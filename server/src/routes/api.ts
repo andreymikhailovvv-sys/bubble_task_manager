@@ -8,6 +8,7 @@ export const apiRouter = Router();
 apiRouter.get('/health', (_, res) => res.json({ ok: true, service: 'bubble-task-manager', date: new Date().toISOString() }));
 apiRouter.get('/spheres', sphereController.list);
 apiRouter.post('/spheres', sphereController.create);
+apiRouter.patch('/spheres/:id', sphereController.update);
 apiRouter.delete('/spheres/:id', sphereController.remove);
 apiRouter.get('/tasks', taskController.list);
 apiRouter.post('/tasks', taskController.create);
