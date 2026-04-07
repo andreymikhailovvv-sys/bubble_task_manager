@@ -1,13 +1,16 @@
 import { PrismaClient } from '@prisma/client';
 
-const fallbackDatabaseUrl = 'file:./dev.db';
+const isProduction = process.env.NODE_ENV === 'production';
 
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = fallbackDatabaseUrl;
-  console.warn(
-    `[db] DATABASE_URL is not set. Falling back to ${fallbackDatabaseUrl}. ` +
-      'Set DATABASE_URL in environment for production persistence.'
+if (isProduction && !process.env.DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL is required in production. Configure Render Postgres and set DATABASE_URL before starting the server.'
   );
+}
+
+if (!isProduction && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'file:./dev.db';
+  console.warn('[db] DATABASE_URL is not set. Using local SQLite database file:./dev.db for development.');
 }
 
 export const prisma = new PrismaClient();
