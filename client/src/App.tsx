@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Brain, Plus, Sparkles } from 'lucide-react';
+import { Brain, ChevronLeft, ChevronRight, Plus, Sparkles } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { TaskEditor } from './components/TaskEditor';
 import { api } from './lib/api';
@@ -30,6 +30,7 @@ export default function App() {
   const [sphereFilter, setSphereFilter] = useState('ALL');
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   async function load() {
     let sphereData = await api.getSpheres();
