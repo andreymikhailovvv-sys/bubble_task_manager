@@ -14,6 +14,7 @@ export type Task = {
   urgency: number;
   priorityScore: number;
   dueDate?: string | null;
+  status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
 };
 
 export type Insight = {

@@ -7,6 +7,7 @@ export type Bubble = {
   radius: number;
   color: string;
   sectorIndex: number;
+  distanceRatio: number;
 };
 
 export const calcScore = (importance: number, urgency: number) => Number((importance * 0.6 + urgency * 0.4).toFixed(2));
@@ -124,7 +125,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         y: point.y,
         radius,
         color: spheres.find((s) => s.id === task.sphereId)?.color ?? '#60a5fa',
-        sectorIndex
+        sectorIndex,
+        distanceRatio: Math.min(1, distance / maxDistance)
       });
     });
   });
@@ -154,6 +156,11 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       }
     }
   }
+
+  result.forEach((bubble) => {
+    const dist = Math.hypot(bubble.x - center, bubble.y - center);
+    bubble.distanceRatio = Math.min(1, dist / maxDistance);
+  });
 
   return result;
 }
