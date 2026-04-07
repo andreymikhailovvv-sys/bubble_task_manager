@@ -17,11 +17,31 @@ interface CreateTaskInput extends TaskInput {
 
 const calcScore = (importance: number, urgency: number) => Number((importance * 0.6 + urgency * 0.4).toFixed(2));
 
+const toNumber = (value: number | string, fieldName: 'importance' | 'urgency'): number => {
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(numericValue)) {
+    throw new TypeError(`Invalid ${fieldName} value`);
+  }
+  return numericValue;
+};
+
+const toDueDate = (value: string | Date | null): Date | null => {
+  if (value === null) {
+    return null;
+  }
+
+  const dateValue = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(dateValue.getTime())) {
+    throw new TypeError('Invalid dueDate value');
+  }
+  return dateValue;
+};
+
 export const taskService = {
   list: () => prisma.task.findMany({ orderBy: { createdAt: 'desc' } }),
   create: async (input: CreateTaskInput) => {
-    const importance = Number(input.importance ?? 3);
-    const urgency = Number(input.urgency ?? 3);
+    const importance = toNumber(input.importance ?? 3, 'importance');
+    const urgency = toNumber(input.urgency ?? 3, 'urgency');
 
     return prisma.task.create({
       data: {
@@ -32,22 +52,41 @@ export const taskService = {
         urgency,
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
-        dueDate: input.dueDate ? new Date(input.dueDate) : null
+        dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null
       }
     });
   },
   update: async (id: string, input: TaskInput) => {
-    const patch: Prisma.TaskUpdateInput = { ...input };
+    const patch: Prisma.TaskUpdateInput = {};
+
+    if (input.title !== undefined) {
+      patch.title = input.title;
+    }
+    if (input.description !== undefined) {
+      patch.description = input.description;
+    }
+    if (input.sphereId !== undefined) {
+      patch.sphere = input.sphereId ? { connect: { id: input.sphereId } } : { disconnect: true };
+    }
+    if (input.status !== undefined) {
+      patch.status = input.status;
+    }
+    if (input.importance !== undefined) {
+      patch.importance = toNumber(input.importance, 'importance');
+    }
+    if (input.urgency !== undefined) {
+      patch.urgency = toNumber(input.urgency, 'urgency');
+    }
 
     if (input.importance !== undefined || input.urgency !== undefined) {
       const current = await prisma.task.findUniqueOrThrow({ where: { id } });
-      const importance = Number(input.importance ?? current.importance);
-      const urgency = Number(input.urgency ?? current.urgency);
+      const importance = toNumber(input.importance ?? current.importance, 'importance');
+      const urgency = toNumber(input.urgency ?? current.urgency, 'urgency');
       patch.priorityScore = calcScore(importance, urgency);
     }
 
     if (input.dueDate !== undefined) {
-      patch.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+      patch.dueDate = toDueDate(input.dueDate);
     }
 
     return prisma.task.update({ where: { id }, data: patch });
