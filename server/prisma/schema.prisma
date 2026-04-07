@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Sphere {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#60a5fa")
+  icon      String?
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  title         String
+  description   String?
+  sphereId      String?
+  sphere        Sphere?    @relation(fields: [sphereId], references: [id], onDelete: SetNull)
+  importance    Int        @default(3)
+  urgency       Int        @default(3)
+  priorityScore Float      @default(3)
+  status        TaskStatus @default(TODO)
+  dueDate       DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([sphereId])
+  @@index([status])
+}
