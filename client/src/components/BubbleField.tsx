@@ -13,6 +13,12 @@ type Props = {
 
 const SIZE = 900;
 
+function getTruncatedTitle(title: string, radius: number) {
+  const maxChars = Math.max(7, Math.floor(radius / 3.1));
+  if (title.length <= maxChars) return title;
+  return `${title.slice(0, Math.max(4, maxChars - 3))}...`;
+}
+
 export function BubbleField({ tasks, spheres, mode, selectedId, onSelect }: Props) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -78,16 +84,20 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect }: Prop
                   cy={0}
                   r={bubble.radius}
                   fill={bubble.color}
-                  fillOpacity={bubble.task.status === 'DONE' ? 0.2 : 0.45}
+                  fillOpacity={0.46}
                   stroke={selectedId === bubble.task.id ? '#f8fafc' : bubble.color}
                   strokeWidth={selectedId === bubble.task.id ? 3 : 2}
                   filter="url(#shadow)"
                 />
-                <text x={0} y={-4} textAnchor="middle" fill="#e2e8f0" className="select-none" style={{ fontSize: Math.max(10, bubble.radius / 3.3), fontWeight: 600 }}>
-                  {bubble.task.title.slice(0, 18)}
-                </text>
-                <text x={0} y={14} textAnchor="middle" fill="#cbd5e1" style={{ fontSize: Math.max(9, bubble.radius / 4.2) }}>
-                  {bubble.task.status}
+                <text
+                  x={0}
+                  y={2}
+                  textAnchor="middle"
+                  fill="#e2e8f0"
+                  className="select-none"
+                  style={{ fontSize: Math.max(9, bubble.radius / 3.5), fontWeight: 600 }}
+                >
+                  {getTruncatedTitle(bubble.task.title, bubble.radius)}
                 </text>
               </motion.g>
             ))}

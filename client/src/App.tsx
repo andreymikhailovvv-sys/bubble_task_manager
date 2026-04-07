@@ -4,22 +4,15 @@ import { BubbleField } from './components/BubbleField';
 import { TaskEditor } from './components/TaskEditor';
 import { api } from './lib/api';
 import { calcScore } from './lib/layout';
-import type { Insight, Sphere, Task, TaskStatus } from './lib/types';
+import type { Insight, Sphere, Task } from './lib/types';
 
 function suggestPriority(task: Partial<Task>) {
   const title = (task.title ?? '').toLowerCase();
   let importance = task.importance ?? 3;
-  let urgency = task.urgency ?? 3;
 
   if (/релиз|клиент|налог|экзамен/.test(title)) importance = Math.min(5, importance + 1);
-  if (/сегодня|срочно|asap/.test(title)) urgency = Math.min(5, urgency + 2);
 
-  if (task.dueDate) {
-    const diff = (new Date(task.dueDate).getTime() - Date.now()) / 86400000;
-    if (diff < 2) urgency = Math.min(5, urgency + 1);
-  }
-
-  return { importance, urgency };
+  return { importance };
 }
 
 export default function App() {
@@ -28,7 +21,6 @@ export default function App() {
   const [selected, setSelected] = useState<Task>();
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | TaskStatus>('ALL');
   const [sphereFilter, setSphereFilter] = useState('ALL');
   const [insights, setInsights] = useState<Insight[]>([]);
 
@@ -47,11 +39,10 @@ export default function App() {
     () =>
       tasks.filter((task) => {
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
-        if (statusFilter !== 'ALL' && task.status !== statusFilter) return false;
         if (sphereFilter !== 'ALL' && task.sphereId !== sphereFilter) return false;
         return true;
       }),
-    [tasks, search, statusFilter, sphereFilter]
+    [tasks, search, sphereFilter]
   );
 
   const persistTask = async (payload: Partial<Task>) => {
@@ -65,7 +56,7 @@ export default function App() {
     if (selected) {
       await api.updateTask(selected.id, { ...normalized, priorityScore: score });
     } else {
-      await api.createTask({ ...normalized, priorityScore: score, status: normalized.status ?? 'TODO' });
+      await api.createTask({ ...normalized, priorityScore: score });
     }
     setSelected(undefined);
     await load();
@@ -91,16 +82,10 @@ export default function App() {
         </button>
       </header>
 
-      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-4">
+      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
         <select className="rounded bg-slate-800 p-2 text-sm" value={sphereFilter} onChange={(e) => setSphereFilter(e.target.value)}>
           <option value="ALL">Все сферы</option>
           {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
-        </select>
-        <select className="rounded bg-slate-800 p-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'ALL' | TaskStatus)}>
-          <option value="ALL">Все статусы</option>
-          <option value="TODO">TODO</option>
-          <option value="IN_PROGRESS">IN_PROGRESS</option>
-          <option value="DONE">DONE</option>
         </select>
         <button
           className="flex items-center justify-center gap-2 rounded bg-fuchsia-700 px-3 py-2 text-sm"
@@ -110,7 +95,7 @@ export default function App() {
             setSelected({ ...selected, ...next });
           }}
         >
-          <Sparkles size={16} /> AI-приоритизировать
+          <Sparkles size={16} /> AI-оценка важности
         </button>
         <button className="flex items-center justify-center gap-2 rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => alert('AI-разбор будет подключен позже через backend endpoint')}>
           <Brain size={16} /> AI-разобрать задачу
