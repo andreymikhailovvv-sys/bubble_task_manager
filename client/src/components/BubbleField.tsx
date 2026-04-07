@@ -109,8 +109,8 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                 animate={{ opacity: 1, scale: 1, x: bubble.x, y: bubble.y }}
                 exit={{ opacity: 0, scale: 0.5 }}
                 transition={{ type: 'spring', damping: 24, stiffness: 180 }}
-                whileHover={{ scale: 1.08 }}
-                style={{ transformOrigin: 'center center' }}
+                whileHover={{ scale: 1.04 }}
+                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
                 onClick={() => onSelect(bubble.task)}
                 onMouseEnter={() => setHoveredTaskId(bubble.task.id)}
                 onMouseLeave={() => setHoveredTaskId((prev) => (prev === bubble.task.id ? null : prev))}
@@ -141,24 +141,6 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                     {bubble.task.title}
                   </div>
                 </foreignObject>
-                <AnimatePresence>
-                  {hoveredTaskId === bubble.task.id ? (
-                    <motion.g initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={{ duration: 0.2 }}>
-                      <foreignObject x={bubble.radius + 8} y={-52} width={230} height={110}>
-                        <div className="rounded-xl border border-slate-600/70 bg-slate-900/95 p-2 text-xs text-slate-100 shadow-xl">
-                          <p className="mb-1 font-semibold">{bubble.task.title}</p>
-                          <p
-                            className="mb-1 text-slate-300"
-                            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                          >
-                            {bubble.task.description?.trim() || 'Без описания'}
-                          </p>
-                          <p className="text-slate-400">Срок: {formatDueDate(bubble.task.dueDate)}</p>
-                        </div>
-                      </foreignObject>
-                    </motion.g>
-                  ) : null}
-                </AnimatePresence>
               </motion.g>
             ))}
           </AnimatePresence>

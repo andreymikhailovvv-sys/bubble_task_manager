@@ -80,7 +80,7 @@ export default function App() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col p-4 text-slate-100 lg:p-6">
+    <main className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6">
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -119,9 +119,9 @@ export default function App() {
         </button>
       </section>
 
-      <div className="relative min-h-0 flex-1 pr-[320px]">
+      <div className="relative min-h-0 flex-1 overflow-hidden pr-[320px]">
         <BubbleField
-          className="h-full min-h-[56vh]"
+          className="h-full"
           tasks={visibleTasks}
           spheres={spheres}
           mode={mode}
