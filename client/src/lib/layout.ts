@@ -18,6 +18,37 @@ function polarToCartesian(center: number, angle: number, distance: number) {
   };
 }
 
+function normalizeAngle(angle: number) {
+  const full = Math.PI * 2;
+  return ((angle % full) + full) % full;
+}
+
+function keepInSector(bubble: Bubble, center: number, maxDistance: number, sectorCount: number) {
+  const dx = bubble.x - center;
+  const dy = bubble.y - center;
+  const safeMaxDistance = Math.max(0, maxDistance - bubble.radius - 6);
+  let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
+  if (distance < bubble.radius + 8) {
+    distance = bubble.radius + 8;
+  }
+
+  let angle = normalizeAngle(Math.atan2(dy, dx));
+  if (sectorCount > 1) {
+    const sectorStart = (Math.PI * 2 * bubble.sectorIndex) / sectorCount;
+    const sectorEnd = (Math.PI * 2 * (bubble.sectorIndex + 1)) / sectorCount;
+    const span = sectorEnd - sectorStart;
+    const maxPadding = Math.max(0, span / 2 - 0.01);
+    const dynamicPadding = Math.asin(Math.min(0.95, (bubble.radius + 6) / Math.max(distance, bubble.radius + 8)));
+    const padding = Math.min(maxPadding, dynamicPadding);
+    const minAngle = sectorStart + padding;
+    const maxAngle = sectorEnd - padding;
+    angle = Math.min(maxAngle, Math.max(minAngle, angle));
+  }
+
+  bubble.x = center + Math.cos(angle) * distance;
+  bubble.y = center + Math.sin(angle) * distance;
+}
+
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
   const center = size / 2;
   const maxDistance = size * 0.42;
@@ -56,6 +87,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     });
   });
 
+  result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
+
   for (let t = 0; t < 20; t += 1) {
     for (let i = 0; i < result.length; i += 1) {
       for (let j = i + 1; j < result.length; j += 1) {
@@ -73,6 +106,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
           a.y -= ny * push;
           b.x += nx * push;
           b.y += ny * push;
+          keepInSector(a, center, maxDistance, sectorCount);
+          keepInSector(b, center, maxDistance, sectorCount);
         }
       }
     }
