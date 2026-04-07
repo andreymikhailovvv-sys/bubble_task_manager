@@ -1,5 +1,3 @@
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
-
 export type Sphere = {
   id: string;
   name: string;
@@ -15,7 +13,6 @@ export type Task = {
   importance: number;
   urgency: number;
   priorityScore: number;
-  status: TaskStatus;
   dueDate?: string | null;
 };
 
