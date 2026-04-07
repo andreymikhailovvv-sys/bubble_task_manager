@@ -8,6 +8,15 @@ type Props = {
   onSave: (payload: Partial<Task>) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
+  onComplete?: () => Promise<void>;
+};
+
+const IMPORTANCE_STYLES: Record<number, string> = {
+  1: 'bg-sky-500/70 border-sky-300',
+  2: 'bg-cyan-500/70 border-cyan-300',
+  3: 'bg-violet-500/70 border-violet-300',
+  4: 'bg-orange-500/70 border-orange-300',
+  5: 'bg-rose-500/75 border-rose-300'
 };
 
 function toDateTimeLocal(value?: string | null) {
@@ -18,12 +27,14 @@ function toDateTimeLocal(value?: string | null) {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, onCancel }: Props) {
+export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, onCancel, onComplete }: Props) {
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
 
   useEffect(() => {
-    setForm(task ?? { importance: 3, sphereId: initialSphereId ?? null });
+    setForm(task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO' });
   }, [task, initialSphereId]);
+
+  const selectedImportance = form.importance ?? 3;
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
@@ -37,9 +48,20 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
             <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
           ))}
         </select>
-        <label className="block text-xs">Важность: {form.importance ?? 3}
-          <input className="mt-1 w-full" type="range" min={1} max={5} value={form.importance ?? 3} onChange={(e) => setForm((p) => ({ ...p, importance: Number(e.target.value) }))} />
-        </label>
+        <div>
+          <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((level) => (
+              <button
+                key={level}
+                className={`rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                onClick={() => setForm((p) => ({ ...p, importance: level }))}
+              >
+                {level}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="block text-xs">Срок (дата и время)
           <input
             type="datetime-local"
@@ -54,6 +76,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
           {task ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
+        {task ? (
+          <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
+            Выполнена
+          </button>
+        ) : null}
       </aside>
     </div>
   );
