@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Brain, Plus, Sparkles } from 'lucide-react';
+import { Brain, ChevronLeft, ChevronRight, Plus, Sparkles } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { TaskEditor } from './components/TaskEditor';
 import { api } from './lib/api';
@@ -30,6 +30,7 @@ export default function App() {
   const [sphereFilter, setSphereFilter] = useState('ALL');
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -79,7 +80,7 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen p-4 text-slate-100 lg:p-6">
+    <main className="flex min-h-screen flex-col p-4 text-slate-100 lg:p-6">
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -118,8 +119,9 @@ export default function App() {
         </button>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+      <div className="relative min-h-0 flex-1">
         <BubbleField
+          className="h-full min-h-[56vh]"
           tasks={visibleTasks}
           spheres={spheres}
           mode={mode}
@@ -133,7 +135,18 @@ export default function App() {
             await load();
           }}
         />
-        <div className="space-y-4">
+        <button
+          className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-900/90 text-slate-100"
+          onClick={() => setIsSidebarOpen((prev) => !prev)}
+          aria-label={isSidebarOpen ? 'Скрыть меню' : 'Показать меню'}
+        >
+          {isSidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
+        <aside
+          className={`absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/96 p-4 transition-transform duration-300 ${
+            isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
             <ul className="space-y-1 text-xs text-slate-300">
@@ -163,7 +176,7 @@ export default function App() {
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Минимум секторов: {MIN_SPHERES}.</p>
           </section>
-        </div>
+        </aside>
       </div>
       {editorState ? (
         <TaskEditor

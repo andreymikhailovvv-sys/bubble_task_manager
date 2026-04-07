@@ -12,31 +12,40 @@ type Props = {
   onSelect: (task: Task) => void;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
+  className?: string;
 };
 
 const SIZE = 900;
 
-function getTruncatedTitle(title: string, radius: number) {
-  const maxChars = Math.max(6, Math.floor(radius / 2.9));
-  if (title.length <= maxChars) return title;
-  return `${title.slice(0, Math.max(3, maxChars - 1))}…`;
+function formatDueDate(value?: string | null) {
+  if (!value) return 'Не указан';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Не указан';
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
-export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRenameSphere, onAddTaskToSphere }: Props) {
+export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRenameSphere, onAddTaskToSphere, className }: Props) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
-    return spheres.map((sphere, idx) => {
-      const angle = (Math.PI * 2 * (idx + 0.5)) / sectorCount;
-      const distance = SIZE * 0.43;
-      return {
-        sphere,
-        x: SIZE / 2 + Math.cos(angle) * distance,
+      return spheres.map((sphere, idx) => {
+        const angle = (Math.PI * 2 * (idx + 0.5)) / sectorCount;
+        const distance = SIZE * 0.46;
+        return {
+          sphere,
+          x: SIZE / 2 + Math.cos(angle) * distance,
         y: SIZE / 2 + Math.sin(angle) * distance
       };
     });
@@ -44,7 +53,7 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
 
   return (
     <div
-      className="relative h-[72vh] overflow-hidden rounded-3xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950"
+      className={`relative overflow-hidden rounded-3xl border border-slate-700/60 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 ${className ?? 'h-full'}`}
       onWheel={(event) => {
         event.preventDefault();
         const svgRect = event.currentTarget.getBoundingClientRect();
@@ -101,6 +110,8 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                 transition={{ type: 'spring', damping: 24, stiffness: 180 }}
                 whileHover={{ scale: 1.08 }}
                 onClick={() => onSelect(bubble.task)}
+                onMouseEnter={() => setHoveredTaskId(bubble.task.id)}
+                onMouseLeave={() => setHoveredTaskId((prev) => (prev === bubble.task.id ? null : prev))}
                 className="cursor-pointer"
               >
                 <circle
@@ -113,33 +124,58 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                   strokeWidth={selectedId === bubble.task.id ? 3 : 2}
                   filter="url(#shadow)"
                 />
-                <foreignObject x={-bubble.radius * 0.78} y={-10} width={bubble.radius * 1.56} height={20} pointerEvents="none">
+                <foreignObject x={-bubble.radius * 0.78} y={-bubble.radius * 0.6} width={bubble.radius * 1.56} height={bubble.radius * 1.2} pointerEvents="none">
                   <div
-                    className="overflow-hidden text-ellipsis whitespace-nowrap text-center text-slate-100"
-                    style={{ fontSize: Math.max(8, bubble.radius / 3.8), fontWeight: 600, lineHeight: '20px' }}
+                    className="overflow-hidden break-words text-center text-slate-100"
+                    style={{
+                      fontSize: Math.max(8, bubble.radius / 4.8),
+                      fontWeight: 600,
+                      lineHeight: '1.2',
+                      display: '-webkit-box',
+                      WebkitLineClamp: Math.max(2, Math.min(4, Math.floor(bubble.radius / 20))),
+                      WebkitBoxOrient: 'vertical'
+                    }}
                   >
-                    {getTruncatedTitle(bubble.task.title, bubble.radius)}
+                    {bubble.task.title}
                   </div>
                 </foreignObject>
+                <AnimatePresence>
+                  {hoveredTaskId === bubble.task.id ? (
+                    <motion.g initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={{ duration: 0.2 }}>
+                      <foreignObject x={bubble.radius + 8} y={-52} width={230} height={110}>
+                        <div className="rounded-xl border border-slate-600/70 bg-slate-900/95 p-2 text-xs text-slate-100 shadow-xl">
+                          <p className="mb-1 font-semibold">{bubble.task.title}</p>
+                          <p
+                            className="mb-1 text-slate-300"
+                            style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                          >
+                            {bubble.task.description?.trim() || 'Без описания'}
+                          </p>
+                          <p className="text-slate-400">Срок: {formatDueDate(bubble.task.dueDate)}</p>
+                        </div>
+                      </foreignObject>
+                    </motion.g>
+                  ) : null}
+                </AnimatePresence>
               </motion.g>
             ))}
           </AnimatePresence>
+          {sectorLabels.map((item) => (
+            <g key={item.sphere.id} transform={`translate(${item.x} ${item.y})`}>
+              <foreignObject x={-74} y={-18} width={148} height={40}>
+                <button className="w-full rounded bg-slate-900/90 px-2 py-1 text-xs text-slate-100" onClick={() => onRenameSphere?.(item.sphere)}>
+                  {item.sphere.name}
+                </button>
+              </foreignObject>
+              <foreignObject x={-12} y={20} width={24} height={24}>
+                <button className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-white" onClick={() => onAddTaskToSphere?.(item.sphere)}>
+                  <Plus size={14} />
+                </button>
+              </foreignObject>
+            </g>
+          ))}
         </g>
       </svg>
-      {sectorLabels.map((item) => (
-        <div
-          key={item.sphere.id}
-          className="absolute -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${(item.x / SIZE) * 100}%`, top: `${(item.y / SIZE) * 100}%` }}
-        >
-          <button className="rounded bg-slate-900/85 px-2 py-1 text-xs text-slate-100" onClick={() => onRenameSphere?.(item.sphere)}>
-            {item.sphere.name}
-          </button>
-          <button className="mx-auto mt-1 flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-white" onClick={() => onAddTaskToSphere?.(item.sphere)}>
-            <Plus size={14} />
-          </button>
-        </div>
-      ))}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Zoom {zoom.toFixed(2)} • Pan drag</div>
     </div>
   );
