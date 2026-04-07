@@ -10,6 +10,7 @@ export type Task = {
   title: string;
   description?: string | null;
   sphereId?: string | null;
+  parentTaskId?: string | null;
   importance: number;
   urgency: number;
   priorityScore: number;

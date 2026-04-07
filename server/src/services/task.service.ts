@@ -5,6 +5,7 @@ interface TaskInput {
   title?: string;
   description?: string | null;
   sphereId?: string | null;
+  parentTaskId?: string | null;
   importance?: number | string;
   urgency?: number | string;
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
@@ -47,7 +48,8 @@ export const taskService = {
       data: {
         title: input.title,
         description: input.description,
-        sphereId: input.sphereId,
+        sphere: input.sphereId ? { connect: { id: input.sphereId } } : undefined,
+        parentTask: input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
         importance,
         urgency,
         priorityScore: calcScore(importance, urgency),
@@ -70,6 +72,9 @@ export const taskService = {
     }
     if (input.status !== undefined) {
       patch.status = input.status;
+    }
+    if (input.parentTaskId !== undefined) {
+      patch.parentTask = input.parentTaskId ? { connect: { id: input.parentTaskId } } : { disconnect: true };
     }
     if (input.importance !== undefined) {
       patch.importance = toNumber(input.importance, 'importance');
