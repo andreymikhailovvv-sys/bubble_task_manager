@@ -82,7 +82,7 @@ function getDistanceByPriority(index: number, urgency: number, importance: numbe
   const withinRing = index % 5;
   const urgencyFactor = (6 - urgency) * 36;
   const importanceFactor = (5 - importance) * 16;
-  const base = 36 + ring * 82 + withinRing * 12 + urgencyFactor + importanceFactor;
+  const base = 26 + ring * 62 + withinRing * 8 + urgencyFactor * 0.72 + importanceFactor * 0.65;
   return Math.min(maxDistance, base);
 }
 
@@ -139,7 +139,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 22;
+        const minDist = a.radius + b.radius + 8;
         if (distance < minDist) {
           const push = (minDist - distance) / 2;
           const nx = dx / distance;

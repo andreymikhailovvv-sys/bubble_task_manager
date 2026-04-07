@@ -16,6 +16,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   getSpheres: () => request<Sphere[]>('/api/spheres'),
   createSphere: (payload: Partial<Sphere>) => request<Sphere>('/api/spheres', { method: 'POST', body: JSON.stringify(payload) }),
+  updateSphere: (id: string, payload: Partial<Sphere>) => request<Sphere>(`/api/spheres/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteSphere: (id: string) => request<{ ok: true }>(`/api/spheres/${id}`, { method: 'DELETE' }),
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),

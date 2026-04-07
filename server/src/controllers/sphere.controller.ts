@@ -10,8 +10,20 @@ export const sphereController = {
     const item = await sphereService.create(req.body);
     res.status(201).json(item);
   },
+  update: async (req: Request, res: Response) => {
+    const item = await sphereService.update(req.params.id, req.body);
+    res.json(item);
+  },
   remove: async (req: Request, res: Response) => {
-    await sphereService.remove(req.params.id);
-    res.json({ ok: true });
+    try {
+      await sphereService.remove(req.params.id);
+      res.json({ ok: true });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('MIN_SPHERES:')) {
+        res.status(400).json({ error: 'Минимум 3 сектора. Удаление недоступно.' });
+        return;
+      }
+      throw error;
+    }
   }
 };
