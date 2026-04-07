@@ -22,6 +22,7 @@ type Props = {
 
 const SIZE = 900;
 const SUBTASK_RADIUS = 18;
+const HOVER_EXIT_DELAY_MS = 220;
 
 function formatDueDate(value?: string | null) {
   if (!value) return 'Не указан';
@@ -83,12 +84,17 @@ export function BubbleField({
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [hoveredSubtaskId, setHoveredSubtaskId] = useState<string | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtask = useMemo(() => Object.values(subtaskMap).flat().find((task) => task.id === hoveredSubtaskId) ?? null, [hoveredSubtaskId, subtaskMap]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
+
+  const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
+  const activeBubble = hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
+
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
     return spheres.map((sphere, idx) => {
@@ -102,6 +108,81 @@ export function BubbleField({
     });
   }, [sectorCount, spheres]);
 
+  const cancelHoverExit = () => {
+    if (hoverExitTimer.current) {
+      clearTimeout(hoverExitTimer.current);
+      hoverExitTimer.current = null;
+    }
+  };
+
+  const activateHover = (taskId: string) => {
+    cancelHoverExit();
+    setHoveredTaskId(taskId);
+  };
+
+  const scheduleHoverExit = () => {
+    cancelHoverExit();
+    hoverExitTimer.current = setTimeout(() => {
+      setHoveredTaskId(null);
+      setHoveredSubtaskId(null);
+    }, HOVER_EXIT_DELAY_MS);
+  };
+
+  const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
+    const isPopping = poppingTaskId === bubble.task.id;
+    const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && isDueWithinHour(task.dueDate));
+    const shouldGlow = bubble.distanceRatio <= 0.22 || hasUrgentSubtask;
+    const isHovered = hoveredTaskId === bubble.task.id;
+
+    return (
+      <motion.g
+        key={bubble.task.id}
+        initial={{ opacity: 0, scale: 0.7 }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }}
+        exit={{ opacity: 0, scale: 0.5 }}
+        transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 24, stiffness: 180 }}
+        style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+        onClick={() => !isPopping && onSelect(bubble.task)}
+        onMouseEnter={() => activateHover(bubble.task.id)}
+        onMouseLeave={scheduleHoverExit}
+        className="cursor-pointer"
+      >
+        <circle
+          cx={0}
+          cy={0}
+          r={bubble.radius}
+          fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
+          fillOpacity={0.48}
+          stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
+          strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
+          filter="url(#bubbleGlow)"
+          className={shouldGlow ? 'animate-pulse' : ''}
+        />
+        <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
+          <div className="flex h-full items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: Math.max(9, bubble.radius / 4.8), fontWeight: 600, lineHeight: '1.2', maxHeight: '100%' }}>
+            <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
+          </div>
+        </foreignObject>
+        {isHovered ? (
+          <foreignObject x={-(bubble.radius + 38)} y={-16} width={30} height={30}>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-slate-50 shadow-lg"
+              onMouseEnter={cancelHoverExit}
+              onMouseLeave={scheduleHoverExit}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddSubtask(bubble.task);
+              }}
+            >
+              <Plus size={14} />
+            </button>
+          </foreignObject>
+        ) : null}
+      </motion.g>
+    );
+  };
+
   return (
     <div
       className={`relative overflow-hidden rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-indigo-950/90 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
@@ -113,10 +194,7 @@ export function BubbleField({
         const nextZoom = Math.min(2.2, Math.max(0.6, zoom + (event.deltaY > 0 ? -0.08 : 0.08)));
         const worldX = (mouseX - offset.x) / zoom;
         const worldY = (mouseY - offset.y) / zoom;
-        setOffset({
-          x: mouseX - worldX * nextZoom,
-          y: mouseY - worldY * nextZoom
-        });
+        setOffset({ x: mouseX - worldX * nextZoom, y: mouseY - worldY * nextZoom });
         setZoom(nextZoom);
       }}
       onMouseDown={(event) => {
@@ -131,9 +209,9 @@ export function BubbleField({
       }}
       onMouseLeave={() => {
         dragStart.current = null;
+        scheduleHoverExit();
       }}
     >
-      {hoveredBubble ? <div className="pointer-events-none absolute inset-0 z-10 bg-slate-950/45" /> : null}
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="relative z-20 h-full w-full">
         <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
           <defs>
@@ -163,57 +241,11 @@ export function BubbleField({
             return <line key={idx} x1={SIZE / 2} y1={SIZE / 2} x2={x} y2={y} stroke="#334155" strokeWidth="1.5" />;
           })}
 
-          <AnimatePresence>
-            {bubbles.map((bubble) => {
-              const isPopping = poppingTaskId === bubble.task.id;
-              const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && isDueWithinHour(task.dueDate));
-              const shouldGlow = bubble.distanceRatio <= 0.22 || hasUrgentSubtask;
-              const isHovered = hoveredTaskId === bubble.task.id;
-              return (
-                <motion.g
-                  key={bubble.task.id}
-                  initial={{ opacity: 0, scale: 0.7 }}
-                  animate={
-                    isPopping
-                      ? { opacity: 0, scale: 1.28 }
-                      : { opacity: 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }
-                  }
-                  exit={{ opacity: 0, scale: 0.5 }}
-                  transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 24, stiffness: 180 }}
-                  style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                  onClick={() => !isPopping && onSelect(bubble.task)}
-                  onMouseEnter={() => setHoveredTaskId(bubble.task.id)}
-                  onMouseLeave={() => setHoveredTaskId((prev) => (prev === bubble.task.id ? null : prev))}
-                  className="cursor-pointer"
-                >
-                  <circle
-                    cx={0}
-                    cy={0}
-                    r={bubble.radius}
-                    fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-                    fillOpacity={0.48}
-                    stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
-                    strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
-                    strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-                    filter="url(#bubbleGlow)"
-                    className={shouldGlow ? 'animate-pulse' : ''}
-                  />
-                  <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-                    <div className="flex h-full items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: Math.max(9, bubble.radius / 4.8), fontWeight: 600, lineHeight: '1.2', maxHeight: '100%' }}>
-                      <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
-                    </div>
-                  </foreignObject>
-                  {isHovered ? (
-                    <foreignObject x={-(bubble.radius + 38)} y={-16} width={30} height={30}>
-                      <button className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-slate-50" onClick={(e) => { e.stopPropagation(); onAddSubtask(bubble.task); }}>
-                        <Plus size={14} />
-                      </button>
-                    </foreignObject>
-                  ) : null}
-                </motion.g>
-              );
-            })}
-          </AnimatePresence>
+          <AnimatePresence>{inactiveBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
+
+          {activeBubble ? <rect x={0} y={0} width={SIZE} height={SIZE} fill="#020617" fillOpacity={0.58} pointerEvents="none" /> : null}
+
+          <AnimatePresence>{activeBubble ? renderBubble(activeBubble, true) : null}</AnimatePresence>
 
           {hoveredBubble
             ? hoveredSubtasks.map((subtask, idx) => {
@@ -223,7 +255,18 @@ export function BubbleField({
                 const y = hoveredBubble.y + Math.sin(angle) * dist;
                 const urgent = subtask.status !== 'DONE' && isDueWithinHour(subtask.dueDate);
                 return (
-                  <g key={subtask.id} transform={`translate(${x} ${y})`} onMouseEnter={() => setHoveredSubtaskId(subtask.id)} onMouseLeave={() => setHoveredSubtaskId((prev) => (prev === subtask.id ? null : prev))}>
+                  <g
+                    key={subtask.id}
+                    transform={`translate(${x} ${y})`}
+                    onMouseEnter={() => {
+                      cancelHoverExit();
+                      setHoveredSubtaskId(subtask.id);
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredSubtaskId((prev) => (prev === subtask.id ? null : prev));
+                      scheduleHoverExit();
+                    }}
+                  >
                     <circle cx={0} cy={0} r={SUBTASK_RADIUS} fill={subtask.status === 'DONE' ? '#16a34a' : '#1e293b'} stroke={urgent ? '#fbbf24' : '#67e8f9'} strokeWidth={2} className={urgent ? 'animate-pulse' : ''} />
                     <text x={0} y={3} fill="#e2e8f0" textAnchor="middle" fontSize={10}>
                       {idx + 1}
@@ -234,7 +277,7 @@ export function BubbleField({
             : null}
 
           {hoveredBubble ? (
-            <foreignObject x={hoveredBubble.x + hoveredBubble.radius + 12} y={hoveredBubble.y - 64} width={250} height={130}>
+            <foreignObject x={hoveredBubble.x + hoveredBubble.radius + 12} y={hoveredBubble.y - 64} width={250} height={130} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}>
               <div className="rounded-xl border border-slate-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                 <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
                 <p className="mb-1 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
@@ -244,7 +287,7 @@ export function BubbleField({
           ) : null}
 
           {hoveredSubtask && hoveredBubble ? (
-            <foreignObject x={hoveredBubble.x - hoveredBubble.radius - 220} y={hoveredBubble.y - 80} width={210} height={160}>
+            <foreignObject x={hoveredBubble.x - hoveredBubble.radius - 220} y={hoveredBubble.y - 80} width={210} height={160} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}>
               <div className="rounded-xl border border-cyan-300/40 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                 <p className="mb-1 font-semibold">{hoveredSubtask.title}</p>
                 <p className="mb-1 text-slate-300">{hoveredSubtask.description?.trim() || 'Без описания'}</p>
