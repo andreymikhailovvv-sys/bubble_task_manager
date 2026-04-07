@@ -37,6 +37,7 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
   const dragStart = useRef<{ x: number; y: number } | null>(null);
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
+  const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -109,6 +110,7 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                 exit={{ opacity: 0, scale: 0.5 }}
                 transition={{ type: 'spring', damping: 24, stiffness: 180 }}
                 whileHover={{ scale: 1.08 }}
+                style={{ transformOrigin: 'center center' }}
                 onClick={() => onSelect(bubble.task)}
                 onMouseEnter={() => setHoveredTaskId(bubble.task.id)}
                 onMouseLeave={() => setHoveredTaskId((prev) => (prev === bubble.task.id ? null : prev))}
@@ -126,7 +128,7 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                 />
                 <foreignObject x={-bubble.radius * 0.78} y={-bubble.radius * 0.6} width={bubble.radius * 1.56} height={bubble.radius * 1.2} pointerEvents="none">
                   <div
-                    className="overflow-hidden break-words text-center text-slate-100"
+                    className="flex h-full items-center justify-center overflow-hidden break-words px-1 text-center text-slate-100"
                     style={{
                       fontSize: Math.max(8, bubble.radius / 4.8),
                       fontWeight: 600,
@@ -159,6 +161,31 @@ export function BubbleField({ tasks, spheres, mode, selectedId, onSelect, onRena
                 </AnimatePresence>
               </motion.g>
             ))}
+          </AnimatePresence>
+          <AnimatePresence>
+            {hoveredBubble ? (
+              <motion.g
+                key={hoveredBubble.task.id}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12 }}
+                transition={{ duration: 0.2 }}
+                style={{ pointerEvents: 'none' }}
+              >
+                <foreignObject x={hoveredBubble.x + hoveredBubble.radius + 12} y={hoveredBubble.y - 62} width={250} height={125}>
+                  <div className="rounded-xl border border-slate-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                    <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
+                    <p
+                      className="mb-1 text-slate-200"
+                      style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                    >
+                      {hoveredBubble.task.description?.trim() || 'Без описания'}
+                    </p>
+                    <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
+                  </div>
+                </foreignObject>
+              </motion.g>
+            ) : null}
           </AnimatePresence>
           {sectorLabels.map((item) => (
             <g key={item.sphere.id} transform={`translate(${item.x} ${item.y})`}>

@@ -119,7 +119,7 @@ export default function App() {
         </button>
       </section>
 
-      <div className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 pr-[320px]">
         <BubbleField
           className="h-full min-h-[56vh]"
           tasks={visibleTasks}
@@ -135,17 +135,8 @@ export default function App() {
             await load();
           }}
         />
-        <button
-          className="absolute right-3 top-1/2 z-20 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-slate-600 bg-slate-900/90 text-slate-100"
-          onClick={() => setIsSidebarOpen((prev) => !prev)}
-          aria-label={isSidebarOpen ? 'Скрыть меню' : 'Показать меню'}
-        >
-          {isSidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
         <aside
-          className={`absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/96 p-4 transition-transform duration-300 ${
-            isSidebarOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
+          className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/96 p-4"
         >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
