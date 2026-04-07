@@ -34,6 +34,7 @@ export default function App() {
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
+  const [subtaskEditor, setSubtaskEditor] = useState<{ parentTask: Task; title: string; description: string; dueDate: string } | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -55,8 +56,15 @@ export default function App() {
     load();
   }, []);
 
-  const activeTasks = useMemo(() => tasks.filter((task) => task.status !== 'DONE'), [tasks]);
-  const completedTasks = useMemo(() => tasks.filter((task) => task.status === 'DONE'), [tasks]);
+  const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
+  const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
+  const subtaskMap = useMemo(() => subtasks.reduce<Record<string, Task[]>>((acc, task) => {
+    const key = task.parentTaskId as string;
+    (acc[key] ??= []).push(task);
+    return acc;
+  }, {}), [subtasks]);
+  const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
+  const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
 
   const visibleTasks = useMemo(
     () =>
@@ -132,10 +140,16 @@ export default function App() {
           className="h-full"
           tasks={visibleTasks}
           spheres={spheres}
+          subtaskMap={subtaskMap}
           mode={mode}
           poppingTaskId={poppingTaskId}
           selectedId={editorState?.task?.id}
           onSelect={(task) => setEditorState({ task })}
+          onAddSubtask={(parentTask) => setSubtaskEditor({ parentTask, title: '', description: '', dueDate: '' })}
+          onToggleSubtaskDone={async (subtask) => {
+            await api.updateTask(subtask.id, { status: subtask.status === 'DONE' ? 'TODO' : 'DONE' });
+            await load();
+          }}
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
         />
@@ -208,6 +222,49 @@ export default function App() {
           } : undefined}
         />
       ) : null}
+
+      {subtaskEditor ? (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={() => setSubtaskEditor(null)}>
+          <aside className="w-full max-w-lg space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-100">Новая подзадача</h3>
+            <p className="text-xs text-slate-300">Основная задача: {subtaskEditor.parentTask.title}</p>
+            <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={subtaskEditor.title} onChange={(e) => setSubtaskEditor((prev) => prev ? { ...prev, title: e.target.value } : prev)} />
+            <textarea className="min-h-20 w-full rounded bg-slate-800 p-2 text-sm" placeholder="Описание" value={subtaskEditor.description} onChange={(e) => setSubtaskEditor((prev) => prev ? { ...prev, description: e.target.value } : prev)} />
+            <label className="block text-xs">Срок
+              <input
+                type="datetime-local"
+                className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                value={subtaskEditor.dueDate}
+                onChange={(e) => setSubtaskEditor((prev) => prev ? { ...prev, dueDate: e.target.value } : prev)}
+              />
+            </label>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm"
+                onClick={async () => {
+                  if (!subtaskEditor.title.trim()) return;
+                  await api.createTask({
+                    title: subtaskEditor.title.trim(),
+                    description: subtaskEditor.description.trim() || null,
+                    dueDate: subtaskEditor.dueDate ? new Date(subtaskEditor.dueDate).toISOString() : null,
+                    parentTaskId: subtaskEditor.parentTask.id,
+                    sphereId: null,
+                    importance: 3,
+                    urgency: 3,
+                    status: 'TODO'
+                  });
+                  setSubtaskEditor(null);
+                  await load();
+                }}
+              >
+                Добавить
+              </button>
+              <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setSubtaskEditor(null)}>Отмена</button>
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
       {sectorEditorSphere ? (
         <SectorEditor
           sphere={sectorEditorSphere.id ? sectorEditorSphere : undefined}
