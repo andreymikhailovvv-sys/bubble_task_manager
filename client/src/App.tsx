@@ -79,7 +79,7 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen p-4 text-slate-100 lg:p-6">
+    <main className="flex min-h-screen flex-col p-4 text-slate-100 lg:p-6">
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -118,8 +118,9 @@ export default function App() {
         </button>
       </section>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+      <div className="relative min-h-0 flex-1 pr-[320px]">
         <BubbleField
+          className="h-full min-h-[56vh]"
           tasks={visibleTasks}
           spheres={spheres}
           mode={mode}
@@ -133,7 +134,9 @@ export default function App() {
             await load();
           }}
         />
-        <div className="space-y-4">
+        <aside
+          className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/96 p-4"
+        >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
             <ul className="space-y-1 text-xs text-slate-300">
@@ -163,7 +166,7 @@ export default function App() {
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Минимум секторов: {MIN_SPHERES}.</p>
           </section>
-        </div>
+        </aside>
       </div>
       {editorState ? (
         <TaskEditor
