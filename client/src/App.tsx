@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { Brain, GripVertical, Plus, Sparkles } from 'lucide-react';
+import { Bot, Brain, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, Sparkles, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
@@ -45,6 +45,11 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [isAiExpanded, setIsAiExpanded] = useState(false);
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(() => localStorage.getItem('btm-background-image'));
@@ -112,10 +117,17 @@ export default function App() {
     });
   }, [completedFilter, completedTasks]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
+  const focusedAiDialog = useMemo(
+    () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
+    [aiDialogByTask, focusedTask]
+  );
 
   useEffect(() => {
     if (!focusedTask) {
       setFocusedDraft(null);
+      setAiDraft('');
+      setAiError(null);
+      setIsAiExpanded(false);
       return;
     }
     setFocusedDraft(focusedTask);
@@ -127,6 +139,37 @@ export default function App() {
       setFocusedNotifyPreset('60');
     }
   }, [focusedTask]);
+
+  const sendFocusedAiQuestion = async () => {
+    if (!focusedTask) return;
+    const question = aiDraft.trim();
+    if (!question) return;
+
+    const taskId = focusedTask.id;
+    const previousDialog = aiDialogByTask[taskId] ?? [];
+    const nextDialog = [...previousDialog, { role: 'user' as const, content: question }];
+    setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
+    setAiDraft('');
+    setAiError(null);
+    setAiLoadingTaskId(taskId);
+
+    try {
+      const result = await askTaskAssistant(taskId, { question, history: previousDialog });
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
+      setAiError(message);
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: 'Не удалось получить ответ. Попробуйте ещё раз.' }]
+      }));
+    } finally {
+      setAiLoadingTaskId(null);
+    }
+  };
 
   const visibleTasks = useMemo(
     () =>
@@ -436,7 +479,59 @@ export default function App() {
 
       {focusedTask && focusedDraft ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
-          <aside className="w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex w-full max-w-[1320px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <aside className="hidden w-[360px] shrink-0 flex-col rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
+                  <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
+                </div>
+                <button
+                  className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                  onClick={() => setIsAiExpanded(true)}
+                  title="Развернуть диалог"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              </div>
+              <div className="mb-3 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+                {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
+                {focusedAiDialog.map((message, index) => (
+                  <div
+                    key={`focused-ai-${message.role}-${index}`}
+                    className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                  >
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                    <p>{message.content}</p>
+                  </div>
+                ))}
+                {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
+              </div>
+              <textarea
+                className="mb-2 min-h-24 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+                placeholder="Например: предложи пошаговый план с оценкой времени"
+                value={aiDraft}
+                onChange={(event) => setAiDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendFocusedAiQuestion();
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
+                <button
+                  className="flex items-center gap-1 rounded bg-violet-600 px-3 py-1.5 text-xs disabled:opacity-50"
+                  disabled={aiLoadingTaskId === focusedTask.id}
+                  onClick={() => void sendFocusedAiQuestion()}
+                >
+                  <SendHorizontal size={13} />
+                  Отправить
+                </button>
+              </div>
+            </aside>
+            <aside className="w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="space-y-3">
                 <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
@@ -532,7 +627,65 @@ export default function App() {
                 </ul>
               </div>
             </div>
-          </aside>
+            </aside>
+          </div>
+        </div>
+      ) : null}
+
+      {focusedTask && isAiExpanded ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsAiExpanded(false)}>
+          <div className="w-full max-w-4xl rounded-3xl border border-violet-200/40 bg-slate-950/99 p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="flex items-center gap-2 text-base font-semibold text-violet-100"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
+                <p className="text-xs text-slate-300">{focusedTask.title}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsAiExpanded(false)} title="Свернуть">
+                  <Minimize2 size={14} />
+                </button>
+                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => { setIsAiExpanded(false); setFocusedTaskId(null); }} title="Закрыть">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
+              {focusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
+              {focusedAiDialog.map((message, index) => (
+                <div
+                  key={`expanded-ai-${message.role}-${index}`}
+                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                >
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <p>{message.content}</p>
+                </div>
+              ))}
+              {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-violet-200">ИИ думает…</p> : null}
+            </div>
+            <textarea
+              className="mb-2 min-h-28 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+              placeholder="Опишите вопрос подробнее…"
+              value={aiDraft}
+              onChange={(event) => setAiDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendFocusedAiQuestion();
+                }
+              }}
+            />
+            <div className="flex items-center justify-between">
+              <p className="min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
+              <button
+                className="flex items-center gap-1 rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
+                disabled={aiLoadingTaskId === focusedTask.id}
+                onClick={() => void sendFocusedAiQuestion()}
+              >
+                <SendHorizontal size={14} />
+                Отправить в ИИ
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
 
