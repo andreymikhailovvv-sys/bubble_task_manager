@@ -57,6 +57,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   }, [task, initialSphereId]);
 
   const selectedImportance = form.importance ?? 3;
+  const isSubtask = Boolean(form.parentTaskId);
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
@@ -64,26 +65,30 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
         <h3 className="text-lg font-semibold text-slate-100">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <textarea className="min-h-20 w-full rounded bg-slate-800 p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-        <select className="w-full rounded bg-slate-800 p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
-          <option value="">Без сектора</option>
-          {spheres.map((sphere) => (
-            <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
-          ))}
-        </select>
-        <div>
-          <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
-          <div className="grid grid-cols-5 gap-2">
-            {[1, 2, 3, 4, 5].map((level) => (
-              <button
-                key={level}
-                className={`rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
-                onClick={() => setForm((p) => ({ ...p, importance: level }))}
-              >
-                {level}
-              </button>
-            ))}
-          </div>
-        </div>
+        {!isSubtask ? (
+          <>
+            <select className="w-full rounded bg-slate-800 p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
+              <option value="">Без сектора</option>
+              {spheres.map((sphere) => (
+                <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
+              ))}
+            </select>
+            <div>
+              <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
+              <div className="grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <button
+                    key={level}
+                    className={`rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                    onClick={() => setForm((p) => ({ ...p, importance: level }))}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : null}
         <label className="block text-xs">Срок (дата и время)
           <input
             type="datetime-local"
@@ -91,12 +96,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
             value={toDateTimeLocal(form.dueDate)}
             onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
           />
-          <button
-            className="mt-2 rounded bg-slate-700 px-3 py-1 text-xs"
-            onClick={() => (document.activeElement as HTMLElement | null)?.blur()}
-          >
-            Принять дату и время
-          </button>
         </label>
         <label className="block text-xs">Уведомлять за
           <select

@@ -81,6 +81,22 @@ function getSubtaskPosition(parentBubble: { x: number; y: number; radius: number
   };
 }
 
+function getSubtaskIndicatorPosition(index: number, total: number, radius: number) {
+  if (total <= 1) {
+    return { x: radius * 0.46, y: -radius * 0.52 };
+  }
+  const maxDots = Math.min(9, total);
+  const arcStart = -Math.PI / 2 + 0.18;
+  const arcEnd = -0.28;
+  const t = maxDots === 1 ? 0.5 : index / (maxDots - 1);
+  const angle = arcStart + (arcEnd - arcStart) * t;
+  const indicatorRadius = Math.max(8, radius - 8);
+  return {
+    x: Math.cos(angle) * indicatorRadius,
+    y: Math.sin(angle) * indicatorRadius
+  };
+}
+
 function hexToRgb(hex: string) {
   const m = hex.replace('#', '');
   const normalized = m.length === 3 ? m.split('').map((x) => x + x).join('') : m;
@@ -204,12 +220,11 @@ export function BubbleField({
           </div>
         </foreignObject>
         {((subtaskMap[bubble.task.id] ?? []).length > 0) ? (
-          <g transform={`translate(0 ${-bubble.radius - 10})`}>
-            {(subtaskMap[bubble.task.id] ?? []).slice(0, 7).map((subtask, idx) => {
-              const count = Math.min(7, (subtaskMap[bubble.task.id] ?? []).length);
-              const spread = Math.max(10, bubble.radius * 0.14);
-              const dotX = (idx - (count - 1) / 2) * spread;
-              return <circle key={subtask.id} cx={dotX} cy={0} r={2.8} fill="#ffffff" fillOpacity={0.95} />;
+          <g>
+            {(subtaskMap[bubble.task.id] ?? []).slice(0, 9).map((subtask, idx) => {
+              const count = Math.min(9, (subtaskMap[bubble.task.id] ?? []).length);
+              const dot = getSubtaskIndicatorPosition(idx, count, bubble.radius);
+              return <circle key={subtask.id} cx={dot.x} cy={dot.y} r={2.8} fill="#ffffff" fillOpacity={0.95} />;
             })}
           </g>
         ) : null}

@@ -52,8 +52,8 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   const dy = bubble.y - center;
   const safeMaxDistance = Math.max(0, maxDistance - bubble.radius - 12);
   let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
-  if (distance < bubble.radius + 14) {
-    distance = bubble.radius + 14;
+  if (distance < 12) {
+    distance = 12;
   }
 
   let angle = normalizeAngle(Math.atan2(dy, dx));
@@ -73,13 +73,23 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
-function getDistanceByPriority(index: number, proximity: number, tieBoost: number, maxDistance: number) {
-  const ring = Math.floor(index / 5);
-  const withinRing = index % 5;
-  const proximityOffset = (1 - proximity) * 258;
-  const tieOffset = -tieBoost * 10;
-  const base = 32 + ring * 62 + withinRing * 11 + proximityOffset + tieOffset;
+function getDistanceByPriority(index: number, maxDistance: number) {
+  if (index === 0) return 28;
+  if (index === 1) return 50;
+
+  const ringIndex = index - 2;
+  const ring = Math.floor(ringIndex / 6);
+  const slot = ringIndex % 6;
+  const base = 118 + ring * 74 + slot * 10;
   return Math.min(maxDistance, base);
+}
+
+function getRadiusByPriority(index: number, proximity: number, tieBoost: number) {
+  const rankScale = Math.max(0, 1 - index / 14);
+  const base = 24 + rankScale * 34;
+  const proximityBoost = proximity * 10;
+  const tieBonus = tieBoost * 5;
+  return Math.max(20, Math.min(66, base + proximityBoost + tieBonus));
 }
 
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
@@ -121,10 +131,11 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = 22 + proximity * 34 + importanceTieBoost * 6;
-      const distance = getDistanceByPriority(i, proximity, importanceTieBoost, maxDistance);
+      const radius = getRadiusByPriority(i, proximity, importanceTieBoost);
+      const distance = getDistanceByPriority(i, maxDistance);
       const angleSpan = endAngle - startAngle;
-      const angle = startAngle + (angleSpan / 6) * ((i % 5) + 1) + Math.floor(i / 5) * 0.1 - rankInDue * 0.02;
+      const ringIndex = Math.max(0, i - 2);
+      const angle = startAngle + (angleSpan / 7) * ((ringIndex % 6) + 1) + Math.floor(ringIndex / 6) * 0.06 - rankInDue * 0.02;
       const point = polarToCartesian(center, angle, distance);
       result.push({
         task,
