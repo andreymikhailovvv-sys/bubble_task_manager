@@ -185,23 +185,18 @@ export default function App() {
           selectedId={editorState?.task?.id}
           onSelect={(task) => setFocusedTaskId(task.id)}
           onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
-          onAddSubtask={(parentTask) =>
-            setEditorState({
-              task: {
-                id: '',
-                title: '',
-                description: '',
-                dueDate: null,
-                importance: 3,
-                urgency: 3,
-                priorityScore: 3,
-                status: 'TODO',
-                sphereId: null,
-                parentTaskId: parentTask.id,
-                notifyBeforeMinutes: 60
-              }
-            })
-          }
+          onCreateSubtask={async (parentTask, payload) => {
+            await api.createTask({
+              ...payload,
+              importance: 3,
+              urgency: 3,
+              priorityScore: 3,
+              status: 'TODO',
+              sphereId: null,
+              parentTaskId: parentTask.id
+            });
+            await load();
+          }}
           onToggleSubtaskDone={async (subtask) => {
             await api.updateTask(subtask.id, { status: subtask.status === 'DONE' ? 'TODO' : 'DONE' });
             await load();

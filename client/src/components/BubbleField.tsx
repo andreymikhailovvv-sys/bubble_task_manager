@@ -15,7 +15,7 @@ type Props = {
   onSelect: (task: Task) => void;
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
-  onAddSubtask: (parentTask: Task) => void;
+  onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   className?: string;
@@ -23,6 +23,20 @@ type Props = {
 
 const SIZE = 900;
 const HOVER_EXIT_DELAY_MS = 220;
+const NOTIFY_PRESETS = [
+  { value: 'null', label: 'Не уведомлять' },
+  { value: '15', label: 'За 15 минут' },
+  { value: '30', label: 'За 30 мин' },
+  { value: '60', label: 'За час' },
+  { value: '180', label: 'За 3 часа' }
+] as const;
+
+type SubtaskDraft = {
+  title: string;
+  description: string;
+  dueDate: string;
+  notifyPreset: string;
+};
 
 function formatDueDate(value?: string | null) {
   if (!value) return 'Не указан';
@@ -101,7 +115,7 @@ export function BubbleField({
   poppingTaskId,
   onSelect,
   onSelectSubtask,
-  onAddSubtask,
+  onCreateSubtask,
   onToggleSubtaskDone,
   onRenameSphere,
   onAddTaskToSphere,
@@ -143,6 +157,9 @@ export function BubbleField({
 
   const activateHover = (taskId: string) => {
     cancelHoverExit();
+    if (taskId !== hoveredTaskId) {
+      setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+    }
     setHoveredTaskId(taskId);
   };
 
