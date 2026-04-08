@@ -240,7 +240,7 @@ export default function App() {
       className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
       style={{
         backgroundImage: backgroundImage
-          ? `linear-gradient(rgba(2,6,23,0.68), rgba(2,6,23,0.82)), url(${backgroundImage})`
+          ? `linear-gradient(rgba(2,6,23,0.58), rgba(2,6,23,0.72)), url(${backgroundImage})`
           : undefined,
         backgroundSize: backgroundImage ? 'cover' : undefined,
         backgroundPosition: backgroundImage ? 'center' : undefined
@@ -322,7 +322,13 @@ export default function App() {
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
         />
-        <aside className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm">
+        <aside
+          className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"
+          data-no-field-zoom="true"
+          onWheel={(event) => {
+            event.stopPropagation();
+          }}
+        >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
             <ul className="space-y-1 text-xs text-slate-300">
