@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { CalendarDays, GripVertical, Plus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { buildBubbles } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -15,6 +15,8 @@ type Props = {
   onSelect: (task: Task) => void;
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
+  onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
+  onReorderSubtasks: (parentTaskId: string, sourceIndex: number, targetIndex: number) => void;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
@@ -117,6 +119,8 @@ export function BubbleField({
   onSelectSubtask,
   onCreateSubtask,
   onToggleSubtaskDone,
+  onUpdateSubtaskDueDate,
+  onReorderSubtasks,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -196,6 +200,10 @@ export function BubbleField({
     const shouldGlow = shouldTaskGlow(bubble.task) || hasUrgentSubtask;
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
+    const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
+    const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
+    const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
 
     return (
       <motion.g
@@ -223,6 +231,23 @@ export function BubbleField({
           className={shouldGlow ? 'animate-pulse' : ''}
           style={overdue ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' } : undefined}
         />
+        {bubbleSubtasks.length > 0 ? (
+          <>
+            <circle cx={0} cy={0} r={bubble.radius + 6} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
+            <circle
+              cx={0}
+              cy={0}
+              r={bubble.radius + 6}
+              fill="none"
+              stroke="#22c55e"
+              strokeWidth={4.4}
+              strokeLinecap="round"
+              strokeDasharray={progressCircumference}
+              strokeDashoffset={progressCircumference * (1 - subtaskProgress)}
+              transform="rotate(-90)"
+            />
+          </>
+        ) : null}
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
           <div className="flex h-full items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: Math.max(9, bubble.radius / 4.8), fontWeight: 600, lineHeight: '1.2', maxHeight: '100%' }}>
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
@@ -341,11 +366,35 @@ export function BubbleField({
                 onMouseLeave={scheduleHoverExit}
               >
                 <div className="rounded-xl border border-cyan-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
-                  <p className="mb-2 font-semibold text-cyan-100">Доп задачи</p>
+                  <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
                   <ul className="mb-3 max-h-30 space-y-1 overflow-auto pr-1">
-                    {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет доп задач</li> : null}
-                    {hoveredSubtasks.map((subtask) => (
-                      <li key={subtask.id} className="flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1">
+                    {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
+                    {hoveredSubtasks.map((subtask, index) => (
+                      <li
+                        key={subtask.id}
+                        className="flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData('text/plain', String(index));
+                        }}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
+                          if (Number.isNaN(sourceIndex)) return;
+                          onReorderSubtasks(hoveredBubble.task.id, sourceIndex, index);
+                        }}
+                        style={isOverdue(subtask)
+                          ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
+                          : shouldTaskGlow(subtask)
+                            ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)' }
+                            : undefined}
+                      >
+                        <span className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
+                          <GripVertical size={14} />
+                        </span>
                         <input
                           type="checkbox"
                           checked={subtask.status === 'DONE'}
@@ -355,7 +404,7 @@ export function BubbleField({
                           }}
                         />
                         <button
-                          className={`truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : ''}`}
+                          className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : ''}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             onSelectSubtask(subtask);
@@ -363,6 +412,19 @@ export function BubbleField({
                         >
                           {subtask.title}
                         </button>
+                        <label className="cursor-pointer text-cyan-300 hover:text-cyan-200" title="Изменить срок подзадачи">
+                          <CalendarDays size={14} />
+                          <input
+                            type="datetime-local"
+                            className="hidden"
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              void onUpdateSubtaskDueDate(subtask, event.target.value ? new Date(event.target.value).toISOString() : null);
+                              event.currentTarget.value = '';
+                            }}
+                          />
+                        </label>
                       </li>
                     ))}
                   </ul>
