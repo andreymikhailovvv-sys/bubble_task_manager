@@ -31,4 +31,4 @@ export type ChatMessage = {
   content: string;
 };
 
-export type ChatMode = 'fast' | 'full';
+export type ChatMode = 'fast' | 'smart';

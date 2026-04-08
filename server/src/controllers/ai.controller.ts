@@ -12,7 +12,7 @@ export const aiController = {
       const { question, history } = req.body as {
         question?: string;
         history?: ChatMessage[];
-        mode?: 'fast' | 'full';
+        mode?: 'fast' | 'smart';
       };
 
       if (!question || typeof question !== 'string') {
@@ -24,7 +24,7 @@ export const aiController = {
         taskId: req.params.id,
         question,
         history: Array.isArray(history) ? history : [],
-        mode: req.body?.mode === 'full' ? 'full' : 'fast'
+        mode: req.body?.mode === 'smart' ? 'smart' : 'fast'
       });
 
       res.json(result);
