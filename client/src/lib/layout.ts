@@ -88,6 +88,33 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
+
+function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: number, sectorCount: number, padding: number, iterations: number) {
+  for (let t = 0; t < iterations; t += 1) {
+    for (let i = 0; i < bubbles.length; i += 1) {
+      for (let j = i + 1; j < bubbles.length; j += 1) {
+        const a = bubbles[i];
+        const b = bubbles[j];
+        if (sectorCount > 1 && a.sectorIndex !== b.sectorIndex) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const minDist = a.radius + b.radius + padding;
+        if (distance >= minDist) continue;
+        const push = (minDist - distance) / 2;
+        const nx = dx / distance;
+        const ny = dy / distance;
+        a.x -= nx * push;
+        a.y -= ny * push;
+        b.x += nx * push;
+        b.y += ny * push;
+        keepInSector(a, center, maxDistance, sectorCount);
+        keepInSector(b, center, maxDistance, sectorCount);
+      }
+    }
+  }
+}
+
 function getDistanceByDeadline(index: number, total: number, maxDistance: number) {
   const minDistance = 16;
   if (total <= 1) return minDistance;
@@ -172,30 +199,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
 
-  for (let t = 0; t < 54; t += 1) {
-    for (let i = 0; i < result.length; i += 1) {
-      for (let j = i + 1; j < result.length; j += 1) {
-        const a = result[i];
-        const b = result[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const distance = Math.hypot(dx, dy) || 1;
-        if (sectorCount > 1 && a.sectorIndex !== b.sectorIndex) continue;
-        const minDist = a.radius + b.radius + 4;
-        if (distance < minDist) {
-          const push = (minDist - distance) / 2;
-          const nx = dx / distance;
-          const ny = dy / distance;
-          a.x -= nx * push;
-          a.y -= ny * push;
-          b.x += nx * push;
-          b.y += ny * push;
-          keepInSector(a, center, maxDistance, sectorCount);
-          keepInSector(b, center, maxDistance, sectorCount);
-        }
-      }
-    }
-  }
+  resolveCollisions(result, center, maxDistance, sectorCount, 8, 54);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -231,6 +235,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       previousDistance = Math.hypot(bubble.x - center, bubble.y - center);
     });
   });
+
+  resolveCollisions(result, center, maxDistance, sectorCount, 6, 36);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
