@@ -35,6 +35,21 @@ function getDueProximity(dueDate?: string | null) {
   return Math.max(0, 1 - diffMs / horizonMs);
 }
 
+function getUrgencyWeight(dueDate?: string | null) {
+  const diffMs = getDueDateDiffMs(dueDate);
+  if (!Number.isFinite(diffMs)) return 0;
+  if (diffMs <= 0) return 1;
+  const diffHours = diffMs / (1000 * 60 * 60);
+  if (diffHours <= 1) return 0.98;
+  if (diffHours <= 3) return 0.94;
+  if (diffHours <= 6) return 0.88;
+  if (diffHours <= 12) return 0.8;
+  if (diffHours <= 24) return 0.68;
+  if (diffHours <= 72) return 0.52;
+  if (diffHours <= 168) return 0.34;
+  return Math.max(0.08, 0.28 - Math.min(0.2, diffHours / (24 * 45)));
+}
+
 function polarToCartesian(center: number, angle: number, distance: number) {
   return {
     x: center + Math.cos(angle) * distance,
@@ -73,23 +88,20 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
-function getDistanceByPriority(index: number, maxDistance: number) {
-  if (index === 0) return 28;
-  if (index === 1) return 50;
-
-  const ringIndex = index - 2;
-  const ring = Math.floor(ringIndex / 6);
-  const slot = ringIndex % 6;
-  const base = 118 + ring * 74 + slot * 10;
-  return Math.min(maxDistance, base);
+function getDistanceByPriority(index: number, urgencyWeight: number, maxDistance: number) {
+  const rankSpread = Math.min(1, index / 12);
+  const urgencyPull = Math.pow(urgencyWeight, 0.72);
+  const ratio = 0.1 + rankSpread * 0.75 - urgencyPull * 0.42;
+  return Math.max(22, Math.min(maxDistance, maxDistance * ratio));
 }
 
-function getRadiusByPriority(index: number, proximity: number, tieBoost: number) {
+function getRadiusByPriority(index: number, proximity: number, urgencyWeight: number, tieBoost: number) {
   const rankScale = Math.max(0, 1 - index / 14);
-  const base = 24 + rankScale * 34;
-  const proximityBoost = proximity * 10;
+  const base = 18 + rankScale * 28;
+  const proximityBoost = proximity * 11;
+  const urgencyBoost = urgencyWeight * 18;
   const tieBonus = tieBoost * 5;
-  return Math.max(20, Math.min(66, base + proximityBoost + tieBonus));
+  return Math.max(18, Math.min(72, base + proximityBoost + urgencyBoost + tieBonus));
 }
 
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
@@ -126,16 +138,18 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
     sorted.forEach((task, i) => {
       const proximity = getDueProximity(task.dueDate);
+      const urgencyWeight = getUrgencyWeight(task.dueDate);
       const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
       const rankInDue = dueRanks[key] ?? 0;
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = getRadiusByPriority(i, proximity, importanceTieBoost);
-      const distance = getDistanceByPriority(i, maxDistance);
+      const radius = getRadiusByPriority(i, proximity, urgencyWeight, importanceTieBoost);
+      const distance = getDistanceByPriority(i, urgencyWeight, maxDistance);
       const angleSpan = endAngle - startAngle;
-      const ringIndex = Math.max(0, i - 2);
-      const angle = startAngle + (angleSpan / 7) * ((ringIndex % 6) + 1) + Math.floor(ringIndex / 6) * 0.06 - rankInDue * 0.02;
+      const ringIndex = Math.max(0, i);
+      const slotCount = Math.max(5, Math.ceil(Math.sqrt(sorted.length + 1)));
+      const angle = startAngle + (angleSpan / (slotCount + 1)) * ((ringIndex % slotCount) + 1) + Math.floor(ringIndex / slotCount) * 0.04 - rankInDue * 0.02;
       const point = polarToCartesian(center, angle, distance);
       result.push({
         task,
@@ -174,6 +188,36 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       }
     }
   }
+
+  bySector.forEach((sectorTasks, sectorIndex) => {
+    const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
+    const ranked = [...sectorTasks]
+      .sort((a, b) => {
+        const diffA = getDueDateDiffMs(a.dueDate);
+        const diffB = getDueDateDiffMs(b.dueDate);
+        if (diffA !== diffB) return diffA - diffB;
+        if (a.importance !== b.importance) return b.importance - a.importance;
+        return b.priorityScore - a.priorityScore;
+      })
+      .map((task) => sectorBubbles.find((bubble) => bubble.task.id === task.id))
+      .filter((bubble): bubble is Bubble => Boolean(bubble));
+
+    let previousDistance = 0;
+    ranked.forEach((bubble, idx) => {
+      const dx = bubble.x - center;
+      const dy = bubble.y - center;
+      const currentDistance = Math.hypot(dx, dy) || 1;
+      const minDistance = idx === 0 ? 16 : previousDistance + bubble.radius * 0.35 + 8;
+      if (currentDistance < minDistance) {
+        const nx = dx / currentDistance;
+        const ny = dy / currentDistance;
+        bubble.x = center + nx * minDistance;
+        bubble.y = center + ny * minDistance;
+        keepInSector(bubble, center, maxDistance, sectorCount);
+      }
+      previousDistance = Math.hypot(bubble.x - center, bubble.y - center);
+    });
+  });
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);

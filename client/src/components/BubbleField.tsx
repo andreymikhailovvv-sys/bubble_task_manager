@@ -82,18 +82,18 @@ function getSubtaskPosition(parentBubble: { x: number; y: number; radius: number
 }
 
 function getSubtaskIndicatorPosition(index: number, total: number, radius: number) {
-  if (total <= 1) {
-    return { x: radius * 0.46, y: -radius * 0.52 };
-  }
   const maxDots = Math.min(9, total);
-  const arcStart = -Math.PI / 2 + 0.18;
-  const arcEnd = -0.28;
-  const t = maxDots === 1 ? 0.5 : index / (maxDots - 1);
-  const angle = arcStart + (arcEnd - arcStart) * t;
-  const indicatorRadius = Math.max(8, radius - 8);
+  const clusterCenter = {
+    x: radius * 0.44,
+    y: -radius * 0.45
+  };
+  const t = maxDots === 1 ? 0 : index / maxDots;
+  const angle = -Math.PI / 2 + t * Math.PI * 1.66;
+  const ring = Math.floor(index / 4);
+  const indicatorRadius = 4 + ring * 3.2;
   return {
-    x: Math.cos(angle) * indicatorRadius,
-    y: Math.sin(angle) * indicatorRadius
+    x: clusterCenter.x + Math.cos(angle) * indicatorRadius,
+    y: clusterCenter.y + Math.sin(angle) * indicatorRadius
   };
 }
 
@@ -322,6 +322,15 @@ export function BubbleField({
                 const urgent = subtask.status !== 'DONE' && shouldTaskGlow(subtask);
                 const overdue = isOverdue(subtask);
                 const radius = SUBTASK_RADIUS + 4;
+                const dx = hoveredBubble.x - x;
+                const dy = hoveredBubble.y - y;
+                const distance = Math.hypot(dx, dy) || 1;
+                const nx = dx / distance;
+                const ny = dy / distance;
+                const lineStartX = nx * (radius + 1);
+                const lineStartY = ny * (radius + 1);
+                const lineEndX = nx * (distance - hoveredBubble.radius - 2);
+                const lineEndY = ny * (distance - hoveredBubble.radius - 2);
                 return (
                   <g
                     key={subtask.id}
@@ -341,10 +350,10 @@ export function BubbleField({
                     className="cursor-pointer"
                   >
                     <line
-                      x1={(hoveredBubble.x - x) * ((hoveredBubble.radius + 2) / (Math.hypot(hoveredBubble.x - x, hoveredBubble.y - y) || 1))}
-                      y1={(hoveredBubble.y - y) * ((hoveredBubble.radius + 2) / (Math.hypot(hoveredBubble.x - x, hoveredBubble.y - y) || 1))}
-                      x2={0}
-                      y2={0}
+                      x1={lineStartX}
+                      y1={lineStartY}
+                      x2={lineEndX}
+                      y2={lineEndY}
                       stroke="#ffffff"
                       strokeOpacity={0.95}
                       strokeWidth={1.8}
