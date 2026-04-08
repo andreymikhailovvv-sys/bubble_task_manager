@@ -12,11 +12,10 @@ type Props = {
 };
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
-  { value: '15', label: 'За 15 мин' },
+  { value: '15', label: 'За 15 минут' },
   { value: '30', label: 'За 30 мин' },
   { value: '60', label: 'За час' },
-  { value: '180', label: 'За 3 часа' },
-  { value: 'custom', label: 'Вручную' }
+  { value: '180', label: 'За 3 часа' }
 ] as const;
 
 const IMPORTANCE_STYLES: Record<number, string> = {
@@ -39,20 +38,17 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('60');
-  const [customNotifyMinutes, setCustomNotifyMinutes] = useState<string>('');
 
   useEffect(() => {
     const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
     setForm(nextForm);
     if (nextForm.notifyBeforeMinutes === null) {
       setNotifyPreset('null');
-      setCustomNotifyMinutes('');
     } else if ([15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 60)) {
       setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 60));
-      setCustomNotifyMinutes('');
     } else {
-      setNotifyPreset('custom');
-      setCustomNotifyMinutes(String(nextForm.notifyBeforeMinutes ?? 60));
+      setNotifyPreset('60');
+      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 60 }));
     }
   }, [task, initialSphereId]);
 
@@ -106,10 +102,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
               setNotifyPreset(value);
               if (value === 'null') {
                 setForm((p) => ({ ...p, notifyBeforeMinutes: null }));
-              } else if (value === 'custom') {
-                const defaultCustom = customNotifyMinutes || '90';
-                setCustomNotifyMinutes(defaultCustom);
-                setForm((p) => ({ ...p, notifyBeforeMinutes: Number(defaultCustom) }));
               } else {
                 setForm((p) => ({ ...p, notifyBeforeMinutes: Number(value) }));
               }
@@ -120,24 +112,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
             ))}
           </select>
         </label>
-        {notifyPreset === 'custom' ? (
-          <label className="block text-xs">Минут до дедлайна
-            <input
-              type="number"
-              min={1}
-              className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-              value={customNotifyMinutes}
-              onChange={(e) => {
-                const value = e.target.value;
-                setCustomNotifyMinutes(value);
-                const parsed = Number(value);
-                if (Number.isFinite(parsed) && parsed > 0) {
-                  setForm((p) => ({ ...p, notifyBeforeMinutes: parsed }));
-                }
-              }}
-            />
-          </label>
-        ) : null}
+
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
           {isEditing ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}

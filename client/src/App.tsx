@@ -14,6 +14,13 @@ const DEFAULT_SPHERES = [
   { name: 'Личное', color: HARMONIOUS_COLORS[1], icon: 'heart' },
   { name: 'Здоровье', color: HARMONIOUS_COLORS[5], icon: 'dumbbell' }
 ];
+const NOTIFY_PRESETS = [
+  { value: 'null', label: 'Не уведомлять' },
+  { value: '15', label: 'За 15 минут' },
+  { value: '30', label: 'За 30 мин' },
+  { value: '60', label: 'За час' },
+  { value: '180', label: 'За 3 часа' }
+] as const;
 
 function suggestPriority(task: Partial<Task>) {
   const title = (task.title ?? '').toLowerCase();
@@ -36,6 +43,7 @@ export default function App() {
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
+  const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -74,6 +82,13 @@ export default function App() {
       return;
     }
     setFocusedDraft(focusedTask);
+    if (focusedTask.notifyBeforeMinutes === null) {
+      setFocusedNotifyPreset('null');
+    } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 60)) {
+      setFocusedNotifyPreset(String(focusedTask.notifyBeforeMinutes ?? 60));
+    } else {
+      setFocusedNotifyPreset('60');
+    }
   }, [focusedTask]);
 
   const visibleTasks = useMemo(
@@ -283,6 +298,21 @@ export default function App() {
                     value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
                     onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
                   />
+                </label>
+                <label className="block text-xs">Уведомлять за
+                  <select
+                    className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                    value={focusedNotifyPreset}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFocusedNotifyPreset(value);
+                      setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
+                    }}
+                  >
+                    {NOTIFY_PRESETS.map((preset) => (
+                      <option key={preset.value} value={preset.value}>{preset.label}</option>
+                    ))}
+                  </select>
                 </label>
                 <div>
                   <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
