@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, GripVertical, Plus } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { GripVertical, Plus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
+import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 
 type Props = {
   tasks: Task[];
@@ -25,14 +26,6 @@ type Props = {
 
 const SIZE = 900;
 const HOVER_EXIT_DELAY_MS = 220;
-const NOTIFY_PRESETS = [
-  { value: 'null', label: 'Не уведомлять' },
-  { value: '15', label: 'За 15 минут' },
-  { value: '30', label: 'За 30 мин' },
-  { value: '60', label: 'За час' },
-  { value: '180', label: 'За 3 часа' }
-] as const;
-
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -134,6 +127,8 @@ export function BubbleField({
     dueDate: '',
     notifyPreset: '60'
   });
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -144,6 +139,12 @@ export function BubbleField({
 
   const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
   const activeBubble = hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
+
+  useEffect(() => {
+    if (isAddingSubtask) {
+      subtaskTitleInputRef.current?.focus();
+    }
+  }, [isAddingSubtask]);
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -169,6 +170,7 @@ export function BubbleField({
     cancelHoverExit();
     if (taskId !== hoveredTaskId) {
       setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+      setIsAddingSubtask(false);
     }
     setHoveredTaskId(taskId);
   };
@@ -177,6 +179,7 @@ export function BubbleField({
     cancelHoverExit();
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
+      setIsAddingSubtask(false);
     }, HOVER_EXIT_DELAY_MS);
   };
 
@@ -192,6 +195,7 @@ export function BubbleField({
       notifyBeforeMinutes: Number.isFinite(nextNotifyBeforeMinutes) ? nextNotifyBeforeMinutes : null
     });
     setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+    setIsAddingSubtask(false);
   };
 
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
@@ -412,31 +416,63 @@ export function BubbleField({
                         >
                           {subtask.title}
                         </button>
-                        <label className="cursor-pointer text-cyan-300 hover:text-cyan-200" title="Изменить срок подзадачи">
-                          <CalendarDays size={14} />
-                          <input
-                            type="datetime-local"
-                            className="hidden"
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => {
-                              event.stopPropagation();
-                              void onUpdateSubtaskDueDate(subtask, event.target.value ? new Date(event.target.value).toISOString() : null);
-                              event.currentTarget.value = '';
-                            }}
-                          />
-                        </label>
+                        <InlineDateTimePickerIcon
+                          value={subtask.dueDate}
+                          title="Изменить срок подзадачи"
+                          onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
+                        />
                       </li>
                     ))}
                   </ul>
-                  <button
-                    className="w-full rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onAddSubtask(hoveredBubble.task);
-                    }}
-                  >
-                    Добавить доп задачу
-                  </button>
+                  {isAddingSubtask ? (
+                    <div className="space-y-2">
+                      <input
+                        ref={subtaskTitleInputRef}
+                        className="w-full rounded bg-slate-800 px-2 py-1.5 text-[11px]"
+                        placeholder="Название доп задачи"
+                        value={subtaskDraft.title}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, title: event.target.value }))}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void onAddSubtask(hoveredBubble.task);
+                          }
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void onAddSubtask(hoveredBubble.task);
+                          }}
+                        >
+                          Сохранить
+                        </button>
+                        <button
+                          className="rounded bg-slate-700 px-2 py-1.5 text-[11px]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setIsAddingSubtask(false);
+                            setSubtaskDraft((prev) => ({ ...prev, title: '' }));
+                          }}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="w-full rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsAddingSubtask(true);
+                      }}
+                    >
+                      Добавить доп задачу
+                    </button>
+                  )}
                 </div>
               </foreignObject>
             </>

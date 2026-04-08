@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Brain, CalendarDays, GripVertical, Plus, Sparkles } from 'lucide-react';
+import { Brain, GripVertical, Plus, Sparkles } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
+import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { api } from './lib/api';
@@ -45,6 +46,7 @@ export default function App() {
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
+  const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -89,6 +91,17 @@ export default function App() {
   const subtaskMap = sortedSubtasks;
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
+  const completedTasksForPanel = useMemo(() => {
+    if (completedFilter === 'all') return completedTasks;
+    const now = new Date();
+    return completedTasks.filter((task) => {
+      const updatedAt = task.updatedAt ? new Date(task.updatedAt) : null;
+      if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
+      return updatedAt.getDate() === now.getDate()
+        && updatedAt.getMonth() === now.getMonth()
+        && updatedAt.getFullYear() === now.getFullYear();
+    });
+  }, [completedFilter, completedTasks]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
 
   useEffect(() => {
@@ -286,10 +299,26 @@ export default function App() {
             </ul>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold">Выполненные задачи</h3>
-            <ul className="space-y-2 text-xs text-slate-200">
-              {completedTasks.length === 0 ? <li className="text-slate-400">Пока нет выполненных задач</li> : null}
-              {completedTasks.map((task) => (
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Выполненные задания</h3>
+              <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
+                <button
+                  className={`rounded px-2 py-0.5 ${completedFilter === 'today' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  onClick={() => setCompletedFilter('today')}
+                >
+                  сегодня
+                </button>
+                <button
+                  className={`rounded px-2 py-0.5 ${completedFilter === 'all' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  onClick={() => setCompletedFilter('all')}
+                >
+                  все
+                </button>
+              </div>
+            </div>
+            <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+              {completedTasksForPanel.length === 0 ? <li className="text-slate-400">Нет выполненных задач для выбранного фильтра</li> : null}
+              {completedTasksForPanel.map((task) => (
                 <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
                   <input
                     type="checkbox"
@@ -432,18 +461,14 @@ export default function App() {
                       <span className="cursor-grab text-slate-400 active:cursor-grabbing"><GripVertical size={14} /></span>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <span className={`flex-1 ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{subtask.title}</span>
-                      <label className="cursor-pointer text-cyan-300 hover:text-cyan-200" title="Изменить срок подзадачи">
-                        <CalendarDays size={14} />
-                        <input
-                          type="datetime-local"
-                          className="hidden"
-                          onChange={async (event) => {
-                            await api.updateTask(subtask.id, { dueDate: event.target.value ? new Date(event.target.value).toISOString() : null });
-                            await load();
-                            event.currentTarget.value = '';
-                          }}
-                        />
-                      </label>
+                      <InlineDateTimePickerIcon
+                        value={subtask.dueDate}
+                        title="Изменить срок подзадачи"
+                        onChange={async (dueDate) => {
+                          await api.updateTask(subtask.id, { dueDate });
+                          await load();
+                        }}
+                      />
                     </li>
                   ))}
                   {(subtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
