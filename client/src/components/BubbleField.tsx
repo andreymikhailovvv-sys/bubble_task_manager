@@ -267,6 +267,10 @@ export function BubbleField({
     <div
       className={`relative overflow-visible rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
       onWheel={(event) => {
+        if (event.target instanceof Element && event.target.closest('[data-no-field-zoom="true"]')) {
+          event.stopPropagation();
+          return;
+        }
         event.preventDefault();
         const svgRect = event.currentTarget.getBoundingClientRect();
         const mouseX = ((event.clientX - svgRect.left) / svgRect.width) * SIZE;
@@ -371,9 +375,12 @@ export function BubbleField({
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
-                <div className="rounded-xl border border-cyan-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                <div
+                  className="rounded-xl border border-cyan-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]"
+                  data-no-field-zoom="true"
+                >
                   <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
-                  <ul className="mb-3 max-h-36 space-y-1 overflow-auto pr-1">
+                  <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
                     {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask, index) => (
                       <li
