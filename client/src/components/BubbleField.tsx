@@ -15,15 +15,28 @@ type Props = {
   onSelect: (task: Task) => void;
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
-  onAddSubtask: (parentTask: Task) => void;
+  onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   className?: string;
 };
 
 const SIZE = 900;
-const SUBTASK_RADIUS = 18;
 const HOVER_EXIT_DELAY_MS = 220;
+const NOTIFY_PRESETS = [
+  { value: 'null', label: 'Не уведомлять' },
+  { value: '15', label: 'За 15 минут' },
+  { value: '30', label: 'За 30 мин' },
+  { value: '60', label: 'За час' },
+  { value: '180', label: 'За 3 часа' }
+] as const;
+
+type SubtaskDraft = {
+  title: string;
+  description: string;
+  dueDate: string;
+  notifyPreset: string;
+};
 
 function formatDueDate(value?: string | null) {
   if (!value) return 'Не указан';
@@ -69,34 +82,6 @@ function isOverdue(task: Task) {
   return due.getTime() < Date.now();
 }
 
-function getSubtaskPosition(parentBubble: { x: number; y: number; radius: number }, index: number) {
-  const step = Math.PI / 4.5;
-  const angle = -Math.PI / 2 + index * step;
-  const ring = Math.floor(index / 7);
-  const dist = parentBubble.radius + SUBTASK_RADIUS + 22 + ring * 26;
-  return {
-    angle,
-    x: parentBubble.x + Math.cos(angle) * dist,
-    y: parentBubble.y + Math.sin(angle) * dist
-  };
-}
-
-function getSubtaskIndicatorPosition(index: number, total: number, radius: number) {
-  const maxDots = Math.min(9, total);
-  const clusterCenter = {
-    x: radius * 0.44,
-    y: -radius * 0.45
-  };
-  const t = maxDots === 1 ? 0 : index / maxDots;
-  const angle = -Math.PI / 2 + t * Math.PI * 1.66;
-  const ring = Math.floor(index / 4);
-  const indicatorRadius = 4 + ring * 3.2;
-  return {
-    x: clusterCenter.x + Math.cos(angle) * indicatorRadius,
-    y: clusterCenter.y + Math.sin(angle) * indicatorRadius
-  };
-}
-
 function hexToRgb(hex: string) {
   const m = hex.replace('#', '');
   const normalized = m.length === 3 ? m.split('').map((x) => x + x).join('') : m;
@@ -126,7 +111,7 @@ export function BubbleField({
   poppingTaskId,
   onSelect,
   onSelectSubtask,
-  onAddSubtask,
+  onCreateSubtask,
   onToggleSubtaskDone,
   onRenameSphere,
   onAddTaskToSphere,
@@ -135,13 +120,18 @@ export function BubbleField({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
-  const [hoveredSubtaskId, setHoveredSubtaskId] = useState<string | null>(null);
+  const [subtaskDraft, setSubtaskDraft] = useState<SubtaskDraft>({
+    title: '',
+    description: '',
+    dueDate: '',
+    notifyPreset: '60'
+  });
+  const [isSubmittingSubtask, setIsSubmittingSubtask] = useState(false);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
-  const hoveredSubtask = useMemo(() => Object.values(subtaskMap).flat().find((task) => task.id === hoveredSubtaskId) ?? null, [hoveredSubtaskId, subtaskMap]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
 
@@ -170,6 +160,9 @@ export function BubbleField({
 
   const activateHover = (taskId: string) => {
     cancelHoverExit();
+    if (taskId !== hoveredTaskId) {
+      setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+    }
     setHoveredTaskId(taskId);
   };
 
@@ -177,7 +170,6 @@ export function BubbleField({
     cancelHoverExit();
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
-      setHoveredSubtaskId(null);
     }, HOVER_EXIT_DELAY_MS);
   };
 
@@ -219,35 +211,6 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
-        {((subtaskMap[bubble.task.id] ?? []).length > 0) ? (
-          <g>
-            {(subtaskMap[bubble.task.id] ?? []).slice(0, 9).map((subtask, idx) => {
-              const count = Math.min(9, (subtaskMap[bubble.task.id] ?? []).length);
-              const dot = getSubtaskIndicatorPosition(idx, count, bubble.radius);
-              return <circle key={subtask.id} cx={dot.x} cy={dot.y} r={2.8} fill="#ffffff" fillOpacity={0.95} />;
-            })}
-          </g>
-        ) : null}
-        {isHovered ? (
-          <foreignObject
-            x={getSubtaskPosition(bubble, (subtaskMap[bubble.task.id] ?? []).length).x - 14 - bubble.x}
-            y={getSubtaskPosition(bubble, (subtaskMap[bubble.task.id] ?? []).length).y - 14 - bubble.y}
-            width={30}
-            height={30}
-          >
-            <button
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-slate-50 shadow-lg"
-              onMouseEnter={cancelHoverExit}
-              onMouseLeave={scheduleHoverExit}
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddSubtask(bubble.task);
-              }}
-            >
-              <Plus size={14} />
-            </button>
-          </foreignObject>
-        ) : null}
       </motion.g>
     );
   };
@@ -316,89 +279,59 @@ export function BubbleField({
 
           <AnimatePresence>{activeBubble ? renderBubble(activeBubble, true) : null}</AnimatePresence>
 
-          {hoveredBubble
-            ? hoveredSubtasks.map((subtask, idx) => {
-                const { x, y } = getSubtaskPosition(hoveredBubble, idx);
-                const urgent = subtask.status !== 'DONE' && shouldTaskGlow(subtask);
-                const overdue = isOverdue(subtask);
-                const radius = SUBTASK_RADIUS + 4;
-                const dx = hoveredBubble.x - x;
-                const dy = hoveredBubble.y - y;
-                const distance = Math.hypot(dx, dy) || 1;
-                const nx = dx / distance;
-                const ny = dy / distance;
-                const lineStartX = nx * (radius + 1);
-                const lineStartY = ny * (radius + 1);
-                const lineEndX = nx * (distance - hoveredBubble.radius - 2);
-                const lineEndY = ny * (distance - hoveredBubble.radius - 2);
-                return (
-                  <g
-                    key={subtask.id}
-                    transform={`translate(${x} ${y})`}
-                    onMouseEnter={() => {
-                      cancelHoverExit();
-                      setHoveredSubtaskId(subtask.id);
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredSubtaskId((prev) => (prev === subtask.id ? null : prev));
-                      scheduleHoverExit();
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onSelectSubtask(subtask);
-                    }}
-                    className="cursor-pointer"
-                  >
-                    <line
-                      x1={lineStartX}
-                      y1={lineStartY}
-                      x2={lineEndX}
-                      y2={lineEndY}
-                      stroke="#ffffff"
-                      strokeOpacity={0.95}
-                      strokeWidth={1.8}
-                    />
-                    <circle
-                      cx={0}
-                      cy={0}
-                      r={radius}
-                      fill={subtask.status === 'DONE' ? '#16a34a' : getBubbleShade(hoveredBubble.color, Math.min(0.95, hoveredBubble.distanceRatio + 0.2))}
-                      fillOpacity={0.66}
-                      stroke={overdue ? '#ef4444' : urgent ? '#fbbf24' : '#67e8f9'}
-                      strokeWidth={2}
-                      className={urgent ? 'animate-pulse' : ''}
-                      style={overdue ? { filter: 'drop-shadow(0 0 8px rgba(239,68,68,0.9))' } : undefined}
-                    />
-                    <foreignObject x={-radius * 0.8} y={-radius * 0.8} width={radius * 1.6} height={radius * 1.6} pointerEvents="none">
-                      <div className="flex h-full items-center justify-center overflow-hidden px-1 text-center text-[8px] font-semibold text-slate-100">
-                        <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{subtask.title}</span>
-                      </div>
-                    </foreignObject>
-                  </g>
-                );
-              })
-            : null}
-
           {hoveredBubble ? (
-            <foreignObject x={hoveredBubble.x + hoveredBubble.radius + 12} y={hoveredBubble.y - 64} width={250} height={130} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}>
+            <foreignObject x={hoveredBubble.x - 120} y={hoveredBubble.y + hoveredBubble.radius + 14} width={300} height={330} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}>
               <div className="rounded-xl border border-slate-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                 <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
                 <p className="mb-1 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
                 <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                 <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
-              </div>
-            </foreignObject>
-          ) : null}
-
-          {hoveredSubtask && hoveredBubble ? (
-            <foreignObject x={hoveredBubble.x - hoveredBubble.radius - 220} y={hoveredBubble.y - 80} width={210} height={160} onMouseEnter={cancelHoverExit} onMouseLeave={scheduleHoverExit}>
-              <div className="rounded-xl border border-cyan-300/40 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
-                <p className="mb-1 font-semibold">{hoveredSubtask.title}</p>
-                <p className="mb-1 text-slate-300">{hoveredSubtask.description?.trim() || 'Без описания'}</p>
-                <p className="mb-2 text-slate-300">Срок: {formatDueDate(hoveredSubtask.dueDate)}</p>
-                <button className="flex items-center gap-1 rounded bg-emerald-600 px-2 py-1 text-xs" onClick={() => onToggleSubtaskDone(hoveredSubtask)}>
-                  <Check size={12} /> {hoveredSubtask.status === 'DONE' ? 'Вернуть в работу' : 'Выполнить'}
-                </button>
+                <p className="mb-1 mt-2 font-semibold text-cyan-100">Доп задачи</p>
+                <ul className="mb-2 max-h-24 space-y-1 overflow-auto pr-1">
+                  {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет доп задач</li> : null}
+                  {hoveredSubtasks.map((subtask) => (
+                    <li key={subtask.id} className="flex items-center justify-between gap-2 rounded bg-slate-800/80 px-2 py-1">
+                      <button className="truncate text-left" onClick={(event) => { event.stopPropagation(); onSelectSubtask(subtask); }}>{subtask.title}</button>
+                      <button className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px]" onClick={(event) => { event.stopPropagation(); onToggleSubtaskDone(subtask); }}>
+                        <Check size={10} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="space-y-1.5 rounded border border-slate-700/70 bg-slate-900/70 p-2">
+                  <p className="font-semibold text-slate-200">Добавить доп задачу</p>
+                  <input className="w-full rounded bg-slate-800 p-1.5 text-[11px]" placeholder="Название" value={subtaskDraft.title} onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, title: event.target.value }))} />
+                  <textarea className="max-h-16 min-h-10 w-full rounded bg-slate-800 p-1.5 text-[11px]" placeholder="Описание" value={subtaskDraft.description} onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, description: event.target.value }))} />
+                  <input type="datetime-local" className="w-full rounded bg-slate-800 p-1.5 text-[11px]" value={subtaskDraft.dueDate} onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, dueDate: event.target.value }))} />
+                  <select className="w-full rounded bg-slate-800 p-1.5 text-[11px]" value={subtaskDraft.notifyPreset} onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, notifyPreset: event.target.value }))}>
+                    {NOTIFY_PRESETS.map((preset) => (
+                      <option key={preset.value} value={preset.value}>{preset.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="w-full rounded bg-cyan-600 px-2 py-1.5 text-[11px] disabled:opacity-60"
+                    disabled={!subtaskDraft.title.trim() || isSubmittingSubtask}
+                    onClick={async (event) => {
+                      event.stopPropagation();
+                      if (!subtaskDraft.title.trim()) return;
+                      setIsSubmittingSubtask(true);
+                      const notifyBeforeMinutes = subtaskDraft.notifyPreset === 'null' ? null : Number(subtaskDraft.notifyPreset);
+                      try {
+                        await onCreateSubtask(hoveredBubble.task, {
+                          title: subtaskDraft.title.trim(),
+                          description: subtaskDraft.description.trim(),
+                          dueDate: subtaskDraft.dueDate ? new Date(subtaskDraft.dueDate).toISOString() : null,
+                          notifyBeforeMinutes
+                        });
+                        setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+                      } finally {
+                        setIsSubmittingSubtask(false);
+                      }
+                    }}
+                  >
+                    {isSubmittingSubtask ? 'Добавляю…' : 'Добавить доп задачу'}
+                  </button>
+                </div>
               </div>
             </foreignObject>
           ) : null}
