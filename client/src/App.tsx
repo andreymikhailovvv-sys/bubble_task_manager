@@ -22,6 +22,7 @@ const NOTIFY_PRESETS = [
   { value: '60', label: 'За час' },
   { value: '180', label: 'За 3 часа' }
 ] as const;
+const AI_DIALOG_STORAGE_KEY = 'btm-ai-dialog-by-task';
 
 function suggestPriority(task: Partial<Task>) {
   const title = (task.title ?? '').toLowerCase();
@@ -49,7 +50,18 @@ export default function App() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
-  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const [aiMode, setAiMode] = useState<ChatMode>('fast');
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>(() => {
+    try {
+      const raw = localStorage.getItem(AI_DIALOG_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, ChatMessage[]>;
+      if (!parsed || typeof parsed !== 'object') return {};
+      return parsed;
+    } catch {
+      return {};
+    }
+  });
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(() => localStorage.getItem('btm-background-image'));
@@ -81,6 +93,10 @@ export default function App() {
     }
     localStorage.removeItem('btm-background-image');
   }, [backgroundImage]);
+
+  useEffect(() => {
+    localStorage.setItem(AI_DIALOG_STORAGE_KEY, JSON.stringify(aiDialogByTask));
+  }, [aiDialogByTask]);
 
   const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
   const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
@@ -128,6 +144,7 @@ export default function App() {
       setAiDraft('');
       setAiError(null);
       setIsAiExpanded(false);
+      setAiMode('fast');
       return;
     }
     setFocusedDraft(focusedTask);
@@ -154,7 +171,7 @@ export default function App() {
     setAiLoadingTaskId(taskId);
 
     try {
-      const result = await askTaskAssistant(taskId, { question, history: previousDialog, mode: 'fast' });
+      const result = await askTaskAssistant(taskId, { question, history: previousDialog, mode: aiMode });
       setAiDialogByTask((prev) => ({
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
@@ -169,6 +186,17 @@ export default function App() {
     } finally {
       setAiLoadingTaskId(null);
     }
+  };
+
+  const clearFocusedAiDialog = () => {
+    if (!focusedTask) return;
+    setAiDialogByTask((prev) => {
+      if (!(focusedTask.id in prev)) return prev;
+      const next = { ...prev };
+      delete next[focusedTask.id];
+      return next;
+    });
+    setAiError(null);
   };
 
   const visibleTasks = useMemo(
@@ -368,7 +396,6 @@ export default function App() {
           }}
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-          onAskTaskAssistant={askTaskAssistant}
         />
         <aside
           className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"
@@ -480,7 +507,7 @@ export default function App() {
       {focusedTask && focusedDraft ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
           <div className="flex w-full max-w-[1320px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
-            <aside className="hidden w-[360px] shrink-0 flex-col rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+            <aside className="hidden min-h-0 w-[360px] shrink-0 flex-col rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
@@ -494,12 +521,12 @@ export default function App() {
                   <Maximize2 size={14} />
                 </button>
               </div>
-              <div className="mb-3 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+              <div className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
                 {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
                 {focusedAiDialog.map((message, index) => (
                   <div
                     key={`focused-ai-${message.role}-${index}`}
-                    className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                    className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
                     <p>{message.content}</p>
@@ -641,6 +668,29 @@ export default function App() {
                 <p className="text-xs text-slate-300">{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-lg bg-slate-900/80 p-1 text-[11px]">
+                  <button
+                    className={`rounded px-2 py-1 ${aiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiMode('fast')}
+                    title="Быстрый режим"
+                  >
+                    Быстрый
+                  </button>
+                  <button
+                    className={`rounded px-2 py-1 ${aiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiMode('smart')}
+                    title="Умный режим (gpt-5.4)"
+                  >
+                    Умный
+                  </button>
+                </div>
+                <button
+                  className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
+                  onClick={clearFocusedAiDialog}
+                  title="Очистить историю диалога по этой задаче"
+                >
+                  Очистить диалог
+                </button>
                 <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsAiExpanded(false)} title="Свернуть">
                   <Minimize2 size={14} />
                 </button>
@@ -654,7 +704,7 @@ export default function App() {
               {focusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-ai-${message.role}-${index}`}
-                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
                   <p>{message.content}</p>
@@ -682,7 +732,7 @@ export default function App() {
                 onClick={() => void sendFocusedAiQuestion()}
               >
                 <SendHorizontal size={14} />
-                Отправить в ИИ
+                Отправить ({aiMode === 'fast' ? 'Быстрый' : 'Умный'})
               </button>
             </div>
           </div>
