@@ -24,6 +24,11 @@ Monorepo с frontend (React + Vite + TypeScript) и backend (Express + Prisma + 
 PORT=4000
 DATABASE_URL="file:./dev.db"
 CLIENT_DIST_PATH=../client/dist
+OPENAI_API_KEY=your_openai_api_key
+# Опционально: переопределить модель (по умолчанию gpt-5-mini, быстрый режим)
+# OPENAI_MODEL=gpt-5-mini
+# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
+# OPENAI_MODEL_FULL=gpt-5.4
 ```
 
 ## Локальный запуск
@@ -79,4 +84,5 @@ npm run start
 - Zoom колесом, pan перетаскиванием
 - Анимации появления/перестроения/hover
 - Заглушки AI + локальная эвристика приоритизации
+- AI-чат по задаче в hover-окне пузыря (с памятью диалога в рамках сессии)
 - Insights endpoint `/api/dashboard/insights`
