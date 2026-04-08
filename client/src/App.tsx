@@ -265,8 +265,8 @@ export default function App() {
       ) : null}
 
       {focusedTask && focusedDraft ? (
-        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
-          <aside className="pointer-events-auto w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
+          <aside className="w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="space-y-3">
                 <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
@@ -283,9 +283,6 @@ export default function App() {
                     value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
                     onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
                   />
-                  <button className="mt-2 rounded bg-slate-700 px-3 py-1 text-xs" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
-                    Принять дату и время
-                  </button>
                 </label>
                 <div>
                   <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
