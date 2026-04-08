@@ -62,14 +62,25 @@ function normalizeAngle(angle: number) {
   return ((angle % full) + full) % full;
 }
 
+function getSectorHalfSpan(sectorCount: number) {
+  return Math.PI / Math.max(1, sectorCount);
+}
+
+function getSectorMinDistance(radius: number, sectorCount: number) {
+  if (sectorCount <= 1) return 12;
+  const halfSpan = getSectorHalfSpan(sectorCount);
+  const boundaryPadding = 12;
+  const minByGeometry = (radius + boundaryPadding) / Math.max(0.06, Math.sin(halfSpan));
+  return Math.max(12, minByGeometry);
+}
+
 function keepInSector(bubble: Bubble, center: number, maxDistance: number, sectorCount: number) {
   const dx = bubble.x - center;
   const dy = bubble.y - center;
   const safeMaxDistance = Math.max(0, maxDistance - bubble.radius - 12);
+  const minDistanceBySector = getSectorMinDistance(bubble.radius, sectorCount);
   let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
-  if (distance < 12) {
-    distance = 12;
-  }
+  distance = Math.max(minDistanceBySector, distance);
 
   let angle = normalizeAngle(Math.atan2(dy, dx));
   if (sectorCount > 1) {
@@ -77,7 +88,7 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
     const sectorEnd = (Math.PI * 2 * (bubble.sectorIndex + 1)) / sectorCount;
     const span = sectorEnd - sectorStart;
     const maxPadding = Math.max(0, span / 2 - 0.01);
-    const dynamicPadding = Math.asin(Math.min(0.95, (bubble.radius + 14) / Math.max(distance, bubble.radius + 14)));
+    const dynamicPadding = Math.asin(Math.min(0.95, (bubble.radius + 12) / Math.max(distance, bubble.radius + 12)));
     const padding = Math.min(maxPadding, dynamicPadding);
     const minAngle = sectorStart + padding;
     const maxAngle = sectorEnd - padding;
@@ -132,13 +143,13 @@ function applyGravity(
       const ny = dy / currentDistance;
       const targetDistance = targetDistanceById[bubble.task.id] ?? 18;
       const gravity = gravityById[bubble.task.id] ?? 0.5;
-      const spring = (targetDistance - currentDistance) * (0.06 + gravity * 0.06);
+      const spring = (targetDistance - currentDistance) * (0.05 + gravity * 0.09);
       bubble.x += nx * spring;
       bubble.y += ny * spring;
       keepInSector(bubble, center, maxDistance, sectorCount);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, sectorCount, 6, 1);
+    resolveCollisions(bubbles, center, maxDistance, sectorCount, 8, 1);
   }
 }
 
@@ -271,7 +282,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
 
-  resolveCollisions(result, center, maxDistance, sectorCount, 6, 36);
+  resolveCollisions(result, center, maxDistance, sectorCount, 8, 72);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
