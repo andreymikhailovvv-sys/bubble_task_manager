@@ -13,6 +13,7 @@ type Props = {
   selectedId?: string;
   poppingTaskId?: string | null;
   onSelect: (task: Task) => void;
+  onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
   onAddSubtask: (parentTask: Task) => void;
   onRenameSphere?: (sphere: Sphere) => void;
@@ -37,12 +38,34 @@ function formatDueDate(value?: string | null) {
   });
 }
 
-function isDueWithinHour(dueDate?: string | null) {
-  if (!dueDate) return false;
-  const due = new Date(dueDate);
+function shouldTaskGlow(task: Task) {
+  if (!task.dueDate) return false;
+  const due = new Date(task.dueDate);
   if (Number.isNaN(due.getTime())) return false;
   const diff = due.getTime() - Date.now();
-  return diff > 0 && diff <= 3_600_000;
+  if (diff < 0) return true;
+  if (task.notifyBeforeMinutes === null) return false;
+  const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
+  return diff <= notifyBefore;
+}
+
+function isOverdue(task: Task) {
+  if (!task.dueDate) return false;
+  const due = new Date(task.dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  return due.getTime() < Date.now();
+}
+
+function getSubtaskPosition(parentBubble: { x: number; y: number; radius: number }, index: number) {
+  const step = Math.PI / 4.5;
+  const angle = -Math.PI / 2 + index * step;
+  const ring = Math.floor(index / 7);
+  const dist = parentBubble.radius + SUBTASK_RADIUS + 22 + ring * 26;
+  return {
+    angle,
+    x: parentBubble.x + Math.cos(angle) * dist,
+    y: parentBubble.y + Math.sin(angle) * dist
+  };
 }
 
 function hexToRgb(hex: string) {
@@ -73,6 +96,7 @@ export function BubbleField({
   selectedId,
   poppingTaskId,
   onSelect,
+  onSelectSubtask,
   onAddSubtask,
   onToggleSubtaskDone,
   onRenameSphere,
@@ -130,8 +154,9 @@ export function BubbleField({
 
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
     const isPopping = poppingTaskId === bubble.task.id;
-    const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && isDueWithinHour(task.dueDate));
-    const shouldGlow = bubble.distanceRatio <= 0.22 || hasUrgentSubtask;
+    const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && shouldTaskGlow(task));
+    const shouldGlow = shouldTaskGlow(bubble.task) || hasUrgentSubtask;
+    const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
 
     return (
@@ -156,8 +181,9 @@ export function BubbleField({
           stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
           strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter="url(#bubbleGlow)"
+          filter={shouldGlow ? 'url(#bubbleGlow)' : undefined}
           className={shouldGlow ? 'animate-pulse' : ''}
+          style={overdue ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' } : undefined}
         />
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
           <div className="flex h-full items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: Math.max(9, bubble.radius / 4.8), fontWeight: 600, lineHeight: '1.2', maxHeight: '100%' }}>
@@ -165,7 +191,12 @@ export function BubbleField({
           </div>
         </foreignObject>
         {isHovered ? (
-          <foreignObject x={-(bubble.radius + 38)} y={-16} width={30} height={30}>
+          <foreignObject
+            x={getSubtaskPosition(bubble, (subtaskMap[bubble.task.id] ?? []).length).x - 14 - bubble.x}
+            y={getSubtaskPosition(bubble, (subtaskMap[bubble.task.id] ?? []).length).y - 14 - bubble.y}
+            width={30}
+            height={30}
+          >
             <button
               className="flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-slate-50 shadow-lg"
               onMouseEnter={cancelHoverExit}
@@ -249,11 +280,10 @@ export function BubbleField({
 
           {hoveredBubble
             ? hoveredSubtasks.map((subtask, idx) => {
-                const angle = -Math.PI + idx * 0.58;
-                const dist = hoveredBubble.radius + SUBTASK_RADIUS + 12;
-                const x = hoveredBubble.x + Math.cos(angle) * dist;
-                const y = hoveredBubble.y + Math.sin(angle) * dist;
-                const urgent = subtask.status !== 'DONE' && isDueWithinHour(subtask.dueDate);
+                const { x, y } = getSubtaskPosition(hoveredBubble, idx);
+                const urgent = subtask.status !== 'DONE' && shouldTaskGlow(subtask);
+                const overdue = isOverdue(subtask);
+                const radius = SUBTASK_RADIUS + 4;
                 return (
                   <g
                     key={subtask.id}
@@ -266,11 +296,29 @@ export function BubbleField({
                       setHoveredSubtaskId((prev) => (prev === subtask.id ? null : prev));
                       scheduleHoverExit();
                     }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSelectSubtask(subtask);
+                    }}
+                    className="cursor-pointer"
                   >
-                    <circle cx={0} cy={0} r={SUBTASK_RADIUS} fill={subtask.status === 'DONE' ? '#16a34a' : '#1e293b'} stroke={urgent ? '#fbbf24' : '#67e8f9'} strokeWidth={2} className={urgent ? 'animate-pulse' : ''} />
-                    <text x={0} y={3} fill="#e2e8f0" textAnchor="middle" fontSize={10}>
-                      {idx + 1}
-                    </text>
+                    <line x1={hoveredBubble.x - x} y1={hoveredBubble.y - y} x2={0} y2={0} stroke="#67e8f9" strokeOpacity={0.65} strokeWidth={1.6} />
+                    <circle
+                      cx={0}
+                      cy={0}
+                      r={radius}
+                      fill={subtask.status === 'DONE' ? '#16a34a' : getBubbleShade(hoveredBubble.color, Math.min(0.95, hoveredBubble.distanceRatio + 0.2))}
+                      fillOpacity={0.66}
+                      stroke={overdue ? '#ef4444' : urgent ? '#fbbf24' : '#67e8f9'}
+                      strokeWidth={2}
+                      className={urgent ? 'animate-pulse' : ''}
+                      style={overdue ? { filter: 'drop-shadow(0 0 8px rgba(239,68,68,0.9))' } : undefined}
+                    />
+                    <foreignObject x={-radius * 0.8} y={-radius * 0.8} width={radius * 1.6} height={radius * 1.6} pointerEvents="none">
+                      <div className="flex h-full items-center justify-center overflow-hidden px-1 text-center text-[8px] font-semibold text-slate-100">
+                        <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{subtask.title}</span>
+                      </div>
+                    </foreignObject>
                   </g>
                 );
               })

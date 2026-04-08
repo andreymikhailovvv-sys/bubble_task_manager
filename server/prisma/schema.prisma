@@ -37,6 +37,7 @@ model Task {
   priorityScore  Float      @default(3)
   status         TaskStatus @default(TODO)
   dueDate        DateTime?
+  notifyBeforeMinutes Int?  @default(60)
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
