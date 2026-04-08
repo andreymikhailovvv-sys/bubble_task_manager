@@ -89,12 +89,12 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
 }
 
 function getDistanceByDeadline(index: number, total: number, maxDistance: number) {
-  const minDistance = 18;
-  const span = Math.max(16, maxDistance - minDistance);
+  const minDistance = 16;
   if (total <= 1) return minDistance;
+  const compactOuter = Math.min(maxDistance * 0.54, 40 + Math.sqrt(total) * 26);
   const rankRatio = index / (total - 1);
-  const easedRatio = Math.pow(rankRatio, 0.92);
-  return minDistance + span * easedRatio;
+  const easedRatio = Math.pow(rankRatio, 0.72);
+  return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
 }
 
 function getRadiusByDeadline(index: number, total: number, proximity: number, urgencyWeight: number, tieBoost: number) {
@@ -180,7 +180,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 12;
+        if (sectorCount > 1 && a.sectorIndex !== b.sectorIndex) continue;
+        const minDist = a.radius + b.radius + 4;
         if (distance < minDist) {
           const push = (minDist - distance) / 2;
           const nx = dx / distance;
@@ -209,14 +210,16 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       .map((task) => sectorBubbles.find((bubble) => bubble.task.id === task.id))
       .filter((bubble): bubble is Bubble => Boolean(bubble));
 
-    let previousDistance = 10;
+    let previousDistance = 8;
     ranked.forEach((bubble, idx) => {
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = getDistanceByDeadline(idx, ranked.length, maxDistance);
-      const minDistance = idx === 0 ? targetDistance : Math.max(targetDistance, previousDistance + bubble.radius * 0.34 + 9);
-      const maxDistanceForRank = Math.min(maxDistance - bubble.radius - 8, minDistance + Math.max(18, bubble.radius * 0.9));
+      const minDistance = idx === 0
+        ? Math.max(12, targetDistance - 5)
+        : Math.max(targetDistance - 12, previousDistance + bubble.radius * 0.2 + 4);
+      const maxDistanceForRank = Math.min(maxDistance - bubble.radius - 6, minDistance + Math.max(8, bubble.radius * 0.45));
       if (currentDistance < minDistance || currentDistance > maxDistanceForRank) {
         const clampedDistance = Math.min(maxDistanceForRank, Math.max(minDistance, currentDistance));
         const nx = dx / currentDistance;
