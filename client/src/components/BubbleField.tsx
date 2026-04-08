@@ -38,6 +38,19 @@ function formatDueDate(value?: string | null) {
   });
 }
 
+function formatDeadlineLeft(value?: string | null) {
+  if (!value) return 'Без дедлайна';
+  const due = new Date(value);
+  if (Number.isNaN(due.getTime())) return 'Без дедлайна';
+  const diffMs = due.getTime() - Date.now();
+  if (diffMs <= 0) return 'Дедлайн истёк';
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `Дедлайн через ${minutes} мин`;
+  return `Дедлайн через ${hours} ч ${minutes} мин`;
+}
+
 function shouldTaskGlow(task: Task) {
   if (!task.dueDate) return false;
   const due = new Date(task.dueDate);
@@ -190,6 +203,16 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
+        {((subtaskMap[bubble.task.id] ?? []).length > 0) ? (
+          <g transform={`translate(0 ${-bubble.radius - 10})`}>
+            {(subtaskMap[bubble.task.id] ?? []).slice(0, 7).map((subtask, idx) => {
+              const count = Math.min(7, (subtaskMap[bubble.task.id] ?? []).length);
+              const spread = Math.max(10, bubble.radius * 0.14);
+              const dotX = (idx - (count - 1) / 2) * spread;
+              return <circle key={subtask.id} cx={dotX} cy={0} r={2.8} fill="#ffffff" fillOpacity={0.95} />;
+            })}
+          </g>
+        ) : null}
         {isHovered ? (
           <foreignObject
             x={getSubtaskPosition(bubble, (subtaskMap[bubble.task.id] ?? []).length).x - 14 - bubble.x}
@@ -302,7 +325,15 @@ export function BubbleField({
                     }}
                     className="cursor-pointer"
                   >
-                    <line x1={hoveredBubble.x - x} y1={hoveredBubble.y - y} x2={0} y2={0} stroke="#67e8f9" strokeOpacity={0.65} strokeWidth={1.6} />
+                    <line
+                      x1={(hoveredBubble.x - x) * ((hoveredBubble.radius + 2) / (Math.hypot(hoveredBubble.x - x, hoveredBubble.y - y) || 1))}
+                      y1={(hoveredBubble.y - y) * ((hoveredBubble.radius + 2) / (Math.hypot(hoveredBubble.x - x, hoveredBubble.y - y) || 1))}
+                      x2={0}
+                      y2={0}
+                      stroke="#ffffff"
+                      strokeOpacity={0.95}
+                      strokeWidth={1.8}
+                    />
                     <circle
                       cx={0}
                       cy={0}
@@ -330,6 +361,7 @@ export function BubbleField({
                 <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
                 <p className="mb-1 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
                 <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
+                <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
               </div>
             </foreignObject>
           ) : null}
