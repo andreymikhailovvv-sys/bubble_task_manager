@@ -26,6 +26,8 @@ type Props = {
 
 const SIZE = 900;
 const HOVER_EXIT_DELAY_MS = 220;
+const SUBTASK_REMINDER_GLOW =
+  'subtask-reminder-glow 2.3s ease-in-out infinite';
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -263,7 +265,7 @@ export function BubbleField({
 
   return (
     <div
-      className={`relative overflow-visible rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/95 via-slate-950/95 to-indigo-950/90 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`relative overflow-visible rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
       onWheel={(event) => {
         event.preventDefault();
         const svgRect = event.currentTarget.getBoundingClientRect();
@@ -294,9 +296,9 @@ export function BubbleField({
         <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.2" />
-              <stop offset="55%" stopColor="#1d4ed8" stopOpacity="0.14" />
-              <stop offset="100%" stopColor="#020617" stopOpacity="0.78" />
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
+              <stop offset="55%" stopColor="#1d4ed8" stopOpacity="0.11" />
+              <stop offset="100%" stopColor="#020617" stopOpacity="0.58" />
             </radialGradient>
             <radialGradient id="fieldHalo" cx="50%" cy="50%" r="62%">
               <stop offset="68%" stopColor="#67e8f9" stopOpacity="0" />
@@ -308,7 +310,7 @@ export function BubbleField({
               <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
             </filter>
           </defs>
-          <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.47} fill="url(#bg)" />
+          <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.47} fill="url(#bg)" opacity={0.86} />
           <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.485} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={0.7} />
 
           {Array.from({ length: sectorCount }).map((_, idx) => {
@@ -349,29 +351,29 @@ export function BubbleField({
               <foreignObject
                 x={clamp(hoveredBubble.x - 130, 8, SIZE - 268)}
                 y={clamp(hoveredBubble.y - hoveredBubble.radius - 126, 8, SIZE - 136)}
-                width={260}
-                height={130}
+                width={290}
+                height={170}
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
-                <div className="rounded-xl border border-slate-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                <div className="rounded-xl border border-slate-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                   <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
-                  <p className="mb-1 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
+                  <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                 </div>
               </foreignObject>
               <foreignObject
-                x={clamp(hoveredBubble.x - 130, 8, SIZE - 308)}
+                x={clamp(hoveredBubble.x - 170, 8, SIZE - 368)}
                 y={clamp(hoveredBubble.y + hoveredBubble.radius + 14, 8, SIZE - 230)}
-                width={300}
-                height={220}
+                width={360}
+                height={250}
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
-                <div className="rounded-xl border border-cyan-200/30 bg-slate-950 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                <div className="rounded-xl border border-cyan-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                   <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
-                  <ul className="mb-3 max-h-30 space-y-1 overflow-auto pr-1">
+                  <ul className="mb-3 max-h-36 space-y-1 overflow-auto pr-1">
                     {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask, index) => (
                       <li
@@ -393,7 +395,7 @@ export function BubbleField({
                         style={isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                           : shouldTaskGlow(subtask)
-                            ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)' }
+                            ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
                             : undefined}
                       >
                         <span className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">

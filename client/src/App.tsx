@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { Brain, GripVertical, Plus, Sparkles } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -47,6 +47,7 @@ export default function App() {
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(() => localStorage.getItem('btm-background-image'));
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -67,6 +68,14 @@ export default function App() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (backgroundImage) {
+      localStorage.setItem('btm-background-image', backgroundImage);
+      return;
+    }
+    localStorage.removeItem('btm-background-image');
+  }, [backgroundImage]);
 
   const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
   const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
@@ -213,8 +222,30 @@ export default function App() {
     await load();
   };
 
+  const handleBackgroundUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setBackgroundImage(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
   return (
-    <main className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6">
+    <main
+      className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
+      style={{
+        backgroundImage: backgroundImage
+          ? `linear-gradient(rgba(2,6,23,0.68), rgba(2,6,23,0.82)), url(${backgroundImage})`
+          : undefined,
+        backgroundSize: backgroundImage ? 'cover' : undefined,
+        backgroundPosition: backgroundImage ? 'center' : undefined
+      }}
+    >
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -291,7 +322,7 @@ export default function App() {
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
         />
-        <aside className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/96 p-4">
+        <aside className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm">
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
             <ul className="space-y-1 text-xs text-slate-300">
@@ -332,6 +363,21 @@ export default function App() {
                 </li>
               ))}
             </ul>
+          </section>
+          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+            <h3 className="mb-2 text-sm font-semibold">Фон рабочего пространства</h3>
+            <label className="mb-2 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200 transition hover:bg-slate-700/80">
+              <span className="block font-medium">Загрузить изображение</span>
+              <span className="mt-1 block text-[11px] text-slate-400">Рекомендуемый размер: от 1920×1080 (лучше 2560×1440).</span>
+              <input type="file" accept="image/*" className="mt-2 block w-full text-[11px]" onChange={handleBackgroundUpload} />
+            </label>
+            <button
+              className="w-full rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50"
+              disabled={!backgroundImage}
+              onClick={() => setBackgroundImage(null)}
+            >
+              Сбросить фон
+            </button>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold">Управление секторами</h3>
@@ -455,7 +501,7 @@ export default function App() {
                       style={isOverdue(subtask)
                         ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                         : shouldTaskGlow(subtask)
-                          ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)' }
+                          ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
                           : undefined}
                     >
                       <span className="cursor-grab text-slate-400 active:cursor-grabbing"><GripVertical size={14} /></span>

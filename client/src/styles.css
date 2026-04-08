@@ -24,3 +24,15 @@ body {
     radial-gradient(circle at top, #1e293b 0%, #020617 56%, #020617 100%);
   background-size: 280px 280px, 360px 360px, 320px 320px, 420px 420px, auto;
 }
+
+@keyframes subtask-reminder-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 7px rgba(56, 189, 248, 0.42), inset 0 0 6px rgba(56, 189, 248, 0.18);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.72), inset 0 0 10px rgba(56, 189, 248, 0.3);
+    transform: scale(1.01);
+  }
+}
