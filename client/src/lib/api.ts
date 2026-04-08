@@ -1,4 +1,4 @@
-import type { ChatMessage, Sphere, Task } from './types';
+import type { ChatMessage, ChatMode, Sphere, Task } from './types';
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -24,7 +24,7 @@ export const api = {
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
 
-  askTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[] }) =>
+  askTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode }) =>
     request<{ answer: string; model: string }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify(payload)

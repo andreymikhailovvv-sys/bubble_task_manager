@@ -12,6 +12,7 @@ export const aiController = {
       const { question, history } = req.body as {
         question?: string;
         history?: ChatMessage[];
+        mode?: 'fast' | 'full';
       };
 
       if (!question || typeof question !== 'string') {
@@ -22,7 +23,8 @@ export const aiController = {
       const result = await aiAssistantService.askTaskAssistant({
         taskId: req.params.id,
         question,
-        history: Array.isArray(history) ? history : []
+        history: Array.isArray(history) ? history : [],
+        mode: req.body?.mode === 'full' ? 'full' : 'fast'
       });
 
       res.json(result);

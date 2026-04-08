@@ -7,7 +7,7 @@ import { TaskEditor } from './components/TaskEditor';
 import { api } from './lib/api';
 import { calcScore } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { ChatMessage, Insight, Sphere, Task } from './lib/types';
+import type { ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
 
 const MIN_SPHERES = 3;
 const DEFAULT_SPHERES = [
@@ -278,7 +278,7 @@ export default function App() {
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; history: ChatMessage[] }) => {
+  const askTaskAssistant = async (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode }) => {
     return api.askTaskAssistant(taskId, payload);
   };
 
@@ -368,6 +368,7 @@ export default function App() {
           }}
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+          onAskTaskAssistant={askTaskAssistant}
         />
         <aside
           className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"

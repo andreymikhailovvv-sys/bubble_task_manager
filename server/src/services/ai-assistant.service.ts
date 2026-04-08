@@ -11,9 +11,11 @@ type AskTaskAssistantInput = {
   taskId: string;
   question: string;
   history: ChatMessage[];
+  mode?: 'fast' | 'full';
 };
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini';
+const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini';
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
@@ -116,7 +118,9 @@ export const aiAssistantService = {
       'Твоя роль — помогать пользователю выполнять конкретную задачу: планировать, разбивать на шаги, снимать блокеры, предлагать приоритеты и практичные действия.',
       'Отвечай на русском языке, по делу, в дружелюбном тоне.',
       'Опирайся на контекст задачи и подзадач. Если информации недостаточно, задай уточняющий вопрос.',
-      'Оформляй ответ в читаемом виде: разделяй мысль на короткие абзацы по смыслу, при необходимости используй маркированные списки.'
+      'Пиши экономно: только сухо и по делу, без воды.',
+      'Если вопрос простой — отвечай коротко.',
+      'Если тема сложная — давай сжатый ответ с самыми важными пунктами.'
     ].join(' ');
 
     const taskContext = formatTaskContext(task);
@@ -127,6 +131,7 @@ export const aiAssistantService = {
       { role: 'user', content: question }
     ];
 
+    const model = input.mode === 'full' ? FULL_MODEL : FAST_MODEL;
     const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -134,7 +139,7 @@ export const aiAssistantService = {
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: OPENAI_MODEL,
+        model,
         input: messages,
         reasoning: { effort: 'minimal' }
       })
@@ -153,7 +158,7 @@ export const aiAssistantService = {
     }
 
     return {
-      model: OPENAI_MODEL,
+      model,
       answer
     };
   }
