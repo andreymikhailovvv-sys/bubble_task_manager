@@ -88,13 +88,67 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
-function getDistanceByDeadline(index: number, total: number, urgencyWeight: number, maxDistance: number) {
-  const minDistance = 22;
-  const span = Math.max(18, maxDistance - minDistance);
-  const rankRatio = total <= 1 ? 0 : index / (total - 1);
-  const urgencyPull = Math.pow(urgencyWeight, 0.8) * 0.22;
-  const ratio = Math.max(0, Math.min(1, rankRatio - urgencyPull));
-  return minDistance + span * ratio;
+
+function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: number, sectorCount: number, padding: number, iterations: number) {
+  for (let t = 0; t < iterations; t += 1) {
+    for (let i = 0; i < bubbles.length; i += 1) {
+      for (let j = i + 1; j < bubbles.length; j += 1) {
+        const a = bubbles[i];
+        const b = bubbles[j];
+        if (sectorCount > 1 && a.sectorIndex !== b.sectorIndex) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        const minDist = a.radius + b.radius + padding;
+        if (distance >= minDist) continue;
+        const push = (minDist - distance) / 2;
+        const nx = dx / distance;
+        const ny = dy / distance;
+        a.x -= nx * push;
+        a.y -= ny * push;
+        b.x += nx * push;
+        b.y += ny * push;
+        keepInSector(a, center, maxDistance, sectorCount);
+        keepInSector(b, center, maxDistance, sectorCount);
+      }
+    }
+  }
+}
+
+function applyGravity(
+  bubbles: Bubble[],
+  center: number,
+  maxDistance: number,
+  sectorCount: number,
+  targetDistanceById: Record<string, number>,
+  gravityById: Record<string, number>
+) {
+  for (let t = 0; t < 120; t += 1) {
+    bubbles.forEach((bubble) => {
+      const dx = bubble.x - center;
+      const dy = bubble.y - center;
+      const currentDistance = Math.hypot(dx, dy) || 1;
+      const nx = dx / currentDistance;
+      const ny = dy / currentDistance;
+      const targetDistance = targetDistanceById[bubble.task.id] ?? 18;
+      const gravity = gravityById[bubble.task.id] ?? 0.5;
+      const spring = (targetDistance - currentDistance) * (0.06 + gravity * 0.06);
+      bubble.x += nx * spring;
+      bubble.y += ny * spring;
+      keepInSector(bubble, center, maxDistance, sectorCount);
+    });
+
+    resolveCollisions(bubbles, center, maxDistance, sectorCount, 6, 1);
+  }
+}
+
+function getDistanceByDeadline(index: number, total: number, maxDistance: number) {
+  const minDistance = 16;
+  if (total <= 1) return minDistance;
+  const compactOuter = Math.min(maxDistance * 0.54, 40 + Math.sqrt(total) * 26);
+  const rankRatio = index / (total - 1);
+  const easedRatio = Math.pow(rankRatio, 0.72);
+  return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
 }
 
 function getRadiusByDeadline(index: number, total: number, proximity: number, urgencyWeight: number, tieBoost: number) {
@@ -120,6 +174,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
   });
 
   const result: Bubble[] = [];
+  const targetDistanceById: Record<string, number> = {};
+  const gravityById: Record<string, number> = {};
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const startAngle = (Math.PI * 2 * sectorIndex) / sectorCount;
@@ -148,7 +204,10 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost);
-      const distance = getDistanceByDeadline(i, sorted.length, urgencyWeight, maxDistance);
+      const distance = getDistanceByDeadline(i, sorted.length, maxDistance);
+      const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
+      targetDistanceById[task.id] = distance;
+      gravityById[task.id] = 1 - rankRatio;
       const angleSpan = endAngle - startAngle;
       const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
       const ring = Math.floor(i / slotCount);
@@ -172,29 +231,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
 
-  for (let t = 0; t < 54; t += 1) {
-    for (let i = 0; i < result.length; i += 1) {
-      for (let j = i + 1; j < result.length; j += 1) {
-        const a = result[i];
-        const b = result[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const distance = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 12;
-        if (distance < minDist) {
-          const push = (minDist - distance) / 2;
-          const nx = dx / distance;
-          const ny = dy / distance;
-          a.x -= nx * push;
-          a.y -= ny * push;
-          b.x += nx * push;
-          b.y += ny * push;
-          keepInSector(a, center, maxDistance, sectorCount);
-          keepInSector(b, center, maxDistance, sectorCount);
-        }
-      }
-    }
-  }
+  resolveCollisions(result, center, maxDistance, sectorCount, 8, 54);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -209,22 +246,32 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       .map((task) => sectorBubbles.find((bubble) => bubble.task.id === task.id))
       .filter((bubble): bubble is Bubble => Boolean(bubble));
 
-    let previousDistance = 14;
+    let previousDistance = 8;
     ranked.forEach((bubble, idx) => {
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const minDistance = idx === 0 ? 16 : previousDistance + bubble.radius * 0.52 + 14;
-      if (currentDistance < minDistance) {
+      const targetDistance = getDistanceByDeadline(idx, ranked.length, maxDistance);
+      const minDistance = idx === 0
+        ? Math.max(12, targetDistance - 5)
+        : Math.max(targetDistance - 12, previousDistance + bubble.radius * 0.2 + 4);
+      const maxDistanceForRank = Math.min(maxDistance - bubble.radius - 6, minDistance + Math.max(8, bubble.radius * 0.45));
+      if (currentDistance < minDistance || currentDistance > maxDistanceForRank) {
+        const clampedDistance = Math.min(maxDistanceForRank, Math.max(minDistance, currentDistance));
         const nx = dx / currentDistance;
         const ny = dy / currentDistance;
-        bubble.x = center + nx * minDistance;
-        bubble.y = center + ny * minDistance;
+        bubble.x = center + nx * clampedDistance;
+        bubble.y = center + ny * clampedDistance;
         keepInSector(bubble, center, maxDistance, sectorCount);
       }
       previousDistance = Math.hypot(bubble.x - center, bubble.y - center);
+      targetDistanceById[bubble.task.id] = minDistance;
     });
   });
+
+  applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
+
+  resolveCollisions(result, center, maxDistance, sectorCount, 6, 36);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
