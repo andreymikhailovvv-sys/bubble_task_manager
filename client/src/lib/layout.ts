@@ -88,20 +88,23 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
-function getDistanceByPriority(index: number, urgencyWeight: number, maxDistance: number) {
-  const rankSpread = Math.min(1, index / 12);
-  const urgencyPull = Math.pow(urgencyWeight, 0.72);
-  const ratio = 0.1 + rankSpread * 0.75 - urgencyPull * 0.42;
-  return Math.max(22, Math.min(maxDistance, maxDistance * ratio));
+function getDistanceByDeadline(index: number, total: number, urgencyWeight: number, maxDistance: number) {
+  const minDistance = 22;
+  const span = Math.max(18, maxDistance - minDistance);
+  const rankRatio = total <= 1 ? 0 : index / (total - 1);
+  const urgencyPull = Math.pow(urgencyWeight, 0.8) * 0.22;
+  const ratio = Math.max(0, Math.min(1, rankRatio - urgencyPull));
+  return minDistance + span * ratio;
 }
 
-function getRadiusByPriority(index: number, proximity: number, urgencyWeight: number, tieBoost: number) {
-  const rankScale = Math.max(0, 1 - index / 14);
-  const base = 18 + rankScale * 28;
-  const proximityBoost = proximity * 11;
-  const urgencyBoost = urgencyWeight * 18;
-  const tieBonus = tieBoost * 5;
-  return Math.max(18, Math.min(72, base + proximityBoost + urgencyBoost + tieBonus));
+function getRadiusByDeadline(index: number, total: number, proximity: number, urgencyWeight: number, tieBoost: number) {
+  const rankRatio = total <= 1 ? 0 : index / (total - 1);
+  const deadlineScale = 1 - rankRatio;
+  const base = 20 + deadlineScale * 30;
+  const proximityBoost = proximity * 9;
+  const urgencyBoost = urgencyWeight * 14;
+  const tieBonus = tieBoost * 4;
+  return Math.max(18, Math.min(74, base + proximityBoost + urgencyBoost + tieBonus));
 }
 
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
@@ -144,12 +147,16 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = getRadiusByPriority(i, proximity, urgencyWeight, importanceTieBoost);
-      const distance = getDistanceByPriority(i, urgencyWeight, maxDistance);
+      const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost);
+      const distance = getDistanceByDeadline(i, sorted.length, urgencyWeight, maxDistance);
       const angleSpan = endAngle - startAngle;
-      const ringIndex = Math.max(0, i);
-      const slotCount = Math.max(5, Math.ceil(Math.sqrt(sorted.length + 1)));
-      const angle = startAngle + (angleSpan / (slotCount + 1)) * ((ringIndex % slotCount) + 1) + Math.floor(ringIndex / slotCount) * 0.04 - rankInDue * 0.02;
+      const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
+      const ring = Math.floor(i / slotCount);
+      const slot = i % slotCount;
+      const baseAngle = startAngle + (angleSpan / (slotCount + 1)) * (slot + 1);
+      const ringOffset = (ring % 2 === 0 ? 1 : -1) * (0.05 + ring * 0.015);
+      const dueOffset = -rankInDue * 0.02;
+      const angle = baseAngle + ringOffset + dueOffset;
       const point = polarToCartesian(center, angle, distance);
       result.push({
         task,
@@ -202,12 +209,12 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       .map((task) => sectorBubbles.find((bubble) => bubble.task.id === task.id))
       .filter((bubble): bubble is Bubble => Boolean(bubble));
 
-    let previousDistance = 0;
+    let previousDistance = 14;
     ranked.forEach((bubble, idx) => {
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const minDistance = idx === 0 ? 16 : previousDistance + bubble.radius * 0.35 + 8;
+      const minDistance = idx === 0 ? 16 : previousDistance + bubble.radius * 0.52 + 14;
       if (currentDistance < minDistance) {
         const nx = dx / currentDistance;
         const ny = dy / currentDistance;
