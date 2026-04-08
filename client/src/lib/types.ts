@@ -25,3 +25,8 @@ export type Insight = {
   id: string;
   text: string;
 };
+
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};

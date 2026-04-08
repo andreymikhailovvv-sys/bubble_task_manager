@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
 import { insightService } from '../services/insight.service.js';
+import { aiController } from '../controllers/ai.controller.js';
 
 export const apiRouter = Router();
 
@@ -15,3 +16,5 @@ apiRouter.post('/tasks', taskController.create);
 apiRouter.patch('/tasks/:id', taskController.update);
 apiRouter.delete('/tasks/:id', taskController.remove);
 apiRouter.get('/dashboard/insights', async (_, res) => res.json(await insightService.list()));
+
+apiRouter.post('/tasks/:id/ai-chat', aiController.askTaskAssistant);

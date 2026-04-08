@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { GripVertical, Plus } from 'lucide-react';
+import { Bot, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
-import type { Sphere, Task } from '../lib/types';
+import type { ChatMessage, Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
   onReorderSubtasks: (parentTaskId: string, sourceIndex: number, targetIndex: number) => void;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
+  onAskTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[] }) => Promise<{ answer: string }>;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   className?: string;
@@ -116,6 +117,7 @@ export function BubbleField({
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
   onReorderSubtasks,
+  onAskTaskAssistant,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -130,13 +132,21 @@ export function BubbleField({
     notifyPreset: '60'
   });
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [isAiExpanded, setIsAiExpanded] = useState(false);
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const aiScrollRef = useRef<HTMLDivElement | null>(null);
+  const expandedAiScrollRef = useRef<HTMLDivElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
+  const hoveredAiDialog = hoveredBubble ? aiDialogByTask[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
 
   const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
@@ -147,6 +157,12 @@ export function BubbleField({
       subtaskTitleInputRef.current?.focus();
     }
   }, [isAddingSubtask]);
+
+  useEffect(() => {
+    if (!hoveredBubble) return;
+    aiScrollRef.current?.scrollTo({ top: aiScrollRef.current.scrollHeight, behavior: 'smooth' });
+    expandedAiScrollRef.current?.scrollTo({ top: expandedAiScrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [hoveredBubble, hoveredAiDialog, aiLoadingTaskId]);
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -182,7 +198,39 @@ export function BubbleField({
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
       setIsAddingSubtask(false);
+      setIsAiExpanded(false);
     }, HOVER_EXIT_DELAY_MS);
+  };
+
+  const sendAiQuestion = async () => {
+    if (!hoveredBubble) return;
+    const question = aiDraft.trim();
+    if (!question) return;
+
+    const taskId = hoveredBubble.task.id;
+    const previousDialog = aiDialogByTask[taskId] ?? [];
+    const nextDialog = [...previousDialog, { role: 'user' as const, content: question }];
+    setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
+    setAiDraft('');
+    setAiError(null);
+    setAiLoadingTaskId(taskId);
+
+    try {
+      const result = await onAskTaskAssistant(taskId, { question, history: previousDialog });
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
+      setAiError(message);
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: 'Не удалось получить ответ. Попробуйте ещё раз.' }]
+      }));
+    } finally {
+      setAiLoadingTaskId(null);
+    }
   };
 
   const onAddSubtask = async (parentTask: Task) => {
@@ -484,10 +532,149 @@ export function BubbleField({
                   )}
                 </div>
               </foreignObject>
+              <foreignObject
+                x={clamp(hoveredBubble.x - hoveredBubble.radius - 338, 8, SIZE - 338)}
+                y={clamp(hoveredBubble.y - 120, 8, SIZE - 258)}
+                width={330}
+                height={250}
+                onMouseEnter={cancelHoverExit}
+                onMouseLeave={scheduleHoverExit}
+              >
+                <div
+                  className="flex h-full flex-col rounded-xl border border-violet-200/30 bg-slate-950/93 p-3 text-xs text-slate-100 shadow-[0_18px_36px_rgba(2,6,23,0.86)]"
+                  data-no-field-zoom="true"
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="flex items-center gap-1 font-semibold text-violet-100"><Bot size={13} /> Вопрос ИИ</p>
+                    <button
+                      className="rounded bg-slate-700/80 p-1 text-slate-200 hover:bg-slate-600"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsAiExpanded(true);
+                      }}
+                      title="Развернуть окно"
+                    >
+                      <Maximize2 size={12} />
+                    </button>
+                  </div>
+                  <div ref={aiScrollRef} className="mb-2 h-28 overflow-y-auto rounded bg-slate-900/80 p-2 pr-1" data-no-field-zoom="true">
+                    {hoveredAiDialog.length === 0 ? <p className="text-[11px] text-slate-400">Спросите ИИ, как лучше выполнить эту задачу.</p> : null}
+                    <div className="space-y-1.5">
+                      {hoveredAiDialog.map((message, index) => (
+                        <p key={`${message.role}-${index}`} className={`rounded px-2 py-1 text-[11px] ${message.role === 'assistant' ? 'bg-violet-600/25 text-violet-50' : 'bg-slate-700/70 text-slate-50'}`}>
+                          <span className="mr-1 font-semibold">{message.role === 'assistant' ? 'ИИ:' : 'Вы:'}</span>
+                          {message.content}
+                        </p>
+                      ))}
+                      {aiLoadingTaskId === hoveredBubble.task.id ? <p className="text-[11px] text-violet-200">ИИ думает…</p> : null}
+                    </div>
+                  </div>
+                  <textarea
+                    className="mb-2 min-h-14 w-full resize-none rounded bg-slate-800 px-2 py-1.5 text-[11px]"
+                    placeholder="Например: как разбить задачу на шаги?"
+                    value={aiDraft}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => setAiDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendAiQuestion();
+                      }
+                    }}
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-h-4 text-[10px] text-rose-300">{aiError ?? ''}</p>
+                    <button
+                      className="flex items-center gap-1 rounded bg-violet-600 px-2 py-1 text-[11px] disabled:opacity-50"
+                      disabled={aiLoadingTaskId === hoveredBubble.task.id}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void sendAiQuestion();
+                      }}
+                    >
+                      <SendHorizontal size={12} />
+                      Отправить
+                    </button>
+                  </div>
+                </div>
+              </foreignObject>
             </>
           ) : null}
         </g>
       </svg>
+      {hoveredBubble && isAiExpanded ? (
+        <div
+          className="absolute inset-8 z-40 rounded-2xl border border-violet-200/30 bg-slate-950/97 p-4 shadow-[0_30px_90px_rgba(2,6,23,0.9)]"
+          onMouseEnter={cancelHoverExit}
+          onMouseLeave={scheduleHoverExit}
+          data-no-field-zoom="true"
+        >
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Вопрос ИИ по задаче</p>
+              <p className="text-xs text-slate-300">{hoveredBubble.task.title}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsAiExpanded(false);
+                }}
+                title="Свернуть"
+              >
+                <Minimize2 size={14} />
+              </button>
+              <button
+                className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsAiExpanded(false);
+                  setHoveredTaskId(null);
+                }}
+                title="Закрыть"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+          <div ref={expandedAiScrollRef} className="mb-3 h-[calc(100%-138px)] overflow-y-auto rounded-xl bg-slate-900/85 p-3 pr-2">
+            {hoveredAiDialog.length === 0 ? <p className="text-sm text-slate-400">Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
+            <div className="space-y-2">
+              {hoveredAiDialog.map((message, index) => (
+                <p key={`expanded-${message.role}-${index}`} className={`rounded-lg px-3 py-2 text-sm leading-snug ${message.role === 'assistant' ? 'bg-violet-600/25 text-violet-50' : 'bg-slate-700/75 text-slate-50'}`}>
+                  <span className="mr-1 font-semibold">{message.role === 'assistant' ? 'ИИ:' : 'Вы:'}</span>
+                  {message.content}
+                </p>
+              ))}
+              {aiLoadingTaskId === hoveredBubble.task.id ? <p className="text-sm text-violet-200">ИИ думает…</p> : null}
+            </div>
+          </div>
+          <textarea
+            className="mb-2 min-h-20 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm"
+            placeholder="Опишите вопрос подробнее…"
+            value={aiDraft}
+            onChange={(event) => setAiDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void sendAiQuestion();
+              }
+            }}
+          />
+          <div className="flex items-center justify-between">
+            <p className="min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
+            <button
+              className="flex items-center gap-1 rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
+              disabled={aiLoadingTaskId === hoveredBubble.task.id}
+              onClick={() => void sendAiQuestion()}
+            >
+              <SendHorizontal size={14} />
+              Отправить в ИИ
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Zoom {zoom.toFixed(2)} • Pan drag</div>
     </div>
   );
