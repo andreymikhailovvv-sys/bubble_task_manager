@@ -25,6 +25,7 @@ type Props = {
 };
 
 const SIZE = 900;
+const WORKSPACE_PADDING = 320;
 const HOVER_EXIT_DELAY_MS = 220;
 const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
@@ -200,6 +201,12 @@ export function BubbleField({
     setIsAddingSubtask(false);
   };
 
+
+  const hoverInfoCard = { width: 290, height: 170 };
+  const hoverSubtasksCard = { width: 360, height: 250 };
+  const workspaceMin = -WORKSPACE_PADDING;
+  const workspaceMax = SIZE + WORKSPACE_PADDING;
+
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && shouldTaskGlow(task));
@@ -224,6 +231,7 @@ export function BubbleField({
         onMouseLeave={scheduleHoverExit}
         className="cursor-pointer"
       >
+        <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
         <circle
           cx={0}
           cy={0}
@@ -273,8 +281,9 @@ export function BubbleField({
         }
         event.preventDefault();
         const svgRect = event.currentTarget.getBoundingClientRect();
-        const mouseX = ((event.clientX - svgRect.left) / svgRect.width) * SIZE;
-        const mouseY = ((event.clientY - svgRect.top) / svgRect.height) * SIZE;
+        const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
+        const mouseX = workspaceMin + ((event.clientX - svgRect.left) / svgRect.width) * workspaceSize;
+        const mouseY = workspaceMin + ((event.clientY - svgRect.top) / svgRect.height) * workspaceSize;
         const nextZoom = Math.min(2.2, Math.max(0.6, zoom + (event.deltaY > 0 ? -0.08 : 0.08)));
         const worldX = (mouseX - offset.x) / zoom;
         const worldY = (mouseY - offset.y) / zoom;
@@ -296,7 +305,7 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="relative z-20 h-full w-full overflow-visible">
+      <svg viewBox={`${workspaceMin} ${workspaceMin} ${SIZE + WORKSPACE_PADDING * 2} ${SIZE + WORKSPACE_PADDING * 2}`} className="relative z-20 h-full w-full overflow-visible">
         <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -353,10 +362,10 @@ export function BubbleField({
           {hoveredBubble ? (
             <>
               <foreignObject
-                x={clamp(hoveredBubble.x - 130, 8, SIZE - 268)}
-                y={clamp(hoveredBubble.y - hoveredBubble.radius - 126, 8, SIZE - 136)}
-                width={290}
-                height={170}
+                x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
+                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 20, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                width={hoverInfoCard.width}
+                height={hoverInfoCard.height}
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
@@ -368,10 +377,10 @@ export function BubbleField({
                 </div>
               </foreignObject>
               <foreignObject
-                x={clamp(hoveredBubble.x - 170, 8, SIZE - 368)}
-                y={clamp(hoveredBubble.y + hoveredBubble.radius + 14, 8, SIZE - 230)}
-                width={360}
-                height={250}
+                x={clamp(hoveredBubble.x - hoverSubtasksCard.width / 2, workspaceMin + 8, workspaceMax - hoverSubtasksCard.width - 8)}
+                y={clamp(hoveredBubble.y + hoveredBubble.radius + 18, workspaceMin + 8, workspaceMax - hoverSubtasksCard.height - 8)}
+                width={hoverSubtasksCard.width}
+                height={hoverSubtasksCard.height}
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
