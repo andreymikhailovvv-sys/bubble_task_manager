@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Brain, Plus, Sparkles } from 'lucide-react';
+import { Brain, CalendarDays, GripVertical, Plus, Sparkles } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
@@ -44,6 +44,7 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
+  const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -67,11 +68,25 @@ export default function App() {
 
   const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
   const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
-  const subtaskMap = useMemo(() => subtasks.reduce<Record<string, Task[]>>((acc, task) => {
-    const key = task.parentTaskId as string;
-    (acc[key] ??= []).push(task);
-    return acc;
-  }, {}), [subtasks]);
+  const sortedSubtasks = useMemo(() => {
+    const baseMap = subtasks.reduce<Record<string, Task[]>>((acc, task) => {
+      const key = task.parentTaskId as string;
+      (acc[key] ??= []).push(task);
+      return acc;
+    }, {});
+
+    return Object.entries(baseMap).reduce<Record<string, Task[]>>((acc, [parentId, items]) => {
+      const order = subtaskOrderMap[parentId];
+      if (!order?.length) {
+        acc[parentId] = items;
+        return acc;
+      }
+      const orderIndex = new Map(order.map((id, index) => [id, index]));
+      acc[parentId] = [...items].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      return acc;
+    }, {});
+  }, [subtasks, subtaskOrderMap]);
+  const subtaskMap = sortedSubtasks;
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
@@ -139,6 +154,49 @@ export default function App() {
     };
     const score = calcScore(normalized.importance, normalized.urgency);
     await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
+    setFocusedTaskId(null);
+    await load();
+  };
+
+  const shouldTaskGlow = (task: Task) => {
+    if (!task.dueDate) return false;
+    const due = new Date(task.dueDate);
+    if (Number.isNaN(due.getTime())) return false;
+    const diff = due.getTime() - Date.now();
+    if (diff < 0) return true;
+    if (task.notifyBeforeMinutes === null) return false;
+    const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
+    return diff <= notifyBefore;
+  };
+
+  const isOverdue = (task: Task) => {
+    if (!task.dueDate) return false;
+    const due = new Date(task.dueDate);
+    if (Number.isNaN(due.getTime())) return false;
+    return due.getTime() < Date.now();
+  };
+
+  const syncParentStatusBySubtasks = async (parentTaskId: string) => {
+    const allTasks = await api.getTasks();
+    const nextSubtasks = allTasks.filter((task) => task.parentTaskId === parentTaskId);
+    if (nextSubtasks.length === 0) return;
+    const allDone = nextSubtasks.every((task) => task.status === 'DONE');
+    const parentTask = allTasks.find((task) => task.id === parentTaskId);
+    if (!parentTask) return;
+    if (allDone && parentTask.status !== 'DONE') {
+      await api.updateTask(parentTaskId, { status: 'DONE' });
+    }
+    if (!allDone && parentTask.status === 'DONE') {
+      await api.updateTask(parentTaskId, { status: 'TODO' });
+    }
+  };
+
+  const toggleSubtaskDone = async (subtask: Task) => {
+    const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
+    await api.updateTask(subtask.id, { status: nextStatus });
+    if (subtask.parentTaskId) {
+      await syncParentStatusBySubtasks(subtask.parentTaskId);
+    }
     await load();
   };
 
@@ -195,11 +253,27 @@ export default function App() {
               sphereId: null,
               parentTaskId: parentTask.id
             });
+            if (parentTask.status === 'DONE') {
+              await api.updateTask(parentTask.id, { status: 'TODO' });
+            }
             await load();
           }}
-          onToggleSubtaskDone={async (subtask) => {
-            await api.updateTask(subtask.id, { status: subtask.status === 'DONE' ? 'TODO' : 'DONE' });
+          onToggleSubtaskDone={toggleSubtaskDone}
+          onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+            await api.updateTask(subtask.id, { dueDate });
             await load();
+          }}
+          onReorderSubtasks={(parentTaskId, sourceIndex, targetIndex) => {
+            setSubtaskOrderMap((prev) => {
+              const current = prev[parentTaskId] ?? (subtaskMap[parentTaskId] ?? []).map((task) => task.id);
+              if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0 || sourceIndex >= current.length || targetIndex >= current.length) {
+                return prev;
+              }
+              const next = [...current];
+              const [moved] = next.splice(sourceIndex, 1);
+              next.splice(targetIndex, 0, moved);
+              return { ...prev, [parentTaskId]: next };
+            });
           }}
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
@@ -330,10 +404,46 @@ export default function App() {
                   + Добавить подзадачу
                 </button>
                 <ul className="space-y-2 text-sm">
-                  {(subtaskMap[focusedTask.id] ?? []).map((subtask) => (
-                    <li key={subtask.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
-                      <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await api.updateTask(subtask.id, { status: subtask.status === 'DONE' ? 'TODO' : 'DONE' }); await load(); }} />
-                      <span className={`${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{subtask.title}</span>
+                  {(subtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
+                    <li
+                      key={subtask.id}
+                      className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
+                      draggable
+                      onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
+                        if (Number.isNaN(sourceIndex)) return;
+                        setSubtaskOrderMap((prev) => {
+                          const current = prev[focusedTask.id] ?? (subtaskMap[focusedTask.id] ?? []).map((task) => task.id);
+                          const next = [...current];
+                          const [moved] = next.splice(sourceIndex, 1);
+                          next.splice(index, 0, moved);
+                          return { ...prev, [focusedTask.id]: next };
+                        });
+                      }}
+                      style={isOverdue(subtask)
+                        ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
+                        : shouldTaskGlow(subtask)
+                          ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)' }
+                          : undefined}
+                    >
+                      <span className="cursor-grab text-slate-400 active:cursor-grabbing"><GripVertical size={14} /></span>
+                      <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
+                      <span className={`flex-1 ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{subtask.title}</span>
+                      <label className="cursor-pointer text-cyan-300 hover:text-cyan-200" title="Изменить срок подзадачи">
+                        <CalendarDays size={14} />
+                        <input
+                          type="datetime-local"
+                          className="hidden"
+                          onChange={async (event) => {
+                            await api.updateTask(subtask.id, { dueDate: event.target.value ? new Date(event.target.value).toISOString() : null });
+                            await load();
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                      </label>
                     </li>
                   ))}
                   {(subtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
