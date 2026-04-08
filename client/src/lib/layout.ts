@@ -115,6 +115,33 @@ function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: numbe
   }
 }
 
+function applyGravity(
+  bubbles: Bubble[],
+  center: number,
+  maxDistance: number,
+  sectorCount: number,
+  targetDistanceById: Record<string, number>,
+  gravityById: Record<string, number>
+) {
+  for (let t = 0; t < 120; t += 1) {
+    bubbles.forEach((bubble) => {
+      const dx = bubble.x - center;
+      const dy = bubble.y - center;
+      const currentDistance = Math.hypot(dx, dy) || 1;
+      const nx = dx / currentDistance;
+      const ny = dy / currentDistance;
+      const targetDistance = targetDistanceById[bubble.task.id] ?? 18;
+      const gravity = gravityById[bubble.task.id] ?? 0.5;
+      const spring = (targetDistance - currentDistance) * (0.06 + gravity * 0.06);
+      bubble.x += nx * spring;
+      bubble.y += ny * spring;
+      keepInSector(bubble, center, maxDistance, sectorCount);
+    });
+
+    resolveCollisions(bubbles, center, maxDistance, sectorCount, 6, 1);
+  }
+}
+
 function getDistanceByDeadline(index: number, total: number, maxDistance: number) {
   const minDistance = 16;
   if (total <= 1) return minDistance;
@@ -147,6 +174,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
   });
 
   const result: Bubble[] = [];
+  const targetDistanceById: Record<string, number> = {};
+  const gravityById: Record<string, number> = {};
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const startAngle = (Math.PI * 2 * sectorIndex) / sectorCount;
@@ -176,6 +205,9 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost);
       const distance = getDistanceByDeadline(i, sorted.length, maxDistance);
+      const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
+      targetDistanceById[task.id] = distance;
+      gravityById[task.id] = 1 - rankRatio;
       const angleSpan = endAngle - startAngle;
       const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
       const ring = Math.floor(i / slotCount);
@@ -233,8 +265,11 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         keepInSector(bubble, center, maxDistance, sectorCount);
       }
       previousDistance = Math.hypot(bubble.x - center, bubble.y - center);
+      targetDistanceById[bubble.task.id] = minDistance;
     });
   });
+
+  applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
 
   resolveCollisions(result, center, maxDistance, sectorCount, 6, 36);
 
