@@ -10,6 +10,14 @@ type Props = {
   onCancel: () => void;
   onComplete?: () => Promise<void>;
 };
+const NOTIFY_PRESETS = [
+  { value: 'null', label: 'Не уведомлять' },
+  { value: '15', label: 'За 15 мин' },
+  { value: '30', label: 'За 30 мин' },
+  { value: '60', label: 'За час' },
+  { value: '180', label: 'За 3 часа' },
+  { value: 'custom', label: 'Вручную' }
+] as const;
 
 const IMPORTANCE_STYLES: Record<number, string> = {
   1: 'bg-sky-500/70 border-sky-300',
@@ -28,10 +36,24 @@ function toDateTimeLocal(value?: string | null) {
 }
 
 export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, onCancel, onComplete }: Props) {
+  const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
+  const [notifyPreset, setNotifyPreset] = useState<string>('60');
+  const [customNotifyMinutes, setCustomNotifyMinutes] = useState<string>('');
 
   useEffect(() => {
-    setForm(task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO' });
+    const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
+    setForm(nextForm);
+    if (nextForm.notifyBeforeMinutes === null) {
+      setNotifyPreset('null');
+      setCustomNotifyMinutes('');
+    } else if ([15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 60)) {
+      setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 60));
+      setCustomNotifyMinutes('');
+    } else {
+      setNotifyPreset('custom');
+      setCustomNotifyMinutes(String(nextForm.notifyBeforeMinutes ?? 60));
+    }
   }, [task, initialSphereId]);
 
   const selectedImportance = form.importance ?? 3;
@@ -39,7 +61,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
       <aside className="w-full max-w-xl space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-slate-100">{task ? 'Редактирование задачи' : 'Новая задача'}</h3>
+        <h3 className="text-lg font-semibold text-slate-100">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <textarea className="min-h-20 w-full rounded bg-slate-800 p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
         <select className="w-full rounded bg-slate-800 p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
@@ -70,13 +92,53 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
             onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
           />
         </label>
-        <div className="rounded bg-slate-800/60 p-2 text-xs text-slate-300">Срочность рассчитывается автоматически: чем ближе срок к текущему времени в Москве, тем задача срочнее.</div>
+        <label className="block text-xs">Уведомлять за
+          <select
+            className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+            value={notifyPreset}
+            onChange={(e) => {
+              const value = e.target.value;
+              setNotifyPreset(value);
+              if (value === 'null') {
+                setForm((p) => ({ ...p, notifyBeforeMinutes: null }));
+              } else if (value === 'custom') {
+                const defaultCustom = customNotifyMinutes || '90';
+                setCustomNotifyMinutes(defaultCustom);
+                setForm((p) => ({ ...p, notifyBeforeMinutes: Number(defaultCustom) }));
+              } else {
+                setForm((p) => ({ ...p, notifyBeforeMinutes: Number(value) }));
+              }
+            }}
+          >
+            {NOTIFY_PRESETS.map((preset) => (
+              <option key={preset.value} value={preset.value}>{preset.label}</option>
+            ))}
+          </select>
+        </label>
+        {notifyPreset === 'custom' ? (
+          <label className="block text-xs">Минут до дедлайна
+            <input
+              type="number"
+              min={1}
+              className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+              value={customNotifyMinutes}
+              onChange={(e) => {
+                const value = e.target.value;
+                setCustomNotifyMinutes(value);
+                const parsed = Number(value);
+                if (Number.isFinite(parsed) && parsed > 0) {
+                  setForm((p) => ({ ...p, notifyBeforeMinutes: parsed }));
+                }
+              }}
+            />
+          </label>
+        ) : null}
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
-          {task ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
+          {isEditing ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
-        {task ? (
+        {isEditing ? (
           <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
             Выполнена
           </button>

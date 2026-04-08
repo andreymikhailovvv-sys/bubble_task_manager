@@ -11,6 +11,7 @@ export type Task = {
   description?: string | null;
   sphereId?: string | null;
   parentTaskId?: string | null;
+  notifyBeforeMinutes?: number | null;
   importance: number;
   urgency: number;
   priorityScore: number;

@@ -10,6 +10,7 @@ interface TaskInput {
   urgency?: number | string;
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
   dueDate?: string | Date | null;
+  notifyBeforeMinutes?: number | string | null;
 }
 
 interface CreateTaskInput extends TaskInput {
@@ -38,6 +39,15 @@ const toDueDate = (value: string | Date | null): Date | null => {
   return dateValue;
 };
 
+const toNotifyBeforeMinutes = (value: number | string | null): number | null => {
+  if (value === null) return null;
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 1) {
+    throw new TypeError('Invalid notifyBeforeMinutes value');
+  }
+  return Math.round(numericValue);
+};
+
 export const taskService = {
   list: () => prisma.task.findMany({ orderBy: { createdAt: 'desc' } }),
   create: async (input: CreateTaskInput) => {
@@ -54,7 +64,8 @@ export const taskService = {
         urgency,
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
-        dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null
+        dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null,
+        notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 60
       }
     });
   },
@@ -92,6 +103,9 @@ export const taskService = {
 
     if (input.dueDate !== undefined) {
       patch.dueDate = toDueDate(input.dueDate);
+    }
+    if (input.notifyBeforeMinutes !== undefined) {
+      patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
 
     return prisma.task.update({ where: { id }, data: patch });
