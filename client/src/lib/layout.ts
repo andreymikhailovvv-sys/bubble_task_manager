@@ -20,20 +20,19 @@ function getMoscowNowMs() {
   return moscowNow.getTime();
 }
 
-function getUrgencyFromDueDate(dueDate?: string | null) {
-  if (!dueDate) return 0;
-
+function getDueDateDiffMs(dueDate?: string | null) {
+  if (!dueDate) return Number.POSITIVE_INFINITY;
   const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return 0;
+  if (Number.isNaN(due.getTime())) return Number.POSITIVE_INFINITY;
+  return due.getTime() - getMoscowNowMs();
+}
 
-  const diffHours = (due.getTime() - getMoscowNowMs()) / 3_600_000;
-  if (diffHours <= 0) return 6;
-  if (diffHours <= 4) return 5;
-  if (diffHours <= 12) return 4;
-  if (diffHours <= 24) return 3;
-  if (diffHours <= 48) return 2;
-  if (diffHours <= 96) return 1;
-  return 0;
+function getDueProximity(dueDate?: string | null) {
+  const diffMs = getDueDateDiffMs(dueDate);
+  if (!Number.isFinite(diffMs)) return 0;
+  if (diffMs <= 0) return 1;
+  const horizonMs = 1000 * 60 * 60 * 24 * 30;
+  return Math.max(0, 1 - diffMs / horizonMs);
 }
 
 function polarToCartesian(center: number, angle: number, distance: number) {
@@ -74,16 +73,12 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   bubble.y = center + Math.sin(angle) * distance;
 }
 
-function getRadiusFromImportance(importance: number) {
-  return 12 + importance * 11;
-}
-
-function getDistanceByPriority(index: number, urgency: number, importance: number, maxDistance: number) {
+function getDistanceByPriority(index: number, proximity: number, tieBoost: number, maxDistance: number) {
   const ring = Math.floor(index / 5);
   const withinRing = index % 5;
-  const urgencyFactor = (6 - urgency) * 36;
-  const importanceFactor = (5 - importance) * 16;
-  const base = 26 + ring * 62 + withinRing * 8 + urgencyFactor * 0.72 + importanceFactor * 0.65;
+  const proximityOffset = (1 - proximity) * 258;
+  const tieOffset = -tieBoost * 10;
+  const base = 32 + ring * 62 + withinRing * 11 + proximityOffset + tieOffset;
   return Math.min(maxDistance, base);
 }
 
@@ -105,19 +100,31 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     const startAngle = (Math.PI * 2 * sectorIndex) / sectorCount;
     const endAngle = (Math.PI * 2 * (sectorIndex + 1)) / sectorCount;
     const sorted = [...sectorTasks].sort((a, b) => {
-      const urgencyA = getUrgencyFromDueDate(a.dueDate);
-      const urgencyB = getUrgencyFromDueDate(b.dueDate);
-      if (urgencyA !== urgencyB) return urgencyB - urgencyA;
+      const diffA = getDueDateDiffMs(a.dueDate);
+      const diffB = getDueDateDiffMs(b.dueDate);
+      if (diffA !== diffB) return diffA - diffB;
       if (a.importance !== b.importance) return b.importance - a.importance;
       return b.priorityScore - a.priorityScore;
     });
 
+    const dueCounts = sorted.reduce<Record<string, number>>((acc, task) => {
+      const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+    const dueRanks: Record<string, number> = {};
+
     sorted.forEach((task, i) => {
-      const urgency = getUrgencyFromDueDate(task.dueDate);
-      const radius = getRadiusFromImportance(task.importance);
-      const distance = getDistanceByPriority(i, urgency, task.importance, maxDistance);
+      const proximity = getDueProximity(task.dueDate);
+      const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
+      const rankInDue = dueRanks[key] ?? 0;
+      dueRanks[key] = rankInDue + 1;
+      const sameDueCount = dueCounts[key] ?? 1;
+      const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
+      const radius = 22 + proximity * 34 + importanceTieBoost * 6;
+      const distance = getDistanceByPriority(i, proximity, importanceTieBoost, maxDistance);
       const angleSpan = endAngle - startAngle;
-      const angle = startAngle + (angleSpan / 6) * ((i % 5) + 1) + Math.floor(i / 5) * 0.1;
+      const angle = startAngle + (angleSpan / 6) * ((i % 5) + 1) + Math.floor(i / 5) * 0.1 - rankInDue * 0.02;
       const point = polarToCartesian(center, angle, distance);
       result.push({
         task,
@@ -133,7 +140,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
 
-  for (let t = 0; t < 26; t += 1) {
+  for (let t = 0; t < 54; t += 1) {
     for (let i = 0; i < result.length; i += 1) {
       for (let j = i + 1; j < result.length; j += 1) {
         const a = result[i];
@@ -141,7 +148,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
-        const minDist = a.radius + b.radius + 8;
+        const minDist = a.radius + b.radius + 12;
         if (distance < minDist) {
           const push = (minDist - distance) / 2;
           const nx = dx / distance;

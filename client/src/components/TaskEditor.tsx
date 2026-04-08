@@ -91,6 +91,12 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
             value={toDateTimeLocal(form.dueDate)}
             onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
           />
+          <button
+            className="mt-2 rounded bg-slate-700 px-3 py-1 text-xs"
+            onClick={() => (document.activeElement as HTMLElement | null)?.blur()}
+          >
+            Принять дату и время
+          </button>
         </label>
         <label className="block text-xs">Уведомлять за
           <select

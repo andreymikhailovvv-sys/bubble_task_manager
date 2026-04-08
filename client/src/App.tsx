@@ -34,6 +34,8 @@ export default function App() {
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
+  const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -64,6 +66,15 @@ export default function App() {
   }, {}), [subtasks]);
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
+  const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
+
+  useEffect(() => {
+    if (!focusedTask) {
+      setFocusedDraft(null);
+      return;
+    }
+    setFocusedDraft(focusedTask);
+  }, [focusedTask]);
 
   const visibleTasks = useMemo(
     () =>
@@ -99,6 +110,20 @@ export default function App() {
     await api.updateTask(task.id, { status: 'DONE' });
     setPoppingTaskId(null);
     setEditorState(null);
+    setFocusedTaskId(null);
+    await load();
+  };
+
+  const saveFocusedTask = async () => {
+    if (!focusedTask || !focusedDraft) return;
+    const normalized = {
+      ...focusedDraft,
+      importance: focusedDraft.importance ?? 3,
+      urgency: focusedDraft.urgency ?? 3,
+      status: focusedDraft.status ?? 'TODO'
+    };
+    const score = calcScore(normalized.importance, normalized.urgency);
+    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
     await load();
   };
 
@@ -143,7 +168,7 @@ export default function App() {
           mode={mode}
           poppingTaskId={poppingTaskId}
           selectedId={editorState?.task?.id}
-          onSelect={(task) => setEditorState({ task })}
+          onSelect={(task) => setFocusedTaskId(task.id)}
           onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
           onAddSubtask={(parentTask) =>
             setEditorState({
@@ -237,6 +262,64 @@ export default function App() {
             await load();
           } : undefined}
         />
+      ) : null}
+
+      {focusedTask && focusedDraft ? (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
+          <aside className="pointer-events-auto w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="space-y-3">
+                <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
+                <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
+                <textarea className="min-h-24 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
+                  <option value="">Без сектора</option>
+                  {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
+                </select>
+                <label className="block text-xs">Срок (дата и время)
+                  <input
+                    type="datetime-local"
+                    className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                    value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
+                    onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+                  />
+                  <button className="mt-2 rounded bg-slate-700 px-3 py-1 text-xs" onClick={() => (document.activeElement as HTMLElement | null)?.blur()}>
+                    Принять дату и время
+                  </button>
+                </label>
+                <div>
+                  <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <button key={level} className={`rounded border px-2 py-1 text-sm ${focusedDraft.importance === level ? 'border-cyan-300 bg-cyan-600' : 'border-slate-600 bg-slate-800'}`} onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}>{level}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button className="rounded bg-cyan-600 px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
+                  <button className="rounded bg-emerald-600 px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
+                  <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                  <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
+                </div>
+              </div>
+              <div className="space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
+                <h4 className="text-sm font-semibold">Подзадачи</h4>
+                <button className="rounded bg-cyan-700 px-3 py-1 text-xs" onClick={() => setEditorState({ task: { id: '', title: '', description: '', dueDate: null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', sphereId: null, parentTaskId: focusedTask.id, notifyBeforeMinutes: 60 } })}>
+                  + Добавить подзадачу
+                </button>
+                <ul className="space-y-2 text-sm">
+                  {(subtaskMap[focusedTask.id] ?? []).map((subtask) => (
+                    <li key={subtask.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
+                      <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await api.updateTask(subtask.id, { status: subtask.status === 'DONE' ? 'TODO' : 'DONE' }); await load(); }} />
+                      <span className={`${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{subtask.title}</span>
+                    </li>
+                  ))}
+                  {(subtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
+                </ul>
+              </div>
+            </div>
+          </aside>
+        </div>
       ) : null}
 
       {sectorEditorSphere ? (
