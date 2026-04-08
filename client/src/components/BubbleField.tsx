@@ -124,6 +124,12 @@ export function BubbleField({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
+  const [subtaskDraft, setSubtaskDraft] = useState<SubtaskDraft>({
+    title: '',
+    description: '',
+    dueDate: '',
+    notifyPreset: '60'
+  });
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,6 +174,20 @@ export function BubbleField({
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
     }, HOVER_EXIT_DELAY_MS);
+  };
+
+  const onAddSubtask = async (parentTask: Task) => {
+    const nextTitle = subtaskDraft.title.trim() || 'Новая доп задача';
+    const nextDescription = subtaskDraft.description.trim();
+    const nextNotifyBeforeMinutes = subtaskDraft.notifyPreset === 'null' ? null : Number(subtaskDraft.notifyPreset);
+
+    await onCreateSubtask(parentTask, {
+      title: nextTitle,
+      description: nextDescription || undefined,
+      dueDate: subtaskDraft.dueDate || null,
+      notifyBeforeMinutes: Number.isFinite(nextNotifyBeforeMinutes) ? nextNotifyBeforeMinutes : null
+    });
+    setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
   };
 
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
