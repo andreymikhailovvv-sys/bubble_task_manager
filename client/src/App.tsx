@@ -154,7 +154,7 @@ export default function App() {
     setAiLoadingTaskId(taskId);
 
     try {
-      const result = await askTaskAssistant(taskId, { question, history: previousDialog });
+      const result = await askTaskAssistant(taskId, { question, history: previousDialog, mode: 'fast' });
       setAiDialogByTask((prev) => ({
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
