@@ -4,7 +4,7 @@ import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
-import { api } from './lib/api';
+import { api, setUnauthorizedHandler } from './lib/api';
 import { calcScore } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
@@ -22,7 +22,15 @@ const NOTIFY_PRESETS = [
   { value: '60', label: 'За час' },
   { value: '180', label: 'За 3 часа' }
 ] as const;
-const AI_DIALOG_STORAGE_KEY = 'btm-ai-dialog-by-task';
+type CurrentUser = {
+  id: string;
+  email: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+};
+
+const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
+const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 
 function suggestPriority(task: Partial<Task>) {
   const title = (task.title ?? '').toLowerCase();
@@ -34,6 +42,8 @@ function suggestPriority(task: Partial<Task>) {
 }
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
@@ -51,20 +61,10 @@ export default function App() {
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
-  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>(() => {
-    try {
-      const raw = localStorage.getItem(AI_DIALOG_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, ChatMessage[]>;
-      if (!parsed || typeof parsed !== 'object') return {};
-      return parsed;
-    } catch {
-      return {};
-    }
-  });
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(() => localStorage.getItem('btm-background-image'));
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -82,21 +82,88 @@ export default function App() {
     setInsights(insightData);
   }
 
+  const clearUserState = () => {
+    setCurrentUser(null);
+    setSpheres([]);
+    setTasks([]);
+    setInsights([]);
+    setEditorState(null);
+    setSectorEditorSphere(null);
+    setPoppingTaskId(null);
+    setFocusedTaskId(null);
+    setFocusedDraft(null);
+    setAiDraft('');
+    setAiError(null);
+    setAiLoadingTaskId(null);
+    setIsAiExpanded(false);
+    setAiMode('fast');
+    setAiDialogByTask({});
+    setSubtaskOrderMap({});
+    setBackgroundImage(null);
+  };
+
   useEffect(() => {
-    load();
+    setUnauthorizedHandler(clearUserState);
+    return () => {
+      setUnauthorizedHandler(null);
+    };
   }, []);
 
   useEffect(() => {
-    if (backgroundImage) {
-      localStorage.setItem('btm-background-image', backgroundImage);
-      return;
-    }
-    localStorage.removeItem('btm-background-image');
-  }, [backgroundImage]);
+    const initAuth = async () => {
+      setAuthLoading(true);
+      try {
+        const me = await api.getMe();
+        setCurrentUser(me.user);
+      } catch {
+        clearUserState();
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    void initAuth();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem(AI_DIALOG_STORAGE_KEY, JSON.stringify(aiDialogByTask));
-  }, [aiDialogByTask]);
+    if (!currentUser) return;
+    void load();
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setAiDialogByTask({});
+      setBackgroundImage(null);
+      return;
+    }
+    try {
+      const aiDialogRaw = localStorage.getItem(getAiDialogStorageKey(currentUser.id));
+      if (!aiDialogRaw) {
+        setAiDialogByTask({});
+      } else {
+        const parsed = JSON.parse(aiDialogRaw) as Record<string, ChatMessage[]>;
+        setAiDialogByTask(parsed && typeof parsed === 'object' ? parsed : {});
+      }
+    } catch {
+      setAiDialogByTask({});
+    }
+
+    setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const key = getBackgroundStorageKey(currentUser.id);
+    if (backgroundImage) {
+      localStorage.setItem(key, backgroundImage);
+      return;
+    }
+    localStorage.removeItem(key);
+  }, [backgroundImage, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getAiDialogStorageKey(currentUser.id), JSON.stringify(aiDialogByTask));
+  }, [aiDialogByTask, currentUser?.id]);
 
   const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
   const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
@@ -310,6 +377,31 @@ export default function App() {
     return api.askTaskAssistant(taskId, payload);
   };
 
+  if (authLoading) {
+    return (
+      <main className="flex h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
+        <p className="text-sm text-slate-300">Проверяем авторизацию…</p>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <main className="flex h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
+        <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/80 p-6 text-center">
+          <h1 className="mb-2 text-2xl font-semibold">Bubble Task Manager</h1>
+          <p className="mb-6 text-sm text-slate-300">Чтобы продолжить, войдите через Google.</p>
+          <button
+            className="w-full rounded-xl bg-cyan-700 px-4 py-2.5 text-sm font-medium transition hover:bg-cyan-600"
+            onClick={() => api.loginWithGoogle()}
+          >
+            Войти через Google
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main
       className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
@@ -323,11 +415,24 @@ export default function App() {
     >
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
+        <div className="mr-1 text-xs text-slate-300">{currentUser.name ?? currentUser.email}</div>
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
         <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
         <button className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}>
           <Plus size={16} /> Сектор
+        </button>
+        <button
+          className="ml-auto rounded bg-slate-700 px-3 py-2 text-sm"
+          onClick={async () => {
+            try {
+              await api.logout();
+            } finally {
+              clearUserState();
+            }
+          }}
+        >
+          Выйти
         </button>
       </header>
 
