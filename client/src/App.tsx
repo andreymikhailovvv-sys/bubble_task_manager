@@ -53,6 +53,7 @@ export default function App() {
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
+  const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [authLogin, setAuthLogin] = useState('');
@@ -196,6 +197,17 @@ export default function App() {
     }, {});
   }, [subtasks, subtaskOrderMap]);
   const subtaskMap = sortedSubtasks;
+  const displayedSubtaskMap = useMemo(
+    () => Object.entries(subtaskMap).reduce<Record<string, Task[]>>((acc, [parentId, items]) => {
+      if (!isSubtaskFilterActive) {
+        acc[parentId] = items;
+        return acc;
+      }
+      acc[parentId] = [...items].sort((a, b) => Number(a.status === 'DONE') - Number(b.status === 'DONE'));
+      return acc;
+    }, {}),
+    [isSubtaskFilterActive, subtaskMap]
+  );
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
   const completedTasksForPanel = useMemo(() => {
@@ -713,7 +725,9 @@ export default function App() {
           className="h-full"
           tasks={visibleTasks}
           spheres={visibleSpheres}
-          subtaskMap={subtaskMap}
+          subtaskMap={displayedSubtaskMap}
+          isSubtaskFilterActive={isSubtaskFilterActive}
+          onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
           mode={mode}
           poppingTaskId={poppingTaskId}
           selectedId={editorState?.task?.id}
@@ -995,7 +1009,18 @@ export default function App() {
                 </div>
               </div>
               <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
-                <h4 className="text-sm font-semibold">Подзадачи</h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold">Подзадачи</h4>
+                  <button
+                    type="button"
+                    className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
+                      ? 'border-cyan-300 bg-cyan-600/90 text-white'
+                      : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
+                    onClick={() => setIsSubtaskFilterActive((prev) => !prev)}
+                  >
+                    Фильтровать
+                  </button>
+                </div>
                 {isAddingFocusedSubtask ? (
                   <div className="space-y-2">
                     <input
@@ -1038,14 +1063,21 @@ export default function App() {
                   </button>
                 )}
                 <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm">
-                  {(subtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
+                  {(displayedSubtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
                     <li
                       key={subtask.id}
                       className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
-                      draggable
-                      onDragStart={(event) => event.dataTransfer.setData('text/plain', String(index))}
-                      onDragOver={(event) => event.preventDefault()}
+                      draggable={!isSubtaskFilterActive}
+                      onDragStart={(event) => {
+                        if (isSubtaskFilterActive) return;
+                        event.dataTransfer.setData('text/plain', String(index));
+                      }}
+                      onDragOver={(event) => {
+                        if (isSubtaskFilterActive) return;
+                        event.preventDefault();
+                      }}
                       onDrop={(event) => {
+                        if (isSubtaskFilterActive) return;
                         event.preventDefault();
                         const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
                         if (Number.isNaN(sourceIndex)) return;
@@ -1082,7 +1114,7 @@ export default function App() {
                       />
                     </li>
                   ))}
-                  {(subtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
+                  {(displayedSubtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
                 </ul>
               </div>
             </div>

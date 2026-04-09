@@ -19,6 +19,8 @@ type Props = {
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
   onReorderSubtasks: (parentTaskId: string, sourceIndex: number, targetIndex: number) => void;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
+  isSubtaskFilterActive: boolean;
+  onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   className?: string;
@@ -114,6 +116,8 @@ export function BubbleField({
   onSelect,
   onSelectSubtask,
   onCreateSubtask,
+  isSubtaskFilterActive,
+  onToggleSubtaskFilter,
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
   onReorderSubtasks,
@@ -389,20 +393,35 @@ export function BubbleField({
                   data-no-field-zoom="true"
                 >
                   <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
+                  <button
+                    type="button"
+                    className={`mb-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
+                      ? 'border-cyan-300 bg-cyan-600/90 text-white'
+                      : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleSubtaskFilter();
+                    }}
+                  >
+                    Фильтровать
+                  </button>
                   <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
                     {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask, index) => (
                       <li
                         key={subtask.id}
                         className="flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
-                        draggable
+                        draggable={!isSubtaskFilterActive}
                         onDragStart={(event) => {
+                          if (isSubtaskFilterActive) return;
                           event.dataTransfer.setData('text/plain', String(index));
                         }}
                         onDragOver={(event) => {
+                          if (isSubtaskFilterActive) return;
                           event.preventDefault();
                         }}
                         onDrop={(event) => {
+                          if (isSubtaskFilterActive) return;
                           event.preventDefault();
                           const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
                           if (Number.isNaN(sourceIndex)) return;
