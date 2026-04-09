@@ -4,10 +4,12 @@ declare global {
   namespace Express {
     interface User {
       id: string;
-      email: string;
+      email?: string | null;
+      username?: string | null;
       name?: string | null;
       avatarUrl?: string | null;
-      googleSub: string;
+      googleSub?: string | null;
+      deviceId?: string | null;
     }
 
     interface Request {

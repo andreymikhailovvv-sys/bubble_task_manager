@@ -14,15 +14,18 @@ enum TaskStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  googleSub String   @unique
-  avatarUrl String?
-  spheres   Sphere[]
-  tasks     Task[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String?  @unique
+  username     String?  @unique
+  passwordHash String?
+  deviceId     String?  @unique
+  name         String?
+  googleSub    String?  @unique
+  avatarUrl    String?
+  spheres      Sphere[]
+  tasks        Task[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([createdAt])
 }

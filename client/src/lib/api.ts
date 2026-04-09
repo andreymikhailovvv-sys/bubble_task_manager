@@ -28,8 +28,20 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
+export type CurrentUser = {
+  id: string;
+  email?: string | null;
+  username?: string | null;
+  name?: string | null;
+  avatarUrl?: string | null;
+  googleSub?: string | null;
+  deviceId?: string | null;
+};
+
 export const api = {
-  getMe: () => request<{ user: { id: string; email: string; name?: string | null; avatarUrl?: string | null } }>('/api/auth/me'),
+  getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
+  register: (payload: { login: string; password: string; name?: string }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   loginWithGoogle: () => {
     window.location.href = '/api/auth/google';
   },
