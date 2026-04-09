@@ -32,3 +32,10 @@ export type ChatMessage = {
 };
 
 export type ChatMode = 'fast' | 'smart';
+
+export type ChatAttachmentPayload = {
+  name: string;
+  mimeType: string;
+  contentBase64: string;
+  size: number;
+};

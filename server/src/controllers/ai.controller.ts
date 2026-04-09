@@ -5,6 +5,12 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
 };
+type ChatAttachment = {
+  name: string;
+  mimeType: string;
+  contentBase64: string;
+  size: number;
+};
 
 export const aiController = {
   askTaskAssistant: async (req: Request, res: Response) => {
@@ -13,6 +19,7 @@ export const aiController = {
         question?: string;
         history?: ChatMessage[];
         mode?: 'fast' | 'smart';
+        attachments?: ChatAttachment[];
       };
 
       if (!question || typeof question !== 'string') {
@@ -34,7 +41,8 @@ export const aiController = {
         taskId: req.params.id,
         question,
         history: Array.isArray(history) ? history : [],
-        mode
+        mode,
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {
