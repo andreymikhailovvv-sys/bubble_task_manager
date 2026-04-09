@@ -20,12 +20,29 @@ export const aiController = {
         return;
       }
 
+      const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
+      console.info('[AI] /tasks/:id/ai-chat request received', {
+        userId: req.user!.id,
+        taskId: req.params.id,
+        mode,
+        questionLength: question.length,
+        historyLength: Array.isArray(history) ? history.length : 0
+      });
+
       const result = await aiAssistantService.askTaskAssistant({
         userId: req.user!.id,
         taskId: req.params.id,
         question,
         history: Array.isArray(history) ? history : [],
-        mode: req.body?.mode === 'smart' ? 'smart' : 'fast'
+        mode
+      });
+
+      console.info('[AI] /tasks/:id/ai-chat response sent', {
+        userId: req.user!.id,
+        taskId: req.params.id,
+        mode,
+        model: result.model,
+        answerLength: result.answer.length
       });
 
       res.json(result);
