@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
@@ -7,9 +7,15 @@ import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
 import { calcScore } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
 
 const MAX_SPHERES = 8;
+const MAX_AI_ATTACHMENTS = 3;
+const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
+const SUPPORTED_AI_FILE_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+]);
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
   { value: '15', label: 'За 15 минут' },
@@ -42,6 +48,7 @@ export default function App() {
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
@@ -56,6 +63,8 @@ export default function App() {
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
+  const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     const sphereData = await api.getSpheres();
@@ -80,6 +89,7 @@ export default function App() {
     setAiDraft('');
     setAiError(null);
     setAiLoadingTaskId(null);
+    setAiPendingFiles([]);
     setIsAiExpanded(false);
       setAiMode('fast');
       setAiDialogByTask({});
@@ -214,6 +224,7 @@ export default function App() {
       setAiError(null);
       setIsAiExpanded(false);
       setAiMode('fast');
+      setAiPendingFiles([]);
       return;
     }
     setFocusedDraft(focusedTask);
@@ -247,18 +258,37 @@ export default function App() {
   const sendFocusedAiQuestion = async () => {
     if (!focusedTask) return;
     const question = aiDraft.trim();
-    if (!question) return;
+    if (!question && aiPendingFiles.length === 0) return;
+
+    const fileNames = aiPendingFiles.map((file) => file.name);
+    let attachmentsPayload: ChatAttachmentPayload[] = [];
+    try {
+      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось прочитать приложенный файл';
+      setAiError(message);
+      return;
+    }
 
     const taskId = focusedTask.id;
     const previousDialog = aiDialogByTask[taskId] ?? [];
-    const nextDialog = [...previousDialog, { role: 'user' as const, content: question }];
+    const userContent = fileNames.length > 0
+      ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
+      : question;
+    const nextDialog = [...previousDialog, { role: 'user' as const, content: userContent }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
     setAiDraft('');
+    setAiPendingFiles([]);
     setAiError(null);
     setAiLoadingTaskId(taskId);
 
     try {
-      const result = await askTaskAssistant(taskId, { question, history: previousDialog, mode: aiMode });
+      const result = await askTaskAssistant(taskId, {
+        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        history: previousDialog,
+        mode: aiMode,
+        attachments: attachmentsPayload
+      });
       setAiDialogByTask((prev) => ({
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
@@ -273,6 +303,56 @@ export default function App() {
     } finally {
       setAiLoadingTaskId(null);
     }
+  };
+
+  const toBase64 = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      const chunk = bytes.subarray(index, index + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  };
+
+  const fileToAttachmentPayload = async (file: File): Promise<ChatAttachmentPayload> => ({
+    name: file.name,
+    mimeType: file.type,
+    size: file.size,
+    contentBase64: await toBase64(file)
+  });
+
+  const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) return;
+
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) {
+      setAiError('Можно прикреплять только PDF и DOCX файлы.');
+    }
+
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setAiError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      event.target.value = '';
+      return;
+    }
+
+    setAiPendingFiles((prev) => {
+      const merged = [...prev, ...normalized];
+      if (merged.length > MAX_AI_ATTACHMENTS) {
+        setAiError(`Можно прикрепить максимум ${MAX_AI_ATTACHMENTS} файла.`);
+        return merged.slice(0, MAX_AI_ATTACHMENTS);
+      }
+      return merged;
+    });
+    event.target.value = '';
+  };
+
+  const removePendingAiFile = (fileName: string) => {
+    setAiPendingFiles((prev) => prev.filter((file) => file.name !== fileName));
   };
 
   const clearFocusedAiDialog = () => {
@@ -467,7 +547,7 @@ export default function App() {
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode }) => {
+  const askTaskAssistant = async (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
     return api.askTaskAssistant(taskId, payload);
   };
 
@@ -816,6 +896,42 @@ export default function App() {
                   }
                 }}
               />
+              <input
+                ref={focusedAiFileInputRef}
+                type="file"
+                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                multiple
+                className="hidden"
+                onChange={handleAiFileSelect}
+              />
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  className="inline-flex items-center gap-1 rounded-md bg-slate-700/90 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+                  type="button"
+                  onClick={() => focusedAiFileInputRef.current?.click()}
+                >
+                  <Paperclip size={12} />
+                  Прикрепить файл
+                </button>
+                <p className="text-[10px] text-slate-400">PDF / DOCX, до 8MB</p>
+              </div>
+              {aiPendingFiles.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {aiPendingFiles.map((file) => (
+                    <button
+                      key={`ai-file-${file.name}`}
+                      type="button"
+                      onClick={() => removePendingAiFile(file.name)}
+                      className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
+                      title="Убрать файл"
+                    >
+                      <Paperclip size={10} />
+                      {file.name}
+                      <X size={10} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="flex shrink-0 items-center justify-between gap-2">
                 <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
                 <button
@@ -1040,6 +1156,42 @@ export default function App() {
                 }
               }}
             />
+            <input
+              ref={expandedAiFileInputRef}
+              type="file"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              multiple
+              className="hidden"
+              onChange={handleAiFileSelect}
+            />
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                className="inline-flex items-center gap-1 rounded-md bg-slate-700/90 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                type="button"
+                onClick={() => expandedAiFileInputRef.current?.click()}
+              >
+                <Paperclip size={12} />
+                Прикрепить файл
+              </button>
+              <p className="text-[11px] text-slate-400">PDF / DOCX, до 8MB</p>
+            </div>
+            {aiPendingFiles.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {aiPendingFiles.map((file) => (
+                  <button
+                    key={`expanded-ai-file-${file.name}`}
+                    type="button"
+                    onClick={() => removePendingAiFile(file.name)}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                    title="Убрать файл"
+                  >
+                    <Paperclip size={12} />
+                    {file.name}
+                    <X size={12} />
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex items-center justify-between">
               <p className="min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
               <button

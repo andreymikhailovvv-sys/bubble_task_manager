@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatMode, Sphere, Task } from './types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task } from './types';
 
 type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
@@ -79,7 +79,7 @@ export const api = {
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
 
-  askTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode }) =>
+  askTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) =>
     request<{ answer: string; model: string }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify(payload)

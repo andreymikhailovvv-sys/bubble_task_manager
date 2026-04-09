@@ -7,6 +7,17 @@ type ChatMessage = {
   role: ChatRole;
   content: string;
 };
+type OpenAiTextMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+};
+type OpenAiUserAttachmentMessage = {
+  role: 'user';
+  content: Array<
+    | { type: 'input_text'; text: string }
+    | { type: 'input_file'; filename: string; file_data: string }
+  >;
+};
 
 type AskTaskAssistantInput = {
   userId: string;
@@ -14,12 +25,21 @@ type AskTaskAssistantInput = {
   question: string;
   history: ChatMessage[];
   mode?: 'fast' | 'smart';
+  attachments?: ChatAttachment[];
+};
+type ChatAttachment = {
+  name: string;
+  mimeType: string;
+  contentBase64: string;
+  size: number;
 };
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 type ReasoningEffort = typeof SUPPORTED_REASONING_EFFORTS[number];
 
@@ -108,6 +128,60 @@ function extractOutputText(response: unknown): string {
   return '';
 }
 
+function normalizeAttachments(attachments: ChatAttachment[] | undefined): ChatAttachment[] {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .filter((attachment) =>
+      attachment
+      && typeof attachment.name === 'string'
+      && typeof attachment.mimeType === 'string'
+      && typeof attachment.contentBase64 === 'string'
+      && typeof attachment.size === 'number')
+    .slice(0, MAX_ATTACHMENTS);
+}
+
+function toInputFilePart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } {
+  const buffer = Buffer.from(attachment.contentBase64, 'base64');
+  if (buffer.length === 0) {
+    throw new Error(`Файл "${attachment.name}" пустой или повреждён.`);
+  }
+  if (buffer.length > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`Файл "${attachment.name}" превышает лимит ${MAX_ATTACHMENT_BYTES / (1024 * 1024)}MB.`);
+  }
+
+  const normalizedName = attachment.name.toLowerCase();
+  const isPdf = attachment.mimeType === 'application/pdf' || normalizedName.endsWith('.pdf');
+  const isDocx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || normalizedName.endsWith('.docx');
+
+  if (!isPdf && !isDocx) {
+    throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены только PDF и DOCX.`);
+  }
+
+  return {
+    type: 'input_file',
+    filename: attachment.name,
+    file_data: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
+  };
+}
+
+function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined): OpenAiUserAttachmentMessage | null {
+  const normalizedAttachments = normalizeAttachments(attachments);
+  if (normalizedAttachments.length === 0) {
+    return null;
+  }
+
+  return {
+    role: 'user',
+    content: [
+      {
+        type: 'input_text',
+        text: 'Пользователь приложил файлы вместе с сообщением. Проанализируй содержимое каждого файла и учитывай его как часть запроса.'
+      },
+      ...normalizedAttachments.map(toInputFilePart)
+    ]
+  };
+}
+
 export const aiAssistantService = {
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -149,9 +223,13 @@ export const aiAssistantService = {
     ].join(' ');
 
     const taskContext = formatTaskContext(task);
-    const messages = [
+    const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
+      ...(attachmentsMessage
+        ? [attachmentsMessage]
+        : []),
       ...history,
       { role: 'user', content: question }
     ];
