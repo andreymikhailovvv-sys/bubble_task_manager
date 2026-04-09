@@ -27,8 +27,8 @@ CLIENT_DIST_PATH=../client/dist
 OPENAI_API_KEY=your_openai_api_key
 # Опционально: переопределить модель (по умолчанию gpt-5-mini, быстрый режим)
 # OPENAI_MODEL=gpt-5-mini
-# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
-# OPENAI_MODEL_FULL=gpt-5.4
+# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5)
+# OPENAI_MODEL_FULL=gpt-5
 ```
 
 ## Локальный запуск

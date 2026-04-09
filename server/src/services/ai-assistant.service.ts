@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { randomUUID } from 'node:crypto';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -16,7 +17,8 @@ type AskTaskAssistantInput = {
 };
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini';
-const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5';
+const SMART_MODEL_FALLBACKS = ['gpt-5', FAST_MODEL];
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
@@ -134,35 +136,100 @@ export const aiAssistantService = {
       { role: 'user', content: question }
     ];
 
-    const model = input.mode === 'smart' ? FULL_MODEL : FAST_MODEL;
-    const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        input: messages,
-        reasoning: { effort: 'minimal' }
-      })
-    });
+    const requestId = randomUUID();
+    const modelCandidates = input.mode === 'smart'
+      ? Array.from(new Set([FULL_MODEL, ...SMART_MODEL_FALLBACKS].filter(Boolean)))
+      : [FAST_MODEL];
 
-    if (!openAiResponse.ok) {
-      const errorText = await openAiResponse.text();
-      throw new Error(`OpenAI request failed: ${openAiResponse.status} ${errorText}`);
+    let lastError: Error | null = null;
+
+    for (const model of modelCandidates) {
+      try {
+        const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model,
+            input: messages,
+            reasoning: { effort: 'minimal' }
+          })
+        });
+
+        if (!openAiResponse.ok) {
+          const errorText = await openAiResponse.text();
+          console.error('[AI] OpenAI request failed', {
+            requestId,
+            mode: input.mode ?? 'fast',
+            model,
+            status: openAiResponse.status,
+            taskId: input.taskId,
+            userId: input.userId,
+            errorText: errorText.slice(0, 2000)
+          });
+
+          lastError = new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
+          if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
+            continue;
+          }
+          throw lastError;
+        }
+
+        const responseJson = await openAiResponse.json();
+        const answer = extractOutputText(responseJson);
+        if (!answer) {
+          console.error('[AI] OpenAI returned empty response', {
+            requestId,
+            mode: input.mode ?? 'fast',
+            model,
+            taskId: input.taskId,
+            userId: input.userId,
+            responseJson
+          });
+
+          lastError = new Error(`OpenAI returned empty response for model "${model}"`);
+          if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
+            continue;
+          }
+          throw lastError;
+        }
+
+        if (input.mode === 'smart' && model !== FULL_MODEL) {
+          console.warn('[AI] Smart mode fallback model used', {
+            requestId,
+            requestedModel: FULL_MODEL,
+            actualModel: model,
+            taskId: input.taskId,
+            userId: input.userId
+          });
+        }
+
+        return {
+          model,
+          answer
+        };
+      } catch (error) {
+        const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
+        lastError = normalizedError;
+
+        console.error('[AI] Failed to process OpenAI response', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          taskId: input.taskId,
+          userId: input.userId,
+          error: normalizedError.message,
+          stack: normalizedError.stack
+        });
+
+        if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
+          continue;
+        }
+      }
     }
 
-    const responseJson = await openAiResponse.json();
-    const answer = extractOutputText(responseJson);
-
-    if (!answer) {
-      throw new Error('OpenAI returned empty response');
-    }
-
-    return {
-      model,
-      answer
-    };
+    throw lastError ?? new Error('OpenAI request failed without details');
   }
 };

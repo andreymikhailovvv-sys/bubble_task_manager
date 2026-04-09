@@ -17,7 +17,30 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const error = new Error(`HTTP ${response.status}`) as ApiError;
+    let errorMessage = `HTTP ${response.status}`;
+    try {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json() as { error?: unknown; message?: unknown };
+        const candidate = typeof payload.error === 'string'
+          ? payload.error
+          : typeof payload.message === 'string'
+            ? payload.message
+            : null;
+        if (candidate?.trim()) {
+          errorMessage = candidate.trim();
+        }
+      } else {
+        const payload = await response.text();
+        if (payload.trim()) {
+          errorMessage = payload.trim().slice(0, 500);
+        }
+      }
+    } catch {
+      // ignore response parsing errors
+    }
+
+    const error = new Error(errorMessage) as ApiError;
     error.status = response.status;
     if (response.status === 401) {
       unauthorizedHandler?.();
