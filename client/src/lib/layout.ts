@@ -153,23 +153,33 @@ function applyGravity(
   }
 }
 
-function getDistanceByDeadline(index: number, total: number, maxDistance: number) {
+function getDistanceByDeadline(index: number, total: number, maxDistance: number, mode: 'global' | 'sectors') {
   const minDistance = 16;
   if (total <= 1) return minDistance;
-  const compactOuter = Math.min(maxDistance * 0.54, 40 + Math.sqrt(total) * 26);
+  const compactOuter = mode === 'global'
+    ? Math.min(maxDistance * 0.46, 34 + Math.sqrt(total) * 19)
+    : Math.min(maxDistance * 0.54, 40 + Math.sqrt(total) * 26);
   const rankRatio = index / (total - 1);
-  const easedRatio = Math.pow(rankRatio, 0.72);
+  const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.58) : Math.pow(rankRatio, 0.72);
   return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
 }
 
-function getRadiusByDeadline(index: number, total: number, proximity: number, urgencyWeight: number, tieBoost: number) {
+function getRadiusByDeadline(
+  index: number,
+  total: number,
+  proximity: number,
+  urgencyWeight: number,
+  tieBoost: number,
+  mode: 'global' | 'sectors'
+) {
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
   const deadlineScale = 1 - rankRatio;
-  const base = 20 + deadlineScale * 30;
-  const proximityBoost = proximity * 9;
-  const urgencyBoost = urgencyWeight * 14;
+  const base = mode === 'global' ? 19 + deadlineScale * 35 : 20 + deadlineScale * 30;
+  const proximityBoost = mode === 'global' ? proximity * 11 : proximity * 9;
+  const urgencyBoost = mode === 'global' ? urgencyWeight * 17 : urgencyWeight * 14;
   const tieBonus = tieBoost * 4;
-  return Math.max(18, Math.min(74, base + proximityBoost + urgencyBoost + tieBonus));
+  const maxRadius = mode === 'global' ? 84 : 74;
+  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus));
 }
 
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
@@ -214,19 +224,23 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost);
-      const distance = getDistanceByDeadline(i, sorted.length, maxDistance);
+      const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode);
+      const distance = getDistanceByDeadline(i, sorted.length, maxDistance, mode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
       gravityById[task.id] = 1 - rankRatio;
-      const angleSpan = endAngle - startAngle;
-      const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
-      const ring = Math.floor(i / slotCount);
-      const slot = i % slotCount;
-      const baseAngle = startAngle + (angleSpan / (slotCount + 1)) * (slot + 1);
-      const ringOffset = (ring % 2 === 0 ? 1 : -1) * (0.05 + ring * 0.015);
-      const dueOffset = -rankInDue * 0.02;
-      const angle = baseAngle + ringOffset + dueOffset;
+      const angle = mode === 'global'
+        ? (i * 2.399963229728653) + rankInDue * 0.018
+        : (() => {
+          const angleSpan = endAngle - startAngle;
+          const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
+          const ring = Math.floor(i / slotCount);
+          const slot = i % slotCount;
+          const baseAngle = startAngle + (angleSpan / (slotCount + 1)) * (slot + 1);
+          const ringOffset = (ring % 2 === 0 ? 1 : -1) * (0.05 + ring * 0.015);
+          const dueOffset = -rankInDue * 0.02;
+          return baseAngle + ringOffset + dueOffset;
+        })();
       const point = polarToCartesian(center, angle, distance);
       result.push({
         task,
@@ -242,7 +256,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
 
-  resolveCollisions(result, center, maxDistance, sectorCount, 8, 54);
+  resolveCollisions(result, center, maxDistance, sectorCount, mode === 'global' ? 4 : 8, 54);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -262,7 +276,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const targetDistance = getDistanceByDeadline(idx, ranked.length, maxDistance);
+      const targetDistance = getDistanceByDeadline(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
         : Math.max(targetDistance - 12, previousDistance + bubble.radius * 0.2 + 4);
@@ -282,7 +296,7 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
 
   applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
 
-  resolveCollisions(result, center, maxDistance, sectorCount, 8, 72);
+  resolveCollisions(result, center, maxDistance, sectorCount, mode === 'global' ? 4 : 8, 72);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);

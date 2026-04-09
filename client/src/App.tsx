@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -40,6 +40,8 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
+  const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
+  const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export default function App() {
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -81,6 +84,8 @@ export default function App() {
     setPoppingTaskId(null);
     setFocusedTaskId(null);
     setFocusedDraft(null);
+    setIsAddingFocusedSubtask(false);
+    setFocusedSubtaskTitle('');
     setAiDraft('');
     setAiError(null);
     setAiLoadingTaskId(null);
@@ -165,13 +170,18 @@ export default function App() {
     }, {});
 
     return Object.entries(baseMap).reduce<Record<string, Task[]>>((acc, [parentId, items]) => {
+      const orderedByCreated = [...items].sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return aTime - bTime;
+      });
       const order = subtaskOrderMap[parentId];
       if (!order?.length) {
-        acc[parentId] = items;
+        acc[parentId] = orderedByCreated;
         return acc;
       }
       const orderIndex = new Map(order.map((id, index) => [id, index]));
-      acc[parentId] = [...items].sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+      acc[parentId] = orderedByCreated.sort((a, b) => (orderIndex.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (orderIndex.get(b.id) ?? Number.MAX_SAFE_INTEGER));
       return acc;
     }, {});
   }, [subtasks, subtaskOrderMap]);
@@ -198,6 +208,8 @@ export default function App() {
   useEffect(() => {
     if (!focusedTask) {
       setFocusedDraft(null);
+      setIsAddingFocusedSubtask(false);
+      setFocusedSubtaskTitle('');
       setAiDraft('');
       setAiError(null);
       setIsAiExpanded(false);
@@ -213,6 +225,11 @@ export default function App() {
       setFocusedNotifyPreset('60');
     }
   }, [focusedTask]);
+
+  useEffect(() => {
+    if (!isAddingFocusedSubtask) return;
+    focusedSubtaskTitleInputRef.current?.focus();
+  }, [isAddingFocusedSubtask]);
 
   const sendFocusedAiQuestion = async () => {
     if (!focusedTask) return;
@@ -348,6 +365,35 @@ export default function App() {
       await syncParentStatusBySubtasks(subtask.parentTaskId);
     }
     await load();
+  };
+
+  const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
+    const createdSubtask = await api.createTask({
+      ...payload,
+      importance: 3,
+      urgency: 3,
+      priorityScore: 3,
+      status: 'TODO',
+      sphereId: null,
+      parentTaskId: parentTask.id
+    });
+    setSubtaskOrderMap((prev) => {
+      const current = prev[parentTask.id] ?? (subtaskMap[parentTask.id] ?? []).map((task) => task.id);
+      return { ...prev, [parentTask.id]: [...current, createdSubtask.id] };
+    });
+    if (parentTask.status === 'DONE') {
+      await api.updateTask(parentTask.id, { status: 'TODO' });
+    }
+    await load();
+    return createdSubtask;
+  };
+
+  const addFocusedSubtask = async () => {
+    if (!focusedTask) return;
+    const title = focusedSubtaskTitle.trim() || 'Новая доп задача';
+    await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 60 });
+    setFocusedSubtaskTitle('');
+    setIsAddingFocusedSubtask(false);
   };
 
   const handleBackgroundUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -489,19 +535,7 @@ export default function App() {
           onSelect={(task) => setFocusedTaskId(task.id)}
           onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
           onCreateSubtask={async (parentTask, payload) => {
-            await api.createTask({
-              ...payload,
-              importance: 3,
-              urgency: 3,
-              priorityScore: 3,
-              status: 'TODO',
-              sphereId: null,
-              parentTaskId: parentTask.id
-            });
-            if (parentTask.status === 'DONE') {
-              await api.updateTask(parentTask.id, { status: 'TODO' });
-            }
-            await load();
+            await createSubtaskForParent(parentTask, payload);
           }}
           onToggleSubtaskDone={toggleSubtaskDone}
           onUpdateSubtaskDueDate={async (subtask, dueDate) => {
@@ -734,9 +768,47 @@ export default function App() {
               </div>
               <div className="space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
                 <h4 className="text-sm font-semibold">Подзадачи</h4>
-                <button className="rounded bg-cyan-700 px-3 py-1 text-xs" onClick={() => setEditorState({ task: { id: '', title: '', description: '', dueDate: null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', sphereId: null, parentTaskId: focusedTask.id, notifyBeforeMinutes: 60 } })}>
-                  + Добавить подзадачу
-                </button>
+                {isAddingFocusedSubtask ? (
+                  <div className="space-y-2">
+                    <input
+                      ref={focusedSubtaskTitleInputRef}
+                      className="w-full rounded bg-slate-800 px-2 py-1.5 text-xs"
+                      placeholder="Название доп задачи"
+                      value={focusedSubtaskTitle}
+                      onChange={(event) => setFocusedSubtaskTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void addFocusedSubtask();
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <button className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-xs" onClick={() => void addFocusedSubtask()}>
+                        Сохранить
+                      </button>
+                      <button
+                        className="rounded bg-slate-700 px-2 py-1.5 text-xs"
+                        onClick={() => {
+                          setIsAddingFocusedSubtask(false);
+                          setFocusedSubtaskTitle('');
+                        }}
+                      >
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className="rounded bg-cyan-700 px-3 py-1 text-xs"
+                    onClick={() => {
+                      setFocusedSubtaskTitle('');
+                      setIsAddingFocusedSubtask(true);
+                    }}
+                  >
+                    + Добавить подзадачу
+                  </button>
+                )}
                 <ul className="space-y-2 text-sm">
                   {(subtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
                     <li
