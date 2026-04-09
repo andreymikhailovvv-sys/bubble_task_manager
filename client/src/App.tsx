@@ -9,12 +9,7 @@ import { calcScore } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
 
-const MIN_SPHERES = 3;
-const DEFAULT_SPHERES = [
-  { name: 'Работа', color: HARMONIOUS_COLORS[0], icon: 'briefcase' },
-  { name: 'Личное', color: HARMONIOUS_COLORS[1], icon: 'heart' },
-  { name: 'Здоровье', color: HARMONIOUS_COLORS[5], icon: 'dumbbell' }
-];
+const MAX_SPHERES = 8;
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
   { value: '15', label: 'За 15 минут' },
@@ -32,7 +27,8 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   const [search, setSearch] = useState('');
-  const [sphereFilter, setSphereFilter] = useState('ALL');
+  const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
+  const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
@@ -61,15 +57,7 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
 
   async function load() {
-    let sphereData = await api.getSpheres();
-    if (sphereData.length < MIN_SPHERES) {
-      for (let i = sphereData.length; i < MIN_SPHERES; i += 1) {
-        const preset = DEFAULT_SPHERES[i] ?? { name: `Сектор ${i + 1}`, color: HARMONIOUS_COLORS[i % HARMONIOUS_COLORS.length], icon: 'star' };
-        await api.createSphere(preset);
-      }
-      sphereData = await api.getSpheres();
-    }
-
+    const sphereData = await api.getSpheres();
     const [taskData, insightData] = await Promise.all([api.getTasks(), api.getInsights()]);
     setSpheres(sphereData);
     setTasks(taskData);
@@ -125,6 +113,15 @@ export default function App() {
     if (!currentUser) return;
     void load();
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    setSelectedSphereIds((prev) => {
+      const sphereIdSet = new Set(spheres.map((sphere) => sphere.id));
+      const normalized = prev.filter((id) => sphereIdSet.has(id));
+      if (normalized.length > 0) return normalized;
+      return spheres.map((sphere) => sphere.id);
+    });
+  }, [spheres]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -292,11 +289,30 @@ export default function App() {
     () =>
       activeTasks.filter((task) => {
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
-        if (sphereFilter !== 'ALL' && task.sphereId !== sphereFilter) return false;
+        const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
+        if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
         return true;
       }),
-    [activeTasks, search, sphereFilter]
+    [activeTasks, search, selectedSphereIds, spheres.length]
   );
+  const visibleSpheres = useMemo(() => {
+    if (selectedSphereIds.length === 0) return spheres;
+    const selectedSet = new Set(selectedSphereIds);
+    return spheres.filter((sphere) => selectedSet.has(sphere.id));
+  }, [selectedSphereIds, spheres]);
+  const isAllSpheresSelected = spheres.length > 0 && visibleSpheres.length === spheres.length;
+  const sphereFilterLabel = spheres.length === 0
+    ? 'Секторов нет'
+    : isAllSpheresSelected
+      ? 'Все сектора'
+      : visibleSpheres.map((sphere) => sphere.name).join(', ');
+
+  const toggleSphereSelection = (sphereId: string) => {
+    setSelectedSphereIds((prev) => {
+      const next = prev.includes(sphereId) ? prev.filter((id) => id !== sphereId) : [...prev, sphereId];
+      return next;
+    });
+  };
 
   const persistTask = async (payload: Partial<Task>) => {
     const normalized = {
@@ -500,14 +516,49 @@ export default function App() {
       </header>
 
       <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
-        <select className="rounded bg-slate-800 p-2 text-sm" value={sphereFilter} onChange={(e) => setSphereFilter(e.target.value)}>
-          <option value="ALL">Все сектора</option>
-          {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
-        </select>
+        <div className="relative">
+          <button
+            className="flex w-full items-center justify-between rounded bg-slate-800 p-2 text-left text-sm"
+            onClick={() => setIsSphereFilterOpen((prev) => !prev)}
+          >
+            <span className="truncate">{sphereFilterLabel}</span>
+            <span className="ml-2 text-xs text-slate-400">{isSphereFilterOpen ? '▲' : '▼'}</span>
+          </button>
+          {isSphereFilterOpen ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
+              <label className="mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
+                <input
+                  type="checkbox"
+                  checked={isAllSpheresSelected}
+                  onChange={(event) => {
+                    setSelectedSphereIds(event.target.checked ? spheres.map((sphere) => sphere.id) : []);
+                  }}
+                />
+                <span>Все сектора</span>
+              </label>
+              <div className="max-h-44 space-y-1 overflow-y-auto">
+                {spheres.map((sphere) => (
+                  <label key={sphere.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
+                    <input
+                      type="checkbox"
+                      checked={selectedSphereIds.includes(sphere.id)}
+                      onChange={() => toggleSphereSelection(sphere.id)}
+                    />
+                    <span className="truncate">{sphere.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
         <div className="lg:col-span-2 flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
-          <button className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}>
+          <button
+            className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={spheres.length >= MAX_SPHERES}
+            onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}
+          >
             <Plus size={16} /> Сектор
           </button>
         </div>
@@ -542,7 +593,7 @@ export default function App() {
         <BubbleField
           className="h-full"
           tasks={visibleTasks}
-          spheres={spheres}
+          spheres={visibleSpheres}
           subtaskMap={subtaskMap}
           mode={mode}
           poppingTaskId={poppingTaskId}
@@ -645,9 +696,7 @@ export default function App() {
                     <span className="flex items-center gap-1" style={{ color: sphere.color }}>{Icon ? <Icon size={13} /> : null}{sphere.name}</span>
                     <button
                       className="text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={spheres.length <= MIN_SPHERES}
                       onClick={async () => {
-                        if (spheres.length <= MIN_SPHERES) return;
                         if (!confirm(`Удалить сектор ${sphere.name}?`)) return;
                         await api.deleteSphere(sphere.id);
                         await load();
@@ -659,7 +708,7 @@ export default function App() {
                 );
               })}
             </ul>
-            <p className="mt-2 text-[11px] text-slate-400">Минимум секторов: {MIN_SPHERES}.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
         </aside>
       </div>
