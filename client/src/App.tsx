@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { Bot, Brain, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, Sparkles, X } from 'lucide-react';
+import { Bot, GripVertical, Maximize2, Minimize2, Plus, SendHorizontal, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
@@ -24,15 +24,6 @@ const NOTIFY_PRESETS = [
 ] as const;
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
-
-function suggestPriority(task: Partial<Task>) {
-  const title = (task.title ?? '').toLowerCase();
-  let importance = task.importance ?? 3;
-
-  if (/релиз|клиент|налог|экзамен/.test(title)) importance = Math.min(5, importance + 1);
-
-  return { importance };
-}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -62,6 +53,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -375,6 +367,29 @@ export default function App() {
     return api.askTaskAssistant(taskId, payload);
   };
 
+  const closeAuthModal = () => {
+    setAuthModalMode(null);
+    setAuthError(null);
+  };
+
+  const submitAuth = async () => {
+    if (!authModalMode) return;
+    try {
+      const result = authModalMode === 'login'
+        ? await api.login({ login: authLogin, password: authPassword })
+        : await api.register({ login: authLogin, password: authPassword, name: authName });
+      setCurrentUser(result.user);
+      setAuthError(null);
+      setAuthModalMode(null);
+    } catch {
+      setAuthError(
+        authModalMode === 'login'
+          ? 'Не удалось войти. Проверьте логин и пароль.'
+          : 'Не удалось зарегистрироваться. Возможно, логин уже занят.'
+      );
+    }
+  };
+
   if (authLoading) {
     return (
       <main className="flex h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
@@ -405,13 +420,10 @@ export default function App() {
           <div className="rounded bg-slate-700 px-2 py-1 text-xs">Гостевой режим</div>
         )}
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
-        <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
-        <button className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}>
-          <Plus size={16} /> Сектор
-        </button>
+        <button className="rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('login')}>Войти</button>
+        <button className="rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('register')}>Регистрация</button>
         <button
-          className="ml-auto rounded bg-slate-700 px-3 py-2 text-sm"
+          className="rounded bg-slate-700 px-3 py-2 text-sm"
           onClick={async () => {
             try {
               await api.logout();
@@ -426,62 +438,44 @@ export default function App() {
         </button>
       </header>
 
-      <section className="mb-3 grid grid-cols-1 gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3 lg:grid-cols-4">
-        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
-        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
-        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
-        <div className="flex gap-2">
-          <button
-            className="flex-1 rounded bg-cyan-700 px-3 py-2 text-sm"
-            onClick={async () => {
-              try {
-                const result = await api.login({ login: authLogin, password: authPassword });
-                setCurrentUser(result.user);
-                setAuthError(null);
-              } catch {
-                setAuthError('Не удалось войти. Проверьте логин и пароль.');
-              }
-            }}
-          >
-            Войти
-          </button>
-          <button
-            className="flex-1 rounded bg-indigo-700 px-3 py-2 text-sm"
-            onClick={async () => {
-              try {
-                const result = await api.register({ login: authLogin, password: authPassword, name: authName });
-                setCurrentUser(result.user);
-                setAuthError(null);
-              } catch {
-                setAuthError('Не удалось зарегистрироваться. Возможно, логин уже занят.');
-              }
-            }}
-          >
-            Регистрация
-          </button>
-        </div>
-        {authError ? <div className="lg:col-span-4 text-xs text-rose-300">{authError}</div> : null}
-      </section>
-
       <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
         <select className="rounded bg-slate-800 p-2 text-sm" value={sphereFilter} onChange={(e) => setSphereFilter(e.target.value)}>
           <option value="ALL">Все сектора</option>
           {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
         </select>
-        <button
-          className="flex items-center justify-center gap-2 rounded bg-fuchsia-700 px-3 py-2 text-sm"
-          onClick={async () => {
-            if (!editorState?.task) return;
-            const next = suggestPriority(editorState.task);
-            setEditorState({ ...editorState, task: { ...editorState.task, ...next } });
-          }}
-        >
-          <Sparkles size={16} /> AI-оценка важности
-        </button>
-        <button className="flex items-center justify-center gap-2 rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => alert('AI-разбор будет подключен позже через backend endpoint')}>
-          <Brain size={16} /> AI-разобрать задачу
-        </button>
+        <div className="lg:col-span-2 flex flex-wrap items-center justify-end gap-2">
+          <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
+          <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
+          <button className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}>
+            <Plus size={16} /> Сектор
+          </button>
+        </div>
       </section>
+
+      {authModalMode ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
+              <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={closeAuthModal}>Закрыть</button>
+            </div>
+            <div className="space-y-2">
+              <input className="w-full rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
+              <input className="w-full rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+              {authModalMode === 'register' ? (
+                <input className="w-full rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
+              ) : null}
+              {authError ? <div className="text-xs text-rose-300">{authError}</div> : null}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button className="flex-1 rounded bg-slate-700 px-3 py-2 text-sm" onClick={closeAuthModal}>Отмена</button>
+              <button className={`flex-1 rounded px-3 py-2 text-sm ${authModalMode === 'login' ? 'bg-cyan-700' : 'bg-indigo-700'}`} onClick={submitAuth}>
+                {authModalMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden pr-[320px]">
         <BubbleField
