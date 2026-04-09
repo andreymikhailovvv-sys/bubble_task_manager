@@ -29,6 +29,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
@@ -291,9 +292,35 @@ export default function App() {
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
         const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
+        if (timeFilter !== 'all') {
+          const timestamp = task.dueDate ?? task.createdAt ?? task.updatedAt;
+          if (!timestamp) return false;
+          const taskDate = new Date(timestamp);
+          if (Number.isNaN(taskDate.getTime())) return false;
+
+          const now = new Date();
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          if (timeFilter === 'today') {
+            const endOfToday = new Date(startOfToday);
+            endOfToday.setDate(endOfToday.getDate() + 1);
+            if (taskDate < startOfToday || taskDate >= endOfToday) return false;
+          } else if (timeFilter === 'week') {
+            const day = startOfToday.getDay();
+            const offsetToMonday = (day + 6) % 7;
+            const startOfWeek = new Date(startOfToday);
+            startOfWeek.setDate(startOfWeek.getDate() - offsetToMonday);
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(endOfWeek.getDate() + 7);
+            if (taskDate < startOfWeek || taskDate >= endOfWeek) return false;
+          } else if (timeFilter === 'month') {
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            if (taskDate < startOfMonth || taskDate >= endOfMonth) return false;
+          }
+        }
         return true;
       }),
-    [activeTasks, search, selectedSphereIds, spheres.length]
+    [activeTasks, search, selectedSphereIds, spheres.length, timeFilter]
   );
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
@@ -515,7 +542,7 @@ export default function App() {
         </button>
       </header>
 
-      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
+      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-4">
         <div className="relative">
           <button
             className="flex w-full items-center justify-between rounded bg-slate-800 p-2 text-left text-sm"
@@ -550,6 +577,18 @@ export default function App() {
               </div>
             </div>
           ) : null}
+        </div>
+        <div>
+          <select
+            className="w-full rounded bg-slate-800 p-2 text-sm"
+            value={timeFilter}
+            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'week' | 'month')}
+          >
+            <option value="all">За все время</option>
+            <option value="today">За сегодня</option>
+            <option value="week">За эту неделю</option>
+            <option value="month">За этот месяц</option>
+          </select>
         </div>
         <div className="lg:col-span-2 flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
@@ -693,7 +732,14 @@ export default function App() {
                 const Icon = resolveSphereIcon(sphere.icon);
                 return (
                   <li key={sphere.id} className="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1">
-                    <span className="flex items-center gap-1" style={{ color: sphere.color }}>{Icon ? <Icon size={13} /> : null}{sphere.name}</span>
+                    <button
+                      className="flex min-w-0 flex-1 items-center gap-1 text-left hover:opacity-90"
+                      style={{ color: sphere.color }}
+                      onClick={() => setSectorEditorSphere(sphere)}
+                    >
+                      {Icon ? <Icon size={13} /> : null}
+                      <span className="truncate">{sphere.name}</span>
+                    </button>
                     <button
                       className="text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={async () => {
@@ -788,7 +834,7 @@ export default function App() {
                 <div className="space-y-3 overflow-y-auto pr-1">
                   <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
                   <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                  <textarea className="min-h-32 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                  <textarea className="min-h-44 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
                   <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
@@ -903,7 +949,13 @@ export default function App() {
                     >
                       <span className="cursor-grab text-slate-400 active:cursor-grabbing"><GripVertical size={14} /></span>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
-                      <span className={`flex-1 ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}>{subtask.title}</span>
+                      <button
+                        className={`flex-1 text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
+                        onClick={() => setEditorState({ task: subtask })}
+                        title="Открыть доп задачу"
+                      >
+                        {subtask.title}
+                      </button>
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
