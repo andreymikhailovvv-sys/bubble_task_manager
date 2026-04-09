@@ -244,7 +244,7 @@ export default function App() {
       scrollToBottom(expandedAiDialogContainerRef.current);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusedTask?.id, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
+  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
 
   const sendFocusedAiQuestion = async () => {
     if (!focusedTask) return;
