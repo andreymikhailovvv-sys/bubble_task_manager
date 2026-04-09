@@ -31,6 +31,15 @@ export const aiController = {
       res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
+      console.error('[AI] /tasks/:id/ai-chat failed', {
+        userId: req.user?.id,
+        taskId: req.params.id,
+        mode: req.body?.mode,
+        questionLength: typeof req.body?.question === 'string' ? req.body.question.length : null,
+        historyLength: Array.isArray(req.body?.history) ? req.body.history.length : null,
+        error: message,
+        stack: error instanceof Error ? error.stack : null
+      });
       res.status(500).json({ error: message });
     }
   }
