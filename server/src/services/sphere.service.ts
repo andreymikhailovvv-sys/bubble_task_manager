@@ -1,35 +1,39 @@
 import { prisma } from '../db/prisma.js';
 
 const MIN_SPHERES = 3;
-const DEFAULT_USER_ID = process.env.DEFAULT_USER_ID ?? 'system_migration_user';
 
 export const sphereService = {
-  list: () => prisma.sphere.findMany({ where: { userId: DEFAULT_USER_ID }, orderBy: { createdAt: 'asc' } }),
-  create: (input: any) =>
+  list: (userId: string) => prisma.sphere.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+  create: (userId: string, input: any) =>
     prisma.sphere.create({
       data: {
         name: input.name,
         color: input.color ?? '#60a5fa',
         icon: input.icon,
-        userId: DEFAULT_USER_ID
+        userId
       }
     }),
-  update: (id: string, input: any) =>
-    prisma.sphere.update({
+  update: async (id: string, userId: string, input: any) => {
+    await prisma.sphere.findFirstOrThrow({ where: { id, userId } });
+    return prisma.sphere.update({
       where: { id },
       data: {
         name: input.name,
         color: input.color,
         icon: input.icon
       }
-    }),
-  remove: async (id: string) => {
-    const total = await prisma.sphere.count({ where: { userId: DEFAULT_USER_ID } });
+    });
+  },
+  remove: async (id: string, userId: string) => {
+    const total = await prisma.sphere.count({ where: { userId } });
     if (total <= MIN_SPHERES) {
       throw new Error(`MIN_SPHERES:${MIN_SPHERES}`);
     }
 
-    await prisma.task.deleteMany({ where: { sphereId: id, userId: DEFAULT_USER_ID } });
-    await prisma.sphere.delete({ where: { id } });
+    await prisma.task.deleteMany({ where: { sphereId: id, userId } });
+    const deleted = await prisma.sphere.deleteMany({ where: { id, userId } });
+    if (deleted.count === 0) {
+      throw new Error('Sphere not found');
+    }
   }
 };

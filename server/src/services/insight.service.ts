@@ -2,8 +2,11 @@ import type { Sphere, Task } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 export const insightService = {
-  list: async () => {
-    const [tasks, spheres] = await Promise.all([prisma.task.findMany(), prisma.sphere.findMany()]);
+  list: async (userId: string) => {
+    const [tasks, spheres] = await Promise.all([
+      prisma.task.findMany({ where: { userId } }),
+      prisma.sphere.findMany({ where: { userId } })
+    ]);
     const now = new Date();
     const overdue = tasks.filter((t: Task) => t.dueDate && t.dueDate < now && t.status !== 'DONE').length;
     const hotCenter = tasks.filter((t: Task) => t.priorityScore >= 4.2 && t.status !== 'DONE').length;
