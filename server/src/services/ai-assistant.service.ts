@@ -173,6 +173,7 @@ export const aiAssistantService = {
     });
 
     let lastError: Error | null = null;
+    const modelAttemptErrors: Array<{ model: string; status: number | 'exception' | 'empty_response'; message: string }> = [];
 
     for (const model of modelCandidates) {
       try {
@@ -222,11 +223,24 @@ export const aiAssistantService = {
             errorText: errorText.slice(0, 2000)
           });
 
-          lastError = new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
-          if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
-            continue;
+          const errorMessage = `OpenAI request failed for model "${model}": ${openAiResponse.status}`;
+          modelAttemptErrors.push({
+            model,
+            status: openAiResponse.status,
+            message: `${errorMessage}. ${errorText.slice(0, 500)}`
+          });
+          lastError = new Error(errorMessage);
+          if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+            console.warn('[AI] primary model failed, trying fallback', {
+              requestId,
+              mode: input.mode ?? 'fast',
+              primaryModel: FULL_MODEL,
+              fallbackModels: modelCandidates.slice(1),
+              taskId: input.taskId,
+              userId: input.userId
+            });
           }
-          throw lastError;
+          continue;
         }
 
         const responseJson = await openAiResponse.json();
@@ -241,11 +255,24 @@ export const aiAssistantService = {
             responseJson
           });
 
-          lastError = new Error(`OpenAI returned empty response for model "${model}"`);
-          if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
-            continue;
+          const errorMessage = `OpenAI returned empty response for model "${model}"`;
+          modelAttemptErrors.push({
+            model,
+            status: 'empty_response',
+            message: errorMessage
+          });
+          lastError = new Error(errorMessage);
+          if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+            console.warn('[AI] primary model failed, trying fallback', {
+              requestId,
+              mode: input.mode ?? 'fast',
+              primaryModel: FULL_MODEL,
+              fallbackModels: modelCandidates.slice(1),
+              taskId: input.taskId,
+              userId: input.userId
+            });
           }
-          throw lastError;
+          continue;
         }
 
         if (input.mode === 'smart' && model !== FULL_MODEL) {
@@ -274,6 +301,11 @@ export const aiAssistantService = {
       } catch (error) {
         const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
         lastError = normalizedError;
+        modelAttemptErrors.push({
+          model,
+          status: 'exception',
+          message: normalizedError.message
+        });
 
         console.error('[AI] Failed to process OpenAI response', {
           requestId,
@@ -285,10 +317,24 @@ export const aiAssistantService = {
           stack: normalizedError.stack
         });
 
-        if (input.mode === 'smart' && model !== modelCandidates[modelCandidates.length - 1]) {
-          continue;
+        if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+          console.warn('[AI] primary model failed, trying fallback', {
+            requestId,
+            mode: input.mode ?? 'fast',
+            primaryModel: FULL_MODEL,
+            fallbackModels: modelCandidates.slice(1),
+            taskId: input.taskId,
+            userId: input.userId
+          });
         }
       }
+    }
+
+    if (input.mode === 'smart' && modelAttemptErrors.length > 0) {
+      const attemptsSummary = modelAttemptErrors
+        .map((attempt) => `${attempt.model} [${attempt.status}]: ${attempt.message}`)
+        .join(' | ');
+      throw new Error(`Smart mode failed for all model attempts: ${attemptsSummary}`);
     }
 
     throw lastError ?? new Error('OpenAI request failed without details');
