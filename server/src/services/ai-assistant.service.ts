@@ -19,6 +19,26 @@ type AskTaskAssistantInput = {
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
+const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+
+type ReasoningEffort = typeof SUPPORTED_REASONING_EFFORTS[number];
+
+function assertReasoningEffort(effort: string): asserts effort is ReasoningEffort {
+  if (!SUPPORTED_REASONING_EFFORTS.includes(effort as ReasoningEffort)) {
+    throw new TypeError(`Unsupported reasoning effort: "${effort}"`);
+  }
+}
+
+function resolveReasoningEffort(mode: AskTaskAssistantInput['mode']): ReasoningEffort {
+  const effortByMode: Record<'fast' | 'smart', ReasoningEffort> = {
+    fast: 'low',
+    smart: 'medium'
+  };
+  const normalizedMode = mode ?? 'fast';
+  const effort = effortByMode[normalizedMode];
+  assertReasoningEffort(effort);
+  return effort;
+}
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
@@ -137,6 +157,7 @@ export const aiAssistantService = {
     ];
 
     const requestId = randomUUID();
+    const reasoningEffort = resolveReasoningEffort(input.mode);
     const modelCandidates = input.mode === 'smart'
       ? Array.from(new Set([FULL_MODEL, ...SMART_MODEL_FALLBACKS].filter(Boolean)))
       : [FAST_MODEL];
@@ -173,7 +194,7 @@ export const aiAssistantService = {
           body: JSON.stringify({
             model,
             input: messages,
-            reasoning: { effort: 'minimal' }
+            reasoning: { effort: reasoningEffort }
           })
         });
         const latencyMs = Date.now() - startedAt;
