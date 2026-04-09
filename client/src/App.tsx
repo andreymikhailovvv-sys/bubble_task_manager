@@ -988,7 +988,7 @@ export default function App() {
                   <button
                     className={`rounded px-2 py-1 ${aiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => setAiMode('fast')}
-                    title="Быстрый режим"
+                    title="Быстрый режим (gpt-5.4-mini)"
                   >
                     Быстрый
                   </button>

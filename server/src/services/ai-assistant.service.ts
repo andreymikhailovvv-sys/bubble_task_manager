@@ -16,9 +16,9 @@ type AskTaskAssistantInput = {
   mode?: 'fast' | 'smart';
 };
 
-const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini';
-const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5';
-const SMART_MODEL_FALLBACKS = ['gpt-5', FAST_MODEL];
+const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
+const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
@@ -141,10 +141,29 @@ export const aiAssistantService = {
       ? Array.from(new Set([FULL_MODEL, ...SMART_MODEL_FALLBACKS].filter(Boolean)))
       : [FAST_MODEL];
 
+    console.info('[AI] Starting OpenAI request', {
+      requestId,
+      mode: input.mode ?? 'fast',
+      models: modelCandidates,
+      taskId: input.taskId,
+      userId: input.userId,
+      questionLength: question.length,
+      historyLength: history.length
+    });
+
     let lastError: Error | null = null;
 
     for (const model of modelCandidates) {
       try {
+        const startedAt = Date.now();
+        console.info('[AI] Sending OpenAI request', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          taskId: input.taskId,
+          userId: input.userId
+        });
+
         const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -156,6 +175,18 @@ export const aiAssistantService = {
             input: messages,
             reasoning: { effort: 'minimal' }
           })
+        });
+        const latencyMs = Date.now() - startedAt;
+
+        console.info('[AI] OpenAI response received', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          status: openAiResponse.status,
+          ok: openAiResponse.ok,
+          latencyMs,
+          taskId: input.taskId,
+          userId: input.userId
         });
 
         if (!openAiResponse.ok) {
@@ -205,6 +236,15 @@ export const aiAssistantService = {
             userId: input.userId
           });
         }
+
+        console.info('[AI] OpenAI response parsed successfully', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          answerLength: answer.length,
+          taskId: input.taskId,
+          userId: input.userId
+        });
 
         return {
           model,
