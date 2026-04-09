@@ -57,6 +57,8 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -230,6 +232,19 @@ export default function App() {
     if (!isAddingFocusedSubtask) return;
     focusedSubtaskTitleInputRef.current?.focus();
   }, [isAddingFocusedSubtask]);
+
+  useEffect(() => {
+    if (!focusedTask) return;
+    const scrollToBottom = (container: HTMLDivElement | null) => {
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+    };
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToBottom(focusedAiDialogContainerRef.current);
+      scrollToBottom(expandedAiDialogContainerRef.current);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
 
   const sendFocusedAiQuestion = async () => {
     if (!focusedTask) return;
@@ -681,7 +696,7 @@ export default function App() {
                   <Maximize2 size={14} />
                 </button>
               </div>
-              <div className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+              <div ref={focusedAiDialogContainerRef} className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
                 {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
                 {focusedAiDialog.map((message, index) => (
                   <div
@@ -899,7 +914,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
+            <div ref={expandedAiDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
               {focusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
               {focusedAiDialog.map((message, index) => (
                 <div
