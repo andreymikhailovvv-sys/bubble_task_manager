@@ -232,6 +232,12 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       const angle = mode === 'global'
         ? (i * 2.399963229728653) + rankInDue * 0.018
         : (() => {
+          if (sectorCount === 2) {
+            const midAngle = startAngle + (endAngle - startAngle) / 2;
+            const laneShift = (rankInDue - (sameDueCount - 1) / 2) * 0.07;
+            const ringShift = Math.floor(i / 5) * 0.045;
+            return midAngle + laneShift + (sectorIndex === 0 ? -ringShift : ringShift);
+          }
           const angleSpan = endAngle - startAngle;
           const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
           const ring = Math.floor(i / slotCount);
