@@ -507,8 +507,8 @@ export default function App() {
       {focusedTask && focusedDraft ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
           <div className="flex w-full max-w-[1320px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
-            <aside className="hidden min-h-0 w-[360px] shrink-0 flex-col rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
-              <div className="mb-3 flex items-center justify-between gap-3">
+            <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[360px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+              <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
@@ -535,7 +535,7 @@ export default function App() {
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
               </div>
               <textarea
-                className="mb-2 min-h-24 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+                className="mb-2 min-h-24 w-full shrink-0 resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
                 placeholder="Например: предложи пошаговый план с оценкой времени"
                 value={aiDraft}
                 onChange={(event) => setAiDraft(event.target.value)}
@@ -546,7 +546,7 @@ export default function App() {
                   }
                 }}
               />
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex shrink-0 items-center justify-between gap-2">
                 <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
                 <button
                   className="flex items-center gap-1 rounded bg-violet-600 px-3 py-1.5 text-xs disabled:opacity-50"
