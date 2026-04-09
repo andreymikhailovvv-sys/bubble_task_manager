@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
-import { authMiddleware } from './middleware/auth.middleware.js';
+import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
 
 const app = express();
@@ -17,7 +17,7 @@ app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(passport.initialize());
-app.use(authMiddleware);
+app.use(authSession);
 app.use('/api', apiRouter);
 
 const clientDist = process.env.CLIENT_DIST_PATH

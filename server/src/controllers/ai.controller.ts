@@ -21,6 +21,7 @@ export const aiController = {
       }
 
       const result = await aiAssistantService.askTaskAssistant({
+        userId: req.user!.id,
         taskId: req.params.id,
         question,
         history: Array.isArray(history) ? history : [],

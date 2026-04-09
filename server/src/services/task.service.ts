@@ -1,8 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
-const DEFAULT_USER_ID = process.env.DEFAULT_USER_ID ?? 'system_migration_user';
-
 interface TaskInput {
   title?: string;
   description?: string | null;
@@ -51,15 +49,15 @@ const toNotifyBeforeMinutes = (value: number | string | null): number | null => 
 };
 
 export const taskService = {
-  list: () => prisma.task.findMany({ where: { userId: DEFAULT_USER_ID }, orderBy: { createdAt: 'desc' } }),
-  create: async (input: CreateTaskInput) => {
+  list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+  create: async (userId: string, input: CreateTaskInput) => {
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
 
     return prisma.task.create({
       data: {
         title: input.title,
-        user: { connect: { id: DEFAULT_USER_ID } },
+        user: { connect: { id: userId } },
         description: input.description,
         sphere: input.sphereId ? { connect: { id: input.sphereId } } : undefined,
         parentTask: input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
@@ -72,7 +70,7 @@ export const taskService = {
       }
     });
   },
-  update: async (id: string, input: TaskInput) => {
+  update: async (id: string, userId: string, input: TaskInput) => {
     const patch: Prisma.TaskUpdateInput = {};
 
     if (input.title !== undefined) {
@@ -98,7 +96,7 @@ export const taskService = {
     }
 
     if (input.importance !== undefined || input.urgency !== undefined) {
-      const current = await prisma.task.findFirstOrThrow({ where: { id, userId: DEFAULT_USER_ID } });
+      const current = await prisma.task.findFirstOrThrow({ where: { id, userId } });
       const importance = toNumber(input.importance ?? current.importance, 'importance');
       const urgency = toNumber(input.urgency ?? current.urgency, 'urgency');
       patch.priorityScore = calcScore(importance, urgency);
@@ -111,9 +109,13 @@ export const taskService = {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
 
+    await prisma.task.findFirstOrThrow({ where: { id, userId } });
     return prisma.task.update({ where: { id }, data: patch });
   },
-  remove: async (id: string) => {
-    await prisma.task.delete({ where: { id } });
+  remove: async (id: string, userId: string) => {
+    const deleted = await prisma.task.deleteMany({ where: { id, userId } });
+    if (deleted.count === 0) {
+      throw new Error('Task not found');
+    }
   }
 };

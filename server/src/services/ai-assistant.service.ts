@@ -8,6 +8,7 @@ type ChatMessage = {
 };
 
 type AskTaskAssistantInput = {
+  userId: string;
   taskId: string;
   question: string;
   history: ChatMessage[];
@@ -92,8 +93,8 @@ export const aiAssistantService = {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    const task = await prisma.task.findUniqueOrThrow({
-      where: { id: input.taskId },
+    const task = await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, userId: input.userId },
       include: {
         subtasks: {
           select: {

@@ -5,7 +5,7 @@ import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
 import { passport } from '../auth/passport.js';
 import { AUTH_COOKIE_NAME, authService } from '../auth/auth.service.js';
-import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireAuth } from '../middleware/auth.js';
 
 export const apiRouter = Router();
 
@@ -44,17 +44,17 @@ apiRouter.post('/auth/logout', (_req, res) => {
 });
 
 apiRouter.get('/auth/me', requireAuth, (req, res) => {
-  res.json({ user: req.authUser });
+  res.json({ user: req.user });
 });
 
-apiRouter.get('/spheres', sphereController.list);
-apiRouter.post('/spheres', sphereController.create);
-apiRouter.patch('/spheres/:id', sphereController.update);
-apiRouter.delete('/spheres/:id', sphereController.remove);
-apiRouter.get('/tasks', taskController.list);
-apiRouter.post('/tasks', taskController.create);
-apiRouter.patch('/tasks/:id', taskController.update);
-apiRouter.delete('/tasks/:id', taskController.remove);
-apiRouter.get('/dashboard/insights', async (_, res) => res.json(await insightService.list()));
+apiRouter.get('/spheres', requireAuth, sphereController.list);
+apiRouter.post('/spheres', requireAuth, sphereController.create);
+apiRouter.patch('/spheres/:id', requireAuth, sphereController.update);
+apiRouter.delete('/spheres/:id', requireAuth, sphereController.remove);
+apiRouter.get('/tasks', requireAuth, taskController.list);
+apiRouter.post('/tasks', requireAuth, taskController.create);
+apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
+apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
+apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
 
-apiRouter.post('/tasks/:id/ai-chat', aiController.askTaskAssistant);
+apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
