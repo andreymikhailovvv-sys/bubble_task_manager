@@ -666,8 +666,8 @@ export default function App() {
 
       {focusedTask && focusedDraft ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
-          <div className="flex w-full max-w-[1320px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
-            <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[360px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+          <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
@@ -681,7 +681,7 @@ export default function App() {
                   <Maximize2 size={14} />
                 </button>
               </div>
-              <div className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+              <div className="mb-3 h-[min(46vh,430px)] space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
                 {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
                 {focusedAiDialog.map((message, index) => (
                   <div
@@ -695,7 +695,7 @@ export default function App() {
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
               </div>
               <textarea
-                className="mb-2 min-h-24 w-full shrink-0 resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+                className="mb-2 min-h-20 w-full shrink-0 resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
                 placeholder="Например: предложи пошаговый план с оценкой времени"
                 value={aiDraft}
                 onChange={(event) => setAiDraft(event.target.value)}
@@ -718,55 +718,57 @@ export default function App() {
                 </button>
               </div>
             </aside>
-            <aside className="w-full max-w-3xl rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="space-y-3">
-                <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
-                <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                <textarea className="min-h-24 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
-                <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
+            <aside className="h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
+            <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="flex min-h-0 flex-col">
+                <div className="space-y-3 overflow-y-auto pr-1">
+                  <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
+                  <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
+                  <textarea className="min-h-32 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                  <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
-                </select>
-                <label className="block text-xs">Срок (дата и время)
-                  <input
-                    type="datetime-local"
-                    className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-                    value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
-                    onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
-                  />
-                </label>
-                <label className="block text-xs">Уведомлять за
-                  <select
-                    className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-                    value={focusedNotifyPreset}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFocusedNotifyPreset(value);
-                      setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
-                    }}
-                  >
-                    {NOTIFY_PRESETS.map((preset) => (
-                      <option key={preset.value} value={preset.value}>{preset.label}</option>
-                    ))}
                   </select>
-                </label>
-                <div>
-                  <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
-                  <div className="grid grid-cols-5 gap-2">
-                    {[1, 2, 3, 4, 5].map((level) => (
-                      <button key={level} className={`rounded border px-2 py-1 text-sm ${focusedDraft.importance === level ? 'border-cyan-300 bg-cyan-600' : 'border-slate-600 bg-slate-800'}`} onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}>{level}</button>
-                    ))}
+                  <label className="block text-xs">Срок (дата и время)
+                    <input
+                      type="datetime-local"
+                      className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                      value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
+                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+                    />
+                  </label>
+                  <label className="block text-xs">Уведомлять за
+                    <select
+                      className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                      value={focusedNotifyPreset}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFocusedNotifyPreset(value);
+                        setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
+                      }}
+                    >
+                      {NOTIFY_PRESETS.map((preset) => (
+                        <option key={preset.value} value={preset.value}>{preset.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div>
+                    <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
+                    <div className="grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <button key={level} className={`rounded border px-2 py-1 text-sm ${focusedDraft.importance === level ? 'border-cyan-300 bg-cyan-600' : 'border-slate-600 bg-slate-800'}`} onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}>{level}</button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="mt-3 flex shrink-0 gap-2">
                   <button className="rounded bg-cyan-600 px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
                   <button className="rounded bg-emerald-600 px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
                   <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
                   <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
                 </div>
               </div>
-              <div className="space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
+              <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
                 <h4 className="text-sm font-semibold">Подзадачи</h4>
                 {isAddingFocusedSubtask ? (
                   <div className="space-y-2">
@@ -809,7 +811,7 @@ export default function App() {
                     + Добавить подзадачу
                   </button>
                 )}
-                <ul className="space-y-2 text-sm">
+                <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm">
                   {(subtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
                     <li
                       key={subtask.id}
