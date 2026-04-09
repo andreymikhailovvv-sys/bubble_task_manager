@@ -14,9 +14,11 @@ export const authSession = (req: Request, _res: Response, next: NextFunction) =>
     req.user = {
       id: authUser.sub,
       email: authUser.email,
+      username: authUser.username,
       name: authUser.name,
       avatarUrl: authUser.avatarUrl,
-      googleSub: authUser.googleSub
+      googleSub: authUser.googleSub,
+      deviceId: authUser.deviceId
     };
   } catch {
     req.user = undefined;

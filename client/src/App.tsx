@@ -4,7 +4,7 @@ import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
-import { api, setUnauthorizedHandler } from './lib/api';
+import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
 import { calcScore } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
@@ -22,13 +22,6 @@ const NOTIFY_PRESETS = [
   { value: '60', label: 'За час' },
   { value: '180', label: 'За 3 часа' }
 ] as const;
-type CurrentUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-  avatarUrl?: string | null;
-};
-
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 
@@ -65,6 +58,10 @@ export default function App() {
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [authLogin, setAuthLogin] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   async function load() {
     let sphereData = await api.getSpheres();
@@ -96,10 +93,11 @@ export default function App() {
     setAiError(null);
     setAiLoadingTaskId(null);
     setIsAiExpanded(false);
-    setAiMode('fast');
-    setAiDialogByTask({});
-    setSubtaskOrderMap({});
-    setBackgroundImage(null);
+      setAiMode('fast');
+      setAiDialogByTask({});
+      setSubtaskOrderMap({});
+      setBackgroundImage(null);
+      setAuthError(null);
   };
 
   useEffect(() => {
@@ -385,22 +383,7 @@ export default function App() {
     );
   }
 
-  if (!currentUser) {
-    return (
-      <main className="flex h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
-        <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/80 p-6 text-center">
-          <h1 className="mb-2 text-2xl font-semibold">Bubble Task Manager</h1>
-          <p className="mb-6 text-sm text-slate-300">Чтобы продолжить, войдите через Google.</p>
-          <button
-            className="w-full rounded-xl bg-cyan-700 px-4 py-2.5 text-sm font-medium transition hover:bg-cyan-600"
-            onClick={() => api.loginWithGoogle()}
-          >
-            Войти через Google
-          </button>
-        </div>
-      </main>
-    );
-  }
+  if (!currentUser) return null;
 
   return (
     <main
@@ -415,7 +398,12 @@ export default function App() {
     >
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
-        <div className="mr-1 text-xs text-slate-300">{currentUser.name ?? currentUser.email}</div>
+        <div className="mr-1 text-xs text-slate-300">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
+        {currentUser.username ? (
+          <div className="rounded bg-emerald-700/80 px-2 py-1 text-xs">Аккаунт: {currentUser.username}</div>
+        ) : (
+          <div className="rounded bg-slate-700 px-2 py-1 text-xs">Гостевой режим</div>
+        )}
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
         <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
@@ -428,13 +416,52 @@ export default function App() {
             try {
               await api.logout();
             } finally {
-              clearUserState();
+              const me = await api.getMe();
+              setCurrentUser(me.user);
+              setAuthError(null);
             }
           }}
         >
           Выйти
         </button>
       </header>
+
+      <section className="mb-3 grid grid-cols-1 gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3 lg:grid-cols-4">
+        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
+        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+        <input className="rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
+        <div className="flex gap-2">
+          <button
+            className="flex-1 rounded bg-cyan-700 px-3 py-2 text-sm"
+            onClick={async () => {
+              try {
+                const result = await api.login({ login: authLogin, password: authPassword });
+                setCurrentUser(result.user);
+                setAuthError(null);
+              } catch {
+                setAuthError('Не удалось войти. Проверьте логин и пароль.');
+              }
+            }}
+          >
+            Войти
+          </button>
+          <button
+            className="flex-1 rounded bg-indigo-700 px-3 py-2 text-sm"
+            onClick={async () => {
+              try {
+                const result = await api.register({ login: authLogin, password: authPassword, name: authName });
+                setCurrentUser(result.user);
+                setAuthError(null);
+              } catch {
+                setAuthError('Не удалось зарегистрироваться. Возможно, логин уже занят.');
+              }
+            }}
+          >
+            Регистрация
+          </button>
+        </div>
+        {authError ? <div className="lg:col-span-4 text-xs text-rose-300">{authError}</div> : null}
+      </section>
 
       <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-3">
         <select className="rounded bg-slate-800 p-2 text-sm" value={sphereFilter} onChange={(e) => setSphereFilter(e.target.value)}>
