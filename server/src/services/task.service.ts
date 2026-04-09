@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
+const DEFAULT_USER_ID = process.env.DEFAULT_USER_ID ?? 'system_migration_user';
+
 interface TaskInput {
   title?: string;
   description?: string | null;
@@ -49,7 +51,7 @@ const toNotifyBeforeMinutes = (value: number | string | null): number | null => 
 };
 
 export const taskService = {
-  list: () => prisma.task.findMany({ orderBy: { createdAt: 'desc' } }),
+  list: () => prisma.task.findMany({ where: { userId: DEFAULT_USER_ID }, orderBy: { createdAt: 'desc' } }),
   create: async (input: CreateTaskInput) => {
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
@@ -57,6 +59,7 @@ export const taskService = {
     return prisma.task.create({
       data: {
         title: input.title,
+        user: { connect: { id: DEFAULT_USER_ID } },
         description: input.description,
         sphere: input.sphereId ? { connect: { id: input.sphereId } } : undefined,
         parentTask: input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
@@ -95,7 +98,7 @@ export const taskService = {
     }
 
     if (input.importance !== undefined || input.urgency !== undefined) {
-      const current = await prisma.task.findUniqueOrThrow({ where: { id } });
+      const current = await prisma.task.findFirstOrThrow({ where: { id, userId: DEFAULT_USER_ID } });
       const importance = toNumber(input.importance ?? current.importance, 'importance');
       const urgency = toNumber(input.urgency ?? current.urgency, 'urgency');
       patch.priorityScore = calcScore(importance, urgency);
