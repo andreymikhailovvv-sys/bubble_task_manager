@@ -681,7 +681,7 @@ export default function App() {
                   <Maximize2 size={14} />
                 </button>
               </div>
-              <div className="mb-3 h-[min(46vh,430px)] space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+              <div className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
                 {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
                 {focusedAiDialog.map((message, index) => (
                   <div
