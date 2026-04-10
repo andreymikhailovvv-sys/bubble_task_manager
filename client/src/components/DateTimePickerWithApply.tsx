@@ -1,0 +1,140 @@
+import { CalendarDays, Check, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+type Props = {
+  value?: string | null;
+  title?: string;
+  className?: string;
+  buttonClassName?: string;
+  popupAlign?: 'left' | 'right';
+  iconOnly?: boolean;
+  onChange: (value: string | null) => void | Promise<void>;
+};
+
+function toLocalParts(value?: string | null) {
+  if (!value) return { date: '', time: '' };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { date: '', time: '' };
+  const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60_000);
+  const isoLocal = local.toISOString();
+  return {
+    date: isoLocal.slice(0, 10),
+    time: isoLocal.slice(11, 16)
+  };
+}
+
+function formatValue(value?: string | null) {
+  if (!value) return 'Срок не выбран';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Срок не выбран';
+  return parsed.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+export function DateTimePickerWithApply({
+  value,
+  title = 'Выбрать срок',
+  className = '',
+  buttonClassName = '',
+  popupAlign = 'left',
+  iconOnly = false,
+  onChange
+}: Props) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draftDate, setDraftDate] = useState('');
+  const [draftTime, setDraftTime] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const formattedValue = useMemo(() => formatValue(value), [value]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const parts = toLocalParts(value);
+    setDraftDate(parts.date);
+    setDraftTime(parts.time);
+  }, [isOpen, value]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setIsOpen(false);
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [isOpen]);
+
+  const popupPositionClass = popupAlign === 'right' ? 'right-0' : 'left-0';
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        className={`flex ${iconOnly ? 'w-auto' : 'w-full'} items-center justify-between gap-2 rounded bg-slate-800 px-2 py-2 text-sm text-slate-100 hover:bg-slate-700 ${buttonClassName}`}
+        title={title}
+        onClick={(event) => {
+          event.stopPropagation();
+          setIsOpen((prev) => !prev);
+        }}
+      >
+        {iconOnly ? null : <span className="truncate text-left">{formattedValue}</span>}
+        <CalendarDays size={14} className="shrink-0 text-cyan-300" />
+      </button>
+
+      {isOpen ? (
+        <div
+          className={`absolute ${popupPositionClass} z-50 mt-2 w-72 rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-2xl`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <p className="mb-2 text-xs text-slate-300">Выбор даты и времени</p>
+          <div className="space-y-2">
+            <input
+              type="date"
+              className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+              value={draftDate}
+              onChange={(event) => setDraftDate(event.target.value)}
+            />
+            <input
+              type="time"
+              className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+              value={draftTime}
+              onChange={(event) => setDraftTime(event.target.value)}
+            />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded bg-slate-700 px-2 py-1.5 text-xs hover:bg-slate-600"
+              onClick={() => {
+                void onChange(null);
+                setIsOpen(false);
+              }}
+            >
+              <span className="inline-flex items-center gap-1"><X size={12} /> Очистить</span>
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded bg-emerald-600 px-2 py-1.5 text-xs font-semibold hover:bg-emerald-500"
+              onClick={() => {
+                if (!draftDate) {
+                  void onChange(null);
+                } else {
+                  const nextDate = new Date(`${draftDate}T${draftTime || '00:00'}`);
+                  void onChange(nextDate.toISOString());
+                }
+                setIsOpen(false);
+              }}
+            >
+              <span className="inline-flex items-center gap-1"><Check size={12} /> Принять</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
