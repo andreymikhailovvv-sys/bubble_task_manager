@@ -55,6 +55,7 @@ export function DateTimePickerWithApply({
   const [draftTime, setDraftTime] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
   const [detachedPosition, setDetachedPosition] = useState<{ top: number; left: number } | null>(null);
 
   const formattedValue = useMemo(() => formatValue(value), [value]);
@@ -70,6 +71,7 @@ export function DateTimePickerWithApply({
     if (!isOpen) return;
     const onPointerDown = (event: MouseEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return;
+      if (popupRef.current?.contains(event.target as Node)) return;
       setIsOpen(false);
     };
     window.addEventListener('mousedown', onPointerDown);
@@ -109,6 +111,7 @@ export function DateTimePickerWithApply({
 
   const popupContent = (
     <div
+      ref={popupRef}
       className={`z-50 w-72 rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-2xl ${
         detachedPopup ? 'fixed' : `absolute ${popupPositionClass} mt-2`
       }`}

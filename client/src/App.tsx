@@ -1002,6 +1002,7 @@ export default function App() {
                     <DateTimePickerWithApply
                       className="mt-1"
                       value={focusedDraft.dueDate}
+                      detachedPopup
                       onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
                     />
                   </label>
