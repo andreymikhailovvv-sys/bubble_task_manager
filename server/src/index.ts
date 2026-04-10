@@ -10,11 +10,13 @@ import { passport } from './auth/passport.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
+const requestBodyLimit = process.env.REQUEST_BODY_LIMIT?.trim() || '15mb';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: requestBodyLimit }));
+app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
 app.use(passport.initialize());
 app.use(authSession);
