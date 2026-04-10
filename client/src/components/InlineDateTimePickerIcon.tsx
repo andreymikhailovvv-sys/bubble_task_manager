@@ -1,4 +1,4 @@
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Check } from 'lucide-react';
 import { useRef } from 'react';
 
 type Props = {
@@ -42,6 +42,17 @@ export function InlineDateTimePickerIcon({ value, title = 'Изменить ср
         }}
       >
         <CalendarDays size={14} />
+      </button>
+      <button
+        type="button"
+        className="ml-1 cursor-pointer text-emerald-300 hover:text-emerald-200"
+        title="Свернуть календарь"
+        onClick={(event) => {
+          event.stopPropagation();
+          inputRef.current?.blur();
+        }}
+      >
+        <Check size={13} />
       </button>
       <input
         ref={inputRef}

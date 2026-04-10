@@ -157,10 +157,10 @@ function getDistanceByDeadline(index: number, total: number, maxDistance: number
   const minDistance = 16;
   if (total <= 1) return minDistance;
   const compactOuter = mode === 'global'
-    ? Math.min(maxDistance * 0.46, 34 + Math.sqrt(total) * 19)
+    ? Math.min(maxDistance * 0.36, 28 + Math.sqrt(total) * 16)
     : Math.min(maxDistance * 0.54, 40 + Math.sqrt(total) * 26);
   const rankRatio = index / (total - 1);
-  const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.58) : Math.pow(rankRatio, 0.72);
+  const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.48) : Math.pow(rankRatio, 0.72);
   return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
 }
 
@@ -180,6 +180,29 @@ function getRadiusByDeadline(
   const tieBonus = tieBoost * 4;
   const maxRadius = mode === 'global' ? 84 : 74;
   return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus));
+}
+
+
+function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: number) {
+  for (let t = 0; t < 90; t += 1) {
+    bubbles.forEach((bubble) => {
+      const dx = bubble.x - center;
+      const dy = bubble.y - center;
+      const currentDistance = Math.hypot(dx, dy) || 1;
+      const normalizedUrgency = Math.min(1, Math.max(0, bubble.task.priorityScore / 5));
+      const importanceBoost = Math.min(1, Math.max(0, (bubble.task.importance - 1) / 4));
+      const centerBias = 0.2 + (normalizedUrgency * 0.55 + importanceBoost * 0.25);
+      const desiredDistance = 16 + (1 - centerBias) * maxDistance * 0.34;
+      const spring = (desiredDistance - currentDistance) * 0.11;
+      const nx = dx / currentDistance;
+      const ny = dy / currentDistance;
+      bubble.x += nx * spring;
+      bubble.y += ny * spring;
+      keepInSector(bubble, center, maxDistance, 1);
+    });
+
+    resolveCollisions(bubbles, center, maxDistance, 1, 4, 1);
+  }
 }
 
 export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
@@ -301,6 +324,10 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
   });
 
   applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
+
+  if (mode === 'global') {
+    compactGlobalLayout(result, center, maxDistance);
+  }
 
   resolveCollisions(result, center, maxDistance, sectorCount, mode === 'global' ? 4 : 8, 72);
 
