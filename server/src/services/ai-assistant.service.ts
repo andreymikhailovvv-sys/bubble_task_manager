@@ -16,6 +16,7 @@ type OpenAiUserAttachmentMessage = {
   content: Array<
     | { type: 'input_text'; text: string }
     | { type: 'input_file'; filename: string; file_data: string }
+    | { type: 'input_image'; image_url: string }
   >;
 };
 
@@ -140,7 +141,7 @@ function normalizeAttachments(attachments: ChatAttachment[] | undefined): ChatAt
     .slice(0, MAX_ATTACHMENTS);
 }
 
-function toInputFilePart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } {
+function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } | { type: 'input_image'; image_url: string } {
   const buffer = Buffer.from(attachment.contentBase64, 'base64');
   if (buffer.length === 0) {
     throw new Error(`Файл "${attachment.name}" пустой или повреждён.`);
@@ -152,16 +153,27 @@ function toInputFilePart(attachment: ChatAttachment): { type: 'input_file'; file
   const normalizedName = attachment.name.toLowerCase();
   const isPdf = attachment.mimeType === 'application/pdf' || normalizedName.endsWith('.pdf');
   const isDocx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || normalizedName.endsWith('.docx');
+  const isPng = attachment.mimeType === 'image/png' || normalizedName.endsWith('.png');
+  const isJpeg = attachment.mimeType === 'image/jpeg' || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg');
+  const isWebp = attachment.mimeType === 'image/webp' || normalizedName.endsWith('.webp');
+  const isGif = attachment.mimeType === 'image/gif' || normalizedName.endsWith('.gif');
 
-  if (!isPdf && !isDocx) {
-    throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены только PDF и DOCX.`);
+  if (isPng || isJpeg || isWebp || isGif) {
+    return {
+      type: 'input_image',
+      image_url: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
+    };
   }
 
-  return {
-    type: 'input_file',
-    filename: attachment.name,
-    file_data: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
-  };
+  if (isPdf || isDocx) {
+    return {
+      type: 'input_file',
+      filename: attachment.name,
+      file_data: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
+    };
+  }
+
+  throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены PDF, DOCX, PNG, JPG, WEBP и GIF.`);
 }
 
 function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined): OpenAiUserAttachmentMessage | null {
@@ -175,9 +187,9 @@ function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined
     content: [
       {
         type: 'input_text',
-        text: 'Пользователь приложил файлы вместе с сообщением. Проанализируй содержимое каждого файла и учитывай его как часть запроса.'
+        text: 'Пользователь приложил файлы и/или изображения вместе с сообщением. Проанализируй содержимое каждого вложения и учитывай его как часть запроса.'
       },
-      ...normalizedAttachments.map(toInputFilePart)
+      ...normalizedAttachments.map(toInputPart)
     ]
   };
 }

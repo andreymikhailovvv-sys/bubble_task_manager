@@ -17,7 +17,11 @@ const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_AI_FILE_TYPES = new Set([
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif'
 ]);
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
@@ -370,9 +374,9 @@ export default function App() {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
 
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx)$/i.test(file.name));
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|png|jpe?g|webp|gif)$/i.test(file.name));
     if (normalized.length !== selectedFiles.length) {
-      setAiError('Можно прикреплять только PDF и DOCX файлы.');
+      setAiError('Можно прикреплять PDF, DOCX и изображения (PNG/JPG/WEBP/GIF).');
     }
 
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
@@ -960,7 +964,7 @@ export default function App() {
               <input
                 ref={focusedAiFileInputRef}
                 type="file"
-                accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
@@ -974,7 +978,7 @@ export default function App() {
                   <Paperclip size={12} />
                   Прикрепить файл
                 </button>
-                <p className="text-[10px] text-slate-400">PDF / DOCX, до 8MB</p>
+                <p className="text-[10px] text-slate-400">PDF / DOCX / PNG / JPG / WEBP / GIF, до 8MB</p>
               </div>
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex flex-wrap gap-1.5">
@@ -1250,7 +1254,7 @@ export default function App() {
             <input
               ref={expandedAiFileInputRef}
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif"
               multiple
               className="hidden"
               onChange={handleAiFileSelect}
@@ -1264,7 +1268,7 @@ export default function App() {
                 <Paperclip size={12} />
                 Прикрепить файл
               </button>
-              <p className="text-[11px] text-slate-400">PDF / DOCX, до 8MB</p>
+              <p className="text-[11px] text-slate-400">PDF / DOCX / PNG / JPG / WEBP / GIF, до 8MB</p>
             </div>
             {aiPendingFiles.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2">
