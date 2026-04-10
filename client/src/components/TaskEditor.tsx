@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { Sphere, Task } from '../lib/types';
 
 type Props = {
@@ -38,6 +39,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('60');
+  const dueDateInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
@@ -86,12 +88,23 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
           </>
         ) : null}
         <label className="block text-xs">Срок (дата и время)
-          <input
-            type="datetime-local"
-            className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-            value={toDateTimeLocal(form.dueDate)}
-            onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
-          />
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              ref={dueDateInputRef}
+              type="datetime-local"
+              className="w-full rounded bg-slate-800 p-2 text-sm"
+              value={toDateTimeLocal(form.dueDate)}
+              onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+            />
+            <button
+              type="button"
+              className="rounded bg-emerald-600/90 p-2 text-white hover:bg-emerald-500"
+              title="Свернуть календарь"
+              onClick={() => dueDateInputRef.current?.blur()}
+            >
+              <Check size={14} />
+            </button>
+          </div>
         </label>
         <label className="block text-xs">Уведомлять за
           <select

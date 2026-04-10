@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, Check, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
@@ -66,6 +66,7 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     const sphereData = await api.getSpheres();
@@ -970,12 +971,23 @@ export default function App() {
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
                   </select>
                   <label className="block text-xs">Срок (дата и время)
-                    <input
-                      type="datetime-local"
-                      className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-                      value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
-                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
-                    />
+                    <div className="mt-1 flex items-center gap-2">
+                      <input
+                        ref={focusedDueDateInputRef}
+                        type="datetime-local"
+                        className="w-full rounded bg-slate-800 p-2 text-sm"
+                        value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
+                        onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+                      />
+                      <button
+                        type="button"
+                        className="rounded bg-emerald-600/90 p-2 text-white hover:bg-emerald-500"
+                        title="Свернуть календарь"
+                        onClick={() => focusedDueDateInputRef.current?.blur()}
+                      >
+                        <Check size={14} />
+                      </button>
+                    </div>
                   </label>
                   <label className="block text-xs">Уведомлять за
                     <select

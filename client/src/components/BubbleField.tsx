@@ -128,16 +128,22 @@ export function BubbleField({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
-  const [subtaskDraft, setSubtaskDraft] = useState<SubtaskDraft>({
-    title: '',
-    description: '',
-    dueDate: '',
-    notifyPreset: '60'
-  });
+  const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '60' } satisfies SubtaskDraft);
+
+  const getDraftForTask = (taskId: string): SubtaskDraft => subtaskDrafts[taskId] ?? defaultSubtaskDraft();
+
+  const patchDraftForTask = (taskId: string, patch: Partial<SubtaskDraft>) => {
+    setSubtaskDrafts((prev) => ({
+      ...prev,
+      [taskId]: { ...getDraftForTask(taskId), ...patch }
+    }));
+  };
 
   const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
@@ -176,7 +182,6 @@ export function BubbleField({
   const activateHover = (taskId: string) => {
     cancelHoverExit();
     if (taskId !== hoveredTaskId) {
-      setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
       setIsAddingSubtask(false);
     }
     setHoveredTaskId(taskId);
@@ -191,17 +196,18 @@ export function BubbleField({
   };
 
   const onAddSubtask = async (parentTask: Task) => {
-    const nextTitle = subtaskDraft.title.trim() || 'Новая доп задача';
-    const nextDescription = subtaskDraft.description.trim();
-    const nextNotifyBeforeMinutes = subtaskDraft.notifyPreset === 'null' ? null : Number(subtaskDraft.notifyPreset);
+    const draft = getDraftForTask(parentTask.id);
+    const nextTitle = draft.title.trim() || 'Новая доп задача';
+    const nextDescription = draft.description.trim();
+    const nextNotifyBeforeMinutes = draft.notifyPreset === 'null' ? null : Number(draft.notifyPreset);
 
     await onCreateSubtask(parentTask, {
       title: nextTitle,
       description: nextDescription || undefined,
-      dueDate: subtaskDraft.dueDate || null,
+      dueDate: draft.dueDate || null,
       notifyBeforeMinutes: Number.isFinite(nextNotifyBeforeMinutes) ? nextNotifyBeforeMinutes : null
     });
-    setSubtaskDraft({ title: '', description: '', dueDate: '', notifyPreset: '60' });
+    setSubtaskDrafts((prev) => ({ ...prev, [parentTask.id]: defaultSubtaskDraft() }));
     setIsAddingSubtask(false);
   };
 
@@ -461,15 +467,17 @@ export function BubbleField({
                       </li>
                     ))}
                   </ul>
-                  {isAddingSubtask ? (
+                  {isAddingSubtask ? (() => {
+                    const activeDraft = getDraftForTask(hoveredBubble.task.id);
+                    return (
                     <div className="space-y-2">
                       <input
                         ref={subtaskTitleInputRef}
                         className="w-full rounded bg-slate-800 px-2 py-1.5 text-[11px]"
                         placeholder="Название доп задачи"
-                        value={subtaskDraft.title}
+                        value={activeDraft.title}
                         onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => setSubtaskDraft((prev) => ({ ...prev, title: event.target.value }))}
+                        onChange={(event) => patchDraftForTask(hoveredBubble.task.id, { title: event.target.value })}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') {
                             event.preventDefault();
@@ -492,14 +500,14 @@ export function BubbleField({
                           onClick={(event) => {
                             event.stopPropagation();
                             setIsAddingSubtask(false);
-                            setSubtaskDraft((prev) => ({ ...prev, title: '' }));
                           }}
                         >
                           Отмена
                         </button>
                       </div>
                     </div>
-                  ) : (
+                  );
+                  })() : (
                     <button
                       className="w-full rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
                       onClick={(event) => {
