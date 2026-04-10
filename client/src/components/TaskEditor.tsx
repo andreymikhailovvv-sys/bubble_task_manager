@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 
@@ -31,6 +32,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('60');
+  const dueDateInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
