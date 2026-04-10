@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { GripVertical, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -19,7 +19,6 @@ type Props = {
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
-  onReorderSubtasks: (parentTaskId: string, sourceIndex: number, targetIndex: number) => void;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
@@ -131,7 +130,6 @@ export function BubbleField({
   onToggleSubtaskFilter,
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
-  onReorderSubtasks,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -424,35 +422,16 @@ export function BubbleField({
                   </button>
                   <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
                     {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
-                    {hoveredSubtasks.map((subtask, index) => (
+                    {hoveredSubtasks.map((subtask) => (
                       <li
                         key={subtask.id}
-                        className="group relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
-                        draggable={!isSubtaskFilterActive}
-                        onDragStart={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.dataTransfer.setData('text/plain', String(index));
-                        }}
-                        onDragOver={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.preventDefault();
-                        }}
-                        onDrop={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.preventDefault();
-                          const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
-                          if (Number.isNaN(sourceIndex)) return;
-                          onReorderSubtasks(hoveredBubble.task.id, sourceIndex, index);
-                        }}
+                        className="relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
                         style={isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                           : shouldTaskGlow(subtask)
                             ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
                             : undefined}
                       >
-                        <span className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
-                          <GripVertical size={14} />
-                        </span>
                         <input
                           type="checkbox"
                           checked={subtask.status === 'DONE'}
@@ -477,11 +456,6 @@ export function BubbleField({
                           title="Изменить срок подзадачи"
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
-                        <div className="pointer-events-none absolute left-2 right-2 top-[calc(100%+4px)] z-30 hidden rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
-                          <p className="font-semibold text-slate-100">Описание:</p>
-                          <p className="mb-1 line-clamp-2"><LinkifiedText text={subtask.description} fallback="Без описания" /></p>
-                          <p>Дедлайн: {formatDueDate(subtask.dueDate)}</p>
-                        </div>
                       </li>
                     ))}
                   </ul>
