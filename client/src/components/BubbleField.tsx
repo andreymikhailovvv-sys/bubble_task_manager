@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, Reorder, motion } from 'framer-motion';
 import { GripVertical, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
@@ -114,6 +114,22 @@ function getBubbleShade(hex: string, distanceRatio: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function resolveReorderMove(previousIds: string[], nextIds: string[]) {
+  if (previousIds.length !== nextIds.length || previousIds.length === 0) return null;
+  for (let sourceIndex = 0; sourceIndex < previousIds.length; sourceIndex += 1) {
+    for (let targetIndex = 0; targetIndex < previousIds.length; targetIndex += 1) {
+      if (sourceIndex === targetIndex) continue;
+      const reordered = [...previousIds];
+      const [moved] = reordered.splice(sourceIndex, 1);
+      reordered.splice(targetIndex, 0, moved);
+      if (reordered.every((value, index) => value === nextIds[index])) {
+        return { sourceIndex, targetIndex };
+      }
+    }
+  }
+  return null;
 }
 
 export function BubbleField({
@@ -422,28 +438,29 @@ export function BubbleField({
                   >
                     Фильтровать
                   </button>
-                  <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
+                  <Reorder.Group
+                    axis="y"
+                    values={hoveredSubtasks}
+                    onReorder={(nextOrder) => {
+                      if (isSubtaskFilterActive) return;
+                      const move = resolveReorderMove(
+                        hoveredSubtasks.map((task) => task.id),
+                        nextOrder.map((task) => task.id)
+                      );
+                      if (!move) return;
+                      onReorderSubtasks(hoveredBubble.task.id, move.sourceIndex, move.targetIndex);
+                    }}
+                    className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1"
+                    data-no-field-zoom="true"
+                  >
                     {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
-                    {hoveredSubtasks.map((subtask, index) => (
-                      <li
+                    {hoveredSubtasks.map((subtask) => (
+                      <Reorder.Item
                         key={subtask.id}
+                        value={subtask}
                         className="group relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
-                        draggable={!isSubtaskFilterActive}
-                        onDragStart={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.dataTransfer.setData('text/plain', String(index));
-                        }}
-                        onDragOver={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.preventDefault();
-                        }}
-                        onDrop={(event) => {
-                          if (isSubtaskFilterActive) return;
-                          event.preventDefault();
-                          const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
-                          if (Number.isNaN(sourceIndex)) return;
-                          onReorderSubtasks(hoveredBubble.task.id, sourceIndex, index);
-                        }}
+                        drag={!isSubtaskFilterActive}
+                        whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
                         style={isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                           : shouldTaskGlow(subtask)
@@ -477,14 +494,14 @@ export function BubbleField({
                           title="Изменить срок подзадачи"
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
-                        <div className="pointer-events-none absolute left-2 right-2 top-[calc(100%+4px)] z-30 hidden rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
+                        <div className="pointer-events-none absolute -top-2 left-[calc(100%+6px)] z-30 hidden w-64 -translate-y-full rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
                           <p className="font-semibold text-slate-100">Описание:</p>
                           <p className="mb-1 line-clamp-2"><LinkifiedText text={subtask.description} fallback="Без описания" /></p>
                           <p>Дедлайн: {formatDueDate(subtask.dueDate)}</p>
                         </div>
-                      </li>
+                      </Reorder.Item>
                     ))}
-                  </ul>
+                  </Reorder.Group>
                   {isAddingSubtask ? (() => {
                     const activeDraft = getDraftForTask(hoveredBubble.task.id);
                     return (
