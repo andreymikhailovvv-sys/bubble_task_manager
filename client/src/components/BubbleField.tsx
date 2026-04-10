@@ -249,7 +249,22 @@ export function BubbleField({
 
 
   const hoverInfoCard = { width: 290, height: 170 };
-  const hoverSubtasksCard = { width: 360, height: 250 };
+  const hoverSubtasksCard = { width: 360, height: 310 };
+
+  const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
+    const belowY = bubbleY + bubbleRadius + 18;
+    const aboveY = bubbleY - bubbleRadius - hoverSubtasksCard.height - 18;
+
+    if (belowY + hoverSubtasksCard.height <= workspaceMax - 8) {
+      return clamp(belowY, workspaceMin + 8, workspaceMax - hoverSubtasksCard.height - 8);
+    }
+
+    if (aboveY >= workspaceMin + 8) {
+      return aboveY;
+    }
+
+    return clamp(belowY, workspaceMin + 8, workspaceMax - hoverSubtasksCard.height - 8);
+  };
   const workspaceMin = -WORKSPACE_PADDING;
   const workspaceMax = SIZE + WORKSPACE_PADDING;
 
@@ -428,7 +443,7 @@ export function BubbleField({
               </foreignObject>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverSubtasksCard.width / 2, workspaceMin + 8, workspaceMax - hoverSubtasksCard.width - 8)}
-                y={clamp(hoveredBubble.y + hoveredBubble.radius + 18, workspaceMin + 8, workspaceMax - hoverSubtasksCard.height - 8)}
+                y={getSubtasksCardY(hoveredBubble.y, hoveredBubble.radius)}
                 width={hoverSubtasksCard.width}
                 height={hoverSubtasksCard.height}
                 onMouseEnter={cancelHoverExit}
