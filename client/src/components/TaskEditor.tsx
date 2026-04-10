@@ -51,7 +51,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onDelete, o
   const isSubtask = Boolean(form.parentTaskId);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
       <aside className="w-full max-w-xl space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-100">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />

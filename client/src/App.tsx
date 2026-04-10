@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, Check, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
-import { calcScore } from './lib/layout';
+import { calcScore, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
+import { LinkifiedText } from './components/LinkifiedText';
 
 const MAX_SPHERES = 8;
 const MAX_AI_ATTACHMENTS = 3;
@@ -24,6 +26,13 @@ const NOTIFY_PRESETS = [
   { value: '60', label: 'За час' },
   { value: '180', label: 'За 3 часа' }
 ] as const;
+const IMPORTANCE_STYLES: Record<number, string> = {
+  1: 'bg-sky-500/70 border-sky-300',
+  2: 'bg-cyan-500/70 border-cyan-300',
+  3: 'bg-violet-500/70 border-violet-300',
+  4: 'bg-orange-500/70 border-orange-300',
+  5: 'bg-rose-500/75 border-rose-300'
+};
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 
@@ -37,6 +46,7 @@ export default function App() {
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
@@ -684,7 +694,17 @@ export default function App() {
             <option value="month">За этот месяц</option>
           </select>
         </div>
-        <div className="lg:col-span-2 flex flex-wrap items-center justify-end gap-2">
+        <div>
+          <select
+            className="w-full rounded bg-slate-800 p-2 text-sm"
+            value={rankingMode}
+            onChange={(event) => setRankingMode(event.target.value as BubbleRankingMode)}
+          >
+            <option value="urgency">По срочности</option>
+            <option value="importance">По важности</option>
+          </select>
+        </div>
+        <div className="lg:col-span-1 flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
@@ -727,6 +747,7 @@ export default function App() {
           className="h-full"
           tasks={visibleTasks}
           spheres={visibleSpheres}
+          rankingMode={rankingMode}
           subtaskMap={displayedSubtaskMap}
           isSubtaskFilterActive={isSubtaskFilterActive}
           onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
@@ -801,7 +822,7 @@ export default function App() {
                       await load();
                     }}
                   />
-                  <span className="truncate">{task.title}</span>
+                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
                 </li>
               ))}
             </ul>
@@ -997,7 +1018,13 @@ export default function App() {
                     <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
                     <div className="grid grid-cols-5 gap-2">
                       {[1, 2, 3, 4, 5].map((level) => (
-                        <button key={level} className={`rounded border px-2 py-1 text-sm ${focusedDraft.importance === level ? 'border-cyan-300 bg-cyan-600' : 'border-slate-600 bg-slate-800'}`} onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}>{level}</button>
+                        <button
+                          key={level}
+                          className={`rounded border px-2 py-1 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                          onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}
+                        >
+                          {level}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1063,48 +1090,47 @@ export default function App() {
                     + Добавить подзадачу
                   </button>
                 )}
-                <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm">
-                  {(displayedSubtaskMap[focusedTask.id] ?? []).map((subtask, index) => (
-                    <li
+                <Reorder.Group
+                  axis="y"
+                  values={displayedSubtaskMap[focusedTask.id] ?? []}
+                  onReorder={(nextOrder) => {
+                    if (isSubtaskFilterActive) return;
+                    setSubtaskOrderMap((prev) => ({ ...prev, [focusedTask.id]: nextOrder.map((task) => task.id) }));
+                  }}
+                  className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
+                >
+                  {(displayedSubtaskMap[focusedTask.id] ?? []).map((subtask) => (
+                    <Reorder.Item
                       key={subtask.id}
-                      className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
-                      draggable={!isSubtaskFilterActive}
-                      onDragStart={(event) => {
-                        if (isSubtaskFilterActive) return;
-                        event.dataTransfer.setData('text/plain', String(index));
-                      }}
-                      onDragOver={(event) => {
-                        if (isSubtaskFilterActive) return;
-                        event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        if (isSubtaskFilterActive) return;
-                        event.preventDefault();
-                        const sourceIndex = Number(event.dataTransfer.getData('text/plain'));
-                        if (Number.isNaN(sourceIndex)) return;
-                        setSubtaskOrderMap((prev) => {
-                          const current = prev[focusedTask.id] ?? (subtaskMap[focusedTask.id] ?? []).map((task) => task.id);
-                          const next = [...current];
-                          const [moved] = next.splice(sourceIndex, 1);
-                          next.splice(index, 0, moved);
-                          return { ...prev, [focusedTask.id]: next };
-                        });
-                      }}
+                      value={subtask}
+                      drag={!isSubtaskFilterActive}
+                      whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
+                      className="group relative flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
                       style={isOverdue(subtask)
                         ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                         : shouldTaskGlow(subtask)
                           ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
                           : undefined}
                     >
-                      <span className="cursor-grab text-slate-400 active:cursor-grabbing"><GripVertical size={14} /></span>
+                      <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
+                        <GripVertical size={14} />
+                      </button>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
-                      <button
-                        className={`flex-1 text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
+                      <div
+                        className={`flex-1 cursor-pointer text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
                         onClick={() => setEditorState({ task: subtask })}
                         title="Открыть доп задачу"
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setEditorState({ task: subtask });
+                          }
+                        }}
                       >
-                        {subtask.title}
-                      </button>
+                        <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                      </div>
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
@@ -1113,10 +1139,15 @@ export default function App() {
                           await load();
                         }}
                       />
-                    </li>
+                      <div className="pointer-events-none absolute -top-2 right-0 z-40 hidden w-64 -translate-y-full rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
+                        <p className="font-semibold text-slate-100">Описание</p>
+                        <p className="mb-1 line-clamp-3"><LinkifiedText text={subtask.description} fallback="Без описания" /></p>
+                        <p>Дедлайн: {subtask.dueDate ? new Date(subtask.dueDate).toLocaleString('ru-RU') : 'Не указан'}</p>
+                      </div>
+                    </Reorder.Item>
                   ))}
                   {(displayedSubtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
-                </ul>
+                </Reorder.Group>
               </div>
             </div>
             </aside>

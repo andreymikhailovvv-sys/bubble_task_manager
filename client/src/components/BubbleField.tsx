@@ -1,16 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { GripVertical, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildBubbles } from '../lib/layout';
+import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
+import { LinkifiedText } from './LinkifiedText';
 
 type Props = {
   tasks: Task[];
   subtaskMap: Record<string, Task[]>;
   spheres: Sphere[];
   mode: 'global' | 'sectors';
+  rankingMode: BubbleRankingMode;
   selectedId?: string;
   poppingTaskId?: string | null;
   onSelect: (task: Task) => void;
@@ -24,6 +26,14 @@ type Props = {
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   className?: string;
+};
+
+const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
+  1: '#38bdf8',
+  2: '#22d3ee',
+  3: '#8b5cf6',
+  4: '#f97316',
+  5: '#ef4444'
 };
 
 const SIZE = 900;
@@ -111,6 +121,7 @@ export function BubbleField({
   subtaskMap,
   spheres,
   mode,
+  rankingMode,
   selectedId,
   poppingTaskId,
   onSelect,
@@ -145,7 +156,7 @@ export function BubbleField({
     }));
   };
 
-  const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE), [tasks, spheres, mode]);
+  const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE, rankingMode), [tasks, spheres, mode, rankingMode]);
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
@@ -246,7 +257,7 @@ export function BubbleField({
           cx={0}
           cy={0}
           r={bubble.radius}
-          fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
+          fill={getBubbleShade(rankingMode === 'importance' ? (IMPORTANCE_BUBBLE_COLORS[bubble.task.importance] ?? bubble.color) : bubble.color, bubble.distanceRatio)}
           fillOpacity={0.48}
           stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
           strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
@@ -380,8 +391,8 @@ export function BubbleField({
                 onMouseLeave={scheduleHoverExit}
               >
                 <div className="rounded-xl border border-slate-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
-                  <p className="mb-1 font-semibold">{hoveredBubble.task.title}</p>
-                  <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{hoveredBubble.task.description?.trim() || 'Без описания'}</p>
+                  <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
+                  <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                 </div>
@@ -416,7 +427,7 @@ export function BubbleField({
                     {hoveredSubtasks.map((subtask, index) => (
                       <li
                         key={subtask.id}
-                        className="flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
+                        className="group relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
                         draggable={!isSubtaskFilterActive}
                         onDragStart={(event) => {
                           if (isSubtaskFilterActive) return;
@@ -450,20 +461,27 @@ export function BubbleField({
                             onToggleSubtaskDone(subtask);
                           }}
                         />
-                        <button
+                        <div
                           className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : ''}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             onSelectSubtask(subtask);
                           }}
+                          role="button"
+                          tabIndex={0}
                         >
-                          {subtask.title}
-                        </button>
+                          <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                        </div>
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
+                        <div className="pointer-events-none absolute left-2 right-2 top-[calc(100%+4px)] z-30 hidden rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
+                          <p className="font-semibold text-slate-100">Описание:</p>
+                          <p className="mb-1 line-clamp-2"><LinkifiedText text={subtask.description} fallback="Без описания" /></p>
+                          <p>Дедлайн: {formatDueDate(subtask.dueDate)}</p>
+                        </div>
                       </li>
                     ))}
                   </ul>
