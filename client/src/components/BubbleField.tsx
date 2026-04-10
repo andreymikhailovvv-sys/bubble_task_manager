@@ -139,6 +139,7 @@ export function BubbleField({
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,6 +198,7 @@ export function BubbleField({
   };
 
   const scheduleHoverExit = () => {
+    if (isNativeCalendarOpen) return;
     cancelHoverExit();
     hoverExitTimer.current = setTimeout(() => {
       setHoveredTaskId(null);
@@ -298,6 +300,7 @@ export function BubbleField({
           event.stopPropagation();
           return;
         }
+        if (isNativeCalendarOpen) return;
         event.preventDefault();
         const svgRect = event.currentTarget.getBoundingClientRect();
         const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
@@ -310,16 +313,19 @@ export function BubbleField({
         setZoom(nextZoom);
       }}
       onMouseDown={(event) => {
+        if (isNativeCalendarOpen) return;
         dragStart.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
       }}
       onMouseMove={(event) => {
-        if (!dragStart.current) return;
+        if (isNativeCalendarOpen || !dragStart.current) return;
         setOffset({ x: event.clientX - dragStart.current.x, y: event.clientY - dragStart.current.y });
       }}
       onMouseUp={() => {
+        if (isNativeCalendarOpen) return;
         dragStart.current = null;
       }}
       onMouseLeave={() => {
+        if (isNativeCalendarOpen) return;
         dragStart.current = null;
         scheduleHoverExit();
       }}
@@ -455,6 +461,7 @@ export function BubbleField({
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
                           detachedPopup
+                          onOpenChange={setIsNativeCalendarOpen}
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
                       </li>

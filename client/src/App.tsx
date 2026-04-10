@@ -898,8 +898,8 @@ export default function App() {
       ) : null}
 
       {focusedTask && focusedDraft ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4" onClick={() => setFocusedTaskId(null)}>
-          <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
+          <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
             <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
