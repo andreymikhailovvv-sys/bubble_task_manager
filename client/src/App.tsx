@@ -35,6 +35,11 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 };
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
+const HELP_WITH_TASK_PROMPT = [
+  'Помоги мне выполнить эту задачу, используя весь контекст задачи и подзадач.',
+  'Если информации уже достаточно — сразу дай конкретный план действий, приоритеты и ближайшие шаги.',
+  'Если данных недостаточно — сначала задай наводящие вопросы, чтобы уточнить контекст, а потом предложи конкретную помощь.'
+].join(' ');
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -279,9 +284,13 @@ export default function App() {
     return () => window.cancelAnimationFrame(frameId);
   }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
 
-  const sendFocusedAiQuestion = async () => {
+  const sendFocusedAiQuestion = async (options?: {
+    questionOverride?: string;
+    userContentOverride?: string;
+    modeOverride?: ChatMode;
+  }) => {
     if (!focusedTask) return;
-    const question = aiDraft.trim();
+    const question = options?.questionOverride?.trim() ?? aiDraft.trim();
     if (!question && aiPendingFiles.length === 0) return;
 
     const fileNames = aiPendingFiles.map((file) => file.name);
@@ -296,9 +305,10 @@ export default function App() {
 
     const taskId = focusedTask.id;
     const previousDialog = aiDialogByTask[taskId] ?? [];
+    const baseUserContent = options?.userContentOverride?.trim() || question;
     const userContent = fileNames.length > 0
-      ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : question;
+      ? `${baseUserContent || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
+      : baseUserContent;
     const nextDialog = [...previousDialog, { role: 'user' as const, content: userContent }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
     setAiDraft('');
@@ -310,7 +320,7 @@ export default function App() {
       const result = await askTaskAssistant(taskId, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history: previousDialog,
-        mode: aiMode,
+        mode: options?.modeOverride ?? aiMode,
         attachments: attachmentsPayload
       });
       setAiDialogByTask((prev) => ({
@@ -327,6 +337,14 @@ export default function App() {
     } finally {
       setAiLoadingTaskId(null);
     }
+  };
+
+  const helpWithTask = async () => {
+    await sendFocusedAiQuestion({
+      questionOverride: HELP_WITH_TASK_PROMPT,
+      userContentOverride: 'Помочь с задачей',
+      modeOverride: 'fast'
+    });
   };
 
   const toBase64 = async (file: File): Promise<string> => {
@@ -977,14 +995,23 @@ export default function App() {
               ) : null}
               <div className="flex shrink-0 items-center justify-between gap-2">
                 <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
-                <button
-                  className="flex items-center gap-1 rounded bg-violet-600 px-3 py-1.5 text-xs disabled:opacity-50"
-                  disabled={aiLoadingTaskId === focusedTask.id}
-                  onClick={() => void sendFocusedAiQuestion()}
-                >
-                  <SendHorizontal size={13} />
-                  Отправить
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded bg-sky-700 px-3 py-1.5 text-xs text-sky-50 disabled:opacity-50"
+                    disabled={aiLoadingTaskId === focusedTask.id}
+                    onClick={() => void helpWithTask()}
+                  >
+                    Помочь с задачей
+                  </button>
+                  <button
+                    className="flex items-center gap-1 rounded bg-violet-600 px-3 py-1.5 text-xs disabled:opacity-50"
+                    disabled={aiLoadingTaskId === focusedTask.id}
+                    onClick={() => void sendFocusedAiQuestion()}
+                  >
+                    <SendHorizontal size={13} />
+                    Отправить
+                  </button>
+                </div>
               </div>
             </aside>
             <aside className="h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
@@ -1258,14 +1285,23 @@ export default function App() {
             ) : null}
             <div className="flex items-center justify-between">
               <p className="min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
-              <button
-                className="flex items-center gap-1 rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
-                disabled={aiLoadingTaskId === focusedTask.id}
-                onClick={() => void sendFocusedAiQuestion()}
-              >
-                <SendHorizontal size={14} />
-                Отправить ({aiMode === 'fast' ? 'Быстрый' : 'Умный'})
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  className="rounded bg-sky-700 px-3 py-2 text-sm text-sky-50 disabled:opacity-50"
+                  disabled={aiLoadingTaskId === focusedTask.id}
+                  onClick={() => void helpWithTask()}
+                >
+                  Помочь с задачей
+                </button>
+                <button
+                  className="flex items-center gap-1 rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
+                  disabled={aiLoadingTaskId === focusedTask.id}
+                  onClick={() => void sendFocusedAiQuestion()}
+                >
+                  <SendHorizontal size={14} />
+                  Отправить ({aiMode === 'fast' ? 'Быстрый' : 'Умный'})
+                </button>
+              </div>
             </div>
           </div>
         </div>
