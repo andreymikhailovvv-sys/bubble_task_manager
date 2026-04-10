@@ -143,6 +143,7 @@ export function BubbleField({
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '60' } satisfies SubtaskDraft);
 
@@ -168,6 +169,30 @@ export function BubbleField({
       subtaskTitleInputRef.current?.focus();
     }
   }, [isAddingSubtask]);
+
+  const handleNativeCalendarOpenChange = (nextOpen: boolean) => {
+    if (nativeCalendarCloseTimer.current) {
+      clearTimeout(nativeCalendarCloseTimer.current);
+      nativeCalendarCloseTimer.current = null;
+    }
+
+    if (nextOpen) {
+      setIsNativeCalendarOpen(true);
+      cancelHoverExit();
+      return;
+    }
+
+    nativeCalendarCloseTimer.current = setTimeout(() => {
+      setIsNativeCalendarOpen(false);
+      nativeCalendarCloseTimer.current = null;
+    }, 320);
+  };
+
+  useEffect(() => () => {
+    if (nativeCalendarCloseTimer.current) {
+      clearTimeout(nativeCalendarCloseTimer.current);
+    }
+  }, []);
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -461,7 +486,7 @@ export function BubbleField({
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
                           detachedPopup
-                          onOpenChange={setIsNativeCalendarOpen}
+                          onOpenChange={handleNativeCalendarOpenChange}
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
                       </li>
