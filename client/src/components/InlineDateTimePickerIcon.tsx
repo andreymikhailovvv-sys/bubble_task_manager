@@ -6,6 +6,7 @@ type Props = {
   className?: string;
   detachedPopup?: boolean;
   onChange: (value: string | null) => void | Promise<void>;
+  onOpenChange?: (isOpen: boolean) => void;
 };
 
 export function InlineDateTimePickerIcon({
@@ -13,7 +14,8 @@ export function InlineDateTimePickerIcon({
   title = 'Изменить срок',
   className = '',
   detachedPopup = false,
-  onChange
+  onChange,
+  onOpenChange
 }: Props) {
   return (
     <DateTimePickerWithApply
@@ -25,6 +27,7 @@ export function InlineDateTimePickerIcon({
       detachedPopup={detachedPopup}
       buttonClassName="w-auto min-w-0 bg-transparent p-0 hover:bg-transparent"
       onChange={onChange}
+      onOpenChange={onOpenChange}
     />
   );
 }

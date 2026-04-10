@@ -12,6 +12,7 @@ type Props = {
   detachedPopup?: boolean;
   detachedOffset?: number;
   onChange: (value: string | null) => void | Promise<void>;
+  onOpenChange?: (isOpen: boolean) => void;
 };
 
 function toLocalParts(value?: string | null) {
@@ -48,7 +49,8 @@ export function DateTimePickerWithApply({
   iconOnly = false,
   detachedPopup = false,
   detachedOffset = 10,
-  onChange
+  onChange,
+  onOpenChange
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
@@ -60,6 +62,10 @@ export function DateTimePickerWithApply({
 
   const formattedValue = useMemo(() => formatValue(value), [value]);
 
+
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
   useEffect(() => {
     if (!isOpen) return;
     const parts = toLocalParts(value);
