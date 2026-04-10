@@ -68,6 +68,7 @@ export default function App() {
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [aiSubtasksLoadingTaskId, setAiSubtasksLoadingTaskId] = useState<string | null>(null);
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
@@ -111,6 +112,7 @@ export default function App() {
     setAiDraft('');
     setAiError(null);
     setAiLoadingTaskId(null);
+    setAiSubtasksLoadingTaskId(null);
     setAiPendingFiles([]);
     setIsAiExpanded(false);
       setAiMode('fast');
@@ -258,6 +260,7 @@ export default function App() {
       setIsAiExpanded(false);
       setAiMode('fast');
       setAiPendingFiles([]);
+      setAiSubtasksLoadingTaskId(null);
       return;
     }
     setFocusedDraft(focusedTask);
@@ -578,6 +581,21 @@ export default function App() {
     await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 60 });
     setFocusedSubtaskTitle('');
     setIsAddingFocusedSubtask(false);
+  };
+
+  const generateFocusedSubtasksWithAi = async () => {
+    if (!focusedTask) return;
+    setAiError(null);
+    setAiSubtasksLoadingTaskId(focusedTask.id);
+    try {
+      await api.generateTaskSubtasks(focusedTask.id);
+      await load();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось сгенерировать подзадачи';
+      setAiError(message);
+    } finally {
+      setAiSubtasksLoadingTaskId(null);
+    }
   };
 
   const reorderVisibleSubtasks = (parentTaskId: string, nextVisibleOrderIds: string[]) => {
@@ -1077,15 +1095,27 @@ export default function App() {
               <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold">Подзадачи</h4>
-                  <button
-                    type="button"
-                    className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
-                      ? 'border-cyan-300 bg-cyan-600/90 text-white'
-                      : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
-                    onClick={() => setIsSubtaskFilterActive((prev) => !prev)}
-                  >
-                    Фильтровать
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center rounded-full border border-rose-300 bg-rose-500 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-70"
+                        onClick={() => void generateFocusedSubtasksWithAi()}
+                        disabled={aiSubtasksLoadingTaskId === focusedTask.id}
+                      >
+                        {aiSubtasksLoadingTaskId === focusedTask.id ? 'Генерирую…' : 'Сформировать ИИ'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
+                        ? 'border-cyan-300 bg-cyan-600/90 text-white'
+                        : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
+                      onClick={() => setIsSubtaskFilterActive((prev) => !prev)}
+                    >
+                      Фильтровать
+                    </button>
+                  </div>
                 </div>
                 {isAddingFocusedSubtask ? (
                   <div className="space-y-2">
