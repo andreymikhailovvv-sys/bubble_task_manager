@@ -988,10 +988,6 @@ export default function App() {
                   <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
                   <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <textarea className="min-h-44 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
-                  <div className="rounded border border-slate-700/80 bg-slate-950/80 p-2 text-xs text-slate-200">
-                    <p className="mb-1 text-[11px] font-semibold text-slate-400">Описание (активные ссылки)</p>
-                    <LinkifiedText text={focusedDraft.description} fallback="Без описания" stopPropagationOnLinkClick />
-                  </div>
                   <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
