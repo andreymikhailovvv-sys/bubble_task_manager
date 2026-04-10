@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Bot, Check, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
+import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
@@ -971,23 +972,11 @@ export default function App() {
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
                   </select>
                   <label className="block text-xs">Срок (дата и время)
-                    <div className="mt-1 flex items-center gap-2">
-                      <input
-                        ref={focusedDueDateInputRef}
-                        type="datetime-local"
-                        className="w-full rounded bg-slate-800 p-2 text-sm"
-                        value={focusedDraft.dueDate ? new Date(new Date(focusedDraft.dueDate).getTime() - new Date(focusedDraft.dueDate).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : ''}
-                        onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: e.target.value ? new Date(e.target.value).toISOString() : null }))}
-                      />
-                      <button
-                        type="button"
-                        className="rounded bg-emerald-600/90 p-2 text-white hover:bg-emerald-500"
-                        title="Свернуть календарь"
-                        onClick={() => focusedDueDateInputRef.current?.blur()}
-                      >
-                        <Check size={14} />
-                      </button>
-                    </div>
+                    <DateTimePickerWithApply
+                      className="mt-1"
+                      value={focusedDraft.dueDate}
+                      onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
+                    />
                   </label>
                   <label className="block text-xs">Уведомлять за
                     <select
