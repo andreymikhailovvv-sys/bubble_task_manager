@@ -454,6 +454,7 @@ export function BubbleField({
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
+                          detachedPopup
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
                       </li>
