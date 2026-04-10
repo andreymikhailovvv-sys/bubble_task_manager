@@ -185,3 +185,4 @@ apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
 
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
+apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);

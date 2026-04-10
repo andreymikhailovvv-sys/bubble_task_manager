@@ -67,5 +67,18 @@ export const aiController = {
       });
       res.status(500).json({ error: message });
     }
+  },
+  generateSubtasks: async (req: Request, res: Response) => {
+    try {
+      const result = await aiAssistantService.generateSubtasks({
+        userId: req.user!.id,
+        taskId: req.params.id
+      });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      const status = message === 'У задачи уже есть подзадачи' ? 409 : 500;
+      res.status(status).json({ error: message });
+    }
   }
 };

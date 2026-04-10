@@ -28,6 +28,11 @@ type AskTaskAssistantInput = {
   mode?: 'fast' | 'smart';
   attachments?: ChatAttachment[];
 };
+
+type GenerateSubtasksInput = {
+  userId: string;
+  taskId: string;
+};
 type ChatAttachment = {
   name: string;
   mimeType: string;
@@ -96,6 +101,48 @@ function formatTaskContext(task: {
     `Приоритет: ${task.priorityScore}`,
     `Подзадачи:\n${subtasksText}`
   ].join('\n');
+}
+
+type GeneratedSubtask = {
+  title: string;
+  description: string;
+};
+
+function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawAnswer);
+  } catch {
+    throw new Error('ИИ вернул невалидный JSON для подзадач');
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || !('subtasks' in parsed)) {
+    throw new Error('ИИ вернул неверный формат подзадач');
+  }
+
+  const subtasks = (parsed as { subtasks?: unknown }).subtasks;
+  if (!Array.isArray(subtasks)) {
+    throw new Error('ИИ вернул неверный формат списка подзадач');
+  }
+
+  const normalized = subtasks
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) return null;
+      const title = 'title' in item ? (item as { title?: unknown }).title : undefined;
+      const description = 'description' in item ? (item as { description?: unknown }).description : undefined;
+      if (typeof title !== 'string' || typeof description !== 'string') return null;
+      const trimmedTitle = title.trim();
+      const trimmedDescription = description.trim();
+      if (!trimmedTitle || !trimmedDescription) return null;
+      return { title: trimmedTitle.slice(0, 180), description: trimmedDescription.slice(0, 4000) };
+    })
+    .filter((item): item is GeneratedSubtask => Boolean(item));
+
+  if (normalized.length === 0) {
+    throw new Error('ИИ не предложил ни одной валидной подзадачи');
+  }
+
+  return normalized.slice(0, 12);
 }
 
 function extractOutputText(response: unknown): string {
@@ -428,5 +475,106 @@ export const aiAssistantService = {
     }
 
     throw lastError ?? new Error('OpenAI request failed without details');
+  },
+
+  generateSubtasks: async (input: GenerateSubtasksInput) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    const task = await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, userId: input.userId },
+      include: {
+        subtasks: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            dueDate: true,
+            status: true
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (task.subtasks.length > 0) {
+      throw new Error('У задачи уже есть подзадачи');
+    }
+
+    const taskContext = formatTaskContext(task);
+    const requestId = randomUUID();
+
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: FAST_MODEL,
+        input: [
+          {
+            role: 'system',
+            content: [
+              'Ты сервис, который декомпозирует задачу на подзадачи.',
+              'Верни только JSON без markdown и без любых комментариев.',
+              'Строгий формат ответа:',
+              '{"subtasks":[{"title":"...","description":"..."}]}.',
+              'В каждом объекте должны быть только поля title и description.',
+              'От 3 до 8 подзадач, конкретных и выполнимых.'
+            ].join(' ')
+          },
+          {
+            role: 'user',
+            content: `Разбей задачу на подзадачи:\n${taskContext}`
+          }
+        ],
+        reasoning: { effort: 'low' }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[AI] generateSubtasks failed', {
+        requestId,
+        taskId: input.taskId,
+        userId: input.userId,
+        status: response.status,
+        errorText: errorText.slice(0, 1000)
+      });
+      throw new Error('Не удалось получить подзадачи от ИИ');
+    }
+
+    const payload = await response.json();
+    const rawAnswer = extractOutputText(payload);
+    if (!rawAnswer) {
+      throw new Error('ИИ вернул пустой ответ для подзадач');
+    }
+
+    const generatedSubtasks = parseGeneratedSubtasks(rawAnswer);
+
+    const created = await prisma.$transaction(
+      generatedSubtasks.map((subtask) => prisma.task.create({
+        data: {
+          title: subtask.title,
+          description: subtask.description,
+          userId: input.userId,
+          parentTaskId: task.id,
+          sphereId: null,
+          importance: 3,
+          urgency: 3,
+          priorityScore: 3,
+          status: 'TODO',
+          notifyBeforeMinutes: 60
+        }
+      }))
+    );
+
+    return {
+      model: FAST_MODEL,
+      createdCount: created.length
+    };
   }
 };
