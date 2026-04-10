@@ -558,6 +558,24 @@ export default function App() {
     setIsAddingFocusedSubtask(false);
   };
 
+  const reorderVisibleSubtasks = (parentTaskId: string, nextVisibleOrderIds: string[]) => {
+    setSubtaskOrderMap((prev) => {
+      const fullOrder = prev[parentTaskId] ?? (subtaskMap[parentTaskId] ?? []).map((task) => task.id);
+      if (fullOrder.length === 0) {
+        return { ...prev, [parentTaskId]: nextVisibleOrderIds };
+      }
+      const visibleSet = new Set(nextVisibleOrderIds);
+      let visibleIndex = 0;
+      const nextFullOrder = fullOrder.map((taskId) => {
+        if (!visibleSet.has(taskId)) return taskId;
+        const replacement = nextVisibleOrderIds[visibleIndex];
+        visibleIndex += 1;
+        return replacement ?? taskId;
+      });
+      return { ...prev, [parentTaskId]: nextFullOrder };
+    });
+  };
+
   const handleBackgroundUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -763,18 +781,6 @@ export default function App() {
           onUpdateSubtaskDueDate={async (subtask, dueDate) => {
             await api.updateTask(subtask.id, { dueDate });
             await load();
-          }}
-          onReorderSubtasks={(parentTaskId, sourceIndex, targetIndex) => {
-            setSubtaskOrderMap((prev) => {
-              const current = prev[parentTaskId] ?? (subtaskMap[parentTaskId] ?? []).map((task) => task.id);
-              if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0 || sourceIndex >= current.length || targetIndex >= current.length) {
-                return prev;
-              }
-              const next = [...current];
-              const [moved] = next.splice(sourceIndex, 1);
-              next.splice(targetIndex, 0, moved);
-              return { ...prev, [parentTaskId]: next };
-            });
           }}
           onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
           onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
@@ -1094,8 +1100,7 @@ export default function App() {
                   axis="y"
                   values={displayedSubtaskMap[focusedTask.id] ?? []}
                   onReorder={(nextOrder) => {
-                    if (isSubtaskFilterActive) return;
-                    setSubtaskOrderMap((prev) => ({ ...prev, [focusedTask.id]: nextOrder.map((task) => task.id) }));
+                    reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
                 >
@@ -1103,9 +1108,8 @@ export default function App() {
                     <Reorder.Item
                       key={subtask.id}
                       value={subtask}
-                      drag={!isSubtaskFilterActive}
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
-                      className="group relative flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
+                      className="relative flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
                       style={isOverdue(subtask)
                         ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
                         : shouldTaskGlow(subtask)
@@ -1139,11 +1143,6 @@ export default function App() {
                           await load();
                         }}
                       />
-                      <div className="pointer-events-none absolute -top-2 right-0 z-40 hidden w-64 -translate-y-full rounded-lg border border-slate-600/70 bg-slate-950/95 p-2 text-[11px] text-slate-200 shadow-xl group-hover:block">
-                        <p className="font-semibold text-slate-100">Описание</p>
-                        <p className="mb-1 line-clamp-3"><LinkifiedText text={subtask.description} fallback="Без описания" /></p>
-                        <p>Дедлайн: {subtask.dueDate ? new Date(subtask.dueDate).toLocaleString('ru-RU') : 'Не указан'}</p>
-                      </div>
                     </Reorder.Item>
                   ))}
                   {(displayedSubtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
