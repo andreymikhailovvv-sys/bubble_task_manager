@@ -1,5 +1,7 @@
 import type { Sphere, Task } from './types';
 
+export type BubbleRankingMode = 'urgency' | 'importance';
+
 export type Bubble = {
   task: Task;
   x: number;
@@ -153,7 +155,7 @@ function applyGravity(
   }
 }
 
-function getDistanceByDeadline(index: number, total: number, maxDistance: number, mode: 'global' | 'sectors') {
+function getDistanceByRank(index: number, total: number, maxDistance: number, mode: 'global' | 'sectors') {
   const minDistance = 16;
   if (total <= 1) return minDistance;
   const compactOuter = mode === 'global'
@@ -164,22 +166,25 @@ function getDistanceByDeadline(index: number, total: number, maxDistance: number
   return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
 }
 
-function getRadiusByDeadline(
+function getRadiusByRank(
   index: number,
   total: number,
   proximity: number,
   urgencyWeight: number,
   tieBoost: number,
-  mode: 'global' | 'sectors'
+  mode: 'global' | 'sectors',
+  rankingMode: BubbleRankingMode,
+  importance: number
 ) {
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
   const deadlineScale = 1 - rankRatio;
   const base = mode === 'global' ? 19 + deadlineScale * 35 : 20 + deadlineScale * 30;
   const proximityBoost = mode === 'global' ? proximity * 11 : proximity * 9;
   const urgencyBoost = mode === 'global' ? urgencyWeight * 17 : urgencyWeight * 14;
+  const importanceBoost = rankingMode === 'importance' ? (importance - 1) * (mode === 'global' ? 4.2 : 3.4) : 0;
   const tieBonus = tieBoost * 4;
-  const maxRadius = mode === 'global' ? 84 : 74;
-  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus));
+  const maxRadius = mode === 'global' ? 90 : 80;
+  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus + importanceBoost));
 }
 
 
@@ -205,7 +210,7 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
   }
 }
 
-export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number): Bubble[] {
+export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number, rankingMode: BubbleRankingMode = 'urgency'): Bubble[] {
   const center = size / 2;
   const maxDistance = size * 0.44;
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
@@ -225,6 +230,10 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     const startAngle = (Math.PI * 2 * sectorIndex) / sectorCount;
     const endAngle = (Math.PI * 2 * (sectorIndex + 1)) / sectorCount;
     const sorted = [...sectorTasks].sort((a, b) => {
+      if (rankingMode === 'importance') {
+        if (a.importance !== b.importance) return b.importance - a.importance;
+        if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
+      }
       const diffA = getDueDateDiffMs(a.dueDate);
       const diffB = getDueDateDiffMs(b.dueDate);
       if (diffA !== diffB) return diffA - diffB;
@@ -247,8 +256,10 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = getRadiusByDeadline(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode);
-      const distance = getDistanceByDeadline(i, sorted.length, maxDistance, mode);
+      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance);
+      const distance = rankingMode === 'importance'
+        ? 18 + (1 - (task.importance - 1) / 4) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
+        : getDistanceByRank(i, sorted.length, maxDistance, mode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
       gravityById[task.id] = 1 - rankRatio;
@@ -291,6 +302,10 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
     const ranked = [...sectorTasks]
       .sort((a, b) => {
+        if (rankingMode === 'importance') {
+          if (a.importance !== b.importance) return b.importance - a.importance;
+          if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
+        }
         const diffA = getDueDateDiffMs(a.dueDate);
         const diffB = getDueDateDiffMs(b.dueDate);
         if (diffA !== diffB) return diffA - diffB;
@@ -305,7 +320,9 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const targetDistance = getDistanceByDeadline(idx, ranked.length, maxDistance, mode);
+      const targetDistance = rankingMode === 'importance'
+        ? 18 + (1 - (bubble.task.importance - 1) / 4) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
+        : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
         : Math.max(targetDistance - 12, previousDistance + bubble.radius * 0.2 + 4);
