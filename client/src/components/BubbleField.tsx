@@ -335,11 +335,15 @@ export function BubbleField({
           <motion.g
             animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-            transform={`translate(${bubble.radius * 0.57} ${-bubble.radius * 0.58})`}
+            transform={`translate(${bubble.radius * 0.66} ${-bubble.radius * 0.66})`}
             pointerEvents="none"
           >
             <circle cx={0} cy={0} r={11} fill="#7c3aed" />
-            <MessageCircle size={12} color="#ffffff" style={{ transform: 'translate(-6px, -6px)' }} />
+            <foreignObject x={-6} y={-6} width={12} height={12}>
+              <div className="flex h-full w-full items-center justify-center">
+                <MessageCircle size={12} color="#ffffff" />
+              </div>
+            </foreignObject>
           </motion.g>
         ) : null}
       </motion.g>
