@@ -39,3 +39,13 @@ export type ChatAttachmentPayload = {
   contentBase64: string;
   size: number;
 };
+
+export type TaskAttachment = {
+  id: string;
+  taskId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  updatedAt: string;
+};

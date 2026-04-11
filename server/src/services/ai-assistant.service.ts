@@ -83,6 +83,7 @@ function formatTaskContext(task: {
   priorityScore: number;
   status: string;
   subtasks: Array<{ title: string; description: string | null; dueDate: Date | null; status: string }>;
+  attachments?: Array<{ name: string; mimeType: string; size: number }>;
 }) {
   const dueDateText = task.dueDate ? task.dueDate.toISOString() : 'не указан';
   const subtasksText = task.subtasks.length
@@ -90,6 +91,11 @@ function formatTaskContext(task: {
       .map((subtask, index) => `${index + 1}. ${subtask.title} | статус: ${subtask.status} | срок: ${subtask.dueDate ? subtask.dueDate.toISOString() : 'не указан'} | описание: ${subtask.description ?? 'нет'}`)
       .join('\n')
     : 'Подзадач нет';
+  const attachmentsText = task.attachments && task.attachments.length > 0
+    ? task.attachments
+      .map((attachment, index) => `${index + 1}. ${attachment.name} | тип: ${attachment.mimeType} | размер: ${attachment.size} байт`)
+      .join('\n')
+    : 'Нет прикреплённых файлов';
 
   return [
     `Название задачи: ${task.title}`,
@@ -99,7 +105,8 @@ function formatTaskContext(task: {
     `Важность: ${task.importance}`,
     `Срочность: ${task.urgency}`,
     `Приоритет: ${task.priorityScore}`,
-    `Подзадачи:\n${subtasksText}`
+    `Подзадачи:\n${subtasksText}`,
+    `Прикреплённые файлы:\n${attachmentsText}`
   ].join('\n');
 }
 
@@ -234,7 +241,7 @@ function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined
     content: [
       {
         type: 'input_text',
-        text: 'Пользователь приложил файлы и/или изображения вместе с сообщением. Проанализируй содержимое каждого вложения и учитывай его как часть запроса.'
+        text: 'К задаче прикреплены вспомогательные файлы и/или изображения. Проанализируй содержимое каждого вложения и учитывай его как часть контекста.'
       },
       ...normalizedAttachments.map(toInputPart)
     ]
@@ -257,6 +264,15 @@ export const aiAssistantService = {
             description: true,
             dueDate: true,
             status: true
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        attachments: {
+          select: {
+            name: true,
+            mimeType: true,
+            size: true,
+            contentBase64: true
           },
           orderBy: { createdAt: 'asc' }
         }
@@ -282,7 +298,7 @@ export const aiAssistantService = {
     ].join(' ');
 
     const taskContext = formatTaskContext(task);
-    const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
@@ -495,6 +511,15 @@ export const aiAssistantService = {
             status: true
           },
           orderBy: { createdAt: 'asc' }
+        },
+        attachments: {
+          select: {
+            name: true,
+            mimeType: true,
+            size: true,
+            contentBase64: true
+          },
+          orderBy: { createdAt: 'asc' }
         }
       }
     });
@@ -505,6 +530,7 @@ export const aiAssistantService = {
 
     const taskContext = formatTaskContext(task);
     const requestId = randomUUID();
+    const taskAttachmentsMessage = buildAttachmentsPromptMessage(task.attachments);
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -529,7 +555,8 @@ export const aiAssistantService = {
           {
             role: 'user',
             content: `Разбей задачу на подзадачи:\n${taskContext}`
-          }
+          },
+          ...(taskAttachmentsMessage ? [taskAttachmentsMessage] : [])
         ],
         reasoning: { effort: 'low' }
       })

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, Check, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, Check, FileText, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -9,7 +9,7 @@ import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
 import { calcScore, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Insight, Sphere, Task } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Insight, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 
 const MAX_SPHERES = 8;
@@ -94,6 +94,9 @@ export default function App() {
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiSubtasksLoadingTaskId, setAiSubtasksLoadingTaskId] = useState<string | null>(null);
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
+  const [focusedTaskAttachments, setFocusedTaskAttachments] = useState<TaskAttachment[]>([]);
+  const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
+  const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
@@ -112,6 +115,7 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
@@ -301,6 +305,7 @@ export default function App() {
       setIsAiExpanded(false);
       setAiMode('fast');
       setAiPendingFiles([]);
+      setFocusedTaskAttachments([]);
       setAiSubtasksLoadingTaskId(null);
       return;
     }
@@ -313,6 +318,19 @@ export default function App() {
       setFocusedNotifyPreset('60');
     }
   }, [focusedTask]);
+
+  useEffect(() => {
+    if (!focusedTask) return;
+    const loadTaskAttachments = async () => {
+      try {
+        const attachments = await api.getTaskAttachments(focusedTask.id);
+        setFocusedTaskAttachments(attachments);
+      } catch {
+        setFocusedTaskAttachments([]);
+      }
+    };
+    void loadTaskAttachments();
+  }, [focusedTask?.id]);
 
   useEffect(() => {
     if (!isAddingFocusedSubtask) return;
@@ -439,6 +457,65 @@ export default function App() {
       return merged;
     });
     event.target.value = '';
+  };
+
+  const uploadFocusedTaskFiles = async (files: File[]) => {
+    if (!focusedTask || files.length === 0) return;
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== files.length) {
+      setAiError('Для задачи можно прикреплять только PDF, DOCX и изображения.');
+    }
+    if (normalized.length === 0) return;
+
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setAiError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      return;
+    }
+
+    setIsUploadingTaskAttachment(true);
+    try {
+      for (const file of normalized) {
+        await api.createTaskAttachment(focusedTask.id, await fileToAttachmentPayload(file));
+      }
+      const next = await api.getTaskAttachments(focusedTask.id);
+      setFocusedTaskAttachments(next);
+      setAiError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось загрузить файл к задаче';
+      setAiError(message);
+    } finally {
+      setIsUploadingTaskAttachment(false);
+      setIsTaskAttachmentDragActive(false);
+    }
+  };
+
+  const handleTaskAttachmentFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    void uploadFocusedTaskFiles(selectedFiles);
+    event.target.value = '';
+  };
+
+  const removeTaskAttachment = async (attachmentId: string) => {
+    if (!focusedTask) return;
+    try {
+      await api.deleteTaskAttachment(focusedTask.id, attachmentId);
+      setFocusedTaskAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось удалить файл';
+      setAiError(message);
+    }
+  };
+
+  const downloadTaskAttachment = (attachment: TaskAttachment) => {
+    if (!focusedTask) return;
+    const url = api.getTaskAttachmentDownloadUrl(focusedTask.id, attachment.id);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const removePendingAiFile = (fileName: string) => {
@@ -1097,6 +1174,62 @@ export default function App() {
                   <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
                   <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <textarea className="min-h-44 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                  <input
+                    ref={focusedTaskAttachmentInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif"
+                    multiple
+                    className="hidden"
+                    onChange={handleTaskAttachmentFileSelect}
+                  />
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-slate-400">Файлы к задаче (используются ИИ в чате, «Помочь с задачей» и «Сформировать ИИ»)</p>
+                    <div className="flex flex-wrap items-start gap-2">
+                      {focusedTaskAttachments.map((attachment) => (
+                        <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
+                          <button
+                            type="button"
+                            title={`${attachment.name} • скачать`}
+                            onClick={() => downloadTaskAttachment(attachment)}
+                            className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
+                          >
+                            <FileText size={12} className="shrink-0 text-cyan-300" />
+                            <span className="truncate">{attachment.name}</span>
+                          </button>
+                          <button
+                            type="button"
+                            title="Удалить файл"
+                            onClick={() => void removeTaskAttachment(attachment.id)}
+                            className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
+                          >
+                            <X size={11} className="shrink-0" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed text-slate-200 transition ${isTaskAttachmentDragActive ? 'border-cyan-300 bg-cyan-700/30' : 'border-slate-500 bg-slate-800 hover:bg-slate-700'} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                        onClick={() => focusedTaskAttachmentInputRef.current?.click()}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setIsTaskAttachmentDragActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setIsTaskAttachmentDragActive(false);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const files = Array.from(event.dataTransfer.files ?? []);
+                          void uploadFocusedTaskFiles(files);
+                        }}
+                        disabled={isUploadingTaskAttachment}
+                        title="Добавить файл или перетащить в плюс"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
                   <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}

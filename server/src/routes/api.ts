@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
+import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
@@ -182,6 +183,10 @@ apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
+apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
+apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
+apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.create);
+apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
 
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);

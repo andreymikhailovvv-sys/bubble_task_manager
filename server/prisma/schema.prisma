@@ -24,6 +24,7 @@ model User {
   avatarUrl    String?
   spheres      Sphere[]
   tasks        Task[]
+  taskAttachments TaskAttachment[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -64,6 +65,7 @@ model Task {
   notifyBeforeMinutes Int?       @default(60)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
+  attachments         TaskAttachment[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -71,4 +73,23 @@ model Task {
   @@index([sphereId])
   @@index([parentTaskId])
   @@index([status])
+}
+
+
+model TaskAttachment {
+  id            String   @id @default(cuid())
+  taskId        String
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  mimeType      String
+  size          Int
+  contentBase64 String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([taskId, createdAt])
 }
