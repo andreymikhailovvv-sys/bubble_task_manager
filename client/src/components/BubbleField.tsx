@@ -332,11 +332,15 @@ export function BubbleField({
           </div>
         </foreignObject>
         {hasAiMessage ? (
-          <foreignObject x={bubble.radius * 0.45} y={-bubble.radius * 0.88} width={24} height={24} pointerEvents="none">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-white shadow-[0_0_0_2px_rgba(15,23,42,0.95)]">
-              <MessageCircle size={12} />
-            </div>
-          </foreignObject>
+          <motion.g
+            animate={{ scale: [1, 1.08, 1] }}
+            transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+            transform={`translate(${bubble.radius * 0.57} ${-bubble.radius * 0.58})`}
+            pointerEvents="none"
+          >
+            <circle cx={0} cy={0} r={11} fill="#7c3aed" />
+            <MessageCircle size={12} color="#ffffff" style={{ transform: 'translate(-6px, -6px)' }} />
+          </motion.g>
         ) : null}
       </motion.g>
     );
