@@ -39,6 +39,10 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 };
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
+const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
+const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
+const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
+const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
 const HELP_WITH_TASK_PROMPT = [
   'Помоги мне выполнить эту задачу, используя весь контекст задачи и подзадач.',
   'Если информации уже достаточно — сразу дай конкретный план действий, приоритеты и ближайшие шаги.',
@@ -97,6 +101,7 @@ export default function App() {
   const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
@@ -139,6 +144,7 @@ export default function App() {
       setAiDialogByTask({});
       setSubtaskOrderMap({});
       setBackgroundImage(null);
+      setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
       setAuthError(null);
   };
 
@@ -182,6 +188,7 @@ export default function App() {
     if (!currentUser) {
       setAiDialogByTask({});
       setBackgroundImage(null);
+      setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
       return;
     }
     try {
@@ -197,6 +204,15 @@ export default function App() {
     }
 
     setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
+    const rawOverlayOpacity = localStorage.getItem(getBackgroundOverlayStorageKey(currentUser.id));
+    const parsedOverlayOpacity = rawOverlayOpacity ? Number(rawOverlayOpacity) : Number.NaN;
+    if (Number.isFinite(parsedOverlayOpacity)) {
+      setBackgroundOverlayOpacity(
+        Math.min(MAX_BACKGROUND_OVERLAY_OPACITY, Math.max(MIN_BACKGROUND_OVERLAY_OPACITY, parsedOverlayOpacity))
+      );
+      return;
+    }
+    setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -208,6 +224,11 @@ export default function App() {
     }
     localStorage.removeItem(key);
   }, [backgroundImage, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getBackgroundOverlayStorageKey(currentUser.id), String(backgroundOverlayOpacity));
+  }, [backgroundOverlayOpacity, currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -691,7 +712,7 @@ export default function App() {
       className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
       style={{
         backgroundImage: backgroundImage
-          ? `linear-gradient(rgba(2,6,23,0.58), rgba(2,6,23,0.72)), url(${backgroundImage})`
+          ? `linear-gradient(rgba(2,6,23,${backgroundOverlayOpacity}), rgba(2,6,23,${backgroundOverlayOpacity})), url(${backgroundImage})`
           : undefined,
         backgroundSize: backgroundImage ? 'cover' : undefined,
         backgroundPosition: backgroundImage ? 'center' : undefined
@@ -899,6 +920,19 @@ export default function App() {
               <span className="block font-medium">Загрузить изображение</span>
               <span className="mt-1 block text-[11px] text-slate-400">Рекомендуемый размер: от 1920×1080 (лучше 2560×1440).</span>
               <input type="file" accept="image/*" className="mt-2 block w-full text-[11px]" onChange={handleBackgroundUpload} />
+            </label>
+            <label className="mb-3 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">
+              <span className="block font-medium">Приглушение фона: {Math.round(backgroundOverlayOpacity * 100)}%</span>
+              <input
+                type="range"
+                min={MIN_BACKGROUND_OVERLAY_OPACITY}
+                max={MAX_BACKGROUND_OVERLAY_OPACITY}
+                step={0.05}
+                value={backgroundOverlayOpacity}
+                className="mt-2 w-full"
+                onChange={(event) => setBackgroundOverlayOpacity(Number(event.target.value))}
+              />
+              <span className="mt-1 block text-[11px] text-slate-400">Меньше — фон ярче, больше — фон темнее.</span>
             </label>
             <button
               className="w-full rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50"
