@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { MessageCircle, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -15,6 +15,7 @@ type Props = {
   rankingMode: BubbleRankingMode;
   selectedId?: string;
   poppingTaskId?: string | null;
+  hasAiNotification?: (taskId: string) => boolean;
   onSelect: (task: Task) => void;
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
@@ -123,6 +124,7 @@ export function BubbleField({
   rankingMode,
   selectedId,
   poppingTaskId,
+  hasAiNotification,
   onSelect,
   onSelectSubtask,
   onCreateSubtask,
@@ -278,6 +280,7 @@ export function BubbleField({
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
+    const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
 
     return (
       <motion.g
@@ -328,6 +331,13 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
+        {hasAiMessage ? (
+          <foreignObject x={bubble.radius * 0.45} y={-bubble.radius * 0.88} width={24} height={24} pointerEvents="none">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-white shadow-[0_0_0_2px_rgba(15,23,42,0.95)]">
+              <MessageCircle size={12} />
+            </div>
+          </foreignObject>
+        ) : null}
       </motion.g>
     );
   };
