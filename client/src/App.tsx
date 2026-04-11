@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Bot, Check, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
@@ -44,6 +44,26 @@ const HELP_WITH_TASK_PROMPT = [
   'Если информации уже достаточно — сразу дай конкретный план действий, приоритеты и ближайшие шаги.',
   'Если данных недостаточно — сначала задай наводящие вопросы, чтобы уточнить контекст, а потом предложи конкретную помощь.'
 ].join(' ');
+const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
+
+function renderAiMessageContent(content: string): ReactNode {
+  return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
+    if (!part) return null;
+    const isBoldMarkup = part.startsWith('**') && part.endsWith('**') && part.length > 4;
+    if (!isBoldMarkup) {
+      return <span key={`plain-${index}`}>{part}</span>;
+    }
+
+    const boldText = part.slice(2, -2);
+    if (!boldText) return null;
+
+    return (
+      <strong key={`bold-${index}`} className="font-semibold text-white">
+        {boldText}
+      </strong>
+    );
+  });
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -962,7 +982,7 @@ export default function App() {
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
-                    <p>{message.content}</p>
+                    <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
@@ -1264,7 +1284,7 @@ export default function App() {
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
-                  <p>{message.content}</p>
+                  <div>{renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
               {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-violet-200">ИИ думает…</p> : null}
