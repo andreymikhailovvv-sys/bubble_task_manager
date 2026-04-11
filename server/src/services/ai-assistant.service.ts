@@ -33,6 +33,12 @@ type GenerateSubtasksInput = {
   userId: string;
   taskId: string;
 };
+type GenerateTaskFromPromptInput = {
+  userId: string;
+  prompt: string;
+  sphereId?: string | null;
+  attachments?: ChatAttachment[];
+};
 type ChatAttachment = {
   name: string;
   mimeType: string;
@@ -114,6 +120,16 @@ type GeneratedSubtask = {
   title: string;
   description: string;
 };
+type GeneratedTaskDraft = {
+  title: string;
+  description: string;
+  dueDate: string | null;
+  importance: number;
+  urgency: number;
+  notifyBeforeMinutes: number | null;
+  subtasks: Array<{ title: string; description: string; dueDate: string | null }>;
+  firstAssistantMessage: string;
+};
 
 function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
   let parsed: unknown;
@@ -150,6 +166,73 @@ function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
   }
 
   return normalized.slice(0, 12);
+}
+
+function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawAnswer);
+  } catch {
+    throw new Error('ИИ вернул невалидный JSON для генерации задачи');
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('ИИ вернул неверный формат задачи');
+  }
+  const source = parsed as Record<string, unknown>;
+  const title = typeof source.title === 'string' ? source.title.trim().slice(0, 180) : '';
+  const description = typeof source.description === 'string' ? source.description.trim().slice(0, 4000) : '';
+  const firstAssistantMessage = typeof source.firstAssistantMessage === 'string'
+    ? source.firstAssistantMessage.trim().slice(0, 6000)
+    : '';
+  const dueDate = typeof source.dueDate === 'string' && source.dueDate.trim()
+    ? source.dueDate.trim()
+    : null;
+  const importanceRaw = typeof source.importance === 'number' ? source.importance : Number(source.importance ?? 3);
+  const urgencyRaw = typeof source.urgency === 'number' ? source.urgency : Number(source.urgency ?? 3);
+  const notifyRaw = source.notifyBeforeMinutes;
+  const notifyBeforeMinutes = notifyRaw === null || notifyRaw === undefined
+    ? null
+    : Math.max(1, Math.round(Number(notifyRaw)));
+  const importance = Number.isFinite(importanceRaw) ? Math.max(1, Math.min(5, Math.round(importanceRaw))) : 3;
+  const urgency = Number.isFinite(urgencyRaw) ? Math.max(1, Math.min(5, Math.round(urgencyRaw))) : 3;
+
+  const subtasksSource = Array.isArray(source.subtasks) ? source.subtasks : [];
+  const subtasks = subtasksSource
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) return null;
+      const record = item as Record<string, unknown>;
+      const subtaskTitle = typeof record.title === 'string' ? record.title.trim().slice(0, 180) : '';
+      const subtaskDescription = typeof record.description === 'string' ? record.description.trim().slice(0, 2000) : '';
+      const subtaskDueDate = typeof record.dueDate === 'string' && record.dueDate.trim()
+        ? record.dueDate.trim()
+        : null;
+      if (!subtaskTitle) return null;
+      return {
+        title: subtaskTitle,
+        description: subtaskDescription,
+        dueDate: subtaskDueDate
+      };
+    })
+    .filter((item): item is { title: string; description: string; dueDate: string | null } => Boolean(item))
+    .slice(0, 12);
+
+  if (!title) {
+    throw new Error('ИИ не вернул название задачи');
+  }
+  if (!firstAssistantMessage) {
+    throw new Error('ИИ не вернул первое сообщение в чат');
+  }
+
+  return {
+    title,
+    description,
+    dueDate,
+    importance,
+    urgency,
+    notifyBeforeMinutes,
+    subtasks,
+    firstAssistantMessage
+  };
 }
 
 function extractOutputText(response: unknown): string {
@@ -602,6 +685,78 @@ export const aiAssistantService = {
     return {
       model: FAST_MODEL,
       createdCount: created.length
+    };
+  },
+
+  generateTaskFromPrompt: async (input: GenerateTaskFromPromptInput) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+    const prompt = input.prompt.trim();
+    if (!prompt) {
+      throw new TypeError('Prompt is required');
+    }
+    const now = new Date();
+    const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: FAST_MODEL,
+        input: [
+          {
+            role: 'system',
+            content: [
+              'Ты формируешь структуру задачи для планировщика.',
+              'Верни только JSON без markdown и без дополнительных комментариев.',
+              'Точный формат:',
+              '{"title":"...","description":"...","dueDate":"ISO-8601 или null","importance":1-5,"urgency":1-5,"notifyBeforeMinutes":число или null,"subtasks":[{"title":"...","description":"...","dueDate":"ISO-8601 или null"}],"firstAssistantMessage":"..."}',
+              'В firstAssistantMessage дай 1 короткое полезное сообщение в чат: либо план выполнения, либо уточняющие вопросы.',
+              'Учитывай текущие дату и время из контекста.'
+            ].join(' ')
+          },
+          {
+            role: 'user',
+            content: [
+              `Текущая дата и время: ${now.toISOString()}.`,
+              `Локальная дата и время: ${now.toLocaleString('ru-RU', { timeZone: 'UTC' })} (UTC).`,
+              `Сектор задачи: ${input.sphereId ? `выбран (${input.sphereId})` : 'не выбран'}.`,
+              `Описание от пользователя: ${prompt}`
+            ].join('\n')
+          },
+          ...(attachmentsMessage ? [attachmentsMessage] : [])
+        ],
+        reasoning: { effort: 'low' }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('Не удалось получить структуру задачи от ИИ');
+    }
+
+    const payload = await response.json();
+    const rawAnswer = extractOutputText(payload);
+    if (!rawAnswer) {
+      throw new Error('ИИ вернул пустой ответ для генерации задачи');
+    }
+    const taskDraft = parseGeneratedTaskDraft(rawAnswer);
+
+    return {
+      model: FAST_MODEL,
+      task: {
+        title: taskDraft.title,
+        description: taskDraft.description,
+        dueDate: taskDraft.dueDate,
+        importance: taskDraft.importance,
+        urgency: taskDraft.urgency,
+        notifyBeforeMinutes: taskDraft.notifyBeforeMinutes,
+        subtasks: taskDraft.subtasks
+      },
+      firstAssistantMessage: taskDraft.firstAssistantMessage
     };
   }
 };

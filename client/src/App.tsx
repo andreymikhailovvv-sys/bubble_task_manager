@@ -606,6 +606,49 @@ export default function App() {
     await load();
   };
 
+  const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; attachments: ChatAttachmentPayload[] }) => {
+    const generated = await api.generateTaskFromAi(payload);
+    const importance = generated.task.importance ?? 3;
+    const urgency = generated.task.urgency ?? 3;
+    const createdTask = await api.createTask({
+      title: generated.task.title,
+      description: generated.task.description,
+      sphereId: payload.sphereId ?? null,
+      importance,
+      urgency,
+      dueDate: generated.task.dueDate ?? null,
+      notifyBeforeMinutes: generated.task.notifyBeforeMinutes,
+      status: 'TODO',
+      priorityScore: calcScore(importance, urgency)
+    });
+
+    if (payload.attachments.length > 0) {
+      await Promise.all(payload.attachments.map((attachment) => api.createTaskAttachment(createdTask.id, attachment)));
+    }
+
+    if (generated.task.subtasks.length > 0) {
+      await Promise.all(generated.task.subtasks.map((subtask) => api.createTask({
+        title: subtask.title,
+        description: subtask.description,
+        dueDate: subtask.dueDate,
+        importance: 3,
+        urgency: 3,
+        priorityScore: 3,
+        status: 'TODO',
+        notifyBeforeMinutes: 60,
+        sphereId: null,
+        parentTaskId: createdTask.id
+      })));
+    }
+
+    setAiDialogByTask((prev) => ({
+      ...prev,
+      [createdTask.id]: [{ role: 'assistant', content: generated.firstAssistantMessage }]
+    }));
+    setEditorState(null);
+    await load();
+  };
+
   const completeTask = async (task: Task) => {
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 320));
@@ -929,6 +972,7 @@ export default function App() {
           onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
           mode={mode}
           poppingTaskId={poppingTaskId}
+          hasAiNotification={(taskId) => (aiDialogByTask[taskId] ?? []).some((message) => message.role === 'assistant')}
           selectedId={editorState?.task?.id}
           onSelect={(task) => setFocusedTaskId(task.id)}
           onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
@@ -1059,6 +1103,7 @@ export default function App() {
           spheres={spheres}
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
+          onGenerateWithAi={createTaskFromAi}
           onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
           onDelete={editorState.task?.id ? async () => {
             await api.deleteTask(editorState.task!.id);
