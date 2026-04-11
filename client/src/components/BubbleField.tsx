@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { MessageCircle, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -15,6 +15,7 @@ type Props = {
   rankingMode: BubbleRankingMode;
   selectedId?: string;
   poppingTaskId?: string | null;
+  hasAiNotification?: (taskId: string) => boolean;
   onSelect: (task: Task) => void;
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
@@ -123,6 +124,7 @@ export function BubbleField({
   rankingMode,
   selectedId,
   poppingTaskId,
+  hasAiNotification,
   onSelect,
   onSelectSubtask,
   onCreateSubtask,
@@ -278,6 +280,7 @@ export function BubbleField({
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
+    const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
 
     return (
       <motion.g
@@ -328,6 +331,17 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
+        {hasAiMessage ? (
+          <motion.g
+            animate={{ scale: [1, 1.08, 1] }}
+            transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
+            transform={`translate(${bubble.radius * 0.57} ${-bubble.radius * 0.58})`}
+            pointerEvents="none"
+          >
+            <circle cx={0} cy={0} r={11} fill="#7c3aed" />
+            <MessageCircle size={12} color="#ffffff" style={{ transform: 'translate(-6px, -6px)' }} />
+          </motion.g>
+        ) : null}
       </motion.g>
     );
   };

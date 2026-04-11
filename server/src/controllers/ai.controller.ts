@@ -80,5 +80,24 @@ export const aiController = {
       const status = message === 'У задачи уже есть подзадачи' ? 409 : 500;
       res.status(status).json({ error: message });
     }
+  },
+  generateTaskFromPrompt: async (req: Request, res: Response) => {
+    try {
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+      if (!prompt.trim()) {
+        res.status(400).json({ error: 'prompt is required' });
+        return;
+      }
+      const result = await aiAssistantService.generateTaskFromPrompt({
+        userId: req.user!.id,
+        prompt,
+        sphereId: typeof req.body?.sphereId === 'string' ? req.body.sphereId : null,
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
+      });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
   }
 };

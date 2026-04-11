@@ -94,4 +94,21 @@ export const api = {
     request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST'
     }),
+  generateTaskFromAi: (payload: { prompt: string; sphereId?: string | null; attachments?: ChatAttachmentPayload[] }) =>
+    request<{
+      model: string;
+      task: {
+        title: string;
+        description: string;
+        dueDate: string | null;
+        importance: number;
+        urgency: number;
+        notifyBeforeMinutes: number | null;
+        subtasks: Array<{ title: string; description: string; dueDate: string | null }>;
+      };
+      firstAssistantMessage: string;
+    }>('/api/tasks/ai-generate', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
 };
