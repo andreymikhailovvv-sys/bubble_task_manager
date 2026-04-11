@@ -281,6 +281,8 @@ export function BubbleField({
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
+    const aiBadgeX = bubble.radius * 0.66;
+    const aiBadgeY = -bubble.radius * 0.66;
 
     return (
       <motion.g
@@ -335,11 +337,14 @@ export function BubbleField({
           <motion.g
             animate={{ scale: [1, 1.08, 1] }}
             transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
-            transform={`translate(${bubble.radius * 0.57} ${-bubble.radius * 0.58})`}
             pointerEvents="none"
           >
-            <circle cx={0} cy={0} r={11} fill="#7c3aed" />
-            <MessageCircle size={12} color="#ffffff" style={{ transform: 'translate(-6px, -6px)' }} />
+            <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
+            <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
+              <div className="flex h-full w-full items-center justify-center">
+                <MessageCircle size={12} color="#ffffff" />
+              </div>
+            </foreignObject>
           </motion.g>
         ) : null}
       </motion.g>
