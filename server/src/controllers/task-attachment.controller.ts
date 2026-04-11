@@ -13,5 +13,12 @@ export const taskAttachmentController = {
   remove: async (req: Request, res: Response) => {
     await taskAttachmentService.remove(req.params.id, req.params.attachmentId, req.user!.id);
     res.json({ ok: true });
+  },
+  download: async (req: Request, res: Response) => {
+    const attachment = await taskAttachmentService.getContent(req.params.id, req.params.attachmentId, req.user!.id);
+    const fileBuffer = Buffer.from(attachment.contentBase64, 'base64');
+    res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(attachment.name)}`);
+    res.send(fileBuffer);
   }
 };

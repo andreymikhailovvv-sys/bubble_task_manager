@@ -88,6 +88,20 @@ export const taskAttachmentService = {
       throw new Error('Файл не найден');
     }
   },
+  getContent: async (taskId: string, attachmentId: string, userId: string) => {
+    const attachment = await prisma.taskAttachment.findFirst({
+      where: { id: attachmentId, taskId, userId },
+      select: {
+        name: true,
+        mimeType: true,
+        contentBase64: true
+      }
+    });
+    if (!attachment) {
+      throw new Error('Файл не найден');
+    }
+    return attachment;
+  },
   listForAi: async (taskId: string, userId: string) => {
     return prisma.taskAttachment.findMany({
       where: { taskId, userId },

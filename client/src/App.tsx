@@ -507,6 +507,17 @@ export default function App() {
     }
   };
 
+  const downloadTaskAttachment = (attachment: TaskAttachment) => {
+    if (!focusedTask) return;
+    const url = api.getTaskAttachmentDownloadUrl(focusedTask.id, attachment.id);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const removePendingAiFile = (fileName: string) => {
     setAiPendingFiles((prev) => prev.filter((file) => file.name !== fileName));
   };
@@ -1175,17 +1186,25 @@ export default function App() {
                     <p className="text-[11px] text-slate-400">Файлы к задаче (используются ИИ в чате, «Помочь с задачей» и «Сформировать ИИ»)</p>
                     <div className="flex flex-wrap items-start gap-2">
                       {focusedTaskAttachments.map((attachment) => (
-                        <button
-                          key={attachment.id}
-                          type="button"
-                          title={`${attachment.name} • удалить`}
-                          onClick={() => void removeTaskAttachment(attachment.id)}
-                          className="inline-flex max-w-[170px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-700"
-                        >
-                          <FileText size={12} className="shrink-0 text-cyan-300" />
-                          <span className="truncate">{attachment.name}</span>
-                          <X size={11} className="shrink-0 text-slate-300" />
-                        </button>
+                        <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
+                          <button
+                            type="button"
+                            title={`${attachment.name} • скачать`}
+                            onClick={() => downloadTaskAttachment(attachment)}
+                            className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
+                          >
+                            <FileText size={12} className="shrink-0 text-cyan-300" />
+                            <span className="truncate">{attachment.name}</span>
+                          </button>
+                          <button
+                            type="button"
+                            title="Удалить файл"
+                            onClick={() => void removeTaskAttachment(attachment.id)}
+                            className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
+                          >
+                            <X size={11} className="shrink-0" />
+                          </button>
+                        </div>
                       ))}
                       <button
                         type="button"

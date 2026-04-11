@@ -184,6 +184,7 @@ apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
+apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
 apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.create);
 apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
