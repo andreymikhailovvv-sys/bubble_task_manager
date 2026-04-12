@@ -272,7 +272,16 @@ export default function App() {
         acc[parentId] = items;
         return acc;
       }
-      acc[parentId] = [...items].sort((a, b) => Number(a.status === 'DONE') - Number(b.status === 'DONE'));
+      const toDeadlineTimestamp = (task: Task) => {
+        if (!task.dueDate) return Number.POSITIVE_INFINITY;
+        const parsed = new Date(task.dueDate).getTime();
+        return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+      };
+      acc[parentId] = [...items].sort((a, b) => {
+        const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
+        if (statusDiff !== 0) return statusDiff;
+        return toDeadlineTimestamp(a) - toDeadlineTimestamp(b);
+      });
       return acc;
     }, {}),
     [isSubtaskFilterActive, subtaskMap]

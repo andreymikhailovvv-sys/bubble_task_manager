@@ -127,7 +127,14 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onGenerateW
         {canShowAiCreateMode ? (
           <div className="grid grid-cols-2 gap-2">
             <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-200'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
-            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'ai' ? 'bg-rose-500 text-white' : 'border border-rose-300/60 bg-rose-500/25 text-rose-100'}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
+            <button
+              className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai'
+                ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400'
+                : 'border-rose-300/70 bg-rose-500/25 text-rose-100 hover:bg-rose-500/35'}`}
+              onClick={() => setCreateMode('ai')}
+            >
+              Через ИИ
+            </button>
           </div>
         ) : null}
         {createMode === 'ai' && canShowAiCreateMode ? (
