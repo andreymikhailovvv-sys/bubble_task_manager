@@ -41,6 +41,8 @@ const WORKSPACE_PADDING = 320;
 const HOVER_EXIT_DELAY_MS = 220;
 const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
+const SUBTASK_OVERDUE_GLOW =
+  'subtask-overdue-glow 2.3s ease-in-out infinite';
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -502,7 +504,7 @@ export function BubbleField({
                         key={subtask.id}
                         className="relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
                         style={isOverdue(subtask)
-                          ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
+                          ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: SUBTASK_OVERDUE_GLOW }
                           : shouldTaskGlow(subtask)
                             ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
                             : undefined}
