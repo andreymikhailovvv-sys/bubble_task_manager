@@ -118,6 +118,8 @@ export default function App() {
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusedAutosaveSignatureRef = useRef<string | null>(null);
 
   async function load() {
     const sphereData = await api.getSpheres();
@@ -317,6 +319,7 @@ export default function App() {
       setAiPendingFiles([]);
       setFocusedTaskAttachments([]);
       setAiSubtasksLoadingTaskId(null);
+      focusedAutosaveSignatureRef.current = null;
       return;
     }
     setFocusedDraft(focusedTask);
@@ -327,7 +330,52 @@ export default function App() {
     } else {
       setFocusedNotifyPreset('60');
     }
+    focusedAutosaveSignatureRef.current = JSON.stringify({
+      title: focusedTask.title ?? '',
+      description: focusedTask.description ?? '',
+      sphereId: focusedTask.sphereId ?? null,
+      dueDate: focusedTask.dueDate ?? null,
+      notifyBeforeMinutes: focusedTask.notifyBeforeMinutes ?? null,
+      importance: focusedTask.importance ?? 3,
+      urgency: focusedTask.urgency ?? 3,
+      status: focusedTask.status ?? 'TODO'
+    });
   }, [focusedTask]);
+
+  useEffect(() => {
+    if (!focusedTask || !focusedDraft) return;
+    const normalized = {
+      ...focusedDraft,
+      importance: focusedDraft.importance ?? 3,
+      urgency: focusedDraft.urgency ?? 3,
+      status: focusedDraft.status ?? 'TODO'
+    };
+    const payloadSignature = JSON.stringify({
+      title: normalized.title ?? '',
+      description: normalized.description ?? '',
+      sphereId: normalized.sphereId ?? null,
+      dueDate: normalized.dueDate ?? null,
+      notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      importance: normalized.importance,
+      urgency: normalized.urgency,
+      status: normalized.status
+    });
+    if (focusedAutosaveSignatureRef.current === payloadSignature) return;
+    if (focusedAutosaveTimeoutRef.current) {
+      clearTimeout(focusedAutosaveTimeoutRef.current);
+    }
+    focusedAutosaveTimeoutRef.current = setTimeout(() => {
+      const score = calcScore(normalized.importance, normalized.urgency);
+      void api.updateTask(focusedTask.id, { ...normalized, priorityScore: score }).then(() => {
+        focusedAutosaveSignatureRef.current = payloadSignature;
+      });
+    }, 700);
+    return () => {
+      if (focusedAutosaveTimeoutRef.current) {
+        clearTimeout(focusedAutosaveTimeoutRef.current);
+      }
+    };
+  }, [focusedTask?.id, focusedDraft]);
 
   useEffect(() => {
     if (!focusedTask) return;
@@ -616,6 +664,18 @@ export default function App() {
     await load();
   };
 
+  const autosaveEditorTask = async (payload: Partial<Task>) => {
+    if (!editorState?.task?.id) return;
+    const normalized = {
+      ...payload,
+      importance: payload.importance ?? 3,
+      urgency: payload.urgency ?? 3,
+      status: payload.status ?? 'TODO'
+    };
+    const score = calcScore(normalized.importance, normalized.urgency);
+    await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
+  };
+
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; attachments: ChatAttachmentPayload[] }) => {
     const generated = await api.generateTaskFromAi(payload);
     const importance = generated.task.importance ?? 3;
@@ -705,23 +765,28 @@ export default function App() {
   const syncParentStatusBySubtasks = async (parentTaskId: string) => {
     const allTasks = await api.getTasks();
     const nextSubtasks = allTasks.filter((task) => task.parentTaskId === parentTaskId);
-    if (nextSubtasks.length === 0) return;
+    if (nextSubtasks.length === 0) return null;
     const allDone = nextSubtasks.every((task) => task.status === 'DONE');
     const parentTask = allTasks.find((task) => task.id === parentTaskId);
-    if (!parentTask) return;
+    if (!parentTask) return allDone;
     if (allDone && parentTask.status !== 'DONE') {
       await api.updateTask(parentTaskId, { status: 'DONE' });
     }
     if (!allDone && parentTask.status === 'DONE') {
       await api.updateTask(parentTaskId, { status: 'TODO' });
     }
+    return allDone;
   };
 
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
     await api.updateTask(subtask.id, { status: nextStatus });
     if (subtask.parentTaskId) {
-      await syncParentStatusBySubtasks(subtask.parentTaskId);
+      const parentCompleted = await syncParentStatusBySubtasks(subtask.parentTaskId);
+      if (parentCompleted && focusedTaskId === subtask.parentTaskId) {
+        setFocusedTaskId(null);
+        setFocusedDraft(null);
+      }
     }
     await load();
   };
@@ -1117,6 +1182,7 @@ export default function App() {
           spheres={spheres}
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
+          onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
           onGenerateWithAi={createTaskFromAi}
           onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
           onDelete={editorState.task?.id ? async () => {
@@ -1419,7 +1485,7 @@ export default function App() {
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
                       className="relative flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
                       style={isOverdue(subtask)
-                        ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)' }
+                        ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
                         : shouldTaskGlow(subtask)
                           ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
                           : undefined}
