@@ -8,6 +8,7 @@ type Props = {
   initialSphereId?: string;
   spheres: Sphere[];
   onSave: (payload: Partial<Task>) => Promise<void>;
+  onAutoSave?: (payload: Partial<Task>) => Promise<void>;
   onGenerateWithAi: (payload: { prompt: string; sphereId?: string | null; attachments: ChatAttachmentPayload[] }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
@@ -39,7 +40,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onGenerateWithAi, onDelete, onCancel, onComplete }: Props) {
+export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('60');
@@ -50,6 +51,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onGenerateW
   const [isGeneratingByAi, setIsGeneratingByAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
@@ -68,7 +71,51 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onGenerateW
     setAiPendingFiles([]);
     setIsGeneratingByAi(false);
     setAiError(null);
+    autosaveSignatureRef.current = task ? JSON.stringify({
+      title: task.title ?? '',
+      description: task.description ?? '',
+      sphereId: task.sphereId ?? null,
+      dueDate: task.dueDate ?? null,
+      notifyBeforeMinutes: task.notifyBeforeMinutes ?? null,
+      importance: task.importance ?? 3,
+      urgency: task.urgency ?? 3,
+      status: task.status ?? 'TODO'
+    }) : null;
   }, [task, initialSphereId]);
+
+  useEffect(() => {
+    if (!isEditing || !task?.id || !onAutoSave) return;
+    const normalized = {
+      ...form,
+      importance: form.importance ?? 3,
+      urgency: form.urgency ?? 3,
+      status: form.status ?? 'TODO'
+    };
+    const nextSignature = JSON.stringify({
+      title: normalized.title ?? '',
+      description: normalized.description ?? '',
+      sphereId: normalized.sphereId ?? null,
+      dueDate: normalized.dueDate ?? null,
+      notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      importance: normalized.importance,
+      urgency: normalized.urgency,
+      status: normalized.status
+    });
+    if (autosaveSignatureRef.current === nextSignature) return;
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+    autosaveTimeoutRef.current = setTimeout(() => {
+      void onAutoSave(normalized).then(() => {
+        autosaveSignatureRef.current = nextSignature;
+      });
+    }, 700);
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [form, isEditing, onAutoSave, task?.id]);
 
   const selectedImportance = form.importance ?? 3;
   const isSubtask = Boolean(form.parentTaskId);
