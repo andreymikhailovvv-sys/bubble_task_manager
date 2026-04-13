@@ -38,6 +38,10 @@ function getDueDateDiffMs(dueDate?: string | null) {
   return due.getTime() - getMoscowNowMs();
 }
 
+function isOverdueNow(dueDate?: string | null) {
+  return getDueDateDiffMs(dueDate) <= 0;
+}
+
 function getDueProximity(dueDate?: string | null) {
   const diffMs = getDueDateDiffMs(dueDate);
   if (!Number.isFinite(diffMs)) return 0;
@@ -207,7 +211,8 @@ function getRadiusByRank(
   tieBoost: number,
   mode: 'global' | 'sectors',
   rankingMode: BubbleRankingMode,
-  importance: number
+  importance: number,
+  overdueBoost: number
 ) {
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
   const deadlineScale = 1 - rankRatio;
@@ -217,7 +222,7 @@ function getRadiusByRank(
   const importanceBoost = rankingMode === 'importance' ? (importance - 1) * (mode === 'global' ? 4.2 : 3.4) : 0;
   const tieBonus = tieBoost * 4;
   const maxRadius = mode === 'global' ? 90 : 80;
-  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus + importanceBoost));
+  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus + importanceBoost + overdueBoost));
 }
 
 
@@ -265,6 +270,9 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     const startAngle = geometry.startAngle;
     const endAngle = geometry.endAngle;
     const sorted = [...sectorTasks].sort((a, b) => {
+      const overdueA = isOverdueNow(a.dueDate);
+      const overdueB = isOverdueNow(b.dueDate);
+      if (overdueA !== overdueB) return overdueA ? -1 : 1;
       if (rankingMode === 'importance') {
         if (a.importance !== b.importance) return b.importance - a.importance;
         if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
@@ -291,7 +299,8 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
       dueRanks[key] = rankInDue + 1;
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
-      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance);
+      const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
+      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost);
       const distance = rankingMode === 'importance'
         ? 18 + (1 - (task.importance - 1) / 4) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
