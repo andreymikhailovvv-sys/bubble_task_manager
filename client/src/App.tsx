@@ -78,7 +78,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
@@ -591,13 +591,26 @@ export default function App() {
     setAiError(null);
   };
 
+  function shouldTaskGlow(task: Task) {
+    if (!task.dueDate) return false;
+    const due = new Date(task.dueDate);
+    if (Number.isNaN(due.getTime())) return false;
+    const diff = due.getTime() - Date.now();
+    if (diff < 0) return true;
+    if (task.notifyBeforeMinutes === null) return false;
+    const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
+    return diff <= notifyBefore;
+  }
+
   const visibleTasks = useMemo(
     () =>
       activeTasks.filter((task) => {
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
         const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
-        if (timeFilter !== 'all') {
+        if (timeFilter === 'focus') {
+          if (!shouldTaskGlow(task)) return false;
+        } else if (timeFilter !== 'all') {
           const timestamp = task.dueDate ?? task.createdAt ?? task.updatedAt;
           if (!timestamp) return false;
           const taskDate = new Date(timestamp);
@@ -742,17 +755,6 @@ export default function App() {
     await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
     setFocusedTaskId(null);
     await load();
-  };
-
-  const shouldTaskGlow = (task: Task) => {
-    if (!task.dueDate) return false;
-    const due = new Date(task.dueDate);
-    if (Number.isNaN(due.getTime())) return false;
-    const diff = due.getTime() - Date.now();
-    if (diff < 0) return true;
-    if (task.notifyBeforeMinutes === null) return false;
-    const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
-    return diff <= notifyBefore;
   };
 
   const isOverdue = (task: Task) => {
@@ -981,12 +983,13 @@ export default function App() {
           <select
             className="w-full rounded bg-slate-800 p-2 text-sm"
             value={timeFilter}
-            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'week' | 'month')}
+            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'week' | 'month' | 'focus')}
           >
             <option value="all">За все время</option>
             <option value="today">За сегодня</option>
             <option value="week">За эту неделю</option>
             <option value="month">За этот месяц</option>
+            <option value="focus">Фокус</option>
           </select>
         </div>
         <div>

@@ -131,6 +131,9 @@ type GeneratedTaskDraft = {
   firstAssistantMessage: string;
 };
 
+const FIRST_ASSISTANT_FALLBACK =
+  'Отлично, начнём с первого шага: пришлите исходные данные/черновик, и я сразу помогу подготовить рабочий вариант.';
+
 function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
   let parsed: unknown;
   try {
@@ -181,9 +184,12 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   const source = parsed as Record<string, unknown>;
   const title = typeof source.title === 'string' ? source.title.trim().slice(0, 180) : '';
   const description = typeof source.description === 'string' ? source.description.trim().slice(0, 4000) : '';
-  const firstAssistantMessage = typeof source.firstAssistantMessage === 'string'
+  let firstAssistantMessage = typeof source.firstAssistantMessage === 'string'
     ? source.firstAssistantMessage.trim().slice(0, 6000)
     : '';
+  if (/^\s*я\b/i.test(firstAssistantMessage)) {
+    firstAssistantMessage = FIRST_ASSISTANT_FALLBACK;
+  }
   const dueDate = typeof source.dueDate === 'string' && source.dueDate.trim()
     ? source.dueDate.trim()
     : null;
@@ -219,9 +225,7 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   if (!title) {
     throw new Error('ИИ не вернул название задачи');
   }
-  if (!firstAssistantMessage) {
-    throw new Error('ИИ не вернул первое сообщение в чат');
-  }
+  if (!firstAssistantMessage) firstAssistantMessage = FIRST_ASSISTANT_FALLBACK;
 
   return {
     title,
@@ -716,7 +720,9 @@ export const aiAssistantService = {
               'Точный формат:',
               '{"title":"...","description":"...","dueDate":"ISO-8601 или null","importance":1-5,"urgency":1-5,"notifyBeforeMinutes":число или null,"subtasks":[{"title":"...","description":"...","dueDate":"ISO-8601 или null"}],"firstAssistantMessage":"..."}',
               'Старайся давать короткое и ёмкое название основной задачи: поле title по возможности не длиннее 3-6 слов.',
-              'В firstAssistantMessage дай 1 короткое полезное сообщение в чат: либо план выполнения, либо уточняющие вопросы.',
+              'В firstAssistantMessage дай 1 конкретное первое сообщение от лица ИИ-помощника (не от лица пользователя).',
+              'firstAssistantMessage должно содержать практическую помощь по первому шагу: мини-инструкцию, пример, чеклист, готовый фрагмент или точечное предложение помочь с первым шагом.',
+              'Не пиши общие фразы и не используй формулировки в стиле "Я сделаю...".',
               'Учитывай текущие дату и время из контекста.',
               'Поле dueDate заполняй обязательно, если задачу реально можно оценить по сроку: определи примерную длительность выполнения и поставь дедлайн относительно текущей даты.',
               'Если по описанию срок не оценить вообще, только тогда верни dueDate = null.'
