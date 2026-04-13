@@ -12,6 +12,15 @@ export type Bubble = {
   distanceRatio: number;
 };
 
+export type SectorGeometry = {
+  startAngle: number;
+  endAngle: number;
+  midAngle: number;
+  span: number;
+};
+
+const FULL_CIRCLE_GEOMETRY: SectorGeometry[] = [{ startAngle: 0, endAngle: Math.PI * 2, midAngle: Math.PI, span: Math.PI * 2 }];
+
 export const calcScore = (importance: number, urgency: number) => Number((importance * 0.6 + urgency * 0.4).toFixed(2));
 
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
@@ -64,31 +73,55 @@ function normalizeAngle(angle: number) {
   return ((angle % full) + full) % full;
 }
 
-function getSectorHalfSpan(sectorCount: number) {
-  return Math.PI / Math.max(1, sectorCount);
-}
-
-function getSectorMinDistance(radius: number, sectorCount: number) {
-  if (sectorCount <= 1) return 12;
-  const halfSpan = getSectorHalfSpan(sectorCount);
+function getSectorMinDistance(radius: number, sectorSpan: number) {
+  if (sectorSpan >= Math.PI * 2) return 12;
+  const halfSpan = Math.max(0.01, sectorSpan / 2);
   const boundaryPadding = 12;
   const minByGeometry = (radius + boundaryPadding) / Math.max(0.06, Math.sin(halfSpan));
   return Math.max(12, minByGeometry);
 }
 
-function keepInSector(bubble: Bubble, center: number, maxDistance: number, sectorCount: number) {
+export function buildSectorGeometry(sectorCount: number, taskCounts: number[]): SectorGeometry[] {
+  if (sectorCount <= 1) {
+    return [{ startAngle: 0, endAngle: Math.PI * 2, midAngle: Math.PI, span: Math.PI * 2 }];
+  }
+
+  const full = Math.PI * 2;
+  if (sectorCount <= 2) {
+    return Array.from({ length: sectorCount }, (_, index) => {
+      const startAngle = (full * index) / sectorCount;
+      const endAngle = (full * (index + 1)) / sectorCount;
+      return { startAngle, endAngle, midAngle: startAngle + (endAngle - startAngle) / 2, span: endAngle - startAngle };
+    });
+  }
+
+  const safeCounts = Array.from({ length: sectorCount }, (_, index) => Math.max(1, taskCounts[index] ?? 0));
+  const totalWeight = safeCounts.reduce((acc, count) => acc + count, 0);
+  let cursor = 0;
+
+  return safeCounts.map((weight) => {
+    const span = (weight / totalWeight) * full;
+    const startAngle = cursor;
+    const endAngle = cursor + span;
+    cursor = endAngle;
+    return { startAngle, endAngle, midAngle: startAngle + span / 2, span };
+  });
+}
+
+function keepInSector(bubble: Bubble, center: number, maxDistance: number, sectorGeometry: SectorGeometry[]) {
   const dx = bubble.x - center;
   const dy = bubble.y - center;
   const safeMaxDistance = Math.max(0, maxDistance - bubble.radius - 12);
-  const minDistanceBySector = getSectorMinDistance(bubble.radius, sectorCount);
+  const geometry = sectorGeometry[bubble.sectorIndex] ?? sectorGeometry[0];
+  const minDistanceBySector = getSectorMinDistance(bubble.radius, geometry?.span ?? Math.PI * 2);
   let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
   distance = Math.max(minDistanceBySector, distance);
 
   let angle = normalizeAngle(Math.atan2(dy, dx));
-  if (sectorCount > 1) {
-    const sectorStart = (Math.PI * 2 * bubble.sectorIndex) / sectorCount;
-    const sectorEnd = (Math.PI * 2 * (bubble.sectorIndex + 1)) / sectorCount;
-    const span = sectorEnd - sectorStart;
+  if (sectorGeometry.length > 1) {
+    const sectorStart = geometry.startAngle;
+    const sectorEnd = geometry.endAngle;
+    const span = geometry.span;
     const maxPadding = Math.max(0, span / 2 - 0.01);
     const dynamicPadding = Math.asin(Math.min(0.95, (bubble.radius + 12) / Math.max(distance, bubble.radius + 12)));
     const padding = Math.min(maxPadding, dynamicPadding);
@@ -102,13 +135,13 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
 }
 
 
-function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: number, sectorCount: number, padding: number, iterations: number) {
+function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: number, sectorGeometry: SectorGeometry[], padding: number, iterations: number) {
   for (let t = 0; t < iterations; t += 1) {
     for (let i = 0; i < bubbles.length; i += 1) {
       for (let j = i + 1; j < bubbles.length; j += 1) {
         const a = bubbles[i];
         const b = bubbles[j];
-        if (sectorCount > 1 && a.sectorIndex !== b.sectorIndex) continue;
+        if (sectorGeometry.length > 1 && a.sectorIndex !== b.sectorIndex) continue;
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const distance = Math.hypot(dx, dy) || 1;
@@ -121,8 +154,8 @@ function resolveCollisions(bubbles: Bubble[], center: number, maxDistance: numbe
         a.y -= ny * push;
         b.x += nx * push;
         b.y += ny * push;
-        keepInSector(a, center, maxDistance, sectorCount);
-        keepInSector(b, center, maxDistance, sectorCount);
+        keepInSector(a, center, maxDistance, sectorGeometry);
+        keepInSector(b, center, maxDistance, sectorGeometry);
       }
     }
   }
@@ -132,7 +165,7 @@ function applyGravity(
   bubbles: Bubble[],
   center: number,
   maxDistance: number,
-  sectorCount: number,
+  sectorGeometry: SectorGeometry[],
   targetDistanceById: Record<string, number>,
   gravityById: Record<string, number>
 ) {
@@ -148,10 +181,10 @@ function applyGravity(
       const spring = (targetDistance - currentDistance) * (0.05 + gravity * 0.09);
       bubble.x += nx * spring;
       bubble.y += ny * spring;
-      keepInSector(bubble, center, maxDistance, sectorCount);
+      keepInSector(bubble, center, maxDistance, sectorGeometry);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, sectorCount, 8, 1);
+    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 8, 1);
   }
 }
 
@@ -203,10 +236,10 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
       const ny = dy / currentDistance;
       bubble.x += nx * spring;
       bubble.y += ny * spring;
-      keepInSector(bubble, center, maxDistance, 1);
+      keepInSector(bubble, center, maxDistance, FULL_CIRCLE_GEOMETRY);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, 1, 4, 1);
+    resolveCollisions(bubbles, center, maxDistance, FULL_CIRCLE_GEOMETRY, 4, 1);
   }
 }
 
@@ -221,14 +254,16 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     const sectorIndex = sectorCount === 1 ? 0 : Math.max(0, spheres.findIndex((sphere) => sphere.id === task.sphereId));
     bySector[sectorIndex].push(task);
   });
+  const sectorGeometry = buildSectorGeometry(sectorCount, bySector.map((sectorTasks) => sectorTasks.length));
 
   const result: Bubble[] = [];
   const targetDistanceById: Record<string, number> = {};
   const gravityById: Record<string, number> = {};
 
   bySector.forEach((sectorTasks, sectorIndex) => {
-    const startAngle = (Math.PI * 2 * sectorIndex) / sectorCount;
-    const endAngle = (Math.PI * 2 * (sectorIndex + 1)) / sectorCount;
+    const geometry = sectorGeometry[sectorIndex] ?? sectorGeometry[0];
+    const startAngle = geometry.startAngle;
+    const endAngle = geometry.endAngle;
     const sorted = [...sectorTasks].sort((a, b) => {
       if (rankingMode === 'importance') {
         if (a.importance !== b.importance) return b.importance - a.importance;
@@ -294,9 +329,9 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
     });
   });
 
-  result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorCount));
+  result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
-  resolveCollisions(result, center, maxDistance, sectorCount, mode === 'global' ? 4 : 8, 54);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 4 : 8, 54);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -333,20 +368,20 @@ export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 
         const ny = dy / currentDistance;
         bubble.x = center + nx * clampedDistance;
         bubble.y = center + ny * clampedDistance;
-        keepInSector(bubble, center, maxDistance, sectorCount);
+        keepInSector(bubble, center, maxDistance, sectorGeometry);
       }
       previousDistance = Math.hypot(bubble.x - center, bubble.y - center);
       targetDistanceById[bubble.task.id] = minDistance;
     });
   });
 
-  applyGravity(result, center, maxDistance, sectorCount, targetDistanceById, gravityById);
+  applyGravity(result, center, maxDistance, sectorGeometry, targetDistanceById, gravityById);
 
   if (mode === 'global') {
     compactGlobalLayout(result, center, maxDistance);
   }
 
-  resolveCollisions(result, center, maxDistance, sectorCount, mode === 'global' ? 4 : 8, 72);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 4 : 8, 72);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildBubbles, type BubbleRankingMode } from '../lib/layout';
+import { buildBubbles, buildSectorGeometry, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -162,6 +162,16 @@ export function BubbleField({
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
+  const sectorTaskCounts = useMemo(() => {
+    if (sectorCount === 1) return [tasks.length];
+    const counts = Array.from({ length: sectorCount }, () => 0);
+    tasks.forEach((task) => {
+      const sectorIndex = Math.max(0, spheres.findIndex((sphere) => sphere.id === task.sphereId));
+      counts[sectorIndex] += 1;
+    });
+    return counts;
+  }, [sectorCount, spheres, tasks]);
+  const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
   const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
   const activeBubble = hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
@@ -199,7 +209,7 @@ export function BubbleField({
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
     return spheres.map((sphere, idx) => {
-      const angle = (Math.PI * 2 * (idx + 0.5)) / sectorCount;
+      const angle = sectorGeometry[idx]?.midAngle ?? 0;
       const distance = SIZE * 0.46;
       return {
         sphere,
@@ -207,7 +217,7 @@ export function BubbleField({
         y: SIZE / 2 + Math.sin(angle) * distance
       };
     });
-  }, [sectorCount, spheres]);
+  }, [sectorCount, sectorGeometry, spheres]);
 
   const cancelHoverExit = () => {
     if (hoverExitTimer.current) {
@@ -410,9 +420,9 @@ export function BubbleField({
           <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.47} fill="url(#bg)" opacity={0.86} />
           <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.485} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={0.7} />
 
-          {Array.from({ length: sectorCount }).map((_, idx) => {
+          {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
-            const angle = (Math.PI * 2 * idx) / sectorCount;
+            const angle = geometry.startAngle;
             const x = SIZE / 2 + Math.cos(angle) * SIZE * 0.47;
             const y = SIZE / 2 + Math.sin(angle) * SIZE * 0.47;
             return <line key={idx} x1={SIZE / 2} y1={SIZE / 2} x2={x} y2={y} stroke="#334155" strokeWidth="1.5" />;
