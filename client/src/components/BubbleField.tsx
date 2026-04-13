@@ -77,6 +77,7 @@ function formatDeadlineLeft(value?: string | null) {
 }
 
 function shouldTaskGlow(task: Task) {
+  if (task.status === 'DONE') return false;
   if (!task.dueDate) return false;
   const due = new Date(task.dueDate);
   if (Number.isNaN(due.getTime())) return false;
@@ -503,9 +504,9 @@ export function BubbleField({
                       <li
                         key={subtask.id}
                         className="relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
-                        style={isOverdue(subtask)
+                        style={subtask.status !== 'DONE' && isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: SUBTASK_OVERDUE_GLOW }
-                          : shouldTaskGlow(subtask)
+                          : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
                             ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
                             : undefined}
                       >

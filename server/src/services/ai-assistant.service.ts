@@ -52,6 +52,7 @@ const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 type ReasoningEffort = typeof SUPPORTED_REASONING_EFFORTS[number];
 
@@ -724,6 +725,7 @@ export const aiAssistantService = {
               'firstAssistantMessage должно содержать практическую помощь по первому шагу: мини-инструкцию, пример, чеклист, готовый фрагмент или точечное предложение помочь с первым шагом.',
               'Не пиши общие фразы и не используй формулировки в стиле "Я сделаю...".',
               'Учитывай текущие дату и время из контекста.',
+              'Для всех сроков и дедлайнов используй московский часовой пояс (Europe/Moscow, UTC+3).',
               'Поле dueDate заполняй обязательно, если задачу реально можно оценить по сроку: определи примерную длительность выполнения и поставь дедлайн относительно текущей даты.',
               'Если по описанию срок не оценить вообще, только тогда верни dueDate = null.'
             ].join(' ')
@@ -732,7 +734,8 @@ export const aiAssistantService = {
             role: 'user',
             content: [
               `Текущая дата и время: ${now.toISOString()}.`,
-              `Локальная дата и время: ${now.toLocaleString('ru-RU', { timeZone: 'UTC' })} (UTC).`,
+              `Локальная дата и время (Москва): ${now.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })} (Europe/Moscow, UTC+3).`,
+              'Считай дедлайны относительно московского времени.',
               `Сектор задачи: ${input.sphereId ? `выбран (${input.sphereId})` : 'не выбран'}.`,
               `Описание от пользователя: ${prompt}`
             ].join('\n')
