@@ -38,6 +38,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
+const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
@@ -101,7 +102,7 @@ export default function App() {
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
-  const [newAiTaskNotificationIds, setNewAiTaskNotificationIds] = useState<string[]>([]);
+  const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
@@ -152,6 +153,7 @@ export default function App() {
     setIsAiExpanded(false);
       setAiMode('fast');
       setAiDialogByTask({});
+      setAiReadCursorByTask({});
       setSubtaskOrderMap({});
       setBackgroundImage(null);
       setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
@@ -207,6 +209,7 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) {
       setAiDialogByTask({});
+      setAiReadCursorByTask({});
       setBackgroundImage(null);
       setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
       return;
@@ -221,6 +224,23 @@ export default function App() {
       }
     } catch {
       setAiDialogByTask({});
+    }
+    try {
+      const aiReadCursorRaw = localStorage.getItem(getAiReadCursorStorageKey(currentUser.id));
+      if (!aiReadCursorRaw) {
+        setAiReadCursorByTask({});
+      } else {
+        const parsed = JSON.parse(aiReadCursorRaw) as Record<string, number>;
+        const normalized = Object.entries(parsed ?? {}).reduce<Record<string, number>>((acc, [taskId, value]) => {
+          if (Number.isFinite(value) && value >= 0) {
+            acc[taskId] = Math.floor(value);
+          }
+          return acc;
+        }, {});
+        setAiReadCursorByTask(normalized);
+      }
+    } catch {
+      setAiReadCursorByTask({});
     }
 
     setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
@@ -254,6 +274,20 @@ export default function App() {
     if (!currentUser) return;
     localStorage.setItem(getAiDialogStorageKey(currentUser.id), JSON.stringify(aiDialogByTask));
   }, [aiDialogByTask, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getAiReadCursorStorageKey(currentUser.id), JSON.stringify(aiReadCursorByTask));
+  }, [aiReadCursorByTask, currentUser?.id]);
+
+  useEffect(() => {
+    if (!focusedTaskId) return;
+    setAiReadCursorByTask((prev) => {
+      const nextReadCount = aiDialogByTask[focusedTaskId]?.length ?? 0;
+      if ((prev[focusedTaskId] ?? 0) >= nextReadCount) return prev;
+      return { ...prev, [focusedTaskId]: nextReadCount };
+    });
+  }, [aiDialogByTask, focusedTaskId]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -293,7 +327,6 @@ export default function App() {
             ...prev,
             [taskId]: [...(prev[taskId] ?? []), { role: 'assistant', content: answer }]
           }));
-          setNewAiTaskNotificationIds((prev) => Array.from(new Set([...prev, taskId])));
         } catch {
           // ignore: if request fails, next overdue re-check will try again
         }
@@ -790,9 +823,15 @@ export default function App() {
       ...prev,
       [createdTask.id]: [{ role: 'assistant', content: generated.firstAssistantMessage }]
     }));
-    setNewAiTaskNotificationIds((prev) => Array.from(new Set([...prev, createdTask.id])));
     setEditorState(null);
     await load();
+  };
+
+  const hasUnreadAiMessage = (taskId: string) => {
+    const dialog = aiDialogByTask[taskId] ?? [];
+    const readCount = aiReadCursorByTask[taskId] ?? 0;
+    if (readCount >= dialog.length) return false;
+    return dialog.slice(readCount).some((message) => message.role === 'assistant');
   };
 
   const completeTask = async (task: Task) => {
@@ -1113,11 +1152,10 @@ export default function App() {
           onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
           mode={mode}
           poppingTaskId={poppingTaskId}
-          hasAiNotification={(taskId) => newAiTaskNotificationIds.includes(taskId)}
+          hasAiNotification={hasUnreadAiMessage}
           selectedId={editorState?.task?.id}
           onSelect={(task) => {
             setFocusedTaskId(task.id);
-            setNewAiTaskNotificationIds((prev) => prev.filter((id) => id !== task.id));
           }}
           onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
           onCreateSubtask={async (parentTask, payload) => {
