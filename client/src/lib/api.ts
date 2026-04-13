@@ -94,6 +94,10 @@ export const api = {
     request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST'
     }),
+  generateOverdueTaskNudge: (taskId: string) =>
+    request<{ sent: boolean; answer?: string; model?: string }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
+      method: 'POST'
+    }),
   generateTaskFromAi: (payload: { prompt: string; sphereId?: string | null; attachments?: ChatAttachmentPayload[] }) =>
     request<{
       model: string;
