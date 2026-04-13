@@ -49,6 +49,7 @@ const HELP_WITH_TASK_PROMPT = [
   'Если данных недостаточно — сначала задай наводящие вопросы, чтобы уточнить контекст, а потом предложи конкретную помощь.'
 ].join(' ');
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
+const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 
 function renderAiMessageContent(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
@@ -120,6 +121,8 @@ export default function App() {
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
+  const overdueStateByTaskRef = useRef<Record<string, boolean>>({});
+  const [overdueTick, setOverdueTick] = useState(0);
 
   async function load() {
     const sphereData = await api.getSpheres();
@@ -183,6 +186,16 @@ export default function App() {
   }, [currentUser?.id]);
 
   useEffect(() => {
+    if (!currentUser) return;
+    const intervalId = window.setInterval(() => {
+      setOverdueTick((prev) => prev + 1);
+    }, OVERDUE_CHECK_INTERVAL_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     setSelectedSphereIds((prev) => {
       const sphereIdSet = new Set(spheres.map((sphere) => sphere.id));
       const normalized = prev.filter((id) => sphereIdSet.has(id));
@@ -241,6 +254,54 @@ export default function App() {
     if (!currentUser) return;
     localStorage.setItem(getAiDialogStorageKey(currentUser.id), JSON.stringify(aiDialogByTask));
   }, [aiDialogByTask, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      overdueStateByTaskRef.current = {};
+      return;
+    }
+
+    const isOverdue = (task: Task) => {
+      if (task.parentTaskId) return false;
+      if (task.status === 'DONE') return false;
+      if (!task.dueDate) return false;
+      const dueDate = new Date(task.dueDate);
+      if (Number.isNaN(dueDate.getTime())) return false;
+      return dueDate.getTime() <= Date.now();
+    };
+
+    const nextOverdueMap = tasks.reduce<Record<string, boolean>>((acc, task) => {
+      if (task.parentTaskId) return acc;
+      acc[task.id] = isOverdue(task);
+      return acc;
+    }, {});
+
+    const newlyOverdueTaskIds = Object.entries(nextOverdueMap)
+      .filter(([taskId, isTaskOverdue]) => isTaskOverdue && !overdueStateByTaskRef.current[taskId])
+      .map(([taskId]) => taskId);
+
+    overdueStateByTaskRef.current = nextOverdueMap;
+    if (newlyOverdueTaskIds.length === 0) return;
+
+    const processOverdueNudges = async () => {
+      for (const taskId of newlyOverdueTaskIds) {
+        try {
+          const result = await api.generateOverdueTaskNudge(taskId);
+          const answer = result.answer;
+          if (!result.sent || !answer) continue;
+          setAiDialogByTask((prev) => ({
+            ...prev,
+            [taskId]: [...(prev[taskId] ?? []), { role: 'assistant', content: answer }]
+          }));
+          setNewAiTaskNotificationIds((prev) => Array.from(new Set([...prev, taskId])));
+        } catch {
+          // ignore: if request fails, next overdue re-check will try again
+        }
+      }
+    };
+
+    void processOverdueNudges();
+  }, [currentUser?.id, overdueTick, tasks]);
 
   const rootTasks = useMemo(() => tasks.filter((task) => !task.parentTaskId), [tasks]);
   const subtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);

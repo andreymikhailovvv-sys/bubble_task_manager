@@ -33,6 +33,10 @@ type GenerateSubtasksInput = {
   userId: string;
   taskId: string;
 };
+type GenerateOverdueNudgeInput = {
+  userId: string;
+  taskId: string;
+};
 type GenerateTaskFromPromptInput = {
   userId: string;
   prompt: string;
@@ -579,6 +583,53 @@ export const aiAssistantService = {
     }
 
     throw lastError ?? new Error('OpenAI request failed without details');
+  },
+
+  generateOverdueTaskNudge: async (input: GenerateOverdueNudgeInput) => {
+    const now = new Date();
+    const updated = await prisma.task.updateMany({
+      where: {
+        id: input.taskId,
+        userId: input.userId,
+        status: { not: 'DONE' },
+        dueDate: { not: null, lt: now },
+        overdueAiNotifiedAt: null
+      },
+      data: {
+        overdueAiNotifiedAt: now
+      }
+    });
+
+    if (updated.count === 0) {
+      return { sent: false as const };
+    }
+
+    try {
+      const result = await aiAssistantService.askTaskAssistant({
+        userId: input.userId,
+        taskId: input.taskId,
+        history: [],
+        mode: 'fast',
+        question: [
+          'Задача только что стала просроченной.',
+          'Проанализируй контекст и предложи пользователю максимально конкретный следующий шаг, который можно сделать прямо сейчас.',
+          'Ответ должен завершаться одним уточняющим вопросом, который подтолкнёт к действию.',
+          'Если контекста недостаточно, вместо плана задай 1-2 точечных вопроса для уточнения.'
+        ].join(' ')
+      });
+
+      return {
+        sent: true as const,
+        answer: result.answer,
+        model: result.model
+      };
+    } catch (error) {
+      await prisma.task.updateMany({
+        where: { id: input.taskId, userId: input.userId, overdueAiNotifiedAt: now },
+        data: { overdueAiNotifiedAt: null }
+      });
+      throw error;
+    }
   },
 
   generateSubtasks: async (input: GenerateSubtasksInput) => {

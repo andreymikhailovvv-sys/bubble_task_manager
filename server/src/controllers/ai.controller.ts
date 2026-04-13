@@ -81,6 +81,18 @@ export const aiController = {
       res.status(status).json({ error: message });
     }
   },
+  generateOverdueTaskNudge: async (req: Request, res: Response) => {
+    try {
+      const result = await aiAssistantService.generateOverdueTaskNudge({
+        userId: req.user!.id,
+        taskId: req.params.id
+      });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   generateTaskFromPrompt: async (req: Request, res: Response) => {
     try {
       const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';

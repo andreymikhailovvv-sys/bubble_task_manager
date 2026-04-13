@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { MessageCircle, Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, buildSectorGeometry, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -355,7 +355,7 @@ export function BubbleField({
             <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
             <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
-                <MessageCircle size={12} color="#ffffff" />
+                <Sparkles size={12} color="#ffffff" />
               </div>
             </foreignObject>
           </motion.g>
