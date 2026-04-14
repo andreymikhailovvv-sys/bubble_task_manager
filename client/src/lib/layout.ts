@@ -100,11 +100,37 @@ export function buildSectorGeometry(sectorCount: number, taskCounts: number[]): 
   }
 
   const safeCounts = Array.from({ length: sectorCount }, (_, index) => Math.max(1, taskCounts[index] ?? 0));
-  const totalWeight = safeCounts.reduce((acc, count) => acc + count, 0);
-  let cursor = 0;
+  const maxSpan = full / 2;
+  const spans = Array.from({ length: sectorCount }, () => 0);
+  const unlocked = new Set(safeCounts.map((_, index) => index));
+  let remainingSpan = full;
+  let remainingWeight = safeCounts.reduce((acc, count) => acc + count, 0);
 
-  return safeCounts.map((weight) => {
-    const span = (weight / totalWeight) * full;
+  while (unlocked.size > 0 && remainingSpan > 0) {
+    let limitedThisPass = false;
+    unlocked.forEach((index) => {
+      if (remainingWeight <= 0) return;
+      const proposed = (safeCounts[index] / remainingWeight) * remainingSpan;
+      if (proposed > maxSpan) {
+        spans[index] = maxSpan;
+        remainingSpan -= maxSpan;
+        remainingWeight -= safeCounts[index];
+        unlocked.delete(index);
+        limitedThisPass = true;
+      }
+    });
+    if (!limitedThisPass) break;
+  }
+
+  if (unlocked.size > 0) {
+    unlocked.forEach((index) => {
+      const span = remainingWeight > 0 ? (safeCounts[index] / remainingWeight) * remainingSpan : remainingSpan / unlocked.size;
+      spans[index] = Math.min(maxSpan, span);
+    });
+  }
+
+  let cursor = 0;
+  return spans.map((span) => {
     const startAngle = cursor;
     const endAngle = cursor + span;
     cursor = endAngle;

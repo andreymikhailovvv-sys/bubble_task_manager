@@ -711,40 +711,53 @@ export default function App() {
   const visibleTasks = useMemo(
     () =>
       activeTasks.filter((task) => {
-        if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
-        const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
-        if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
-        if (timeFilter === 'focus') {
-          if (!shouldTaskGlow(task)) return false;
-        } else if (timeFilter !== 'all') {
-          const timestamp = task.dueDate ?? task.createdAt ?? task.updatedAt;
-          if (!timestamp) return false;
-          const taskDate = new Date(timestamp);
-          if (Number.isNaN(taskDate.getTime())) return false;
-
+        const taskSubtasks = subtaskMap[task.id] ?? [];
+        const parseDate = (value?: string | null) => {
+          if (!value) return null;
+          const parsed = new Date(value);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const getBoundary = () => {
           const now = new Date();
           const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           if (timeFilter === 'today') {
             const endOfToday = new Date(startOfToday);
             endOfToday.setDate(endOfToday.getDate() + 1);
-            if (taskDate < startOfToday || taskDate >= endOfToday) return false;
-          } else if (timeFilter === 'week') {
+            return { start: startOfToday, end: endOfToday };
+          }
+          if (timeFilter === 'week') {
             const day = startOfToday.getDay();
             const offsetToMonday = (day + 6) % 7;
             const startOfWeek = new Date(startOfToday);
             startOfWeek.setDate(startOfWeek.getDate() - offsetToMonday);
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(endOfWeek.getDate() + 7);
-            if (taskDate < startOfWeek || taskDate >= endOfWeek) return false;
-          } else if (timeFilter === 'month') {
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            if (taskDate < startOfMonth || taskDate >= endOfMonth) return false;
+            return { start: startOfWeek, end: endOfWeek };
           }
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          return { start: startOfMonth, end: endOfMonth };
+        };
+        const isDateInRange = (date: Date, start: Date, end: Date) => date >= start && date < end;
+
+        if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
+        const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
+        if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
+        if (timeFilter === 'focus') {
+          if (!shouldTaskGlow(task)) return false;
+        } else if (timeFilter !== 'all') {
+          const { start, end } = getBoundary();
+          const ownDate = parseDate(task.dueDate ?? task.createdAt ?? task.updatedAt);
+          const hasOwnDateMatch = ownDate ? isDateInRange(ownDate, start, end) : false;
+          const hasSubtaskDateMatch = taskSubtasks.some((subtask) => {
+            const subtaskDate = parseDate(subtask.dueDate);
+            return subtaskDate ? isDateInRange(subtaskDate, start, end) : false;
+          });
+          if (!hasOwnDateMatch && !hasSubtaskDateMatch) return false;
         }
         return true;
       }),
-    [activeTasks, search, selectedSphereIds, spheres.length, timeFilter]
+    [activeTasks, search, selectedSphereIds, spheres.length, subtaskMap, timeFilter]
   );
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
