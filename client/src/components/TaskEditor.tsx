@@ -19,6 +19,8 @@ const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_AI_FILE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'image/png',
   'image/jpeg',
   'image/webp',
@@ -131,9 +133,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     event.target.value = '';
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
     if (normalized.length === 0) {
-      setAiError('Разрешены PDF, DOCX и изображения.');
+      setAiError('Разрешены PDF, DOCX, XLS/XLSX и изображения.');
       return;
     }
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
@@ -198,7 +200,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             <input
               ref={aiAttachmentInputRef}
               type="file"
-              accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif"
+              accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
               multiple
               className="hidden"
               onChange={handleAiFileSelect}
