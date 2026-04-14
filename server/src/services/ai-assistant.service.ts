@@ -642,6 +642,44 @@ export const aiAssistantService = {
     });
 
     if (updated.count === 0) {
+      const task = await prisma.task.findFirst({
+        where: {
+          id: input.taskId,
+          userId: input.userId,
+          status: { not: 'DONE' },
+          dueDate: { not: null, lt: now },
+          overdueAiNotifiedAt: { not: null }
+        },
+        select: {
+          overdueAiNotifiedAt: true
+        }
+      });
+
+      if (!task?.overdueAiNotifiedAt) {
+        return { sent: false as const };
+      }
+
+      const existingNudge = await prisma.taskAiMessage.findFirst({
+        where: {
+          taskId: input.taskId,
+          userId: input.userId,
+          role: 'assistant',
+          createdAt: { gte: task.overdueAiNotifiedAt }
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          content: true
+        }
+      });
+
+      if (existingNudge?.content) {
+        return {
+          sent: true as const,
+          answer: existingNudge.content,
+          replayed: true as const
+        };
+      }
+
       return { sent: false as const };
     }
 
