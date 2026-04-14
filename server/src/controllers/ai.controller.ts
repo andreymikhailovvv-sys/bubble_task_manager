@@ -1,10 +1,6 @@
 import { Request, Response } from 'express';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 
-type ChatMessage = {
-  role: 'user' | 'assistant';
-  content: string;
-};
 type ChatAttachment = {
   name: string;
   mimeType: string;
@@ -13,11 +9,23 @@ type ChatAttachment = {
 };
 
 export const aiController = {
+  getTaskAssistantHistory: async (req: Request, res: Response) => {
+    try {
+      const messages = await aiAssistantService.listTaskDialog({
+        userId: req.user!.id,
+        taskId: req.params.id
+      });
+      res.json({ messages });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   askTaskAssistant: async (req: Request, res: Response) => {
     try {
-      const { question, history } = req.body as {
+      const { question, userMessage } = req.body as {
         question?: string;
-        history?: ChatMessage[];
+        userMessage?: string;
         mode?: 'fast' | 'smart';
         attachments?: ChatAttachment[];
       };
@@ -33,16 +41,31 @@ export const aiController = {
         taskId: req.params.id,
         mode,
         questionLength: question.length,
-        historyLength: Array.isArray(history) ? history.length : 0
+        userMessageLength: typeof userMessage === 'string' ? userMessage.length : 0
+      });
+
+      const persistedHistory = await aiAssistantService.listTaskDialog({
+        userId: req.user!.id,
+        taskId: req.params.id
       });
 
       const result = await aiAssistantService.askTaskAssistant({
         userId: req.user!.id,
         taskId: req.params.id,
         question,
-        history: Array.isArray(history) ? history : [],
+        history: persistedHistory,
         mode,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
+      });
+
+      const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : question.trim();
+      await aiAssistantService.appendTaskDialogMessages({
+        userId: req.user!.id,
+        taskId: req.params.id,
+        messages: [
+          { role: 'user', content: normalizedUserMessage },
+          { role: 'assistant', content: result.answer }
+        ]
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {
@@ -61,7 +84,7 @@ export const aiController = {
         taskId: req.params.id,
         mode: req.body?.mode,
         questionLength: typeof req.body?.question === 'string' ? req.body.question.length : null,
-        historyLength: Array.isArray(req.body?.history) ? req.body.history.length : null,
+        userMessageLength: typeof req.body?.userMessage === 'string' ? req.body.userMessage.length : null,
         error: message,
         stack: error instanceof Error ? error.stack : null
       });

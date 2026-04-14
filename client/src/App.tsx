@@ -37,7 +37,6 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   4: 'bg-orange-500/70 border-orange-300',
   5: 'bg-rose-500/75 border-rose-300'
 };
-const getAiDialogStorageKey = (userId: string) => `btm:${userId}:ai-dialog-by-task`;
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
@@ -123,6 +122,7 @@ export default function App() {
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueStateByTaskRef = useRef<Record<string, boolean>>({});
+  const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const [overdueTick, setOverdueTick] = useState(0);
 
   async function load() {
@@ -154,6 +154,7 @@ export default function App() {
       setAiMode('fast');
       setAiDialogByTask({});
       setAiReadCursorByTask({});
+      loadedAiHistoryTaskIdsRef.current = new Set();
       setSubtaskOrderMap({});
       setBackgroundImage(null);
       setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
@@ -212,19 +213,11 @@ export default function App() {
       setAiReadCursorByTask({});
       setBackgroundImage(null);
       setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
+      loadedAiHistoryTaskIdsRef.current = new Set();
       return;
     }
-    try {
-      const aiDialogRaw = localStorage.getItem(getAiDialogStorageKey(currentUser.id));
-      if (!aiDialogRaw) {
-        setAiDialogByTask({});
-      } else {
-        const parsed = JSON.parse(aiDialogRaw) as Record<string, ChatMessage[]>;
-        setAiDialogByTask(parsed && typeof parsed === 'object' ? parsed : {});
-      }
-    } catch {
-      setAiDialogByTask({});
-    }
+    setAiDialogByTask({});
+    loadedAiHistoryTaskIdsRef.current = new Set();
     try {
       const aiReadCursorRaw = localStorage.getItem(getAiReadCursorStorageKey(currentUser.id));
       if (!aiReadCursorRaw) {
@@ -272,13 +265,29 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    localStorage.setItem(getAiDialogStorageKey(currentUser.id), JSON.stringify(aiDialogByTask));
-  }, [aiDialogByTask, currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
     localStorage.setItem(getAiReadCursorStorageKey(currentUser.id), JSON.stringify(aiReadCursorByTask));
   }, [aiReadCursorByTask, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser || !focusedTaskId) return;
+    if (loadedAiHistoryTaskIdsRef.current.has(focusedTaskId)) return;
+    let isCancelled = false;
+    const loadAiTaskHistory = async () => {
+      try {
+        const result = await api.getTaskAssistantHistory(focusedTaskId);
+        if (isCancelled) return;
+        loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
+        setAiDialogByTask((prev) => ({ ...prev, [focusedTaskId]: result.messages }));
+      } catch {
+        if (isCancelled) return;
+        loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
+      }
+    };
+    void loadAiTaskHistory();
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser?.id, focusedTaskId]);
 
   useEffect(() => {
     if (!focusedTaskId) return;
@@ -537,7 +546,7 @@ export default function App() {
     try {
       const result = await askTaskAssistant(taskId, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
-        history: previousDialog,
+        userMessage: userContent,
         mode: options?.modeOverride ?? aiMode,
         attachments: attachmentsPayload
       });
@@ -969,7 +978,7 @@ export default function App() {
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
+  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
     return api.askTaskAssistant(taskId, payload);
   };
 

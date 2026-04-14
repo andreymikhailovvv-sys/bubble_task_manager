@@ -85,7 +85,9 @@ export const api = {
   deleteTaskAttachment: (taskId: string, attachmentId: string) =>
     request<{ ok: true }>(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' }),
 
-  askTaskAssistant: (taskId: string, payload: { question: string; history: ChatMessage[]; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) =>
+  getTaskAssistantHistory: (taskId: string) =>
+    request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat`),
+  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) =>
     request<{ answer: string; model: string }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify(payload)
