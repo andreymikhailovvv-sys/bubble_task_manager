@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 type ChatRole = 'user' | 'assistant';
 
-type ChatMessage = {
+export type ChatMessage = {
   role: ChatRole;
   content: string;
 };
@@ -341,6 +341,45 @@ function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined
 }
 
 export const aiAssistantService = {
+  listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {
+    await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, userId: input.userId },
+      select: { id: true }
+    });
+
+    const messages = await prisma.taskAiMessage.findMany({
+      where: { taskId: input.taskId, userId: input.userId },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true }
+    });
+
+    return messages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }));
+  },
+
+  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[] }) => {
+    const normalizedMessages = normalizeHistory(input.messages);
+    if (normalizedMessages.length === 0) {
+      return;
+    }
+
+    await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, userId: input.userId },
+      select: { id: true }
+    });
+
+    await prisma.taskAiMessage.createMany({
+      data: normalizedMessages.map((message) => ({
+        taskId: input.taskId,
+        userId: input.userId,
+        role: message.role,
+        content: message.content
+      }))
+    });
+  },
+
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -616,6 +655,12 @@ export const aiAssistantService = {
           'Ответ должен завершаться одним уточняющим вопросом, который подтолкнёт к действию.',
           'Если контекста недостаточно, вместо плана задай 1-2 точечных вопроса для уточнения.'
         ].join(' ')
+      });
+
+      await aiAssistantService.appendTaskDialogMessages({
+        userId: input.userId,
+        taskId: input.taskId,
+        messages: [{ role: 'assistant', content: result.answer }]
       });
 
       return {

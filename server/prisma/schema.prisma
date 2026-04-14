@@ -13,6 +13,11 @@ enum TaskStatus {
   DONE
 }
 
+enum AiMessageRole {
+  user
+  assistant
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -24,6 +29,7 @@ model User {
   avatarUrl    String?
   spheres      Sphere[]
   tasks        Task[]
+  aiMessages   TaskAiMessage[]
   taskAttachments TaskAttachment[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -67,6 +73,7 @@ model Task {
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   attachments         TaskAttachment[]
+  aiMessages          TaskAiMessage[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -74,6 +81,23 @@ model Task {
   @@index([sphereId])
   @@index([parentTaskId])
   @@index([status])
+}
+
+model TaskAiMessage {
+  id        String        @id @default(cuid())
+  taskId    String
+  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AiMessageRole
+  content   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([taskId, createdAt])
+  @@index([taskId, userId, createdAt])
 }
 
 
