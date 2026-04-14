@@ -11,13 +11,15 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const SUPPORTED_TASK_ATTACHMENT_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif'
 ]);
 
-const isSupportedByExtension = (fileName: string) => /\.(pdf|docx|png|jpe?g|webp|gif)$/i.test(fileName);
+const isSupportedByExtension = (fileName: string) => /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(fileName);
 
 const sanitizeName = (name: string) => name.trim().slice(0, 180);
 
@@ -47,7 +49,7 @@ export const taskAttachmentService = {
     const mimeType = String(input.mimeType ?? '').trim();
     const isSupportedMime = SUPPORTED_TASK_ATTACHMENT_TYPES.has(mimeType);
     if (!isSupportedMime && !isSupportedByExtension(name)) {
-      throw new TypeError('Поддерживаются только PDF, DOCX и изображения (PNG/JPG/WEBP/GIF)');
+      throw new TypeError('Поддерживаются PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF)');
     }
 
     const size = Number(input.size);

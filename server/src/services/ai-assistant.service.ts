@@ -299,6 +299,8 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
   const normalizedName = attachment.name.toLowerCase();
   const isPdf = attachment.mimeType === 'application/pdf' || normalizedName.endsWith('.pdf');
   const isDocx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || normalizedName.endsWith('.docx');
+  const isXls = attachment.mimeType === 'application/vnd.ms-excel' || normalizedName.endsWith('.xls');
+  const isXlsx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || normalizedName.endsWith('.xlsx');
   const isPng = attachment.mimeType === 'image/png' || normalizedName.endsWith('.png');
   const isJpeg = attachment.mimeType === 'image/jpeg' || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg');
   const isWebp = attachment.mimeType === 'image/webp' || normalizedName.endsWith('.webp');
@@ -311,7 +313,7 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
     };
   }
 
-  if (isPdf || isDocx) {
+  if (isPdf || isDocx || isXls || isXlsx) {
     return {
       type: 'input_file',
       filename: attachment.name,
@@ -319,7 +321,7 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
     };
   }
 
-  throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены PDF, DOCX, PNG, JPG, WEBP и GIF.`);
+  throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены PDF, DOCX, XLS/XLSX, PNG, JPG, WEBP и GIF.`);
 }
 
 function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined): OpenAiUserAttachmentMessage | null {
