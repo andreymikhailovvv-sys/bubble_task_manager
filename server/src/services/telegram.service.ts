@@ -10,7 +10,6 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 
 const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
 const MENU_LIST_TASKS = '📋 Посмотреть задачи';
-const MENU_BACK = '⬅️ Назад';
 
 type TelegramFile = {
   file_id: string;
@@ -79,7 +78,7 @@ const formatDeadlineLeft = (dueDate: Date | null) => {
 
 const formatDate = (value: Date | null) => {
   if (!value) return 'не указан';
-  return value.toLocaleString('ru-RU', { timeZone: 'UTC' }) + ' UTC';
+  return value.toLocaleString('ru-RU', { timeZone: 'UTC' });
 };
 
 const keyboardMain = (taskId: string) => ({
@@ -121,10 +120,10 @@ const keyboardSnooze = (taskId: string) => ({
 });
 
 const keyboardReplyMain = {
-  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }], [{ text: MENU_BACK }]],
+  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }]],
   resize_keyboard: true,
   one_time_keyboard: false,
-  is_persistent: true
+  is_persistent: false
 };
 
 const telegramRequest = async <T>(method: string, payload: Record<string, unknown>): Promise<T | null> => {
@@ -248,7 +247,11 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     : '📌 <b>Детали задачи</b>';
 
   const subtaskLines = task.subtasks.length
-    ? task.subtasks.map((subtask, index) => `${index + 1}. ${subtask.status === 'DONE' ? '✅' : '▫️'} ${escapeHtml(subtask.title)}`)
+    ? task.subtasks.map((subtask, index) => {
+      const title = escapeHtml(subtask.title);
+      const decoratedTitle = subtask.status === 'DONE' ? `<s>${title}</s>` : title;
+      return `${index + 1}. ${subtask.status === 'DONE' ? '✅' : '▫️'} ${decoratedTitle}`;
+    })
     : ['— подзадач пока нет'];
 
   const lines = [
@@ -376,7 +379,8 @@ const buildTaskListTextParts = async (userId: string, chatId: string) => {
 
   const lines = ['📋 <b>Список задач</b>', '', 'Введите номер задачи, чтобы открыть детали:'];
   ordered.forEach((task, index) => {
-    lines.push(`${index + 1}. 🧩 <b>Основная задача:</b> ${escapeHtml(task.title)} — ${escapeHtml(formatDate(task.dueDate))}`);
+    lines.push(`${index + 1}. ${escapeHtml(task.title)}`);
+    lines.push(`   ⏳ Дедлайн: ${escapeHtml(formatDate(task.dueDate))}`);
   });
 
   return splitTextByLimit(lines, SAFE_MAX_MESSAGE_LENGTH);
@@ -518,12 +522,6 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
 
   if (!session?.userId) {
     await sendMessage(chatId, 'ℹ️ Нажмите <b>/start</b>, чтобы подключить аккаунт.');
-    return;
-  }
-
-  if (descriptionText === MENU_BACK) {
-    await resetBotMenuState(chatId);
-    await sendMessage(chatId, '⬅️ Возвращаю в главное меню.', keyboardReplyMain);
     return;
   }
 
