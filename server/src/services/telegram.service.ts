@@ -92,6 +92,16 @@ const keyboardMain = (taskId: string) => ({
   ]
 });
 
+const keyboardTaskDetails = (taskId: string) => ({
+  inline_keyboard: [
+    [
+      { text: '✅ Выполнить', callback_data: `done:${taskId}` },
+      { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
+    ],
+    [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
+  ]
+});
+
 const keyboardBackTask = (taskId: string) => ({
   inline_keyboard: [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]]
 });
@@ -223,6 +233,41 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   return lines.join('\n');
 };
 
+const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: number) => {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId, parentTaskId: null },
+    include: {
+      subtasks: { orderBy: { createdAt: 'asc' } }
+    }
+  });
+
+  if (!task) return null;
+
+  const subtitle = typeof taskIndex === 'number'
+    ? `📌 <b>Детали задачи #${taskIndex}</b>`
+    : '📌 <b>Детали задачи</b>';
+
+  const subtaskLines = task.subtasks.length
+    ? task.subtasks.map((subtask, index) => `${index + 1}. ${subtask.status === 'DONE' ? '✅' : '▫️'} ${escapeHtml(subtask.title)}`)
+    : ['— подзадач пока нет'];
+
+  const lines = [
+    subtitle,
+    '',
+    `📍 <b>${escapeHtml(task.title)}</b>`,
+    '',
+    '🧩 <b>Описание подзадачи</b>',
+    escapeHtml(task.description?.trim() || 'Без описания'),
+    '',
+    `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
+    '',
+    '☑️ <b>Подзадачи:</b>',
+    ...subtaskLines
+  ];
+
+  return lines.join('\n');
+};
+
 const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string) => {
   const task = await prisma.task.findFirst({
     where: { id: taskId, userId },
@@ -314,7 +359,7 @@ const handleLoginInput = async (chatId: string, text: string) => {
 
 const buildTaskListTextParts = async (userId: string, chatId: string) => {
   const tasks = await prisma.task.findMany({
-    where: { userId, status: { not: 'DONE' } },
+    where: { userId, status: { not: 'DONE' }, parentTaskId: null },
     select: { id: true, title: true, dueDate: true },
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }]
   });
@@ -331,7 +376,7 @@ const buildTaskListTextParts = async (userId: string, chatId: string) => {
 
   const lines = ['📋 <b>Список задач</b>', '', 'Введите номер задачи, чтобы открыть детали:'];
   ordered.forEach((task, index) => {
-    lines.push(`${index + 1}. 🧩 <b>Задача:</b> ${escapeHtml(task.title)} — ${escapeHtml(formatDate(task.dueDate))}`);
+    lines.push(`${index + 1}. 🧩 <b>Основная задача:</b> ${escapeHtml(task.title)} — ${escapeHtml(formatDate(task.dueDate))}`);
   });
 
   return splitTextByLimit(lines, SAFE_MAX_MESSAGE_LENGTH);
@@ -546,13 +591,13 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
 
     const taskId = taskIds[selectedIndex - 1];
-    const taskText = await getTaskNotificationText(taskId, session.userId);
+    const taskText = await getTaskDetailsText(taskId, session.userId, selectedIndex);
     if (!taskText) {
       await sendMessage(chatId, '⚠️ Не удалось найти задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyMain);
       return;
     }
 
-    await sendMessage(chatId, `📌 <b>Детали задачи #${selectedIndex}</b>\n\n${taskText}`, keyboardMain(taskId));
+    await sendMessage(chatId, taskText, keyboardTaskDetails(taskId));
     return;
   }
 
@@ -681,6 +726,16 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
+  if (action === 'delete') {
+    const deleted = await prisma.task.deleteMany({
+      where: { id: taskId, userId: session.userId }
+    });
+    await answerCallback(callback.id, deleted.count ? 'Задача удалена' : 'Задача не найдена');
+    await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
+    await editMessage(chatId, messageId, deleted.count ? '🗑 <b>Задача удалена.</b>' : '⚠️ <b>Задача не найдена.</b>');
+    return;
+  }
+
   if (action === 'ai') {
     await setSession(chatId, { mode: 'AWAITING_AI_MESSAGE', activeTaskId: taskId });
     await answerCallback(callback.id);
@@ -690,12 +745,14 @@ const handleCallback = async (update: TelegramUpdate) => {
 
   if (action === 'backtask') {
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
-    const text = session.userId ? await getTaskNotificationText(taskId, session.userId) : null;
+    const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
+    const index = taskIds.findIndex((id) => id === taskId);
+    const text = session.userId ? await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined) : null;
     await answerCallback(callback.id);
     if (text) {
-      await editMessage(chatId, messageId, text, keyboardMain(taskId));
+      await editMessage(chatId, messageId, text, keyboardTaskDetails(taskId));
     } else {
-      await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardMain(taskId));
+      await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardTaskDetails(taskId));
     }
   }
 };
