@@ -111,14 +111,7 @@ const keyboardSnooze = (taskId: string) => ({
 });
 
 const keyboardReplyMain = {
-  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }]],
-  resize_keyboard: true,
-  one_time_keyboard: false,
-  is_persistent: true
-};
-
-const keyboardReplyBack = {
-  keyboard: [[{ text: MENU_BACK }]],
+  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }], [{ text: MENU_BACK }]],
   resize_keyboard: true,
   one_time_keyboard: false,
   is_persistent: true
@@ -144,8 +137,36 @@ const sendMessage = async (chatId: string, text: string, replyMarkup?: Record<st
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
-    reply_markup: replyMarkup
+    reply_markup: replyMarkup ?? keyboardReplyMain
   });
+};
+
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
+const SAFE_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 200;
+
+const splitTextByLimit = (lines: string[], limit: number) => {
+  const chunks: string[] = [];
+  let current: string[] = [];
+  let currentLength = 0;
+
+  for (const line of lines) {
+    const nextLength = currentLength + line.length + 1;
+    if (current.length > 0 && nextLength > limit) {
+      chunks.push(current.join('\n'));
+      current = [line];
+      currentLength = line.length;
+      continue;
+    }
+
+    current.push(line);
+    currentLength = nextLength;
+  }
+
+  if (current.length > 0) {
+    chunks.push(current.join('\n'));
+  }
+
+  return chunks;
 };
 
 const editMessage = async (chatId: string, messageId: number, text: string, replyMarkup?: Record<string, unknown>) => {
@@ -291,7 +312,7 @@ const handleLoginInput = async (chatId: string, text: string) => {
   );
 };
 
-const buildTaskListText = async (userId: string, chatId: string) => {
+const buildTaskListTextParts = async (userId: string, chatId: string) => {
   const tasks = await prisma.task.findMany({
     where: { userId, status: { not: 'DONE' } },
     select: { id: true, title: true, dueDate: true },
@@ -305,15 +326,15 @@ const buildTaskListText = async (userId: string, chatId: string) => {
   listTaskIdsByChatId.set(chatId, ordered.map((task) => task.id));
 
   if (ordered.length === 0) {
-    return '📭 <b>Активных задач пока нет.</b>\n\nСоздайте новую задачу через «🤖 Создать задачу ИИ». ';
+    return ['📭 <b>Активных задач пока нет.</b>\n\nСоздайте новую задачу через «🤖 Создать задачу ИИ».'];
   }
 
   const lines = ['📋 <b>Список задач</b>', '', 'Введите номер задачи, чтобы открыть детали:'];
   ordered.forEach((task, index) => {
-    lines.push(`${index + 1}. 🧩 <b>${escapeHtml(task.title)}</b> — ${escapeHtml(formatDate(task.dueDate))}`);
+    lines.push(`${index + 1}. 🧩 <b>Задача:</b> ${escapeHtml(task.title)} — ${escapeHtml(formatDate(task.dueDate))}`);
   });
 
-  return lines.join('\n');
+  return splitTextByLimit(lines, SAFE_MAX_MESSAGE_LENGTH);
 };
 
 const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment?: ChatAttachment) => {
@@ -451,7 +472,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   }
 
   if (!session?.userId) {
-    await sendMessage(chatId, 'ℹ️ Нажмите <b>/start</b>, чтобы подключить аккаунт.', keyboardReplyBack);
+    await sendMessage(chatId, 'ℹ️ Нажмите <b>/start</b>, чтобы подключить аккаунт.');
     return;
   }
 
@@ -467,15 +488,17 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     await sendMessage(
       chatId,
       '🤖 <b>Создание задачи через ИИ</b>\n\nОтправьте описание задачи текстом. Можно сразу прикрепить файл — я учту его при формировании задачи.',
-      keyboardReplyBack
+      keyboardReplyMain
     );
     return;
   }
 
   if (descriptionText === MENU_LIST_TASKS) {
     await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
-    const listText = await buildTaskListText(session.userId, chatId);
-    await sendMessage(chatId, listText, keyboardReplyBack);
+    const listParts = await buildTaskListTextParts(session.userId, chatId);
+    for (const listPart of listParts) {
+      await sendMessage(chatId, listPart, keyboardReplyMain);
+    }
     return;
   }
 
@@ -518,14 +541,14 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
 
     if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > taskIds.length) {
-      await sendMessage(chatId, '⚠️ Введите корректный номер задачи из списка или нажмите «⬅️ Назад».', keyboardReplyBack);
+      await sendMessage(chatId, '⚠️ Введите корректный номер задачи из списка или нажмите «⬅️ Назад».', keyboardReplyMain);
       return;
     }
 
     const taskId = taskIds[selectedIndex - 1];
     const taskText = await getTaskNotificationText(taskId, session.userId);
     if (!taskText) {
-      await sendMessage(chatId, '⚠️ Не удалось найти задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyBack);
+      await sendMessage(chatId, '⚠️ Не удалось найти задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyMain);
       return;
     }
 
@@ -544,7 +567,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Не удалось обработать файл.';
-        await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardReplyBack);
+        await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardReplyMain);
         return;
       }
     }
@@ -553,7 +576,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
 
     if (attachment && !prompt) {
       pendingAiAttachmentByChatId.set(chatId, attachment);
-      await sendMessage(chatId, '📎 Файл получил. Теперь пришлите текстовое описание задачи, чтобы ИИ мог её сформировать.', keyboardReplyBack);
+      await sendMessage(chatId, '📎 Файл получил. Теперь пришлите текстовое описание задачи, чтобы ИИ мог её сформировать.', keyboardReplyMain);
       return;
     }
 
@@ -562,7 +585,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
 
     if (!prompt) {
-      await sendMessage(chatId, '⚠️ Нужен текст с описанием задачи. Можно с файлом или без него.', keyboardReplyBack);
+      await sendMessage(chatId, '⚠️ Нужен текст с описанием задачи. Можно с файлом или без него.', keyboardReplyMain);
       return;
     }
 
@@ -590,7 +613,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.';
-      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyBack);
+      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
       return;
     }
   }
@@ -609,7 +632,7 @@ const handleCallback = async (update: TelegramUpdate) => {
   if (data === 'auth_login') {
     await setSession(chatId, { mode: 'AWAITING_LINK_CREDENTIALS', activeTaskId: null });
     await answerCallback(callback.id);
-    await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyBack);
+    await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyMain);
     return;
   }
 
