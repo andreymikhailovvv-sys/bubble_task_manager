@@ -96,6 +96,8 @@ export default function App() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiSubtasksLoadingTaskId, setAiSubtasksLoadingTaskId] = useState<string | null>(null);
+  const [isAiSubtasksPromptOpen, setIsAiSubtasksPromptOpen] = useState(false);
+  const [aiSubtasksPrompt, setAiSubtasksPrompt] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [focusedTaskAttachments, setFocusedTaskAttachments] = useState<TaskAttachment[]>([]);
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
@@ -457,6 +459,8 @@ export default function App() {
       setFocusedDraft(null);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
+      setIsAiSubtasksPromptOpen(false);
+      setAiSubtasksPrompt('');
       setAiDraft('');
       setAiError(null);
       setIsAiExpanded(false);
@@ -797,6 +801,7 @@ export default function App() {
           const ownDate = parseDate(task.dueDate ?? task.createdAt ?? task.updatedAt);
           const hasOwnDateMatch = ownDate ? isDateInRange(ownDate, start, end) : false;
           const hasSubtaskDateMatch = taskSubtasks.some((subtask) => {
+            if (subtask.status === 'DONE') return false;
             const subtaskDate = parseDate(subtask.dueDate);
             return subtaskDate ? isDateInRange(subtaskDate, start, end) : false;
           });
@@ -1002,8 +1007,10 @@ export default function App() {
     setAiError(null);
     setAiSubtasksLoadingTaskId(focusedTask.id);
     try {
-      await api.generateTaskSubtasks(focusedTask.id);
+      await api.generateTaskSubtasks(focusedTask.id, { note: aiSubtasksPrompt.trim() || undefined });
       await load();
+      setIsAiSubtasksPromptOpen(false);
+      setAiSubtasksPrompt('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось сгенерировать подзадачи';
       setAiError(message);
@@ -1606,7 +1613,7 @@ export default function App() {
                       <button
                         type="button"
                         className="inline-flex items-center rounded-full border border-rose-300 bg-rose-500 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-70"
-                        onClick={() => void generateFocusedSubtasksWithAi()}
+                        onClick={() => setIsAiSubtasksPromptOpen(true)}
                         disabled={aiSubtasksLoadingTaskId === focusedTask.id}
                       >
                         {aiSubtasksLoadingTaskId === focusedTask.id ? 'Генерирую…' : 'Сформировать ИИ'}
@@ -1720,6 +1727,47 @@ export default function App() {
             </div>
             </aside>
           </div>
+          {isAiSubtasksPromptOpen ? (
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
+              onClick={() => {
+                if (aiSubtasksLoadingTaskId !== focusedTask.id) {
+                  setIsAiSubtasksPromptOpen(false);
+                }
+              }}
+            >
+              <aside className="w-full max-w-lg space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(event) => event.stopPropagation()}>
+                <h4 className="text-base font-semibold text-slate-100">Пояснение для генерации подзадач</h4>
+                <p className="text-xs text-slate-300">
+                  При желании добавьте пояснение, чтобы ИИ лучше понял контекст. Например: желаемый формат, ограничения, приоритеты.
+                </p>
+                <textarea
+                  className="min-h-24 w-full rounded bg-slate-800 p-2 text-sm"
+                  placeholder="Необязательно. Например: сначала быстрые шаги на сегодня, затем всё остальное."
+                  value={aiSubtasksPrompt}
+                  onChange={(event) => setAiSubtasksPrompt(event.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded bg-slate-700 px-3 py-2 text-sm"
+                    onClick={() => setIsAiSubtasksPromptOpen(false)}
+                    disabled={aiSubtasksLoadingTaskId === focusedTask.id}
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded bg-rose-500 px-3 py-2 text-sm font-semibold text-white disabled:opacity-70"
+                    onClick={() => void generateFocusedSubtasksWithAi()}
+                    disabled={aiSubtasksLoadingTaskId === focusedTask.id}
+                  >
+                    {aiSubtasksLoadingTaskId === focusedTask.id ? 'Генерирую…' : 'Сформировать ИИ'}
+                  </button>
+                </div>
+              </aside>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

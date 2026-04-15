@@ -32,6 +32,7 @@ type AskTaskAssistantInput = {
 type GenerateSubtasksInput = {
   userId: string;
   taskId: string;
+  note?: string;
 };
 type GenerateOverdueNudgeInput = {
   userId: string;
@@ -124,6 +125,7 @@ function formatTaskContext(task: {
 type GeneratedSubtask = {
   title: string;
   description: string;
+  dueDate: string | null;
 };
 type GeneratedTaskDraft = {
   title: string;
@@ -161,11 +163,20 @@ function parseGeneratedSubtasks(rawAnswer: string): GeneratedSubtask[] {
       if (typeof item !== 'object' || item === null) return null;
       const title = 'title' in item ? (item as { title?: unknown }).title : undefined;
       const description = 'description' in item ? (item as { description?: unknown }).description : undefined;
+      const dueDate = 'dueDate' in item ? (item as { dueDate?: unknown }).dueDate : null;
       if (typeof title !== 'string' || typeof description !== 'string') return null;
       const trimmedTitle = title.trim();
       const trimmedDescription = description.trim();
       if (!trimmedTitle || !trimmedDescription) return null;
-      return { title: trimmedTitle.slice(0, 180), description: trimmedDescription.slice(0, 4000) };
+      const normalizedDueDate = typeof dueDate === 'string' && dueDate.trim()
+        ? dueDate.trim()
+        : null;
+      const parsedDueDate = normalizedDueDate ? new Date(normalizedDueDate) : null;
+      return {
+        title: trimmedTitle.slice(0, 180),
+        description: trimmedDescription.slice(0, 4000),
+        dueDate: parsedDueDate && !Number.isNaN(parsedDueDate.getTime()) ? parsedDueDate.toISOString() : null
+      };
     })
     .filter((item): item is GeneratedSubtask => Boolean(item));
 
@@ -771,15 +782,25 @@ export const aiAssistantService = {
               'Ты сервис, который декомпозирует задачу на подзадачи.',
               'Верни только JSON без markdown и без любых комментариев.',
               'Строгий формат ответа:',
-              '{"subtasks":[{"title":"...","description":"..."}]}.',
-              'В каждом объекте должны быть только поля title и description.',
+              '{"subtasks":[{"title":"...","description":"...","dueDate":"ISO-8601 или null"}]}.',
+              'В каждом объекте должны быть только поля title, description и dueDate.',
               'От 3 до 8 подзадач, конкретных и выполнимых.'
             ].join(' ')
           },
           {
             role: 'user',
-            content: `Разбей задачу на подзадачи:\n${taskContext}`
+            content: [
+              `Разбей задачу на подзадачи:\n${taskContext}`,
+              `Текущая дата и время: ${new Date().toISOString()}.`,
+              'Для подзадач старайся ставить реалистичные dueDate (ISO-8601, Europe/Moscow), если срок можно оценить.'
+            ].join('\n')
           },
+          ...(input.note?.trim()
+            ? [{
+              role: 'user' as const,
+              content: `Дополнительное пояснение пользователя: ${input.note.trim().slice(0, 2000)}`
+            }]
+            : []),
           ...(taskAttachmentsMessage ? [taskAttachmentsMessage] : [])
         ],
         reasoning: { effort: 'low' }
@@ -818,6 +839,7 @@ export const aiAssistantService = {
           urgency: 3,
           priorityScore: 3,
           status: 'TODO',
+          dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
           notifyBeforeMinutes: 60
         }
       }))
