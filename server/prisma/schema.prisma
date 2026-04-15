@@ -27,10 +27,13 @@ model User {
   name         String?
   googleSub    String?  @unique
   avatarUrl    String?
+  telegramChatId String?  @unique
+  telegramLinkedAt DateTime?
   spheres      Sphere[]
   tasks        Task[]
   aiMessages   TaskAiMessage[]
   taskAttachments TaskAttachment[]
+  telegramSessions TelegramSession[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -70,6 +73,7 @@ model Task {
   dueDate             DateTime?
   notifyBeforeMinutes Int?       @default(60)
   overdueAiNotifiedAt DateTime?
+  telegramNotifiedAt  DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   attachments         TaskAttachment[]
@@ -117,4 +121,17 @@ model TaskAttachment {
   @@index([taskId])
   @@index([userId])
   @@index([taskId, createdAt])
+}
+
+
+model TelegramSession {
+  chatId       String              @id
+  userId       String?
+  user         User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mode         String @default("IDLE")
+  activeTaskId String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([userId])
 }
