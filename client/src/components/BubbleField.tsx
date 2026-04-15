@@ -88,6 +88,11 @@ function shouldTaskGlow(task: Task) {
   return diff <= notifyBefore;
 }
 
+function shouldSubtaskAffectParentReminder(subtask: Task) {
+  if (subtask.status === 'DONE') return false;
+  return shouldTaskGlow(subtask);
+}
+
 function isOverdue(task: Task) {
   if (!task.dueDate) return false;
   const due = new Date(task.dueDate);
@@ -286,7 +291,7 @@ export function BubbleField({
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
-      && (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && shouldTaskGlow(task));
+      && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;

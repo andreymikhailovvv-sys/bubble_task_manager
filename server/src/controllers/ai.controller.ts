@@ -125,7 +125,8 @@ export const aiController = {
     try {
       const result = await aiAssistantService.generateSubtasks({
         userId: req.user!.id,
-        taskId: req.params.id
+        taskId: req.params.id,
+        note: typeof req.body?.note === 'string' ? req.body.note : undefined
       });
       res.json(result);
     } catch (error) {

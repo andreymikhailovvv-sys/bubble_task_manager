@@ -97,9 +97,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
-  generateTaskSubtasks: (taskId: string) =>
+  generateTaskSubtasks: (taskId: string, payload?: { note?: string }) =>
     request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify(payload ?? {})
     }),
   generateOverdueTaskNudge: (taskId: string) =>
     request<{ sent: boolean; answer?: string; model?: string }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
