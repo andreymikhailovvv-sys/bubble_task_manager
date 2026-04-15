@@ -6,11 +6,29 @@ import { aiAssistantService } from './ai-assistant.service.js';
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
+const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+
+const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
+const MENU_LIST_TASKS = '📋 Посмотреть задачи';
+const MENU_BACK = '⬅️ Назад';
+
+type TelegramFile = {
+  file_id: string;
+  file_size?: number;
+  file_path?: string;
+  mime_type?: string;
+  file_name?: string;
+  width?: number;
+  height?: number;
+};
 
 type TelegramUpdate = {
   message?: {
     chat: { id: number };
     text?: string;
+    caption?: string;
+    document?: TelegramFile;
+    photo?: TelegramFile[];
   };
   callback_query?: {
     id: string;
@@ -22,6 +40,16 @@ type TelegramUpdate = {
     };
   };
 };
+
+type ChatAttachment = {
+  name: string;
+  mimeType: string;
+  contentBase64: string;
+  size: number;
+};
+
+const listTaskIdsByChatId = new Map<string, string[]>();
+const pendingAiAttachmentByChatId = new Map<string, ChatAttachment>();
 
 const isEnabled = () => Boolean(BOT_TOKEN);
 
@@ -81,6 +109,20 @@ const keyboardSnooze = (taskId: string) => ({
     [{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]
   ]
 });
+
+const keyboardReplyMain = {
+  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }]],
+  resize_keyboard: true,
+  one_time_keyboard: false,
+  is_persistent: true
+};
+
+const keyboardReplyBack = {
+  keyboard: [[{ text: MENU_BACK }]],
+  resize_keyboard: true,
+  one_time_keyboard: false,
+  is_persistent: true
+};
 
 const telegramRequest = async <T>(method: string, payload: Record<string, unknown>): Promise<T | null> => {
   if (!BOT_TOKEN) return null;
@@ -210,6 +252,12 @@ const setSession = async (chatId: string, patch: { userId?: string | null; mode?
   });
 };
 
+const resetBotMenuState = async (chatId: string) => {
+  listTaskIdsByChatId.delete(chatId);
+  pendingAiAttachmentByChatId.delete(chatId);
+  await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
+};
+
 const handleLoginInput = async (chatId: string, text: string) => {
   const [loginRaw, passwordRaw] = text.trim().split(/\s+/, 2);
   const login = (loginRaw ?? '').trim().toLowerCase();
@@ -234,15 +282,159 @@ const handleLoginInput = async (chatId: string, text: string) => {
     }
   });
 
-  await setSession(chatId, { userId: user.id, mode: 'IDLE', activeTaskId: null });
-  await sendMessage(chatId, `✅ <b>Аккаунт подключён.</b>\nТеперь я буду присылать уведомления по задачам, ${escapeHtml(user.name ?? user.username ?? '')} 🙌`);
+  await resetBotMenuState(chatId);
+  await setSession(chatId, { userId: user.id });
+  await sendMessage(
+    chatId,
+    `✅ <b>Аккаунт подключён.</b>\nТеперь я буду присылать уведомления по задачам, ${escapeHtml(user.name ?? user.username ?? '')} 🙌\n\nВыберите действие в меню ⤵️`,
+    keyboardReplyMain
+  );
 };
 
-const handleIncomingMessage = async (chatId: string, text: string) => {
+const buildTaskListText = async (userId: string, chatId: string) => {
+  const tasks = await prisma.task.findMany({
+    where: { userId, status: { not: 'DONE' } },
+    select: { id: true, title: true, dueDate: true },
+    orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }]
+  });
+
+  const withDate = tasks.filter((task) => task.dueDate);
+  const withoutDate = tasks.filter((task) => !task.dueDate);
+  const ordered = [...withDate, ...withoutDate];
+
+  listTaskIdsByChatId.set(chatId, ordered.map((task) => task.id));
+
+  if (ordered.length === 0) {
+    return '📭 <b>Активных задач пока нет.</b>\n\nСоздайте новую задачу через «🤖 Создать задачу ИИ». ';
+  }
+
+  const lines = ['📋 <b>Список задач</b>', '', 'Введите номер задачи, чтобы открыть детали:'];
+  ordered.forEach((task, index) => {
+    lines.push(`${index + 1}. 🧩 <b>${escapeHtml(task.title)}</b> — ${escapeHtml(formatDate(task.dueDate))}`);
+  });
+
+  return lines.join('\n');
+};
+
+const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment?: ChatAttachment) => {
+  const generated = await aiAssistantService.generateTaskFromPrompt({
+    userId,
+    prompt,
+    sphereId: null,
+    attachments: attachment ? [attachment] : []
+  });
+
+  const importance = generated.task.importance ?? 3;
+  const urgency = generated.task.urgency ?? 3;
+
+  const createdTask = await prisma.task.create({
+    data: {
+      title: generated.task.title,
+      description: generated.task.description,
+      userId,
+      sphereId: null,
+      importance,
+      urgency,
+      priorityScore: Number((importance * 0.6 + urgency * 0.4).toFixed(2)),
+      status: 'TODO',
+      dueDate: generated.task.dueDate ? new Date(generated.task.dueDate) : null,
+      notifyBeforeMinutes: generated.task.notifyBeforeMinutes
+    }
+  });
+
+  if (attachment) {
+    await prisma.taskAttachment.create({
+      data: {
+        taskId: createdTask.id,
+        userId,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        contentBase64: attachment.contentBase64
+      }
+    });
+  }
+
+  if (generated.task.subtasks.length > 0) {
+    await prisma.$transaction(generated.task.subtasks.map((subtask) => prisma.task.create({
+      data: {
+        title: subtask.title,
+        description: subtask.description,
+        userId,
+        parentTaskId: createdTask.id,
+        sphereId: null,
+        importance: 3,
+        urgency: 3,
+        priorityScore: 3,
+        status: 'TODO',
+        dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
+        notifyBeforeMinutes: 60
+      }
+    })));
+  }
+
+  await aiAssistantService.appendTaskDialogMessages({
+    userId,
+    taskId: createdTask.id,
+    messages: [{ role: 'assistant', content: generated.firstAssistantMessage }]
+  });
+
+  return { createdTask, generated };
+};
+
+const loadTelegramAttachment = async (message: TelegramUpdate['message']): Promise<ChatAttachment | null> => {
+  if (!BOT_TOKEN || !message) return null;
+
+  const document = message.document;
+  const photo = Array.isArray(message.photo) && message.photo.length > 0
+    ? message.photo[message.photo.length - 1]
+    : null;
+
+  const candidate = document ?? photo;
+  if (!candidate?.file_id) return null;
+
+  const resolvedMimeType = document?.mime_type || 'image/jpeg';
+  const resolvedName = document?.file_name?.trim() || `telegram-file-${Date.now()}.${document ? 'bin' : 'jpg'}`;
+
+  const fileInfo = await telegramRequest<{ ok: boolean; result?: { file_path?: string; file_size?: number } }>('getFile', {
+    file_id: candidate.file_id
+  });
+
+  const filePath = fileInfo?.result?.file_path;
+  if (!filePath) {
+    throw new Error('Не удалось получить файл из Telegram.');
+  }
+
+  const response = await fetch(`${TELEGRAM_API}/file/bot${BOT_TOKEN}/${filePath}`);
+  if (!response.ok) {
+    throw new Error('Не удалось скачать файл из Telegram.');
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const size = arrayBuffer.byteLength;
+
+  if (size > MAX_ATTACHMENT_BYTES) {
+    throw new Error('Файл слишком большой. Максимальный размер — 8 MB.');
+  }
+
+  return {
+    name: resolvedName.slice(0, 180),
+    mimeType: resolvedMimeType,
+    size,
+    contentBase64: Buffer.from(arrayBuffer).toString('base64')
+  };
+};
+
+const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['message']>) => {
+  const chatId = String(updateMessage.chat.id);
+  const text = typeof updateMessage.text === 'string' ? updateMessage.text.trim() : '';
+  const caption = typeof updateMessage.caption === 'string' ? updateMessage.caption.trim() : '';
+  const descriptionText = text || caption;
+
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
 
-  if (text === '/start') {
-    await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
+  if (descriptionText === '/start') {
+    await resetBotMenuState(chatId);
     await sendMessage(
       chatId,
       '👋 <b>Bubble Task Manager Bot</b>\n\nЧтобы подключить аккаунт, нажмите кнопку ниже и отправьте <b>логин пароль</b> одним сообщением.',
@@ -254,12 +446,41 @@ const handleIncomingMessage = async (chatId: string, text: string) => {
   }
 
   if (session?.mode === 'AWAITING_LINK_CREDENTIALS') {
-    await handleLoginInput(chatId, text);
+    await handleLoginInput(chatId, descriptionText);
     return;
   }
 
-  if ((session?.mode === 'AI_CHAT' || session?.mode === 'AWAITING_AI_MESSAGE') && session.userId && session.activeTaskId) {
-    const question = text.trim();
+  if (!session?.userId) {
+    await sendMessage(chatId, 'ℹ️ Нажмите <b>/start</b>, чтобы подключить аккаунт.', keyboardReplyBack);
+    return;
+  }
+
+  if (descriptionText === MENU_BACK) {
+    await resetBotMenuState(chatId);
+    await sendMessage(chatId, '⬅️ Возвращаю в главное меню.', keyboardReplyMain);
+    return;
+  }
+
+  if (descriptionText === MENU_CREATE_AI_TASK) {
+    pendingAiAttachmentByChatId.delete(chatId);
+    await setSession(chatId, { mode: 'AWAITING_AI_TASK_PROMPT', activeTaskId: null });
+    await sendMessage(
+      chatId,
+      '🤖 <b>Создание задачи через ИИ</b>\n\nОтправьте описание задачи текстом. Можно сразу прикрепить файл — я учту его при формировании задачи.',
+      keyboardReplyBack
+    );
+    return;
+  }
+
+  if (descriptionText === MENU_LIST_TASKS) {
+    await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
+    const listText = await buildTaskListText(session.userId, chatId);
+    await sendMessage(chatId, listText, keyboardReplyBack);
+    return;
+  }
+
+  if ((session.mode === 'AI_CHAT' || session.mode === 'AWAITING_AI_MESSAGE') && session.activeTaskId) {
+    const question = descriptionText;
     if (!question) {
       await sendMessage(chatId, '⚠️ Сообщение пустое. Напишите вопрос ИИ или нажмите «Назад».', keyboardBackTask(session.activeTaskId));
       return;
@@ -292,7 +513,89 @@ const handleIncomingMessage = async (chatId: string, text: string) => {
     return;
   }
 
-  await sendMessage(chatId, 'ℹ️ Нажмите <b>/start</b>, чтобы подключить аккаунт или продолжить работу.');
+  if (session.mode === 'VIEWING_TASK_LIST') {
+    const selectedIndex = Number(descriptionText);
+    const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
+
+    if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > taskIds.length) {
+      await sendMessage(chatId, '⚠️ Введите корректный номер задачи из списка или нажмите «⬅️ Назад».', keyboardReplyBack);
+      return;
+    }
+
+    const taskId = taskIds[selectedIndex - 1];
+    const taskText = await getTaskNotificationText(taskId, session.userId);
+    if (!taskText) {
+      await sendMessage(chatId, '⚠️ Не удалось найти задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyBack);
+      return;
+    }
+
+    await sendMessage(chatId, `📌 <b>Детали задачи #${selectedIndex}</b>\n\n${taskText}`, keyboardMain(taskId));
+    return;
+  }
+
+  if (session.mode === 'AWAITING_AI_TASK_PROMPT') {
+    let attachment: ChatAttachment | undefined;
+
+    if (updateMessage.document || (updateMessage.photo && updateMessage.photo.length > 0)) {
+      try {
+        const loaded = await loadTelegramAttachment(updateMessage);
+        if (loaded) {
+          attachment = loaded;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Не удалось обработать файл.';
+        await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardReplyBack);
+        return;
+      }
+    }
+
+    const prompt = descriptionText;
+
+    if (attachment && !prompt) {
+      pendingAiAttachmentByChatId.set(chatId, attachment);
+      await sendMessage(chatId, '📎 Файл получил. Теперь пришлите текстовое описание задачи, чтобы ИИ мог её сформировать.', keyboardReplyBack);
+      return;
+    }
+
+    if (!attachment && pendingAiAttachmentByChatId.has(chatId)) {
+      attachment = pendingAiAttachmentByChatId.get(chatId);
+    }
+
+    if (!prompt) {
+      await sendMessage(chatId, '⚠️ Нужен текст с описанием задачи. Можно с файлом или без него.', keyboardReplyBack);
+      return;
+    }
+
+    await sendMessage(chatId, '🧠 Формирую задачу через ИИ...');
+
+    try {
+      const created = await createTaskFromAiPrompt(session.userId, prompt, attachment);
+      pendingAiAttachmentByChatId.delete(chatId);
+      await resetBotMenuState(chatId);
+
+      const dueDateLabel = created.createdTask.dueDate ? formatDate(created.createdTask.dueDate) : 'не указан';
+      const lines = [
+        '✅ <b>Задача создана!</b>',
+        '',
+        `🧩 <b>${escapeHtml(created.createdTask.title)}</b>`,
+        `${escapeHtml(created.createdTask.description ?? 'Без описания')}`,
+        `⏰ Дедлайн: <b>${escapeHtml(dueDateLabel)}</b>`,
+        `🗂 Подзадач: <b>${created.generated.task.subtasks.length}</b>`,
+        attachment ? '📎 Файл прикреплён к задаче.' : '📎 Файл не прикреплялся.',
+        '',
+        `🤖 <b>Первое сообщение ИИ:</b>\n${escapeHtml(created.generated.firstAssistantMessage)}`
+      ];
+
+      await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.';
+      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyBack);
+      return;
+    }
+  }
+
+  await sendMessage(chatId, 'ℹ️ Выберите действие через меню: «🤖 Создать задачу ИИ» или «📋 Посмотреть задачи».', keyboardReplyMain);
 };
 
 const handleCallback = async (update: TelegramUpdate) => {
@@ -306,7 +609,7 @@ const handleCallback = async (update: TelegramUpdate) => {
   if (data === 'auth_login') {
     await setSession(chatId, { mode: 'AWAITING_LINK_CREDENTIALS', activeTaskId: null });
     await answerCallback(callback.id);
-    await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>');
+    await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyBack);
     return;
   }
 
@@ -388,9 +691,8 @@ export const telegramService = {
         return;
       }
 
-      if (update.message?.text) {
-        const chatId = String(update.message.chat.id);
-        await handleIncomingMessage(chatId, update.message.text);
+      if (update.message) {
+        await handleIncomingMessage(update.message);
       }
     } catch (error) {
       console.error('[Telegram] Failed to process update', error);
