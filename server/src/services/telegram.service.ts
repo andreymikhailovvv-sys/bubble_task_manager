@@ -129,12 +129,7 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
     where: { id: taskId, userId },
     include: {
       subtasks: { orderBy: { createdAt: 'asc' } },
-      parentTask: true,
-      aiMessages: {
-        where: { role: 'assistant' },
-        orderBy: { createdAt: 'desc' },
-        take: 1
-      }
+      parentTask: true
     }
   });
 
@@ -142,7 +137,6 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
 
   const title = escapeHtml(task.title);
   const description = escapeHtml(task.description ?? 'Без описания');
-  const aiMessage = task.aiMessages[0]?.content ? escapeHtml(task.aiMessages[0].content) : null;
   const lines = [
     '🔔 <b>Задача начинает сиять</b>',
     '',
@@ -163,12 +157,33 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
     }
   }
 
-  if (aiMessage) {
-    lines.push('', '🤖 <b>Последнее сообщение ИИ</b>');
-    lines.push(aiMessage);
-  }
-
   return lines.join('\n');
+};
+
+const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string) => {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, userId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      user: { select: { telegramChatId: true } }
+    }
+  });
+
+  if (!task?.user.telegramChatId) return;
+
+  const lines = [
+    '🚨 <b>Дедлайн краснеет!</b>',
+    '',
+    `🧩 <b>${escapeHtml(task.title)}</b>`,
+    `${escapeHtml(task.description ?? 'Без описания')}`,
+    '',
+    '🤖 <b>Сообщение от ИИ</b>',
+    escapeHtml(aiMessage)
+  ];
+
+  await sendMessage(task.user.telegramChatId, lines.join('\n'), keyboardMain(task.id));
 };
 
 const setSession = async (chatId: string, patch: { userId?: string | null; mode?: string; activeTaskId?: string | null }) => {
@@ -420,5 +435,10 @@ export const telegramService = {
         await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: null } });
       }
     }
+  },
+  async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string }) {
+    if (!BOT_TOKEN) return;
+    if (!input.aiMessage.trim()) return;
+    await sendOverdueTaskNotification(input.taskId, input.userId, input.aiMessage);
   }
 };

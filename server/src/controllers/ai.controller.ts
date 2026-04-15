@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
+import { telegramService } from '../services/telegram.service.js';
 
 type ChatAttachment = {
   name: string;
@@ -139,6 +140,19 @@ export const aiController = {
         userId: req.user!.id,
         taskId: req.params.id
       });
+
+      if (
+        result.sent &&
+        result.answer &&
+        !('replayed' in result && result.replayed)
+      ) {
+        await telegramService.notifyOverdueTaskAiMessage({
+          userId: req.user!.id,
+          taskId: req.params.id,
+          aiMessage: result.answer
+        });
+      }
+
       res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
