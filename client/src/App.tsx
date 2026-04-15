@@ -9,7 +9,7 @@ import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
 import { calcScore, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Insight, Sphere, Task, TaskAttachment } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 
 const MAX_SPHERES = 8;
@@ -82,9 +82,8 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'week' | 'month' | 'focus'>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
-  const [insights, setInsights] = useState<Insight[]>([]);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -154,17 +153,15 @@ export default function App() {
 
   async function load() {
     const sphereData = await api.getSpheres();
-    const [taskData, insightData] = await Promise.all([api.getTasks(), api.getInsights()]);
+    const taskData = await api.getTasks();
     setSpheres(sphereData);
     setTasks(taskData);
-    setInsights(insightData);
   }
 
   const clearUserState = () => {
     setCurrentUser(null);
     setSpheres([]);
     setTasks([]);
-    setInsights([]);
     setEditorState(null);
     setSectorEditorSphere(null);
     setPoppingTaskId(null);
@@ -438,14 +435,13 @@ export default function App() {
     });
   }, [completedFilter, completedTasks]);
   const upcomingSubtasksForPanel = useMemo(() => {
-    const nowTs = Date.now();
     return subtasks
       .filter((task) => task.status !== 'DONE' && Boolean(task.dueDate))
       .map((task) => ({
         task,
         dueTimestamp: task.dueDate ? new Date(task.dueDate).getTime() : Number.NaN
       }))
-      .filter(({ dueTimestamp }) => Number.isFinite(dueTimestamp) && dueTimestamp >= nowTs)
+      .filter(({ dueTimestamp }) => Number.isFinite(dueTimestamp))
       .sort((a, b) => a.dueTimestamp - b.dueTimestamp)
       .slice(0, 5)
       .map(({ task }) => task);
@@ -768,6 +764,13 @@ export default function App() {
             const endOfToday = new Date(startOfToday);
             endOfToday.setDate(endOfToday.getDate() + 1);
             return { start: startOfToday, end: endOfToday };
+          }
+          if (timeFilter === 'tomorrow') {
+            const startOfTomorrow = new Date(startOfToday);
+            startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+            const endOfTomorrow = new Date(startOfTomorrow);
+            endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+            return { start: startOfTomorrow, end: endOfTomorrow };
           }
           if (timeFilter === 'week') {
             const day = startOfToday.getDay();
@@ -1155,10 +1158,11 @@ export default function App() {
           <select
             className="w-full rounded bg-slate-800 p-2 text-sm"
             value={timeFilter}
-            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'week' | 'month' | 'focus')}
+            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
           >
             <option value="all">За все время</option>
             <option value="today">За сегодня</option>
+            <option value="tomorrow">За завтра</option>
             <option value="week">За эту неделю</option>
             <option value="month">За этот месяц</option>
             <option value="focus">Фокус</option>
@@ -1248,9 +1252,25 @@ export default function App() {
           }}
         >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold text-slate-200">AI suggestions</h3>
-            <ul className="space-y-1 text-xs text-slate-300">
-              {insights.map((insight) => <li key={insight.id}>• {insight.text}</li>)}
+            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
+            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
+              {upcomingSubtasksForPanel.map((task) => (
+                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={async () => {
+                      await api.updateTask(task.id, { status: 'DONE' });
+                      if (task.parentTaskId) {
+                        await syncParentStatusBySubtasks(task.parentTaskId);
+                      }
+                      await load();
+                    }}
+                  />
+                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
+                </li>
+              ))}
             </ul>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
@@ -1280,28 +1300,6 @@ export default function App() {
                     checked
                     onChange={async () => {
                       await api.updateTask(task.id, { status: 'TODO' });
-                      await load();
-                    }}
-                  />
-                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
-            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
-              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
-              {upcomingSubtasksForPanel.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
-                  <input
-                    type="checkbox"
-                    checked={false}
-                    onChange={async () => {
-                      await api.updateTask(task.id, { status: 'DONE' });
-                      if (task.parentTaskId) {
-                        await syncParentStatusBySubtasks(task.parentTaskId);
-                      }
                       await load();
                     }}
                   />
