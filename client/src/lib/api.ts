@@ -92,6 +92,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  appendTaskAssistantMessages: (taskId: string, payload: { messages: ChatMessage[] }) =>
+    request<{ ok: true }>(`/api/tasks/${taskId}/ai-chat/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   generateTaskSubtasks: (taskId: string) =>
     request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST'
