@@ -57,6 +57,11 @@ const escapeHtml = (value: string) => value
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;');
 
+const formatAiTextWithBold = (value: string) => {
+  const escaped = escapeHtml(value);
+  return escaped.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>');
+};
+
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
   const diffMs = dueDate.getTime() - Date.now();
@@ -379,7 +384,7 @@ const buildTaskListTextParts = async (userId: string, chatId: string) => {
 
   const lines = ['📋 <b>Список задач</b>', '', 'Введите номер задачи, чтобы открыть детали:'];
   ordered.forEach((task, index) => {
-    lines.push(`${index + 1}. ${escapeHtml(task.title)}`);
+    lines.push(`${index + 1}. <b><u>Задача: ${escapeHtml(task.title)}</u></b>`);
     lines.push(`   ⏳ Дедлайн: ${escapeHtml(formatDate(task.dueDate))}`);
   });
 
@@ -573,7 +578,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     await setSession(chatId, { mode: 'AI_CHAT' });
     await sendMessage(
       chatId,
-      `🤖 <b>Ответ ИИ</b>\n\n${escapeHtml(result.answer)}\n\n✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.`,
+      `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}\n\n✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.`,
       keyboardBackTask(session.activeTaskId)
     );
     return;
@@ -649,7 +654,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         `🗂 Подзадач: <b>${created.generated.task.subtasks.length}</b>`,
         attachment ? '📎 Файл прикреплён к задаче.' : '📎 Файл не прикреплялся.',
         '',
-        `🤖 <b>Первое сообщение ИИ:</b>\n${escapeHtml(created.generated.firstAssistantMessage)}`
+        `🤖 <b>Первое сообщение ИИ:</b>\n${formatAiTextWithBold(created.generated.firstAssistantMessage)}`
       ];
 
       await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
