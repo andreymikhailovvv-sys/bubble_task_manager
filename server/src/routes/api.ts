@@ -191,6 +191,7 @@ apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(a
 
 apiRouter.get('/tasks/:id/ai-chat', requireAuth, aiController.getTaskAssistantHistory);
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
+apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
 apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);
 apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, aiController.generateOverdueTaskNudge);
 apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromPrompt);

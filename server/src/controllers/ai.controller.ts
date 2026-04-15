@@ -91,6 +91,35 @@ export const aiController = {
       res.status(500).json({ error: message });
     }
   },
+  appendTaskAssistantMessages: async (req: Request, res: Response) => {
+    try {
+      const rawMessages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+      const messages = rawMessages
+        .map((message: unknown) => {
+          if (typeof message !== 'object' || message === null) return null;
+          const role = 'role' in message ? (message as { role?: unknown }).role : null;
+          const content = 'content' in message ? (message as { content?: unknown }).content : null;
+          if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') return null;
+          return { role, content };
+        })
+        .filter((message: { role: 'user' | 'assistant'; content: string } | null): message is { role: 'user' | 'assistant'; content: string } => Boolean(message));
+
+      if (messages.length === 0) {
+        res.status(400).json({ error: 'messages is required' });
+        return;
+      }
+
+      await aiAssistantService.appendTaskDialogMessages({
+        userId: req.user!.id,
+        taskId: req.params.id,
+        messages
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   generateSubtasks: async (req: Request, res: Response) => {
     try {
       const result = await aiAssistantService.generateSubtasks({

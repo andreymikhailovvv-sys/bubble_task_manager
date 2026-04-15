@@ -52,6 +52,7 @@ const HELP_WITH_TASK_PROMPT = [
 ].join(' ');
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
+const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 
 function renderAiMessageContent(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
@@ -123,9 +124,33 @@ export default function App() {
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
-  const overdueStateByTaskRef = useRef<Record<string, boolean>>({});
+  const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const [overdueTick, setOverdueTick] = useState(0);
+
+  const formatDeadlineTooltip = (task: Task) => {
+    const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+    const dueDateText = dueDate && !Number.isNaN(dueDate.getTime())
+      ? dueDate.toLocaleString('ru-RU')
+      : 'Без дедлайна';
+    const nowMs = Date.now();
+    const diffMs = dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate.getTime() - nowMs : null;
+    const absDiffMs = diffMs === null ? null : Math.abs(diffMs);
+    const hours = absDiffMs === null ? 0 : Math.floor(absDiffMs / (60 * 60 * 1000));
+    const minutes = absDiffMs === null ? 0 : Math.floor((absDiffMs % (60 * 60 * 1000)) / (60 * 1000));
+    const deadlineDeltaText = diffMs === null
+      ? 'Срок не задан'
+      : diffMs >= 0
+        ? `Через ${hours} ч ${minutes} мин`
+        : `Просрочено на ${hours} ч ${minutes} мин`;
+
+    return [
+      `Название: ${task.title}`,
+      `Описание: ${task.description?.trim() ? task.description : 'Нет описания'}`,
+      `Дедлайн: ${dueDateText}`,
+      deadlineDeltaText
+    ].join('\n');
+  };
 
   async function load() {
     const sphereData = await api.getSpheres();
@@ -302,7 +327,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) {
-      overdueStateByTaskRef.current = {};
+      overdueNudgeAttemptAtByTaskRef.current = {};
       return;
     }
 
@@ -315,31 +340,37 @@ export default function App() {
       return dueDate.getTime() <= Date.now();
     };
 
-    const nextOverdueMap = tasks.reduce<Record<string, boolean>>((acc, task) => {
+    const overdueTaskIds = tasks.reduce<string[]>((acc, task) => {
       if (task.parentTaskId) return acc;
-      acc[task.id] = isOverdue(task);
+      if (isOverdue(task)) acc.push(task.id);
       return acc;
-    }, {});
-
-    const newlyOverdueTaskIds = Object.entries(nextOverdueMap)
-      .filter(([taskId, isTaskOverdue]) => isTaskOverdue && !overdueStateByTaskRef.current[taskId])
-      .map(([taskId]) => taskId);
-
-    overdueStateByTaskRef.current = nextOverdueMap;
-    if (newlyOverdueTaskIds.length === 0) return;
+    }, []);
+    if (overdueTaskIds.length === 0) return;
 
     const processOverdueNudges = async () => {
-      for (const taskId of newlyOverdueTaskIds) {
+      const nowTs = Date.now();
+      for (const taskId of overdueTaskIds) {
+        const lastAttemptAt = overdueNudgeAttemptAtByTaskRef.current[taskId] ?? 0;
+        if (nowTs - lastAttemptAt < OVERDUE_NUDGE_RETRY_INTERVAL_MS) {
+          continue;
+        }
+        overdueNudgeAttemptAtByTaskRef.current[taskId] = nowTs;
         try {
           const result = await api.generateOverdueTaskNudge(taskId);
           const answer = result.answer;
           if (!result.sent || !answer) continue;
           setAiDialogByTask((prev) => ({
             ...prev,
-            [taskId]: [...(prev[taskId] ?? []), { role: 'assistant', content: answer }]
+            [taskId]: (() => {
+              const previousDialog = prev[taskId] ?? [];
+              const alreadyHasMessage = previousDialog.some((message) => message.role === 'assistant' && message.content === answer);
+              return alreadyHasMessage
+                ? previousDialog
+                : [...previousDialog, { role: 'assistant', content: answer }];
+            })()
           }));
         } catch {
-          // ignore: if request fails, next overdue re-check will try again
+          overdueNudgeAttemptAtByTaskRef.current[taskId] = 0;
         }
       }
     };
@@ -406,6 +437,19 @@ export default function App() {
         && updatedAt.getFullYear() === now.getFullYear();
     });
   }, [completedFilter, completedTasks]);
+  const upcomingSubtasksForPanel = useMemo(() => {
+    const nowTs = Date.now();
+    return subtasks
+      .filter((task) => task.status !== 'DONE' && Boolean(task.dueDate))
+      .map((task) => ({
+        task,
+        dueTimestamp: task.dueDate ? new Date(task.dueDate).getTime() : Number.NaN
+      }))
+      .filter(({ dueTimestamp }) => Number.isFinite(dueTimestamp) && dueTimestamp >= nowTs)
+      .sort((a, b) => a.dueTimestamp - b.dueTimestamp)
+      .slice(0, 5)
+      .map(({ task }) => task);
+  }, [subtasks]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
   const focusedAiDialog = useMemo(
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
@@ -847,6 +891,9 @@ export default function App() {
       ...prev,
       [createdTask.id]: [{ role: 'assistant', content: generated.firstAssistantMessage }]
     }));
+    await api.appendTaskAssistantMessages(createdTask.id, {
+      messages: [{ role: 'assistant', content: generated.firstAssistantMessage }]
+    });
     setEditorState(null);
     await load();
   };
@@ -1233,6 +1280,28 @@ export default function App() {
                     checked
                     onChange={async () => {
                       await api.updateTask(task.id, { status: 'TODO' });
+                      await load();
+                    }}
+                  />
+                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
+            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
+              {upcomingSubtasksForPanel.map((task) => (
+                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={async () => {
+                      await api.updateTask(task.id, { status: 'DONE' });
+                      if (task.parentTaskId) {
+                        await syncParentStatusBySubtasks(task.parentTaskId);
+                      }
                       await load();
                     }}
                   />
@@ -1639,6 +1708,7 @@ export default function App() {
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
+                        detachedPopup
                         onChange={async (dueDate) => {
                           await api.updateTask(subtask.id, { dueDate });
                           await load();

@@ -99,7 +99,7 @@ export function DateTimePickerWithApply({
         : preferredLeft;
       const clampedLeft = Math.max(8, Math.min(alignedLeft, viewportWidth - popupWidth - 8));
       setDetachedPosition({
-        top: Math.max(8, triggerRect.top),
+        top: Math.max(8, triggerRect.bottom + detachedOffset),
         left: clampedLeft
       });
     };
@@ -118,7 +118,7 @@ export function DateTimePickerWithApply({
   const popupContent = (
     <div
       ref={popupRef}
-      className={`z-50 w-72 rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-2xl ${
+      className={`z-[120] w-72 rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-2xl ${
         detachedPopup ? 'fixed' : `absolute ${popupPositionClass} mt-2`
       }`}
       style={detachedPopup && detachedPosition ? { top: detachedPosition.top, left: detachedPosition.left } : undefined}
