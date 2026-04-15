@@ -109,6 +109,10 @@ export const taskService = {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
 
+    if (input.status !== undefined || input.dueDate !== undefined || input.notifyBeforeMinutes !== undefined) {
+      patch.telegramNotifiedAt = null;
+    }
+
     await prisma.task.findFirstOrThrow({ where: { id, userId } });
     return prisma.task.update({ where: { id }, data: patch });
   },

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { apiRouter } from './routes/api.js';
 import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
+import { telegramService } from './services/telegram.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -30,6 +31,16 @@ app.use(express.static(clientDist));
 app.get('*', (_, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
+
+
+const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
+if (telegramService.isEnabled()) {
+  setInterval(() => {
+    telegramService.notifyShiningTasks().catch((error) => {
+      console.error('[Telegram] notifyShiningTasks failed', error);
+    });
+  }, telegramPollIntervalMs).unref();
+}
 
 app.listen(port, () => {
   console.log(`Server started on http://localhost:${port}`);

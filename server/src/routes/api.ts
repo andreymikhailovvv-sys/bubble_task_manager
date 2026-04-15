@@ -4,6 +4,7 @@ import { taskController } from '../controllers/task.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
+import { telegramController } from '../controllers/telegram.controller.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
 import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.service.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -195,3 +196,5 @@ apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTa
 apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);
 apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, aiController.generateOverdueTaskNudge);
 apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromPrompt);
+
+apiRouter.post('/telegram/webhook', telegramController.webhook);

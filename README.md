@@ -29,6 +29,12 @@ OPENAI_API_KEY=your_openai_api_key
 # OPENAI_MODEL=gpt-5.4-mini
 # Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
 # OPENAI_MODEL_FULL=gpt-5.4
+# Telegram bot
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+# Опционально, но рекомендуется для защиты webhook
+TELEGRAM_WEBHOOK_SECRET=your_random_secret
+# Интервал проверки «сияющих» задач в мс (по умолчанию 60000)
+TELEGRAM_POLL_INTERVAL_MS=60000
 ```
 
 ## Локальный запуск
@@ -86,3 +92,23 @@ npm run start
 - Заглушки AI + локальная эвристика приоритизации
 - AI-чат по задаче в hover-окне пузыря (с памятью диалога в рамках сессии)
 - Insights endpoint `/api/dashboard/insights`
+
+
+## Подключение Telegram webhook
+1. Создайте бота у @BotFather и получите токен.
+2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN` и (рекомендуется) `TELEGRAM_WEBHOOK_SECRET`.
+3. После деплоя установите webhook:
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://bubble-task-manager.onrender.com/api/telegram/webhook",
+    "secret_token": "<TELEGRAM_WEBHOOK_SECRET>",
+    "allowed_updates": ["message", "callback_query"]
+  }'
+```
+4. Для проверки статуса:
+```bash
+curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
+```
+5. В боте отправьте `/start`, затем нажмите «Войти» и отправьте одним сообщением: `<логин> <пароль>`.
