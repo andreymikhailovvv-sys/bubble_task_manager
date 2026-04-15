@@ -285,8 +285,9 @@ export function BubbleField({
 
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
     const isPopping = poppingTaskId === bubble.task.id;
-    const hasUrgentSubtask = (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && shouldTaskGlow(task));
-    const shouldGlow = shouldTaskGlow(bubble.task) || hasUrgentSubtask;
+    const hasUrgentSubtask = bubble.task.status !== 'DONE'
+      && (subtaskMap[bubble.task.id] ?? []).some((task) => task.status !== 'DONE' && shouldTaskGlow(task));
+    const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
