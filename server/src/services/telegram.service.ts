@@ -1,5 +1,5 @@
 import { authService } from '../auth/auth.service.js';
-import type { Prisma, TelegramSessionMode } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 
@@ -171,7 +171,7 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   return lines.join('\n');
 };
 
-const setSession = async (chatId: string, patch: { userId?: string | null; mode?: TelegramSessionMode; activeTaskId?: string | null }) => {
+const setSession = async (chatId: string, patch: { userId?: string | null; mode?: string; activeTaskId?: string | null }) => {
   const update: Prisma.TelegramSessionUpdateInput = {};
   if (patch.userId !== undefined) {
     update.user = patch.userId ? { connect: { id: patch.userId } } : { disconnect: true };
