@@ -56,7 +56,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
-  const [notifyPreset, setNotifyPreset] = useState<string>('60');
+  const [notifyPreset, setNotifyPreset] = useState<string>('30');
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiSphereId, setAiSphereId] = useState<string | null>(initialSphereId ?? null);
@@ -68,15 +68,15 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const autosaveSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 60 };
+    const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 30 };
     setForm(nextForm);
     if (nextForm.notifyBeforeMinutes === null) {
       setNotifyPreset('null');
-    } else if ([15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 60)) {
-      setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 60));
+    } else if ([15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 30)) {
+      setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 30));
     } else {
-      setNotifyPreset('60');
-      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 60 }));
+      setNotifyPreset('30');
+      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 30 }));
     }
     setCreateMode('manual');
     setAiPrompt('');

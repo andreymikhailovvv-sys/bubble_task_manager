@@ -877,7 +877,7 @@ export const aiAssistantService = {
           priorityScore: 3,
           status: 'TODO',
           dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
-          notifyBeforeMinutes: 60
+          notifyBeforeMinutes: 30
         }
       }))
     );

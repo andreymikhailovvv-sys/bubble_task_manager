@@ -66,7 +66,7 @@ export const taskService = {
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
         dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null,
-        notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 60
+        notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
       }
     });
   },
@@ -113,8 +113,23 @@ export const taskService = {
       patch.telegramNotifiedAt = null;
     }
 
-    await prisma.task.findFirstOrThrow({ where: { id, userId } });
-    return prisma.task.update({ where: { id }, data: patch });
+    const currentTask = await prisma.task.findFirstOrThrow({
+      where: { id, userId },
+      select: { id: true, parentTaskId: true }
+    });
+
+    return prisma.$transaction(async (tx) => {
+      const updatedTask = await tx.task.update({ where: { id }, data: patch });
+
+      if (input.status === 'DONE' && !currentTask.parentTaskId) {
+        await tx.task.updateMany({
+          where: { parentTaskId: id, userId, status: { not: 'DONE' } },
+          data: { status: 'DONE', telegramNotifiedAt: null }
+        });
+      }
+
+      return updatedTask;
+    });
   },
   remove: async (id: string, userId: string) => {
     const deleted = await prisma.task.deleteMany({ where: { id, userId } });

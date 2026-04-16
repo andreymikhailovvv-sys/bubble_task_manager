@@ -274,14 +274,50 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
   }
 }
 
-export function buildBubbles(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors', size: number, rankingMode: BubbleRankingMode = 'urgency'): Bubble[] {
+export function buildBubbles(
+  tasks: Task[],
+  spheres: Sphere[],
+  mode: 'global' | 'sectors',
+  size: number,
+  rankingMode: BubbleRankingMode = 'urgency',
+  subtaskMap: Record<string, Task[]> = {}
+): Bubble[] {
   const center = size / 2;
   const maxDistance = size * 0.44;
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
 
+  const getEffectiveDueDate = (task: Task) => {
+    const parseDate = (value?: string | null) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+
+    const taskDueDate = parseDate(task.dueDate);
+    const activeSubtaskDates = (subtaskMap[task.id] ?? [])
+      .filter((subtask) => subtask.status !== 'DONE')
+      .map((subtask) => parseDate(subtask.dueDate))
+      .filter((date): date is Date => Boolean(date));
+
+    if (!taskDueDate && activeSubtaskDates.length === 0) return null;
+    if (!taskDueDate) {
+      return activeSubtaskDates.reduce((minDate, current) => (current < minDate ? current : minDate));
+    }
+    if (activeSubtaskDates.length === 0) return taskDueDate;
+    const earliestSubtaskDueDate = activeSubtaskDates.reduce((minDate, current) => (current < minDate ? current : minDate));
+    return earliestSubtaskDueDate < taskDueDate ? earliestSubtaskDueDate : taskDueDate;
+  };
+
+  const tasksWithEffectiveDueDate = tasks.map((task) => {
+    const effectiveDueDate = getEffectiveDueDate(task);
+    const effectiveDueDateIso = effectiveDueDate ? effectiveDueDate.toISOString() : task.dueDate ?? null;
+    if (effectiveDueDateIso === task.dueDate) return task;
+    return { ...task, dueDate: effectiveDueDateIso };
+  });
+
   const bySector = Array.from({ length: sectorCount }, () => [] as Task[]);
 
-  tasks.forEach((task) => {
+  tasksWithEffectiveDueDate.forEach((task) => {
     const sectorIndex = sectorCount === 1 ? 0 : Math.max(0, spheres.findIndex((sphere) => sphere.id === task.sphereId));
     bySector[sectorIndex].push(task);
   });
