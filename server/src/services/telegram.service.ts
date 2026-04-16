@@ -7,6 +7,7 @@ const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
 const MENU_LIST_TASKS = '📋 Посмотреть задачи';
@@ -83,8 +84,19 @@ const formatDeadlineLeft = (dueDate: Date | null) => {
 
 const formatDate = (value: Date | null) => {
   if (!value) return 'не указан';
-  return value.toLocaleString('ru-RU', { timeZone: 'UTC' });
+  return value.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE });
 };
+
+const sortSubtasksByStatusAndDeadline = <T extends { status: string; dueDate: Date | null }>(subtasks: T[]) => subtasks
+  .slice()
+  .sort((a, b) => {
+    const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
+    if (statusDiff !== 0) return statusDiff;
+    const aTs = a.dueDate ? a.dueDate.getTime() : Number.POSITIVE_INFINITY;
+    const bTs = b.dueDate ? b.dueDate.getTime() : Number.POSITIVE_INFINITY;
+    if (aTs !== bTs) return aTs - bTs;
+    return 0;
+  });
 
 const keyboardMain = (taskId: string) => ({
   inline_keyboard: [
@@ -274,8 +286,9 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     ? `📌 <b>Детали задачи #${taskIndex}</b>`
     : '📌 <b>Детали задачи</b>';
 
-  const allSubtaskLines = task.subtasks.length
-    ? task.subtasks.map((subtask, index) => {
+  const sortedSubtasks = sortSubtasksByStatusAndDeadline(task.subtasks);
+  const allSubtaskLines = sortedSubtasks.length
+    ? sortedSubtasks.map((subtask, index) => {
       const title = escapeHtml(subtask.title);
       const decoratedTitle = subtask.status === 'DONE' ? `<s>${title}</s>` : title;
       return `${index + 1}. ${subtask.status === 'DONE' ? '✅' : '▫️'} ${decoratedTitle}`;
@@ -519,7 +532,7 @@ const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment
         priorityScore: 3,
         status: 'TODO',
         dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
-        notifyBeforeMinutes: 60
+        notifyBeforeMinutes: 30
       }
     })));
   }
@@ -801,16 +814,23 @@ const handleCallback = async (update: TelegramUpdate) => {
     await answerCallback(callback.id, 'Сначала авторизуйтесь через /start');
     return;
   }
+  const userId = session.userId;
+
+  if (!taskId && action !== 'noop') {
+    await answerCallback(callback.id, 'Некорректные данные');
+    return;
+  }
+  const resolvedTaskId = taskId as string;
 
   if (action === 'snooze') {
     await answerCallback(callback.id);
-    await editMessage(chatId, messageId, '⏳ <b>На сколько отложить задачу?</b>', keyboardSnooze(taskId));
+    await editMessage(chatId, messageId, '⏳ <b>На сколько отложить задачу?</b>', keyboardSnooze(resolvedTaskId));
     return;
   }
 
   if (action === 'snooze_set') {
     const minutes = Number(value);
-    const task = await prisma.task.findFirst({ where: { id: taskId, userId: session.userId } });
+    const task = await prisma.task.findFirst({ where: { id: resolvedTaskId, userId } });
     if (!task) {
       await answerCallback(callback.id, 'Задача не найдена');
       return;
@@ -830,9 +850,24 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
 
   if (action === 'done') {
-    await prisma.task.updateMany({
-      where: { id: taskId, userId: session.userId },
-      data: { status: 'DONE', telegramNotifiedAt: null }
+    await prisma.$transaction(async (tx) => {
+      const parentTask = await tx.task.findFirst({
+        where: { id: resolvedTaskId, userId },
+        select: { id: true, parentTaskId: true }
+      });
+      if (!parentTask) return;
+
+      await tx.task.update({
+        where: { id: parentTask.id },
+        data: { status: 'DONE', telegramNotifiedAt: null }
+      });
+
+      if (!parentTask.parentTaskId) {
+        await tx.task.updateMany({
+          where: { parentTaskId: parentTask.id, userId, status: { not: 'DONE' } },
+          data: { status: 'DONE', telegramNotifiedAt: null }
+        });
+      }
     });
     await answerCallback(callback.id, 'Задача закрыта');
     await editMessage(chatId, messageId, '✅ <b>Задача выполнена и закрыта.</b> Отличная работа!');
@@ -841,7 +876,7 @@ const handleCallback = async (update: TelegramUpdate) => {
 
   if (action === 'delete') {
     const deleted = await prisma.task.deleteMany({
-      where: { id: taskId, userId: session.userId }
+      where: { id: resolvedTaskId, userId }
     });
     await answerCallback(callback.id, deleted.count ? 'Задача удалена' : 'Задача не найдена');
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
@@ -850,17 +885,17 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
 
   if (action === 'ai') {
-    await setSession(chatId, { mode: 'AWAITING_AI_MESSAGE', activeTaskId: taskId });
+    await setSession(chatId, { mode: 'AWAITING_AI_MESSAGE', activeTaskId: resolvedTaskId });
     await answerCallback(callback.id);
-    await editMessage(chatId, messageId, '🤖 <b>Напишите сообщение для ИИ</b>\n\nЯ отправлю его в диалог задачи.', keyboardBackTask(taskId));
+    await editMessage(chatId, messageId, '🤖 <b>Напишите сообщение для ИИ</b>\n\nЯ отправлю его в диалог задачи.', keyboardBackTask(resolvedTaskId));
     return;
   }
 
   if (action === 'subtasks_page') {
     const page = Number(value);
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
-    const index = taskIds.findIndex((id) => id === taskId);
-    const details = await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined, Number.isFinite(page) ? page : 1);
+    const index = taskIds.findIndex((id) => id === resolvedTaskId);
+    const details = await getTaskDetailsText(resolvedTaskId, userId, index >= 0 ? index + 1 : undefined, Number.isFinite(page) ? page : 1);
 
     await answerCallback(callback.id);
     if (!details) {
@@ -868,20 +903,20 @@ const handleCallback = async (update: TelegramUpdate) => {
       return;
     }
 
-    await editMessage(chatId, messageId, details.text, keyboardTaskDetails(taskId, details.page, details.totalPages));
+    await editMessage(chatId, messageId, details.text, keyboardTaskDetails(resolvedTaskId, details.page, details.totalPages));
     return;
   }
 
   if (action === 'backtask') {
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
-    const index = taskIds.findIndex((id) => id === taskId);
-    const details = session.userId ? await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined, 1) : null;
+    const index = taskIds.findIndex((id) => id === resolvedTaskId);
+    const details = await getTaskDetailsText(resolvedTaskId, userId, index >= 0 ? index + 1 : undefined, 1);
     await answerCallback(callback.id);
     if (details) {
-      await editMessage(chatId, messageId, details.text, keyboardTaskDetails(taskId, details.page, details.totalPages));
+      await editMessage(chatId, messageId, details.text, keyboardTaskDetails(resolvedTaskId, details.page, details.totalPages));
     } else {
-      await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardTaskDetails(taskId));
+      await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardTaskDetails(resolvedTaskId));
     }
   }
 };

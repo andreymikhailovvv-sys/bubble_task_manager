@@ -84,7 +84,7 @@ function shouldTaskGlow(task: Task) {
   const diff = due.getTime() - Date.now();
   if (diff < 0) return true;
   if (task.notifyBeforeMinutes === null) return false;
-  const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
+  const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
   return diff <= notifyBefore;
 }
 
@@ -155,7 +155,7 @@ export function BubbleField({
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '60' } satisfies SubtaskDraft);
+  const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '30' } satisfies SubtaskDraft);
 
   const getDraftForTask = (taskId: string): SubtaskDraft => subtaskDrafts[taskId] ?? defaultSubtaskDraft();
 
@@ -166,7 +166,10 @@ export function BubbleField({
     }));
   };
 
-  const bubbles = useMemo(() => buildBubbles(tasks, spheres, mode, SIZE, rankingMode), [tasks, spheres, mode, rankingMode]);
+  const bubbles = useMemo(
+    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
+    [tasks, spheres, mode, rankingMode, subtaskMap]
+  );
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
@@ -309,7 +312,7 @@ export function BubbleField({
         initial={false}
         animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }}
         exit={{ opacity: 1, scale: 1, x: bubble.x, y: bubble.y }}
-        transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 24, stiffness: 180 }}
+        transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 30, stiffness: 140, mass: 0.95 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
         onMouseEnter={() => activateHover(bubble.task.id)}

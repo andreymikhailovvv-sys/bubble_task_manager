@@ -109,7 +109,7 @@ export default function App() {
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
-  const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('60');
+  const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
   const [aiDraft, setAiDraft] = useState('');
@@ -425,10 +425,6 @@ export default function App() {
   const subtaskMap = sortedSubtasks;
   const displayedSubtaskMap = useMemo(
     () => Object.entries(subtaskMap).reduce<Record<string, Task[]>>((acc, [parentId, items]) => {
-      if (!isSubtaskFilterActive) {
-        acc[parentId] = items;
-        return acc;
-      }
       const toDeadlineTimestamp = (task: Task) => {
         if (!task.dueDate) return Number.POSITIVE_INFINITY;
         const parsed = new Date(task.dueDate).getTime();
@@ -441,7 +437,7 @@ export default function App() {
       });
       return acc;
     }, {}),
-    [isSubtaskFilterActive, subtaskMap]
+    [subtaskMap]
   );
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
@@ -494,10 +490,10 @@ export default function App() {
     setFocusedDraft(focusedTask);
     if (focusedTask.notifyBeforeMinutes === null) {
       setFocusedNotifyPreset('null');
-    } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 60)) {
-      setFocusedNotifyPreset(String(focusedTask.notifyBeforeMinutes ?? 60));
+    } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 30)) {
+      setFocusedNotifyPreset(String(focusedTask.notifyBeforeMinutes ?? 30));
     } else {
-      setFocusedNotifyPreset('60');
+      setFocusedNotifyPreset('30');
     }
     focusedAutosaveSignatureRef.current = JSON.stringify({
       title: focusedTask.title ?? '',
@@ -768,7 +764,7 @@ export default function App() {
     const diff = due.getTime() - Date.now();
     if (diff < 0) return true;
     if (task.notifyBeforeMinutes === null) return false;
-    const notifyBefore = (task.notifyBeforeMinutes ?? 60) * 60_000;
+    const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
     return diff <= notifyBefore;
   }
 
@@ -909,7 +905,7 @@ export default function App() {
         urgency: 3,
         priorityScore: 3,
         status: 'TODO',
-        notifyBeforeMinutes: 60,
+        notifyBeforeMinutes: 30,
         sphereId: null,
         parentTaskId: createdTask.id
       })));
@@ -1017,7 +1013,7 @@ export default function App() {
   const addFocusedSubtask = async () => {
     if (!focusedTask) return;
     const title = focusedSubtaskTitle.trim() || 'Новая доп задача';
-    await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 60 });
+    await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 30 });
     setFocusedSubtaskTitle('');
     setIsAddingFocusedSubtask(false);
   };
