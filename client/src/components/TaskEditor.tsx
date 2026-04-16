@@ -26,6 +26,17 @@ const SUPPORTED_AI_FILE_TYPES = new Set([
   'image/webp',
   'image/gif'
 ]);
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif'
+};
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
   { value: '15', label: 'За 15 минут' },
@@ -123,9 +134,17 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const isSubtask = Boolean(form.parentTaskId);
   const canShowAiCreateMode = !isEditing && !isSubtask;
 
+  const resolveAttachmentMimeType = (file: File): string => {
+    const fromBrowser = file.type?.trim();
+    if (fromBrowser) return fromBrowser;
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!extension) return 'application/octet-stream';
+    return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
+  };
+
   const fileToAttachmentPayload = async (file: File): Promise<ChatAttachmentPayload> => ({
     name: file.name,
-    mimeType: file.type || 'application/octet-stream',
+    mimeType: resolveAttachmentMimeType(file),
     contentBase64: await file.arrayBuffer().then((buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)))),
     size: file.size
   });

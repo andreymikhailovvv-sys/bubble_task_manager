@@ -551,30 +551,59 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   }
 
   if ((session.mode === 'AI_CHAT' || session.mode === 'AWAITING_AI_MESSAGE') && session.activeTaskId) {
+    let attachment: ChatAttachment | undefined;
+    if (updateMessage.document || (updateMessage.photo && updateMessage.photo.length > 0)) {
+      try {
+        const loaded = await loadTelegramAttachment(updateMessage);
+        if (loaded) {
+          attachment = loaded;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Не удалось обработать файл.';
+        await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardBackTask(session.activeTaskId));
+        return;
+      }
+    }
+
     const question = descriptionText;
-    if (!question) {
+    if (attachment && !question) {
+      pendingAiAttachmentByChatId.set(chatId, attachment);
+      await sendMessage(chatId, '📎 Файл получил. Теперь пришлите текстовый вопрос к ИИ по этой задаче.', keyboardBackTask(session.activeTaskId));
+      return;
+    }
+
+    if (!attachment && pendingAiAttachmentByChatId.has(chatId)) {
+      attachment = pendingAiAttachmentByChatId.get(chatId);
+    }
+
+    if (!question && !attachment) {
       await sendMessage(chatId, '⚠️ Сообщение пустое. Напишите вопрос ИИ или нажмите «Назад».', keyboardBackTask(session.activeTaskId));
       return;
     }
 
     const history = await aiAssistantService.listTaskDialog({ userId: session.userId, taskId: session.activeTaskId });
+    const userMessage = attachment
+      ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файл: ${attachment.name}`
+      : question;
     const result = await aiAssistantService.askTaskAssistant({
       userId: session.userId,
       taskId: session.activeTaskId,
-      question,
+      question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файла и ответь по задаче.',
       history,
-      mode: 'fast'
+      mode: 'fast',
+      attachments: attachment ? [attachment] : []
     });
 
     await aiAssistantService.appendTaskDialogMessages({
       userId: session.userId,
       taskId: session.activeTaskId,
       messages: [
-        { role: 'user', content: question },
+        { role: 'user', content: userMessage },
         { role: 'assistant', content: result.answer }
       ]
     });
 
+    pendingAiAttachmentByChatId.delete(chatId);
     await setSession(chatId, { mode: 'AI_CHAT' });
     await sendMessage(
       chatId,

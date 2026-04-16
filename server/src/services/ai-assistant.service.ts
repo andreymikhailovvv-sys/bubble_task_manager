@@ -53,6 +53,7 @@ type ChatAttachment = {
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
+const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || FULL_MODEL;
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
@@ -298,6 +299,25 @@ function normalizeAttachments(attachments: ChatAttachment[] | undefined): ChatAt
     .slice(0, MAX_ATTACHMENTS);
 }
 
+function resolveAttachmentMimeType(attachment: ChatAttachment): string {
+  const normalizedMime = attachment.mimeType?.trim();
+  if (normalizedMime) return normalizedMime;
+
+  const extension = attachment.name.split('.').pop()?.toLowerCase();
+  if (!extension) return 'application/octet-stream';
+
+  if (extension === 'pdf') return 'application/pdf';
+  if (extension === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (extension === 'xls') return 'application/vnd.ms-excel';
+  if (extension === 'xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (extension === 'png') return 'image/png';
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'webp') return 'image/webp';
+  if (extension === 'gif') return 'image/gif';
+
+  return 'application/octet-stream';
+}
+
 function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } | { type: 'input_image'; image_url: string } {
   const buffer = Buffer.from(attachment.contentBase64, 'base64');
   if (buffer.length === 0) {
@@ -308,19 +328,20 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
   }
 
   const normalizedName = attachment.name.toLowerCase();
-  const isPdf = attachment.mimeType === 'application/pdf' || normalizedName.endsWith('.pdf');
-  const isDocx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || normalizedName.endsWith('.docx');
-  const isXls = attachment.mimeType === 'application/vnd.ms-excel' || normalizedName.endsWith('.xls');
-  const isXlsx = attachment.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || normalizedName.endsWith('.xlsx');
-  const isPng = attachment.mimeType === 'image/png' || normalizedName.endsWith('.png');
-  const isJpeg = attachment.mimeType === 'image/jpeg' || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg');
-  const isWebp = attachment.mimeType === 'image/webp' || normalizedName.endsWith('.webp');
-  const isGif = attachment.mimeType === 'image/gif' || normalizedName.endsWith('.gif');
+  const mimeType = resolveAttachmentMimeType(attachment);
+  const isPdf = mimeType === 'application/pdf' || normalizedName.endsWith('.pdf');
+  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || normalizedName.endsWith('.docx');
+  const isXls = mimeType === 'application/vnd.ms-excel' || normalizedName.endsWith('.xls');
+  const isXlsx = mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || normalizedName.endsWith('.xlsx');
+  const isPng = mimeType === 'image/png' || normalizedName.endsWith('.png');
+  const isJpeg = mimeType === 'image/jpeg' || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg');
+  const isWebp = mimeType === 'image/webp' || normalizedName.endsWith('.webp');
+  const isGif = mimeType === 'image/gif' || normalizedName.endsWith('.gif');
 
   if (isPng || isJpeg || isWebp || isGif) {
     return {
       type: 'input_image',
-      image_url: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
+      image_url: `data:${mimeType};base64,${attachment.contentBase64}`
     };
   }
 
@@ -328,7 +349,7 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
     return {
       type: 'input_file',
       filename: attachment.name,
-      file_data: `data:${attachment.mimeType};base64,${attachment.contentBase64}`
+      file_data: `data:${mimeType};base64,${attachment.contentBase64}`
     };
   }
 
@@ -351,6 +372,21 @@ function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined
       ...normalizedAttachments.map(toInputPart)
     ]
   };
+}
+
+function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachments: boolean): string[] {
+  if (hasAttachments) {
+    if (mode === 'smart') {
+      return Array.from(new Set([FULL_MODEL, ATTACHMENTS_MODEL].filter(Boolean)));
+    }
+    return Array.from(new Set([ATTACHMENTS_MODEL].filter(Boolean)));
+  }
+
+  if (mode === 'smart') {
+    return Array.from(new Set([FULL_MODEL, ...SMART_MODEL_FALLBACKS].filter(Boolean)));
+  }
+
+  return [FAST_MODEL];
 }
 
 export const aiAssistantService = {
@@ -443,6 +479,7 @@ export const aiAssistantService = {
 
     const taskContext = formatTaskContext(task);
     const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
+    const hasAttachments = Boolean(attachmentsMessage);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
@@ -455,14 +492,13 @@ export const aiAssistantService = {
 
     const requestId = randomUUID();
     const reasoningEffort = resolveReasoningEffort(input.mode);
-    const modelCandidates = input.mode === 'smart'
-      ? Array.from(new Set([FULL_MODEL, ...SMART_MODEL_FALLBACKS].filter(Boolean)))
-      : [FAST_MODEL];
+    const modelCandidates = resolveModelCandidates(input.mode, hasAttachments);
 
     console.info('[AI] Starting OpenAI request', {
       requestId,
       mode: input.mode ?? 'fast',
       models: modelCandidates,
+      hasAttachments,
       taskId: input.taskId,
       userId: input.userId,
       questionLength: question.length,
@@ -527,7 +563,7 @@ export const aiAssistantService = {
             message: `${errorMessage}. ${errorText.slice(0, 500)}`
           });
           lastError = new Error(errorMessage);
-          if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+          if (model === FULL_MODEL && modelCandidates.length > 1) {
             console.warn('[AI] primary model failed, trying fallback', {
               requestId,
               mode: input.mode ?? 'fast',
@@ -559,7 +595,7 @@ export const aiAssistantService = {
             message: errorMessage
           });
           lastError = new Error(errorMessage);
-          if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+          if (model === FULL_MODEL && modelCandidates.length > 1) {
             console.warn('[AI] primary model failed, trying fallback', {
               requestId,
               mode: input.mode ?? 'fast',
@@ -614,7 +650,7 @@ export const aiAssistantService = {
           stack: normalizedError.stack
         });
 
-        if (input.mode === 'smart' && model === FULL_MODEL && modelCandidates.length > 1) {
+        if (model === FULL_MODEL && modelCandidates.length > 1) {
           console.warn('[AI] primary model failed, trying fallback', {
             requestId,
             mode: input.mode ?? 'fast',
@@ -766,6 +802,7 @@ export const aiAssistantService = {
     const taskContext = formatTaskContext(task);
     const requestId = randomUUID();
     const taskAttachmentsMessage = buildAttachmentsPromptMessage(task.attachments);
+    const modelForSubtasks = taskAttachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -774,7 +811,7 @@ export const aiAssistantService = {
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: FAST_MODEL,
+        model: modelForSubtasks,
         input: [
           {
             role: 'system',
@@ -846,7 +883,7 @@ export const aiAssistantService = {
     );
 
     return {
-      model: FAST_MODEL,
+      model: modelForSubtasks,
       createdCount: created.length
     };
   },
@@ -862,6 +899,7 @@ export const aiAssistantService = {
     }
     const now = new Date();
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    const modelForPrompt = attachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -869,7 +907,7 @@ export const aiAssistantService = {
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: FAST_MODEL,
+        model: modelForPrompt,
         input: [
           {
             role: 'system',
@@ -916,7 +954,7 @@ export const aiAssistantService = {
     const taskDraft = parseGeneratedTaskDraft(rawAnswer);
 
     return {
-      model: FAST_MODEL,
+      model: modelForPrompt,
       task: {
         title: taskDraft.title,
         description: taskDraft.description,
