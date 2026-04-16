@@ -157,6 +157,8 @@ const sendMessage = async (chatId: string, text: string, replyMarkup?: Record<st
 
 const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 const SAFE_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 200;
+const MAX_TASK_DETAILS_DESCRIPTION_LENGTH = 1500;
+const MIN_SUBTASK_LINES_IN_DETAILS = 5;
 
 const splitTextByLimit = (lines: string[], limit: number) => {
   const chunks: string[] = [];
@@ -181,6 +183,11 @@ const splitTextByLimit = (lines: string[], limit: number) => {
   }
 
   return chunks;
+};
+
+const truncateEscapedText = (value: string, maxLength: number) => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
 const editMessage = async (chatId: string, messageId: number, text: string, replyMarkup?: Record<string, unknown>) => {
@@ -251,7 +258,7 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     ? `📌 <b>Детали задачи #${taskIndex}</b>`
     : '📌 <b>Детали задачи</b>';
 
-  const subtaskLines = task.subtasks.length
+  const allSubtaskLines = task.subtasks.length
     ? task.subtasks.map((subtask, index) => {
       const title = escapeHtml(subtask.title);
       const decoratedTitle = subtask.status === 'DONE' ? `<s>${title}</s>` : title;
@@ -259,13 +266,19 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     })
     : ['— подзадач пока нет'];
 
-  const lines = [
+  let subtaskLines = [...allSubtaskLines];
+  const escapedDescription = truncateEscapedText(
+    escapeHtml(task.description?.trim() || 'Без описания'),
+    MAX_TASK_DETAILS_DESCRIPTION_LENGTH
+  );
+
+  let lines = [
     subtitle,
     '',
     `📍 <b>${escapeHtml(task.title)}</b>`,
     '',
     '🧩 <b>Описание подзадачи</b>',
-    escapeHtml(task.description?.trim() || 'Без описания'),
+    escapedDescription,
     '',
     `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
     '',
@@ -273,7 +286,42 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     ...subtaskLines
   ];
 
-  return lines.join('\n');
+  let result = lines.join('\n');
+  while (result.length > SAFE_MAX_MESSAGE_LENGTH && subtaskLines.length > MIN_SUBTASK_LINES_IN_DETAILS) {
+    subtaskLines = subtaskLines.slice(0, -1);
+    lines = [
+      subtitle,
+      '',
+      `📍 <b>${escapeHtml(task.title)}</b>`,
+      '',
+      '🧩 <b>Описание подзадачи</b>',
+      escapedDescription,
+      '',
+      `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
+      '',
+      `☑️ <b>Подзадачи:</b> (показаны первые ${subtaskLines.length} из ${allSubtaskLines.length})`,
+      ...subtaskLines
+    ];
+    result = lines.join('\n');
+  }
+
+  if (result.length > SAFE_MAX_MESSAGE_LENGTH) {
+    const shortLines = [
+      subtitle,
+      '',
+      `📍 <b>${escapeHtml(task.title)}</b>`,
+      '',
+      '🧩 <b>Описание подзадачи</b>',
+      truncateEscapedText(escapedDescription, 700),
+      '',
+      `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
+      '',
+      `☑️ <b>Подзадачи:</b> всего ${allSubtaskLines.length}`
+    ];
+    return shortLines.join('\n');
+  }
+
+  return result;
 };
 
 const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string) => {
