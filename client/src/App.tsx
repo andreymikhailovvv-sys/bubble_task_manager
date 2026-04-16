@@ -876,14 +876,14 @@ export default function App() {
     await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
   };
 
-  const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; attachments: ChatAttachmentPayload[] }) => {
+  const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
     const generated = await api.generateTaskFromAi(payload);
     const importance = generated.task.importance ?? 3;
     const urgency = generated.task.urgency ?? 3;
     const createdTask = await api.createTask({
       title: generated.task.title,
       description: generated.task.description,
-      sphereId: payload.sphereId ?? null,
+      sphereId: payload.autoAssignSphere ? (generated.suggestedSphereId ?? null) : (payload.sphereId ?? null),
       importance,
       urgency,
       dueDate: generated.task.dueDate ?? null,

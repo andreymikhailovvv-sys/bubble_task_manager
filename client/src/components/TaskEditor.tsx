@@ -9,7 +9,7 @@ type Props = {
   spheres: Sphere[];
   onSave: (payload: Partial<Task>) => Promise<void>;
   onAutoSave?: (payload: Partial<Task>) => Promise<void>;
-  onGenerateWithAi: (payload: { prompt: string; sphereId?: string | null; attachments: ChatAttachmentPayload[] }) => Promise<void>;
+  onGenerateWithAi: (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
   onComplete?: () => Promise<void>;
@@ -59,7 +59,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const [notifyPreset, setNotifyPreset] = useState<string>('30');
   const [createMode, setCreateMode] = useState<'manual' | 'ai'>('manual');
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiSphereId, setAiSphereId] = useState<string | null>(initialSphereId ?? null);
+  const [aiSphereSelection, setAiSphereSelection] = useState<string>('auto');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [isGeneratingByAi, setIsGeneratingByAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     }
     setCreateMode('manual');
     setAiPrompt('');
-    setAiSphereId(initialSphereId ?? null);
+    setAiSphereSelection('auto');
     setAiPendingFiles([]);
     setIsGeneratingByAi(false);
     setAiError(null);
@@ -180,7 +180,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       setAiError(null);
       setIsGeneratingByAi(true);
       const attachments = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
-      await onGenerateWithAi({ prompt, sphereId: aiSphereId ?? null, attachments });
+      const autoAssignSphere = aiSphereSelection === 'auto';
+      const sphereId = aiSphereSelection === 'none' || aiSphereSelection === 'auto'
+        ? null
+        : aiSphereSelection;
+      await onGenerateWithAi({ prompt, sphereId, autoAssignSphere, attachments });
     } catch (error) {
       setAiError(error instanceof Error ? error.message : 'Не удалось сформировать задачу через ИИ');
     } finally {
@@ -246,8 +250,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 <Plus size={15} />
               </button>
             </div>
-            <select className="w-full rounded bg-slate-800 p-2 text-sm" value={aiSphereId ?? ''} onChange={(e) => setAiSphereId(e.target.value || null)}>
-              <option value="">Без сектора</option>
+            <select className="w-full rounded bg-slate-800 p-2 text-sm" value={aiSphereSelection} onChange={(e) => setAiSphereSelection(e.target.value)}>
+              <option value="auto">Автоматически</option>
+              <option value="none">Без сектора</option>
               {spheres.map((sphere) => (
                 <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
               ))}

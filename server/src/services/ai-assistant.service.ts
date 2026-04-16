@@ -42,6 +42,7 @@ type GenerateTaskFromPromptInput = {
   userId: string;
   prompt: string;
   sphereId?: string | null;
+  autoAssignSphere?: boolean;
   attachments?: ChatAttachment[];
 };
 type ChatAttachment = {
@@ -135,6 +136,7 @@ type GeneratedTaskDraft = {
   importance: number;
   urgency: number;
   notifyBeforeMinutes: number | null;
+  selectedSphereName: string | null;
   subtasks: Array<{ title: string; description: string; dueDate: string | null }>;
   firstAssistantMessage: string;
 };
@@ -213,6 +215,9 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   const importanceRaw = typeof source.importance === 'number' ? source.importance : Number(source.importance ?? 3);
   const urgencyRaw = typeof source.urgency === 'number' ? source.urgency : Number(source.urgency ?? 3);
   const notifyRaw = source.notifyBeforeMinutes;
+  const selectedSphereName = typeof source.selectedSphereName === 'string' && source.selectedSphereName.trim()
+    ? source.selectedSphereName.trim().slice(0, 180)
+    : null;
   const notifyBeforeMinutes = notifyRaw === null || notifyRaw === undefined
     ? null
     : Math.max(1, Math.round(Number(notifyRaw)));
@@ -251,6 +256,7 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
     importance,
     urgency,
     notifyBeforeMinutes,
+    selectedSphereName,
     subtasks,
     firstAssistantMessage
   };
@@ -900,6 +906,16 @@ export const aiAssistantService = {
     const now = new Date();
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
     const modelForPrompt = attachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
+    const userSpheres = input.autoAssignSphere
+      ? await prisma.sphere.findMany({
+        where: { userId: input.userId },
+        select: { id: true, name: true },
+        orderBy: { createdAt: 'asc' }
+      })
+      : [];
+    const spheresPromptLine = userSpheres.length > 0
+      ? userSpheres.map((sphere, index) => `${index + 1}. ${sphere.name}`).join('; ')
+      : 'список пуст';
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -915,7 +931,7 @@ export const aiAssistantService = {
               'Ты формируешь структуру задачи для планировщика.',
               'Верни только JSON без markdown и без дополнительных комментариев.',
               'Точный формат:',
-              '{"title":"...","description":"...","dueDate":"ISO-8601 или null","importance":1-5,"urgency":1-5,"notifyBeforeMinutes":число или null,"subtasks":[{"title":"...","description":"...","dueDate":"ISO-8601 или null"}],"firstAssistantMessage":"..."}',
+              '{"title":"...","description":"...","dueDate":"ISO-8601 или null","importance":1-5,"urgency":1-5,"notifyBeforeMinutes":число или null,"selectedSphereName":"название сектора или null","subtasks":[{"title":"...","description":"...","dueDate":"ISO-8601 или null"}],"firstAssistantMessage":"..."}',
               'Старайся давать короткое и ёмкое название основной задачи: поле title по возможности не длиннее 3-6 слов.',
               'В firstAssistantMessage дай 1 конкретное первое сообщение от лица ИИ-помощника (не от лица пользователя).',
               'firstAssistantMessage должно содержать практическую помощь по первому шагу: мини-инструкцию, пример, чеклист, готовый фрагмент или точечное предложение помочь с первым шагом.',
@@ -923,7 +939,10 @@ export const aiAssistantService = {
               'Учитывай текущие дату и время из контекста.',
               'Для всех сроков и дедлайнов используй московский часовой пояс (Europe/Moscow, UTC+3).',
               'Поле dueDate заполняй обязательно, если задачу реально можно оценить по сроку: определи примерную длительность выполнения и поставь дедлайн относительно текущей даты.',
-              'Если по описанию срок не оценить вообще, только тогда верни dueDate = null.'
+              'Если по описанию срок не оценить вообще, только тогда верни dueDate = null.',
+              input.autoAssignSphere
+                ? 'Поле selectedSphereName обязательно: выбери ровно одно название сектора из списка пользователя (без изменений и сокращений). Если список секторов пуст — верни null.'
+                : 'Поле selectedSphereName верни как null.'
             ].join(' ')
           },
           {
@@ -933,6 +952,9 @@ export const aiAssistantService = {
               `Локальная дата и время (Москва): ${now.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })} (Europe/Moscow, UTC+3).`,
               'Считай дедлайны относительно московского времени.',
               `Сектор задачи: ${input.sphereId ? `выбран (${input.sphereId})` : 'не выбран'}.`,
+              input.autoAssignSphere
+                ? `Доступные секторы пользователя: ${spheresPromptLine}.`
+                : 'Автоматический выбор сектора отключён.',
               `Описание от пользователя: ${prompt}`
             ].join('\n')
           },
@@ -952,9 +974,13 @@ export const aiAssistantService = {
       throw new Error('ИИ вернул пустой ответ для генерации задачи');
     }
     const taskDraft = parseGeneratedTaskDraft(rawAnswer);
+    const suggestedSphereId = input.autoAssignSphere
+      ? userSpheres.find((sphere) => sphere.name.trim().toLowerCase() === (taskDraft.selectedSphereName ?? '').trim().toLowerCase())?.id ?? null
+      : null;
 
     return {
       model: modelForPrompt,
+      suggestedSphereId,
       task: {
         title: taskDraft.title,
         description: taskDraft.description,
