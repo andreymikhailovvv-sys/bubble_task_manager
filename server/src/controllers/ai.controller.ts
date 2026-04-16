@@ -171,6 +171,7 @@ export const aiController = {
         userId: req.user!.id,
         prompt,
         sphereId: typeof req.body?.sphereId === 'string' ? req.body.sphereId : null,
+        autoAssignSphere: req.body?.autoAssignSphere === true,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
       res.json(result);

@@ -106,9 +106,10 @@ export const api = {
     request<{ sent: boolean; answer?: string; model?: string }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
       method: 'POST'
     }),
-  generateTaskFromAi: (payload: { prompt: string; sphereId?: string | null; attachments?: ChatAttachmentPayload[] }) =>
+  generateTaskFromAi: (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments?: ChatAttachmentPayload[] }) =>
     request<{
       model: string;
+      suggestedSphereId: string | null;
       task: {
         title: string;
         description: string;

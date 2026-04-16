@@ -485,6 +485,7 @@ const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment
     userId,
     prompt,
     sphereId: null,
+    autoAssignSphere: true,
     attachments: attachment ? [attachment] : []
   });
 
@@ -496,7 +497,7 @@ const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment
       title: generated.task.title,
       description: generated.task.description,
       userId,
-      sphereId: null,
+      sphereId: generated.suggestedSphereId ?? null,
       importance,
       urgency,
       priorityScore: Number((importance * 0.6 + urgency * 0.4).toFixed(2)),
