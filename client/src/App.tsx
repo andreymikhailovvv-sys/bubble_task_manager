@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Bot, Check, FileText, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
-import { Reorder } from 'framer-motion';
+import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -84,6 +84,7 @@ export default function App() {
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
+  const [displayMode, setDisplayMode] = useState<'bubbles' | 'list'>('bubbles');
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1087,6 +1088,28 @@ export default function App() {
 
   if (!currentUser) return null;
 
+  const formatTaskDueDate = (value?: string | null) => {
+    if (!value) return 'Без дедлайна';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Без дедлайна';
+    return date.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const listTasks = [...visibleTasks].sort((a, b) => {
+    if (a.urgency !== b.urgency) return b.urgency - a.urgency;
+    const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+    const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+    if (aDue !== bDue) return aDue - bDue;
+    if (a.importance !== b.importance) return b.importance - a.importance;
+    return a.title.localeCompare(b.title, 'ru');
+  });
+
   return (
     <main
       className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
@@ -1125,7 +1148,7 @@ export default function App() {
         </button>
       </header>
 
-      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-4">
+      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-5">
         <div className="relative">
           <button
             className="flex w-full items-center justify-between rounded bg-slate-800 p-2 text-left text-sm"
@@ -1185,6 +1208,16 @@ export default function App() {
             <option value="importance">По важности</option>
           </select>
         </div>
+        <div>
+          <select
+            className="w-full rounded bg-slate-800 p-2 text-sm"
+            value={displayMode}
+            onChange={(event) => setDisplayMode(event.target.value as 'bubbles' | 'list')}
+          >
+            <option value="bubbles">Баблы</option>
+            <option value="list">Списком</option>
+          </select>
+        </div>
         <div className="lg:col-span-1 flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
@@ -1224,33 +1257,113 @@ export default function App() {
       ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden pr-[320px]">
-        <BubbleField
-          className="h-full"
-          tasks={visibleTasks}
-          spheres={visibleSpheres}
-          rankingMode={rankingMode}
-          subtaskMap={displayedSubtaskMap}
-          isSubtaskFilterActive={isSubtaskFilterActive}
-          onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
-          mode={mode}
-          poppingTaskId={poppingTaskId}
-          hasAiNotification={hasUnreadAiMessage}
-          selectedId={editorState?.task?.id}
-          onSelect={(task) => {
-            setFocusedTaskId(task.id);
-          }}
-          onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
-          onCreateSubtask={async (parentTask, payload) => {
-            await createSubtaskForParent(parentTask, payload);
-          }}
-          onToggleSubtaskDone={toggleSubtaskDone}
-          onUpdateSubtaskDueDate={async (subtask, dueDate) => {
-            await api.updateTask(subtask.id, { dueDate });
-            await load();
-          }}
-          onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
-          onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-        />
+        {displayMode === 'bubbles' ? (
+          <BubbleField
+            className="h-full"
+            tasks={visibleTasks}
+            spheres={visibleSpheres}
+            rankingMode={rankingMode}
+            subtaskMap={displayedSubtaskMap}
+            isSubtaskFilterActive={isSubtaskFilterActive}
+            onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
+            mode={mode}
+            poppingTaskId={poppingTaskId}
+            hasAiNotification={hasUnreadAiMessage}
+            selectedId={editorState?.task?.id}
+            onSelect={(task) => {
+              setFocusedTaskId(task.id);
+            }}
+            onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
+            onCreateSubtask={async (parentTask, payload) => {
+              await createSubtaskForParent(parentTask, payload);
+            }}
+            onToggleSubtaskDone={toggleSubtaskDone}
+            onUpdateSubtaskDueDate={async (subtask, dueDate) => {
+              await api.updateTask(subtask.id, { dueDate });
+              await load();
+            }}
+            onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
+            onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+          />
+        ) : (
+          <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+            <ul className="space-y-3 pr-1">
+              {listTasks.length === 0 ? (
+                <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
+                  Нет задач для выбранных фильтров
+                </li>
+              ) : null}
+              {listTasks.map((task) => {
+                const isExpandedTask = shouldTaskGlow(task) || isOverdue(task);
+                const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+                const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
+                const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
+                return (
+                  <motion.li
+                    key={task.id}
+                    layout
+                    className={`cursor-pointer rounded-xl border px-4 py-3 transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
+                      hasOverdueState
+                        ? 'border-rose-400/70 bg-rose-950/25'
+                        : hasReminderState
+                          ? 'border-cyan-300/60 bg-cyan-950/20'
+                          : 'border-slate-700/70 bg-slate-900/75'
+                    }`}
+                    style={hasOverdueState
+                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                      : hasReminderState
+                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                        : undefined}
+                    onClick={() => setFocusedTaskId(task.id)}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                        <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                      </h3>
+                      <span className="shrink-0 rounded-full border border-slate-500 bg-slate-700/70 px-2 py-0.5 text-[11px] text-slate-100">
+                        Срочность: {task.urgency}
+                      </span>
+                    </div>
+                    {isExpandedTask ? (
+                      <div className="mt-2 space-y-2 text-xs text-slate-200">
+                        <p className="text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="text-slate-400">Срок: {formatTaskDueDate(task.dueDate)}</p>
+                        <div>
+                          <p className="mb-1 text-slate-300">Подзадачи:</p>
+                          <ul className="space-y-1">
+                            {taskSubtasks.length === 0 ? <li className="text-slate-500">Подзадач пока нет</li> : null}
+                            {taskSubtasks.map((subtask) => (
+                              <li
+                                key={subtask.id}
+                                className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={subtask.status === 'DONE'}
+                                  onChange={() => {
+                                    void toggleSubtaskDone(subtask);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-100'}`}
+                                  onClick={() => setEditorState({ task: subtask })}
+                                >
+                                  <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    ) : null}
+                  </motion.li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         <aside
           className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"
           data-no-field-zoom="true"

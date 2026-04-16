@@ -306,9 +306,9 @@ export function BubbleField({
     return (
       <motion.g
         key={bubble.task.id}
-        initial={{ opacity: 0, scale: 0.7 }}
+        initial={false}
         animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }}
-        exit={{ opacity: 0, scale: 0.5 }}
+        exit={{ opacity: 1, scale: 1, x: bubble.x, y: bubble.y }}
         transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 24, stiffness: 180 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
