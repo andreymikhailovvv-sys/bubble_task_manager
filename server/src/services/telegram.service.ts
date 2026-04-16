@@ -96,15 +96,30 @@ const keyboardMain = (taskId: string) => ({
   ]
 });
 
-const keyboardTaskDetails = (taskId: string) => ({
-  inline_keyboard: [
-    [
-      { text: '✅ Выполнить', callback_data: `done:${taskId}` },
-      { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
-    ],
-    [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
-  ]
-});
+const keyboardTaskDetails = (taskId: string, page = 1, totalPages = 1) => {
+  const pagingRow: Array<{ text: string; callback_data: string }> = [];
+
+  if (totalPages > 1) {
+    if (page > 1) {
+      pagingRow.push({ text: '⬅️ Пред.', callback_data: `subtasks_page:${taskId}:${page - 1}` });
+    }
+    pagingRow.push({ text: `📄 ${page}/${totalPages}`, callback_data: 'noop' });
+    if (page < totalPages) {
+      pagingRow.push({ text: 'След. ➡️', callback_data: `subtasks_page:${taskId}:${page + 1}` });
+    }
+  }
+
+  return {
+    inline_keyboard: [
+      ...(pagingRow.length > 0 ? [pagingRow] : []),
+      [
+        { text: '✅ Выполнить', callback_data: `done:${taskId}` },
+        { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
+      ],
+      [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
+    ]
+  };
+};
 
 const keyboardBackTask = (taskId: string) => ({
   inline_keyboard: [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]]
@@ -157,6 +172,9 @@ const sendMessage = async (chatId: string, text: string, replyMarkup?: Record<st
 
 const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 const SAFE_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 200;
+const MAX_TASK_DETAILS_DESCRIPTION_LENGTH = 1500;
+const MIN_SUBTASK_LINES_IN_DETAILS = 5;
+const TASK_DETAILS_SUBTASKS_PER_PAGE = 10;
 
 const splitTextByLimit = (lines: string[], limit: number) => {
   const chunks: string[] = [];
@@ -181,6 +199,11 @@ const splitTextByLimit = (lines: string[], limit: number) => {
   }
 
   return chunks;
+};
+
+const truncateEscapedText = (value: string, maxLength: number) => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
 const editMessage = async (chatId: string, messageId: number, text: string, replyMarkup?: Record<string, unknown>) => {
@@ -237,7 +260,7 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   return lines.join('\n');
 };
 
-const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: number) => {
+const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: number, subtaskPage = 1) => {
   const task = await prisma.task.findFirst({
     where: { id: taskId, userId, parentTaskId: null },
     include: {
@@ -251,7 +274,7 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     ? `📌 <b>Детали задачи #${taskIndex}</b>`
     : '📌 <b>Детали задачи</b>';
 
-  const subtaskLines = task.subtasks.length
+  const allSubtaskLines = task.subtasks.length
     ? task.subtasks.map((subtask, index) => {
       const title = escapeHtml(subtask.title);
       const decoratedTitle = subtask.status === 'DONE' ? `<s>${title}</s>` : title;
@@ -259,21 +282,74 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     })
     : ['— подзадач пока нет'];
 
-  const lines = [
+  const totalPages = Math.max(1, Math.ceil(allSubtaskLines.length / TASK_DETAILS_SUBTASKS_PER_PAGE));
+  const currentPage = Math.min(Math.max(1, subtaskPage), totalPages);
+  const pageStart = (currentPage - 1) * TASK_DETAILS_SUBTASKS_PER_PAGE;
+  const pageEnd = pageStart + TASK_DETAILS_SUBTASKS_PER_PAGE;
+  let subtaskLines = allSubtaskLines.slice(pageStart, pageEnd);
+  const escapedDescription = truncateEscapedText(
+    escapeHtml(task.description?.trim() || 'Без описания'),
+    MAX_TASK_DETAILS_DESCRIPTION_LENGTH
+  );
+
+  let lines = [
     subtitle,
     '',
     `📍 <b>${escapeHtml(task.title)}</b>`,
     '',
     '🧩 <b>Описание подзадачи</b>',
-    escapeHtml(task.description?.trim() || 'Без описания'),
+    escapedDescription,
     '',
     `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
     '',
-    '☑️ <b>Подзадачи:</b>',
+    `☑️ <b>Подзадачи:</b> (страница ${currentPage}/${totalPages})`,
     ...subtaskLines
   ];
 
-  return lines.join('\n');
+  let result = lines.join('\n');
+  while (result.length > SAFE_MAX_MESSAGE_LENGTH && subtaskLines.length > MIN_SUBTASK_LINES_IN_DETAILS) {
+    subtaskLines = subtaskLines.slice(0, -1);
+    lines = [
+      subtitle,
+      '',
+      `📍 <b>${escapeHtml(task.title)}</b>`,
+      '',
+      '🧩 <b>Описание подзадачи</b>',
+      escapedDescription,
+      '',
+      `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
+      '',
+      `☑️ <b>Подзадачи:</b> (страница ${currentPage}/${totalPages}, показано ${subtaskLines.length})`,
+      ...subtaskLines
+    ];
+    result = lines.join('\n');
+  }
+
+  if (result.length > SAFE_MAX_MESSAGE_LENGTH) {
+    const shortLines = [
+      subtitle,
+      '',
+      `📍 <b>${escapeHtml(task.title)}</b>`,
+      '',
+      '🧩 <b>Описание подзадачи</b>',
+      truncateEscapedText(escapedDescription, 700),
+      '',
+      `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
+      '',
+      `☑️ <b>Подзадачи:</b> всего ${allSubtaskLines.length}`
+    ];
+    return {
+      text: shortLines.join('\n'),
+      page: currentPage,
+      totalPages
+    };
+  }
+
+  return {
+    text: result,
+    page: currentPage,
+    totalPages
+  };
 };
 
 const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string) => {
@@ -623,13 +699,13 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
 
     const taskId = taskIds[selectedIndex - 1];
-    const taskText = await getTaskDetailsText(taskId, session.userId, selectedIndex);
-    if (!taskText) {
+    const taskDetails = await getTaskDetailsText(taskId, session.userId, selectedIndex, 1);
+    if (!taskDetails) {
       await sendMessage(chatId, '⚠️ Не удалось найти задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyMain);
       return;
     }
 
-    await sendMessage(chatId, taskText, keyboardTaskDetails(taskId));
+    await sendMessage(chatId, taskDetails.text, keyboardTaskDetails(taskId, taskDetails.page, taskDetails.totalPages));
     return;
   }
 
@@ -713,6 +789,11 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
+  if (data === 'noop') {
+    await answerCallback(callback.id);
+    return;
+  }
+
   const [action, taskId, value] = data.split(':');
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
 
@@ -775,14 +856,30 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
+  if (action === 'subtasks_page') {
+    const page = Number(value);
+    const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
+    const index = taskIds.findIndex((id) => id === taskId);
+    const details = await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined, Number.isFinite(page) ? page : 1);
+
+    await answerCallback(callback.id);
+    if (!details) {
+      await editMessage(chatId, messageId, '⚠️ Не удалось открыть задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyMain);
+      return;
+    }
+
+    await editMessage(chatId, messageId, details.text, keyboardTaskDetails(taskId, details.page, details.totalPages));
+    return;
+  }
+
   if (action === 'backtask') {
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
     const index = taskIds.findIndex((id) => id === taskId);
-    const text = session.userId ? await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined) : null;
+    const details = session.userId ? await getTaskDetailsText(taskId, session.userId, index >= 0 ? index + 1 : undefined, 1) : null;
     await answerCallback(callback.id);
-    if (text) {
-      await editMessage(chatId, messageId, text, keyboardTaskDetails(taskId));
+    if (details) {
+      await editMessage(chatId, messageId, details.text, keyboardTaskDetails(taskId, details.page, details.totalPages));
     } else {
       await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardTaskDetails(taskId));
     }
