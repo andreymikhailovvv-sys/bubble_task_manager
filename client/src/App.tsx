@@ -104,6 +104,8 @@ export default function App() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [displayMode, setDisplayMode] = useState<'bubbles' | 'list' | 'timeline'>('bubbles');
+  const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1124,60 +1126,118 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
-  const timelineMonths = (() => {
-    const grouped = new Map<string, { monthLabel: string; days: Map<string, { dayLabel: string; tasks: Task[] }> }>();
-    const tasksWithoutDate: Task[] = [];
+  const timelineViewData = useMemo(() => {
+    try {
+      const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+      const addDays = (value: Date, days: number) => {
+        const next = new Date(value);
+        next.setDate(next.getDate() + days);
+        return next;
+      };
+      const normalizeToMonday = (value: Date) => {
+        const day = value.getDay();
+        const offsetToMonday = (day + 6) % 7;
+        return addDays(startOfDay(value), -offsetToMonday);
+      };
+      const monthStart = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth(), 1);
+      const monthEnd = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth() + 1, 1);
+      const dayStart = startOfDay(timelineAnchorDate);
+      const dayEnd = addDays(dayStart, 1);
+      const weekStart = normalizeToMonday(timelineAnchorDate);
+      const weekEnd = addDays(weekStart, 7);
+      const rangeStart = timelineViewMode === 'day' ? dayStart : timelineViewMode === 'week' ? weekStart : monthStart;
+      const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthEnd;
 
-    listTasks.forEach((task) => {
-      if (!task.dueDate) {
-        tasksWithoutDate.push(task);
-        return;
-      }
-      const dueDate = new Date(task.dueDate);
-      if (Number.isNaN(dueDate.getTime())) {
-        tasksWithoutDate.push(task);
-        return;
-      }
+      const tasksWithoutDate: Task[] = [];
+      const datedTasks = listTasks
+        .map((task) => {
+          if (!task.dueDate) {
+            tasksWithoutDate.push(task);
+            return null;
+          }
+          const dueDate = new Date(task.dueDate);
+          if (Number.isNaN(dueDate.getTime())) {
+            tasksWithoutDate.push(task);
+            return null;
+          }
+          return { task, dueDate };
+        })
+        .filter((entry): entry is { task: Task; dueDate: Date } => entry !== null);
 
-      const monthKey = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}`;
-      const dayKey = `${monthKey}-${String(dueDate.getDate()).padStart(2, '0')}`;
-      const monthLabel = dueDate.toLocaleDateString('ru-RU', {
-        month: 'long',
-        year: 'numeric'
+      const tasksInRange = datedTasks.filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd);
+      const dayGroups = Array.from({ length: 7 }, (_, index) => {
+        const date = addDays(weekStart, index);
+        const start = startOfDay(date);
+        const end = addDays(start, 1);
+        return {
+          key: start.toISOString(),
+          date,
+          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+        };
       });
-      const dayLabel = dueDate.toLocaleDateString('ru-RU', {
-        weekday: 'long',
-        day: '2-digit',
-        month: '2-digit'
+      const hourGroups = Array.from({ length: 24 }, (_, hour) => {
+        const start = new Date(dayStart);
+        start.setHours(hour, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(hour + 1, 0, 0, 0);
+        return {
+          hour,
+          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+        };
       });
 
-      if (!grouped.has(monthKey)) {
-        grouped.set(monthKey, { monthLabel, days: new Map() });
+      const firstDayWeekday = (monthStart.getDay() + 6) % 7;
+      const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+      const monthCells: Array<{ key: string; date: Date | null; tasks: Task[] }> = Array.from({ length: firstDayWeekday }, (_, index) => ({
+        key: `empty-${index}`,
+        date: null,
+        tasks: []
+      }));
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+        const start = startOfDay(date);
+        const end = addDays(start, 1);
+        monthCells.push({
+          key: date.toISOString(),
+          date,
+          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+        });
       }
-      const monthGroup = grouped.get(monthKey)!;
-      if (!monthGroup.days.has(dayKey)) {
-        monthGroup.days.set(dayKey, { dayLabel, tasks: [] });
-      }
-      monthGroup.days.get(dayKey)!.tasks.push(task);
-    });
 
-    return {
-      months: Array.from(grouped.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([monthKey, monthData]) => ({
-          monthKey,
-          monthLabel: monthData.monthLabel.charAt(0).toUpperCase() + monthData.monthLabel.slice(1),
-          days: Array.from(monthData.days.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([dayKey, dayData]) => ({
-              dayKey,
-              dayLabel: dayData.dayLabel,
-              tasks: dayData.tasks
-            }))
-        })),
-      tasksWithoutDate
-    };
-  })();
+      const title = timelineViewMode === 'day'
+        ? timelineAnchorDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+        : timelineViewMode === 'week'
+          ? `${weekStart.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — ${addDays(weekStart, 6).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+          : timelineAnchorDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+
+      return {
+        title: title.charAt(0).toUpperCase() + title.slice(1),
+        tasksWithoutDate,
+        tasksInRange: tasksInRange.map(({ task }) => task),
+        dayGroups,
+        hourGroups,
+        monthCells
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Неизвестная ошибка при рендере таймлайна';
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error('Ошибка при построении данных таймлайна', error);
+      void api.reportClientError({
+        source: 'timeline-render',
+        message,
+        stack,
+        details: `mode=${timelineViewMode}`
+      });
+      return {
+        title: 'Ошибка таймлайна',
+        tasksWithoutDate: listTasks,
+        tasksInRange: [],
+        dayGroups: [],
+        hourGroups: [],
+        monthCells: []
+      };
+    }
+  }, [listTasks, timelineAnchorDate, timelineViewMode]);
 
   return (
     <main
@@ -1436,65 +1496,164 @@ export default function App() {
         ) : (
           <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              {timelineMonths.months.length === 0 ? (
+              <section className="sticky top-0 z-20 rounded-2xl border border-slate-700/70 bg-slate-900/90 p-3 backdrop-blur">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      onClick={() => {
+                        setTimelineAnchorDate((prev) => {
+                          const next = new Date(prev);
+                          if (timelineViewMode === 'day') next.setDate(next.getDate() - 1);
+                          else if (timelineViewMode === 'week') next.setDate(next.getDate() - 7);
+                          else next.setMonth(next.getMonth() - 1);
+                          return next;
+                        });
+                      }}
+                    >
+                      ←
+                    </button>
+                    <button
+                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      onClick={() => setTimelineAnchorDate(new Date())}
+                    >
+                      Сегодня
+                    </button>
+                    <button
+                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      onClick={() => {
+                        setTimelineAnchorDate((prev) => {
+                          const next = new Date(prev);
+                          if (timelineViewMode === 'day') next.setDate(next.getDate() + 1);
+                          else if (timelineViewMode === 'week') next.setDate(next.getDate() + 7);
+                          else next.setMonth(next.getMonth() + 1);
+                          return next;
+                        });
+                      }}
+                    >
+                      →
+                    </button>
+                  </div>
+                  <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
+                  <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
+                    {([
+                      { key: 'day', label: 'День' },
+                      { key: 'week', label: 'Неделя' },
+                      { key: 'month', label: 'Месяц' }
+                    ] as const).map((mode) => (
+                      <button
+                        key={mode.key}
+                        className={`rounded-md px-2 py-1 text-xs transition ${
+                          timelineViewMode === mode.key
+                            ? 'bg-cyan-700 text-white'
+                            : 'text-slate-300 hover:bg-slate-800'
+                        }`}
+                        onClick={() => setTimelineViewMode(mode.key)}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {timelineViewData.tasksInRange.length === 0 ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
-                  Нет задач с датой для отображения на таймлайне
+                  Нет задач с датой для выбранного режима
                 </div>
               ) : null}
 
-              {timelineMonths.months.map((month) => (
-                <section key={month.monthKey} className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
-                  <h3 className="mb-3 text-sm font-semibold text-cyan-100">{month.monthLabel}</h3>
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                    {month.days.map((day) => (
-                      <div key={day.dayKey} className="rounded-xl border border-slate-700/70 bg-slate-900/75 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-200">{day.dayLabel}</h4>
-                          <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">{day.tasks.length}</span>
-                        </div>
-                        <ul className="space-y-2">
-                          {day.tasks.map((task) => {
-                            const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
-                            const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
-                            return (
-                              <li
-                                key={task.id}
-                                className={`cursor-pointer rounded-lg border px-3 py-2 transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
-                                  hasOverdueState
-                                    ? 'border-rose-400/70 bg-rose-950/25'
-                                    : hasReminderState
-                                      ? 'border-cyan-300/60 bg-cyan-950/20'
-                                      : 'border-slate-700/70 bg-slate-900/75'
-                                }`}
-                                style={hasOverdueState
-                                  ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
-                                  : hasReminderState
-                                    ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
-                                    : undefined}
-                                onClick={() => setFocusedTaskId(task.id)}
-                              >
-                                <p className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+              {timelineViewMode === 'month' ? (
+                <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
+                  <div className="mb-2 grid grid-cols-7 gap-2">
+                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName) => (
+                      <div key={dayName} className="text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        {dayName}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
+                    {timelineViewData.monthCells.map((cell) => (
+                      <div key={cell.key} className={`min-h-32 rounded-xl border p-2 ${cell.date ? 'border-slate-700/70 bg-slate-900/75' : 'border-transparent bg-slate-900/20'}`}>
+                        {cell.date ? (
+                          <>
+                            <p className="mb-2 text-xs font-semibold text-slate-300">{cell.date.getDate()}</p>
+                            <ul className="space-y-1">
+                              {cell.tasks.slice(0, 4).map((task) => (
+                                <li
+                                  key={task.id}
+                                  className="cursor-pointer truncate rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-xs text-slate-100 hover:border-cyan-300/70"
+                                  onClick={() => setFocusedTaskId(task.id)}
+                                >
                                   <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                                </p>
-                                <p className="mt-1 text-xs text-slate-400">Срок: {formatTaskDueDate(task.dueDate)}</p>
-                              </li>
-                            );
-                          })}
-                        </ul>
+                                </li>
+                              ))}
+                              {cell.tasks.length > 4 ? <li className="text-[11px] text-slate-400">+ ещё {cell.tasks.length - 4}</li> : null}
+                            </ul>
+                          </>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 </section>
-              ))}
+              ) : null}
 
-              {timelineMonths.tasksWithoutDate.length > 0 ? (
+              {timelineViewMode === 'week' ? (
+                <section className="grid grid-cols-1 gap-3 xl:grid-cols-7">
+                  {timelineViewData.dayGroups.map((day) => (
+                    <div key={day.key} className="rounded-xl border border-slate-700/70 bg-slate-900/75 p-3">
+                      <div className="mb-2 border-b border-slate-700/70 pb-2">
+                        <p className="text-xs text-slate-400">{day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}</p>
+                        <p className="text-sm font-semibold text-slate-100">{day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</p>
+                      </div>
+                      <ul className="space-y-2">
+                        {day.tasks.length === 0 ? <li className="text-xs text-slate-500">Нет задач</li> : null}
+                        {day.tasks.map((task) => (
+                          <li
+                            key={task.id}
+                            className="cursor-pointer rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-xs text-slate-100 hover:border-cyan-300/70"
+                            onClick={() => setFocusedTaskId(task.id)}
+                          >
+                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              {timelineViewMode === 'day' ? (
+                <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70">
+                  {timelineViewData.hourGroups.map((hourGroup) => (
+                    <div key={hourGroup.hour} className="grid grid-cols-[70px_minmax(0,1fr)] border-b border-slate-800/80 last:border-b-0">
+                      <div className="border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">{String(hourGroup.hour).padStart(2, '0')}:00</div>
+                      <div className="min-h-11 space-y-2 px-2 py-2">
+                        {hourGroup.tasks.map((task) => (
+                          <button
+                            key={task.id}
+                            type="button"
+                            className="block w-full rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-left text-xs text-slate-100 hover:border-cyan-300/70"
+                            onClick={() => setFocusedTaskId(task.id)}
+                          >
+                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                            <span className="ml-1 text-slate-400">({new Date(task.dueDate ?? '').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              {timelineViewData.tasksWithoutDate.length > 0 ? (
                 <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-200">Без даты</h3>
-                    <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">{timelineMonths.tasksWithoutDate.length}</span>
+                    <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">{timelineViewData.tasksWithoutDate.length}</span>
                   </div>
                   <ul className="space-y-2">
-                    {timelineMonths.tasksWithoutDate.map((task) => (
+                    {timelineViewData.tasksWithoutDate.map((task) => (
                       <li
                         key={task.id}
                         className="cursor-pointer rounded-lg border border-slate-700/70 bg-slate-900/75 px-3 py-2 transition hover:border-cyan-300/70 hover:bg-slate-800/70"
