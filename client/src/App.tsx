@@ -92,6 +92,112 @@ function resolveAttachmentMimeType(file: File): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
+type TimelineViewData = {
+  title: string;
+  tasksWithoutDate: Task[];
+  tasksInRange: Task[];
+  dayGroups: Array<{ key: string; date: Date; tasks: Task[] }>;
+  hourGroups: Array<{ hour: number; tasks: Task[] }>;
+  monthCells: Array<{ key: string; date: Date | null; tasks: Task[] }>;
+};
+
+function buildTimelineViewData(
+  listTasks: Task[],
+  timelineAnchorDate: Date,
+  timelineViewMode: 'day' | 'week' | 'month'
+): TimelineViewData {
+  const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  const addDays = (value: Date, days: number) => {
+    const next = new Date(value);
+    next.setDate(next.getDate() + days);
+    return next;
+  };
+  const normalizeToMonday = (value: Date) => {
+    const day = value.getDay();
+    const offsetToMonday = (day + 6) % 7;
+    return addDays(startOfDay(value), -offsetToMonday);
+  };
+  const monthStart = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth(), 1);
+  const monthEnd = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth() + 1, 1);
+  const dayStart = startOfDay(timelineAnchorDate);
+  const dayEnd = addDays(dayStart, 1);
+  const weekStart = normalizeToMonday(timelineAnchorDate);
+  const weekEnd = addDays(weekStart, 7);
+  const rangeStart = timelineViewMode === 'day' ? dayStart : timelineViewMode === 'week' ? weekStart : monthStart;
+  const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthEnd;
+
+  const tasksWithoutDate: Task[] = [];
+  const datedTasks = listTasks
+    .map((task) => {
+      if (!task.dueDate) {
+        tasksWithoutDate.push(task);
+        return null;
+      }
+      const dueDate = new Date(task.dueDate);
+      if (Number.isNaN(dueDate.getTime())) {
+        tasksWithoutDate.push(task);
+        return null;
+      }
+      return { task, dueDate };
+    })
+    .filter((entry): entry is { task: Task; dueDate: Date } => entry !== null);
+
+  const tasksInRange = datedTasks.filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd);
+  const dayGroups = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(weekStart, index);
+    const start = startOfDay(date);
+    const end = addDays(start, 1);
+    return {
+      key: start.toISOString(),
+      date,
+      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+    };
+  });
+  const hourGroups = Array.from({ length: 24 }, (_, hour) => {
+    const start = new Date(dayStart);
+    start.setHours(hour, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(hour + 1, 0, 0, 0);
+    return {
+      hour,
+      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+    };
+  });
+
+  const firstDayWeekday = (monthStart.getDay() + 6) % 7;
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const monthCells: TimelineViewData['monthCells'] = Array.from({ length: firstDayWeekday }, (_, index) => ({
+    key: `empty-${index}`,
+    date: null,
+    tasks: []
+  }));
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+    const start = startOfDay(date);
+    const end = addDays(start, 1);
+    monthCells.push({
+      key: date.toISOString(),
+      date,
+      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+    });
+  }
+
+  const title = timelineViewMode === 'day'
+    ? timelineAnchorDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : timelineViewMode === 'week'
+      ? `${weekStart.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — ${addDays(weekStart, 6).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : timelineAnchorDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+
+  return {
+    title: title.charAt(0).toUpperCase() + title.slice(1),
+    tasksWithoutDate,
+    tasksInRange: tasksInRange.map(({ task }) => task),
+    dayGroups,
+    hourGroups,
+    monthCells
+  };
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -1128,97 +1234,7 @@ export default function App() {
   });
   const timelineViewData = useMemo(() => {
     try {
-      const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
-      const addDays = (value: Date, days: number) => {
-        const next = new Date(value);
-        next.setDate(next.getDate() + days);
-        return next;
-      };
-      const normalizeToMonday = (value: Date) => {
-        const day = value.getDay();
-        const offsetToMonday = (day + 6) % 7;
-        return addDays(startOfDay(value), -offsetToMonday);
-      };
-      const monthStart = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth(), 1);
-      const monthEnd = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth() + 1, 1);
-      const dayStart = startOfDay(timelineAnchorDate);
-      const dayEnd = addDays(dayStart, 1);
-      const weekStart = normalizeToMonday(timelineAnchorDate);
-      const weekEnd = addDays(weekStart, 7);
-      const rangeStart = timelineViewMode === 'day' ? dayStart : timelineViewMode === 'week' ? weekStart : monthStart;
-      const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthEnd;
-
-      const tasksWithoutDate: Task[] = [];
-      const datedTasks = listTasks
-        .map((task) => {
-          if (!task.dueDate) {
-            tasksWithoutDate.push(task);
-            return null;
-          }
-          const dueDate = new Date(task.dueDate);
-          if (Number.isNaN(dueDate.getTime())) {
-            tasksWithoutDate.push(task);
-            return null;
-          }
-          return { task, dueDate };
-        })
-        .filter((entry): entry is { task: Task; dueDate: Date } => entry !== null);
-
-      const tasksInRange = datedTasks.filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd);
-      const dayGroups = Array.from({ length: 7 }, (_, index) => {
-        const date = addDays(weekStart, index);
-        const start = startOfDay(date);
-        const end = addDays(start, 1);
-        return {
-          key: start.toISOString(),
-          date,
-          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
-        };
-      });
-      const hourGroups = Array.from({ length: 24 }, (_, hour) => {
-        const start = new Date(dayStart);
-        start.setHours(hour, 0, 0, 0);
-        const end = new Date(start);
-        end.setHours(hour + 1, 0, 0, 0);
-        return {
-          hour,
-          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
-        };
-      });
-    }
-
-      const firstDayWeekday = (monthStart.getDay() + 6) % 7;
-      const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
-      const monthCells: Array<{ key: string; date: Date | null; tasks: Task[] }> = Array.from({ length: firstDayWeekday }, (_, index) => ({
-        key: `empty-${index}`,
-        date: null,
-        tasks: []
-      }));
-      for (let day = 1; day <= daysInMonth; day += 1) {
-        const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
-        const start = startOfDay(date);
-        const end = addDays(start, 1);
-        monthCells.push({
-          key: date.toISOString(),
-          date,
-          tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
-        });
-      }
-
-      const title = timelineViewMode === 'day'
-        ? timelineAnchorDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-        : timelineViewMode === 'week'
-          ? `${weekStart.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — ${addDays(weekStart, 6).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}`
-          : timelineAnchorDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
-
-      return {
-        title: title.charAt(0).toUpperCase() + title.slice(1),
-        tasksWithoutDate,
-        tasksInRange: tasksInRange.map(({ task }) => task),
-        dayGroups,
-        hourGroups,
-        monthCells
-      };
+      return buildTimelineViewData(listTasks, timelineAnchorDate, timelineViewMode);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Неизвестная ошибка при рендере таймлайна';
       const stack = error instanceof Error ? error.stack : undefined;
@@ -1236,7 +1252,7 @@ export default function App() {
         dayGroups: [],
         hourGroups: [],
         monthCells: []
-      };
+      } satisfies TimelineViewData;
     }
   }, [listTasks, timelineAnchorDate, timelineViewMode]);
 
