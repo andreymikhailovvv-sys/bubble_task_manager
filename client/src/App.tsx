@@ -1185,6 +1185,7 @@ export default function App() {
           tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
         };
       });
+    }
 
       const firstDayWeekday = (monthStart.getDay() + 6) % 7;
       const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
