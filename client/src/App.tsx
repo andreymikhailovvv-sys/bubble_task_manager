@@ -103,7 +103,7 @@ export default function App() {
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
-  const [displayMode, setDisplayMode] = useState<'bubbles' | 'list'>('bubbles');
+  const [displayMode, setDisplayMode] = useState<'bubbles' | 'list' | 'kanban'>('bubbles');
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1124,6 +1124,11 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
+  const kanbanColumns: Array<{ key: 'TODO' | 'IN_PROGRESS' | 'DONE'; title: string; tasks: Task[] }> = [
+    { key: 'TODO', title: 'К выполнению', tasks: listTasks.filter((task) => (task.status ?? 'TODO') === 'TODO') },
+    { key: 'IN_PROGRESS', title: 'В работе', tasks: listTasks.filter((task) => task.status === 'IN_PROGRESS') },
+    { key: 'DONE', title: 'Выполнено', tasks: listTasks.filter((task) => task.status === 'DONE') }
+  ];
 
   return (
     <main
@@ -1227,10 +1232,11 @@ export default function App() {
           <select
             className="w-full rounded bg-slate-800 p-2 text-sm"
             value={displayMode}
-            onChange={(event) => setDisplayMode(event.target.value as 'bubbles' | 'list')}
+            onChange={(event) => setDisplayMode(event.target.value as 'bubbles' | 'list' | 'kanban')}
           >
             <option value="bubbles">Баблы</option>
             <option value="list">Списком</option>
+            <option value="kanban">Канбан</option>
           </select>
         </div>
         <div className="lg:col-span-1 flex flex-wrap items-center justify-end gap-2">
@@ -1300,7 +1306,7 @@ export default function App() {
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
-        ) : (
+        ) : displayMode === 'list' ? (
           <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {listTasks.length === 0 ? (
@@ -1377,6 +1383,53 @@ export default function App() {
                 );
               })}
             </ul>
+          </div>
+        ) : (
+          <div className="h-full overflow-x-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+            <div className="grid min-w-[900px] grid-cols-3 gap-3 pr-1">
+              {kanbanColumns.map((column) => (
+                <section key={column.key} className="flex min-h-0 flex-col rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-100">{column.title}</h3>
+                    <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">{column.tasks.length}</span>
+                  </div>
+                  <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                    {column.tasks.length === 0 ? (
+                      <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-3 py-2 text-xs text-slate-400">
+                        Нет задач
+                      </li>
+                    ) : null}
+                    {column.tasks.map((task) => {
+                      const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
+                      const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
+                      return (
+                        <li
+                          key={task.id}
+                          className={`cursor-pointer rounded-xl border px-3 py-2 transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
+                            hasOverdueState
+                              ? 'border-rose-400/70 bg-rose-950/25'
+                              : hasReminderState
+                                ? 'border-cyan-300/60 bg-cyan-950/20'
+                                : 'border-slate-700/70 bg-slate-900/75'
+                          }`}
+                          style={hasOverdueState
+                            ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                            : hasReminderState
+                              ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                              : undefined}
+                          onClick={() => setFocusedTaskId(task.id)}
+                        >
+                          <p className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">Срок: {formatTaskDueDate(task.dueDate)}</p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
           </div>
         )}
         <aside
