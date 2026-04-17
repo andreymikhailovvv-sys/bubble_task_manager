@@ -88,6 +88,13 @@ function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
     .slice(-20);
 }
 
+function trimHistoryForAttachments(history: ChatMessage[], hasAttachments: boolean): ChatMessage[] {
+  if (!hasAttachments) return history;
+  // Когда есть вложения, payload резко растёт (base64), и OpenAI может отсечь ранние сообщения.
+  // Оставляем только короткий хвост диалога, чтобы вложения и последний вопрос точно попали в контекст.
+  return history.slice(-6);
+}
+
 function formatTaskContext(task: {
   title: string;
   description: string | null;
@@ -486,13 +493,12 @@ export const aiAssistantService = {
     const taskContext = formatTaskContext(task);
     const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
+    const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
-      ...(attachmentsMessage
-        ? [attachmentsMessage]
-        : []),
-      ...history,
+      ...trimmedHistory,
+      ...(attachmentsMessage ? [attachmentsMessage] : []),
       { role: 'user', content: question }
     ];
 
@@ -508,7 +514,8 @@ export const aiAssistantService = {
       taskId: input.taskId,
       userId: input.userId,
       questionLength: question.length,
-      historyLength: history.length
+      historyLength: history.length,
+      historyLengthUsed: trimmedHistory.length
     });
 
     let lastError: Error | null = null;
