@@ -1232,7 +1232,7 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
-  const timelineViewData = useMemo(() => {
+  const timelineViewData = (() => {
     try {
       return buildTimelineViewData(listTasks, timelineAnchorDate, timelineViewMode);
     } catch (error) {
@@ -1254,7 +1254,7 @@ export default function App() {
         monthCells: []
       } satisfies TimelineViewData;
     }
-  }, [listTasks, timelineAnchorDate, timelineViewMode]);
+  })();
 
   return (
     <main
