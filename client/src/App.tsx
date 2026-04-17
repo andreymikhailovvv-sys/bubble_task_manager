@@ -1124,7 +1124,7 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
-  const timelineMonths = useMemo(() => {
+  const timelineMonths = (() => {
     const grouped = new Map<string, { monthLabel: string; days: Map<string, { dayLabel: string; tasks: Task[] }> }>();
     const tasksWithoutDate: Task[] = [];
 
@@ -1177,7 +1177,7 @@ export default function App() {
         })),
       tasksWithoutDate
     };
-  }, [listTasks]);
+  })();
 
   return (
     <main
