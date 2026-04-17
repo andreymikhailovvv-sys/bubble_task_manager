@@ -124,4 +124,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  reportClientError: (payload: {
+    source: 'error-boundary' | 'window-error' | 'unhandledrejection' | 'timeline-render';
+    message: string;
+    stack?: string;
+    details?: string;
+    url?: string;
+  }) =>
+    request<{ ok: true }>('/api/client-errors', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
 };

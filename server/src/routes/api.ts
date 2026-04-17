@@ -76,6 +76,23 @@ const ensureDeviceUser = async (req: any, res: any) => {
 
 apiRouter.get('/health', (_, res) => res.json({ ok: true, service: 'bubble-task-manager', date: new Date().toISOString() }));
 
+apiRouter.post('/client-errors', async (req, res) => {
+  const source = typeof req.body?.source === 'string' ? req.body.source : 'unknown';
+  const message = typeof req.body?.message === 'string' ? req.body.message : 'empty-message';
+  const stack = typeof req.body?.stack === 'string' ? req.body.stack : '';
+  const details = typeof req.body?.details === 'string' ? req.body.details : '';
+  const url = typeof req.body?.url === 'string' ? req.body.url : '';
+  const userId = req.user?.id ?? 'anonymous';
+  const userAgent = req.get('user-agent') ?? 'unknown';
+  const ip = req.ip ?? 'unknown';
+
+  console.error(
+    `[client-error] source=${source} userId=${userId} ip=${ip} userAgent="${userAgent}" url="${url}" message="${message}" details="${details}" stack="${stack.slice(0, 4000)}"`
+  );
+
+  res.json({ ok: true });
+});
+
 apiRouter.post('/auth/register', async (req, res) => {
   const loginRaw = String(req.body?.login ?? '');
   const passwordRaw = String(req.body?.password ?? '');
