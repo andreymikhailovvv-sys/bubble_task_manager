@@ -4,6 +4,13 @@ import { sphereService } from '../services/sphere.service.js';
 export const sphereController = {
   list: async (req: Request, res: Response) => {
     const data = await sphereService.list(req.user!.id);
+    const userAgent = req.get('user-agent') ?? 'unknown';
+    const isTelegramMiniApp = /Telegram/i.test(userAgent) || /MiniApp/i.test(userAgent);
+    if (isTelegramMiniApp) {
+      console.info(
+        `[MiniApp] spheres list userId=${req.user!.id} username=${req.user!.username ?? '—'} deviceId=${req.user!.deviceId ?? '—'} count=${data.length}`
+      );
+    }
     res.json(data);
   },
   create: async (req: Request, res: Response) => {
