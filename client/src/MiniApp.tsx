@@ -99,6 +99,7 @@ export default function MiniApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -134,6 +135,22 @@ export default function MiniApp() {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyWebkitOverflowScrolling = document.body.style.getPropertyValue('-webkit-overflow-scrolling');
+    const prevRootOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'auto';
+    document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
+    document.documentElement.style.overflow = 'auto';
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.setProperty('-webkit-overflow-scrolling', prevBodyWebkitOverflowScrolling);
+      document.documentElement.style.overflow = prevRootOverflow;
+    };
+  }, []);
+
   const filteredTasks = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -142,6 +159,10 @@ export default function MiniApp() {
 
     return tasks.filter((task) => {
       if (task.parentTaskId) return false;
+      if (sphereFilter !== 'all') {
+        const taskSphereValue = task.sphereId ?? 'without-sphere';
+        if (taskSphereValue !== sphereFilter) return false;
+      }
       if (timeFilter === 'all') return true;
       if (!task.dueDate) return false;
 
@@ -166,7 +187,7 @@ export default function MiniApp() {
       monthEnd.setDate(monthEnd.getDate() + 30);
       return due >= now && due <= monthEnd;
     });
-  }, [tasks, timeFilter]);
+  }, [sphereFilter, tasks, timeFilter]);
 
   const subtasksByParent = useMemo(() => {
     const map: Record<string, Task[]> = {};
@@ -256,7 +277,7 @@ export default function MiniApp() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 p-4 text-slate-100">
+    <main className="min-h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto max-w-2xl space-y-4">
         <header className="space-y-2">
           <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
@@ -273,6 +294,23 @@ export default function MiniApp() {
             {(Object.keys(timeFilterLabel) as TimeFilter[]).map((value) => (
               <option key={value} value={value}>
                 {timeFilterLabel[value]}
+              </option>
+            ))}
+          </select>
+        </section>
+
+        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <label className="mb-1 block text-xs text-slate-300">Фильтр по сектору</label>
+          <select
+            value={sphereFilter}
+            onChange={(event) => setSphereFilter(event.target.value)}
+            className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+          >
+            <option value="all">Все секторы</option>
+            <option value="without-sphere">Без сектора</option>
+            {spheres.map((sphere) => (
+              <option key={sphere.id} value={sphere.id}>
+                {sphere.name}
               </option>
             ))}
           </select>
