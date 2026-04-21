@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import MiniApp from './MiniApp';
 import { api } from './lib/api';
 import './styles.css';
 
@@ -63,10 +64,12 @@ window.addEventListener('unhandledrejection', (event) => {
   });
 });
 
+const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      <App />
+      {isMiniAppRoute ? <MiniApp /> : <App />}
     </AppErrorBoundary>
   </React.StrictMode>
 );

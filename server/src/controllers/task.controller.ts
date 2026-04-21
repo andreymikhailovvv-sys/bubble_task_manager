@@ -4,6 +4,11 @@ import { taskService } from '../services/task.service.js';
 export const taskController = {
   list: async (req: Request, res: Response) => {
     const data = await taskService.list(req.user!.id);
+    const userAgent = req.get('user-agent') ?? 'unknown';
+    const isTelegramMiniApp = /Telegram/i.test(userAgent) || /MiniApp/i.test(userAgent);
+    if (isTelegramMiniApp) {
+      console.info(`[MiniApp] tasks list userId=${req.user!.id} count=${data.length}`);
+    }
     res.json(data);
   },
   create: async (req: Request, res: Response) => {
