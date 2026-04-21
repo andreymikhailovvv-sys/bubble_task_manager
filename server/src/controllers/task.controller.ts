@@ -7,7 +7,9 @@ export const taskController = {
     const userAgent = req.get('user-agent') ?? 'unknown';
     const isTelegramMiniApp = /Telegram/i.test(userAgent) || /MiniApp/i.test(userAgent);
     if (isTelegramMiniApp) {
-      console.info(`[MiniApp] tasks list userId=${req.user!.id} count=${data.length}`);
+      console.info(
+        `[MiniApp] tasks list userId=${req.user!.id} username=${req.user!.username ?? '—'} deviceId=${req.user!.deviceId ?? '—'} count=${data.length}`
+      );
     }
     res.json(data);
   },

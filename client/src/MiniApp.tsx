@@ -15,6 +15,17 @@ type TelegramWindow = Window & {
   };
 };
 
+const extractInitDataFromUrl = () => {
+  const fromSearch = new URLSearchParams(window.location.search).get('tgWebAppData');
+  if (fromSearch?.trim()) return fromSearch.trim();
+
+  const rawHash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  const fromHash = new URLSearchParams(rawHash).get('tgWebAppData');
+  if (fromHash?.trim()) return fromHash.trim();
+
+  return '';
+};
+
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 
 type TaskDraft = {
@@ -97,7 +108,7 @@ export default function MiniApp() {
     setError(null);
     try {
       const tgWindow = window as TelegramWindow;
-      const initData = tgWindow.Telegram?.WebApp?.initData?.trim();
+      const initData = tgWindow.Telegram?.WebApp?.initData?.trim() || extractInitDataFromUrl();
 
       if (initData) {
         console.info(`[MiniApp] Используем Telegram initData (length=${initData.length})`);
@@ -105,8 +116,7 @@ export default function MiniApp() {
         tgWindow.Telegram?.WebApp?.ready?.();
         tgWindow.Telegram?.WebApp?.expand?.();
       } else {
-        console.info('[MiniApp] Telegram initData не найден, используем fallback /api/auth/me');
-        await api.getMe();
+        throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
       }
 
       const [sphereList, taskList] = await Promise.all([api.getSpheres(), api.getTasks()]);
