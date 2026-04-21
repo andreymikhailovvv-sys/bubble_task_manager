@@ -45,6 +45,11 @@ type GenerateTaskFromPromptInput = {
   autoAssignSphere?: boolean;
   attachments?: ChatAttachment[];
 };
+type TranscribeAudioInput = {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+};
 type ChatAttachment = {
   name: string;
   mimeType: string;
@@ -403,6 +408,44 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
+  transcribeAudio: async (input: TranscribeAudioInput) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    const binary = Buffer.from(input.contentBase64, 'base64');
+    if (binary.byteLength === 0) {
+      throw new Error('Пустой аудиофайл для расшифровки');
+    }
+
+    const formData = new FormData();
+    formData.append('file', new Blob([binary], { type: input.mimeType || 'audio/ogg' }), input.fileName || `voice-${Date.now()}.ogg`);
+    formData.append('model', process.env.OPENAI_AUDIO_TRANSCRIBE_MODEL?.trim() || 'gpt-4o-mini-transcribe');
+    formData.append('language', 'ru');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Не удалось расшифровать голосовое (${response.status}): ${errorText.slice(0, 300)}`);
+    }
+
+    const payload = await response.json() as { text?: unknown };
+    const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+    if (!text) {
+      throw new Error('Расшифровка голосового вернула пустой текст');
+    }
+
+    return text;
+  },
+
   listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {
     await prisma.task.findFirstOrThrow({
       where: { id: input.taskId, userId: input.userId },

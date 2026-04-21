@@ -11,6 +11,7 @@ const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
 const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
 const MENU_LIST_TASKS = '📋 Посмотреть задачи';
+const CREATE_TASK_TEXT_TRIGGERS = new Set(['создать', 'create']);
 
 type TelegramFile = {
   file_id: string;
@@ -29,6 +30,8 @@ type TelegramUpdate = {
     caption?: string;
     document?: TelegramFile;
     photo?: TelegramFile[];
+    voice?: TelegramFile;
+    audio?: TelegramFile;
   };
   callback_query?: {
     id: string;
@@ -607,19 +610,59 @@ const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment
   return { createdTask, generated };
 };
 
+const createTaskFromPromptAndNotify = async (
+  chatId: string,
+  userId: string,
+  prompt: string,
+  attachment?: ChatAttachment,
+  transcript?: string
+) => {
+  await sendMessage(chatId, '🧠 Формирую задачу через ИИ...');
+
+  try {
+    const created = await createTaskFromAiPrompt(userId, prompt, attachment);
+    pendingAiAttachmentByChatId.delete(chatId);
+    await resetBotMenuState(chatId);
+
+    const dueDateLabel = created.createdTask.dueDate ? formatDate(created.createdTask.dueDate) : 'не указан';
+    const lines = [
+      '✅ <b>Задача создана!</b>',
+      '',
+      transcript ? `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}` : null,
+      transcript ? '' : null,
+      `🧩 <b>${escapeHtml(created.createdTask.title)}</b>`,
+      `${escapeHtml(created.createdTask.description ?? 'Без описания')}`,
+      `⏰ Дедлайн: <b>${escapeHtml(dueDateLabel)}</b>`,
+      `🗂 Подзадач: <b>${created.generated.task.subtasks.length}</b>`,
+      attachment ? '📎 Файл прикреплён к задаче.' : '📎 Файл не прикреплялся.',
+      '',
+      `🤖 <b>Первое сообщение ИИ:</b>\n${formatAiTextWithBold(created.generated.firstAssistantMessage)}`
+    ].filter((line): line is string => Boolean(line));
+
+    await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.';
+    await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
+  }
+};
+
 const loadTelegramAttachment = async (message: TelegramUpdate['message']): Promise<ChatAttachment | null> => {
   if (!BOT_TOKEN || !message) return null;
 
   const document = message.document;
+  const voice = message.voice;
+  const audio = message.audio;
   const photo = Array.isArray(message.photo) && message.photo.length > 0
     ? message.photo[message.photo.length - 1]
     : null;
 
-  const candidate = document ?? photo;
+  const candidate = voice ?? audio ?? document ?? photo;
   if (!candidate?.file_id) return null;
 
-  const resolvedMimeType = document?.mime_type || 'image/jpeg';
-  const resolvedName = document?.file_name?.trim() || `telegram-file-${Date.now()}.${document ? 'bin' : 'jpg'}`;
+  const resolvedMimeType = voice?.mime_type || audio?.mime_type || document?.mime_type || 'image/jpeg';
+  const resolvedName = voice
+    ? `telegram-voice-${Date.now()}.ogg`
+    : audio?.file_name?.trim() || document?.file_name?.trim() || `telegram-file-${Date.now()}.${document ? 'bin' : 'jpg'}`;
 
   const fileInfo = await telegramRequest<{ ok: boolean; result?: { file_path?: string; file_size?: number } }>('getFile', {
     file_id: candidate.file_id
@@ -654,6 +697,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   const chatId = String(updateMessage.chat.id);
   const text = typeof updateMessage.text === 'string' ? updateMessage.text.trim() : '';
   const caption = typeof updateMessage.caption === 'string' ? updateMessage.caption.trim() : '';
+  const isVoiceMessage = Boolean(updateMessage.voice || updateMessage.audio);
   const descriptionText = text || caption;
 
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
@@ -680,12 +724,40 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     return;
   }
 
-  if (descriptionText === MENU_CREATE_AI_TASK) {
+  if (isVoiceMessage) {
+    pendingAiAttachmentByChatId.delete(chatId);
+    await setSession(chatId, { mode: 'AWAITING_AI_TASK_PROMPT', activeTaskId: null });
+    await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и запускаю создание задачи через ИИ...');
+
+    try {
+      const voiceAttachment = await loadTelegramAttachment(updateMessage);
+      if (!voiceAttachment) {
+        await sendMessage(chatId, '⚠️ Не удалось прочитать голосовое сообщение. Попробуйте ещё раз.', keyboardReplyMain);
+        return;
+      }
+
+      const transcript = await aiAssistantService.transcribeAudio({
+        fileName: voiceAttachment.name,
+        mimeType: voiceAttachment.mimeType,
+        contentBase64: voiceAttachment.contentBase64
+      });
+
+      await createTaskFromPromptAndNotify(chatId, session.userId, transcript, undefined, transcript);
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось обработать голосовое.';
+      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
+      return;
+    }
+  }
+
+  const normalizedText = descriptionText.toLowerCase();
+  if (descriptionText === MENU_CREATE_AI_TASK || CREATE_TASK_TEXT_TRIGGERS.has(normalizedText)) {
     pendingAiAttachmentByChatId.delete(chatId);
     await setSession(chatId, { mode: 'AWAITING_AI_TASK_PROMPT', activeTaskId: null });
     await sendMessage(
       chatId,
-      '🤖 <b>Создание задачи через ИИ</b>\n\nОтправьте описание задачи текстом. Можно сразу прикрепить файл — я учту его при формировании задачи.',
+      '🤖 <b>Создание задачи через ИИ</b>\n\nОтправьте описание задачи текстом или голосовым. Можно сразу прикрепить файл — я учту его при формировании задачи.',
       keyboardReplyMain
     );
     return;
@@ -834,33 +906,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
-    await sendMessage(chatId, '🧠 Формирую задачу через ИИ...');
-
-    try {
-      const created = await createTaskFromAiPrompt(session.userId, prompt, attachment);
-      pendingAiAttachmentByChatId.delete(chatId);
-      await resetBotMenuState(chatId);
-
-      const dueDateLabel = created.createdTask.dueDate ? formatDate(created.createdTask.dueDate) : 'не указан';
-      const lines = [
-        '✅ <b>Задача создана!</b>',
-        '',
-        `🧩 <b>${escapeHtml(created.createdTask.title)}</b>`,
-        `${escapeHtml(created.createdTask.description ?? 'Без описания')}`,
-        `⏰ Дедлайн: <b>${escapeHtml(dueDateLabel)}</b>`,
-        `🗂 Подзадач: <b>${created.generated.task.subtasks.length}</b>`,
-        attachment ? '📎 Файл прикреплён к задаче.' : '📎 Файл не прикреплялся.',
-        '',
-        `🤖 <b>Первое сообщение ИИ:</b>\n${formatAiTextWithBold(created.generated.firstAssistantMessage)}`
-      ];
-
-      await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
-      return;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.';
-      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
-      return;
-    }
+    await createTaskFromPromptAndNotify(chatId, session.userId, prompt, attachment);
+    return;
   }
 
   await sendMessage(chatId, 'ℹ️ Выберите действие через меню: «🤖 Создать задачу ИИ» или «📋 Посмотреть задачи».', keyboardReplyMain);
