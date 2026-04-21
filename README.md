@@ -94,6 +94,16 @@ npm run start
 - Insights endpoint `/api/dashboard/insights`
 
 
+
+## Telegram Mini App
+- Мини-приложение доступно по пути: `https://bubble-task-manager.onrender.com/miniapp`.
+- На мини-экране доступны:
+  - просмотр списка задач;
+  - группировка задач по секторам;
+  - фильтр по времени (сегодня/завтра/7 дней/30 дней);
+  - раскрытие карточки с дедлайном, описанием и подзадачами;
+  - редактирование названия, описания и срока для задачи и подзадач.
+
 ## Подключение Telegram webhook
 1. Создайте бота у @BotFather и получите токен.
 2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN` и (рекомендуется) `TELEGRAM_WEBHOOK_SECRET`.
