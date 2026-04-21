@@ -128,13 +128,39 @@ const keyboardTaskDetails = (taskId: string, page = 1, totalPages = 1) => {
         { text: '✅ Выполнить', callback_data: `done:${taskId}` },
         { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
       ],
-      [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
+      [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }],
+      [{ text: '⬅️ Назад к списку', callback_data: 'backlist' }]
     ]
   };
 };
 
 const keyboardBackTask = (taskId: string) => ({
   inline_keyboard: [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]]
+});
+
+const keyboardSubtaskDetails = (subtaskId: string, parentTaskId: string) => ({
+  inline_keyboard: [
+    [
+      { text: '✅ Закрыть', callback_data: `done_subtask:${subtaskId}` },
+      { text: '🗑 Удалить', callback_data: `delete_subtask:${subtaskId}` }
+    ],
+    [{ text: '⏳ Перенести', callback_data: `snooze_subtask:${subtaskId}` }],
+    [{ text: '⬅️ Назад к задаче', callback_data: `backtask:${parentTaskId}` }]
+  ]
+});
+
+const keyboardSubtaskSnooze = (subtaskId: string, parentTaskId: string) => ({
+  inline_keyboard: [
+    [
+      { text: '🕒 +15 мин', callback_data: `snooze_set_subtask:${subtaskId}:15` },
+      { text: '🕞 +30 мин', callback_data: `snooze_set_subtask:${subtaskId}:30` }
+    ],
+    [
+      { text: '🕐 +1 час', callback_data: `snooze_set_subtask:${subtaskId}:60` },
+      { text: '🕒 +3 часа', callback_data: `snooze_set_subtask:${subtaskId}:180` }
+    ],
+    [{ text: '⬅️ Назад', callback_data: `opensubtask:${subtaskId}` }]
+  ]
 });
 
 const keyboardSnooze = (taskId: string) => ({
@@ -362,6 +388,40 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
     text: result,
     page: currentPage,
     totalPages
+  };
+};
+
+const getSubtaskDetailsByIndex = async (parentTaskId: string, userId: string, subtaskIndex: number) => {
+  if (!Number.isInteger(subtaskIndex) || subtaskIndex < 1) return null;
+
+  const parentTask = await prisma.task.findFirst({
+    where: { id: parentTaskId, userId, parentTaskId: null },
+    include: {
+      subtasks: { orderBy: { createdAt: 'asc' } }
+    }
+  });
+
+  if (!parentTask) return null;
+
+  const sortedSubtasks = sortSubtasksByStatusAndDeadline(parentTask.subtasks);
+  const subtask = sortedSubtasks[subtaskIndex - 1];
+  if (!subtask) return null;
+
+  const lines = [
+    `🧷 <b>Подзадача #${subtaskIndex}</b>`,
+    '',
+    `📍 <b>${escapeHtml(subtask.title)}</b>`,
+    '',
+    '🧩 <b>Описание</b>',
+    escapeHtml(subtask.description?.trim() || 'Без описания'),
+    '',
+    `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(subtask.dueDate))}`,
+    `📌 <b>Статус:</b> ${subtask.status === 'DONE' ? '✅ Выполнена' : '▫️ Активна'}`
+  ];
+
+  return {
+    text: lines.join('\n'),
+    subtaskId: subtask.id
   };
 };
 
@@ -720,6 +780,24 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
 
     await sendMessage(chatId, taskDetails.text, keyboardTaskDetails(taskId, taskDetails.page, taskDetails.totalPages));
+    await setSession(chatId, { mode: 'VIEWING_TASK_DETAILS', activeTaskId: taskId });
+    return;
+  }
+
+  if (session.mode === 'VIEWING_TASK_DETAILS' && session.activeTaskId) {
+    const selectedSubtaskIndex = Number(descriptionText);
+    const subtaskDetails = await getSubtaskDetailsByIndex(session.activeTaskId, session.userId, selectedSubtaskIndex);
+
+    if (!subtaskDetails) {
+      await sendMessage(
+        chatId,
+        '⚠️ Введите корректный номер подзадачи из списка или нажмите «⬅️ Назад к списку».',
+        keyboardTaskDetails(session.activeTaskId)
+      );
+      return;
+    }
+
+    await sendMessage(chatId, subtaskDetails.text, keyboardSubtaskDetails(subtaskDetails.subtaskId, session.activeTaskId));
     return;
   }
 
@@ -808,7 +886,10 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
-  const [action, taskId, value] = data.split(':');
+  const parts = data.split(':');
+  const action = parts[0];
+  const taskId = parts[1];
+  const value = parts[2];
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
 
   if (!session?.userId) {
@@ -817,11 +898,22 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
   const userId = session.userId;
 
-  if (!taskId && action !== 'noop') {
+  if (!taskId && action !== 'noop' && action !== 'backlist') {
     await answerCallback(callback.id, 'Некорректные данные');
     return;
   }
   const resolvedTaskId = taskId as string;
+
+  if (action === 'backlist') {
+    await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
+    const listParts = await buildTaskListTextParts(userId, chatId);
+    await answerCallback(callback.id);
+    await editMessage(chatId, messageId, listParts[0]);
+    for (const extraPart of listParts.slice(1)) {
+      await sendMessage(chatId, extraPart, keyboardReplyMain);
+    }
+    return;
+  }
 
   if (action === 'snooze') {
     await answerCallback(callback.id);
@@ -847,6 +939,54 @@ const handleCallback = async (update: TelegramUpdate) => {
 
     await answerCallback(callback.id, `Отложено на ${minutes} мин`);
     await editMessage(chatId, messageId, `✅ <b>Готово.</b>\nЗадача отложена на <b>${minutes} мин</b>.\nНовый дедлайн: <b>${formatDate(dueDate)}</b>`, keyboardMain(task.id));
+    return;
+  }
+
+  if (action === 'snooze_subtask') {
+    const subtask = await prisma.task.findFirst({
+      where: { id: resolvedTaskId, userId, parentTaskId: { not: null } },
+      select: { id: true, parentTaskId: true }
+    });
+    if (!subtask?.parentTaskId) {
+      await answerCallback(callback.id, 'Подзадача не найдена');
+      return;
+    }
+
+    await answerCallback(callback.id);
+    await editMessage(chatId, messageId, '⏳ <b>На сколько перенести подзадачу?</b>', keyboardSubtaskSnooze(resolvedTaskId, subtask.parentTaskId));
+    return;
+  }
+
+  if (action === 'snooze_set_subtask') {
+    const minutes = Number(parts[2]);
+    if (!Number.isFinite(minutes)) {
+      await answerCallback(callback.id, 'Некорректные данные');
+      return;
+    }
+
+    const subtask = await prisma.task.findFirst({
+      where: { id: resolvedTaskId, userId, parentTaskId: { not: null } },
+      select: { id: true, parentTaskId: true, dueDate: true }
+    });
+    if (!subtask?.parentTaskId) {
+      await answerCallback(callback.id, 'Подзадача не найдена');
+      return;
+    }
+
+    const baseTime = subtask.dueDate && subtask.dueDate.getTime() > Date.now() ? subtask.dueDate : new Date();
+    const dueDate = new Date(baseTime.getTime() + minutes * 60_000);
+    await prisma.task.update({
+      where: { id: subtask.id },
+      data: { dueDate, telegramNotifiedAt: null }
+    });
+
+    await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
+    await editMessage(
+      chatId,
+      messageId,
+      `✅ <b>Готово.</b>\nПодзадача перенесена на <b>${minutes} мин</b>.\nНовый дедлайн: <b>${formatDate(dueDate)}</b>`,
+      keyboardSubtaskDetails(subtask.id, subtask.parentTaskId)
+    );
     return;
   }
 
@@ -885,6 +1025,53 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
+  if (action === 'done_subtask') {
+    const subtask = await prisma.task.findFirst({
+      where: { id: resolvedTaskId, userId, parentTaskId: { not: null } },
+      select: { id: true, parentTaskId: true }
+    });
+    if (!subtask?.parentTaskId) {
+      await answerCallback(callback.id, 'Подзадача не найдена');
+      return;
+    }
+
+    const updated = await prisma.task.updateMany({
+      where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId },
+      data: { status: 'DONE', telegramNotifiedAt: null }
+    });
+    await answerCallback(callback.id, updated.count ? 'Подзадача закрыта' : 'Подзадача не найдена');
+    await editMessage(
+      chatId,
+      messageId,
+      updated.count ? '✅ <b>Подзадача закрыта.</b>' : '⚠️ <b>Подзадача не найдена.</b>',
+      keyboardBackTask(subtask.parentTaskId)
+    );
+    return;
+  }
+
+  if (action === 'delete_subtask') {
+    const subtask = await prisma.task.findFirst({
+      where: { id: resolvedTaskId, userId, parentTaskId: { not: null } },
+      select: { id: true, parentTaskId: true }
+    });
+    if (!subtask?.parentTaskId) {
+      await answerCallback(callback.id, 'Подзадача не найдена');
+      return;
+    }
+
+    const deleted = await prisma.task.deleteMany({
+      where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId }
+    });
+    await answerCallback(callback.id, deleted.count ? 'Подзадача удалена' : 'Подзадача не найдена');
+    await editMessage(
+      chatId,
+      messageId,
+      deleted.count ? '🗑 <b>Подзадача удалена.</b>' : '⚠️ <b>Подзадача не найдена.</b>',
+      keyboardBackTask(subtask.parentTaskId)
+    );
+    return;
+  }
+
   if (action === 'ai') {
     await setSession(chatId, { mode: 'AWAITING_AI_MESSAGE', activeTaskId: resolvedTaskId });
     await answerCallback(callback.id);
@@ -905,11 +1092,50 @@ const handleCallback = async (update: TelegramUpdate) => {
     }
 
     await editMessage(chatId, messageId, details.text, keyboardTaskDetails(resolvedTaskId, details.page, details.totalPages));
+    await setSession(chatId, { mode: 'VIEWING_TASK_DETAILS', activeTaskId: resolvedTaskId });
+    return;
+  }
+
+  if (action === 'opensubtask') {
+    const subtask = await prisma.task.findFirst({
+      where: { id: resolvedTaskId, userId, parentTaskId: { not: null } },
+      select: { parentTaskId: true }
+    });
+    if (!subtask?.parentTaskId) {
+      await answerCallback(callback.id, 'Подзадача не найдена');
+      return;
+    }
+
+    const parentTask = await prisma.task.findFirst({
+      where: { id: subtask.parentTaskId, userId, parentTaskId: null },
+      include: { subtasks: { orderBy: { createdAt: 'asc' } } }
+    });
+
+    await answerCallback(callback.id);
+    if (!parentTask) {
+      await editMessage(chatId, messageId, '⚠️ Родительская задача не найдена.', keyboardReplyMain);
+      return;
+    }
+
+    const sortedSubtasks = sortSubtasksByStatusAndDeadline(parentTask.subtasks);
+    const subtaskIndex = sortedSubtasks.findIndex((item) => item.id === resolvedTaskId);
+    if (subtaskIndex < 0) {
+      await editMessage(chatId, messageId, '⚠️ Подзадача не найдена.', keyboardBackTask(subtask.parentTaskId));
+      return;
+    }
+
+    const subtaskDetails = await getSubtaskDetailsByIndex(subtask.parentTaskId, userId, subtaskIndex + 1);
+    if (!subtaskDetails) {
+      await editMessage(chatId, messageId, '⚠️ Подзадача не найдена.', keyboardBackTask(subtask.parentTaskId));
+      return;
+    }
+
+    await editMessage(chatId, messageId, subtaskDetails.text, keyboardSubtaskDetails(subtaskDetails.subtaskId, subtask.parentTaskId));
     return;
   }
 
   if (action === 'backtask') {
-    await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
+    await setSession(chatId, { mode: 'VIEWING_TASK_DETAILS', activeTaskId: resolvedTaskId });
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
     const index = taskIds.findIndex((id) => id === resolvedTaskId);
     const details = await getTaskDetailsText(resolvedTaskId, userId, index >= 0 ? index + 1 : undefined, 1);
