@@ -3,6 +3,18 @@ import { ChevronDown, ChevronUp, Save } from 'lucide-react';
 import { api } from './lib/api';
 import type { Sphere, Task } from './lib/types';
 
+type TelegramWebApp = {
+  initData?: string;
+  ready?: () => void;
+  expand?: () => void;
+};
+
+type TelegramWindow = Window & {
+  Telegram?: {
+    WebApp?: TelegramWebApp;
+  };
+};
+
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 
 type TaskDraft = {
@@ -84,10 +96,23 @@ export default function MiniApp() {
     setLoading(true);
     setError(null);
     try {
-      await api.getMe();
+      const tgWindow = window as TelegramWindow;
+      const initData = tgWindow.Telegram?.WebApp?.initData?.trim();
+
+      if (initData) {
+        console.info(`[MiniApp] Используем Telegram initData (length=${initData.length})`);
+        await api.loginTelegramMiniApp({ initData });
+        tgWindow.Telegram?.WebApp?.ready?.();
+        tgWindow.Telegram?.WebApp?.expand?.();
+      } else {
+        console.info('[MiniApp] Telegram initData не найден, используем fallback /api/auth/me');
+        await api.getMe();
+      }
+
       const [sphereList, taskList] = await Promise.all([api.getSpheres(), api.getTasks()]);
       setSpheres(sphereList);
       setTasks(taskList);
+      console.info(`[MiniApp] Данные загружены: sectors=${sphereList.length}, tasks=${taskList.length}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить мини-приложение');
     } finally {

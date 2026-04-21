@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
@@ -54,6 +55,67 @@ const setAuthCookies = (
     deviceId: user.deviceId
   });
   res.cookie(AUTH_COOKIE_NAME, token, authService.cookieOptions());
+};
+
+const validateTelegramMiniAppInitData = (initDataRaw: string) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required for mini app auth');
+  }
+
+  const parsed = new URLSearchParams(initDataRaw);
+  const hash = parsed.get('hash');
+  if (!hash) {
+    throw new Error('Missing hash in init data');
+  }
+
+  const pairs: string[] = [];
+  parsed.forEach((value, key) => {
+    if (key === 'hash') return;
+    pairs.push(`${key}=${value}`);
+  });
+  pairs.sort();
+  const dataCheckString = pairs.join('\n');
+
+  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const expectedHash = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+  if (expectedHash.length !== hash.length) {
+    throw new Error('Invalid init data signature length');
+  }
+  const isValid = crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(hash));
+  if (!isValid) {
+    throw new Error('Invalid init data signature');
+  }
+
+  const authDateRaw = parsed.get('auth_date');
+  const authDate = authDateRaw ? Number(authDateRaw) : Number.NaN;
+  if (!Number.isFinite(authDate)) {
+    throw new Error('Invalid auth_date in init data');
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const maxAgeSeconds = 24 * 60 * 60;
+  if (nowSeconds - authDate > maxAgeSeconds) {
+    throw new Error('Init data is too old');
+  }
+
+  const userRaw = parsed.get('user');
+  if (!userRaw) {
+    throw new Error('Missing user in init data');
+  }
+
+  let user: { id: number; username?: string; first_name?: string; last_name?: string };
+  try {
+    user = JSON.parse(userRaw) as { id: number; username?: string; first_name?: string; last_name?: string };
+  } catch {
+    throw new Error('Invalid user payload in init data');
+  }
+
+  if (!user?.id) {
+    throw new Error('Missing telegram user id in init data');
+  }
+
+  return user;
 };
 
 const ensureDeviceUser = async (req: any, res: any) => {
@@ -190,6 +252,41 @@ apiRouter.get('/auth/me', async (req, res) => {
   }
 
   const user = await ensureDeviceUser(req, res);
+  res.json({ user: toAuthUser(user) });
+});
+
+apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
+  const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
+  const userAgent = req.get('user-agent') ?? 'unknown';
+  const ip = req.ip ?? 'unknown';
+  console.info(`[MiniApp] auth attempt ip=${ip} userAgent="${userAgent.slice(0, 180)}" initDataLength=${initDataRaw.length}`);
+
+  if (!initDataRaw) {
+    console.warn('[MiniApp] auth failed: initData is empty');
+    res.status(400).json({ error: 'initData is required' });
+    return;
+  }
+
+  let telegramUserId: string;
+  try {
+    const telegramUser = validateTelegramMiniAppInitData(initDataRaw);
+    telegramUserId = String(telegramUser.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown validation error';
+    console.warn(`[MiniApp] auth failed: invalid initData (${message})`);
+    res.status(401).json({ error: 'Invalid Telegram init data' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { telegramChatId: telegramUserId } });
+  if (!user) {
+    console.warn(`[MiniApp] auth failed: no user linked for telegramChatId=${telegramUserId}`);
+    res.status(403).json({ error: 'Telegram account is not linked. Open bot and login first.' });
+    return;
+  }
+
+  setAuthCookies(res, user);
+  console.info(`[MiniApp] auth success userId=${user.id} telegramChatId=${telegramUserId}`);
   res.json({ user: toAuthUser(user) });
 });
 

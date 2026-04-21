@@ -65,6 +65,8 @@ export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   register: (payload: { login: string; password: string; name?: string }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  loginTelegramMiniApp: (payload: { initData: string }) =>
+    request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
   loginWithGoogle: () => {
     window.location.href = '/api/auth/google';
   },
