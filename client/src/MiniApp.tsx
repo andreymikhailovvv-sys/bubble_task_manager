@@ -137,6 +137,7 @@ export default function MiniApp() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -345,6 +346,34 @@ export default function MiniApp() {
     }
   };
 
+  const addSubtask = async (parentTask: Task) => {
+    setCreatingSubtaskForId(parentTask.id);
+    setError(null);
+    try {
+      const created = await api.createTask({
+        title: 'Новая подзадача',
+        description: null,
+        parentTaskId: parentTask.id,
+        sphereId: parentTask.sphereId ?? null,
+        dueDate: parentTask.dueDate ?? null
+      });
+      setDraftByTaskId((prev) => ({
+        ...prev,
+        [created.id]: {
+          title: created.title,
+          description: created.description ?? '',
+          dueDate: toInputDateTime(created.dueDate)
+        }
+      }));
+      setExpandedSubtaskIds((prev) => [...new Set([...prev, created.id])]);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось добавить подзадачу');
+    } finally {
+      setCreatingSubtaskForId(null);
+    }
+  };
+
   const openedTask = openedTaskId
     ? tasks.find((task) => task.id === openedTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
     : null;
@@ -528,7 +557,17 @@ export default function MiniApp() {
             </div>
 
             <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
-              <h3 className="text-sm font-semibold">Подзадачи</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Подзадачи</h3>
+                <button
+                  type="button"
+                  onClick={() => void addSubtask(openedTask)}
+                  disabled={creatingSubtaskForId === openedTask.id}
+                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                >
+                  {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить подзадачу'}
+                </button>
+              </div>
               {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Подзадач пока нет.</p> : null}
               {openedTaskSubtasks.map((subtask) => {
                 const isSubtaskExpanded = expandedSubtaskIds.includes(subtask.id);
