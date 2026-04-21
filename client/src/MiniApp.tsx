@@ -93,6 +93,37 @@ function fromInputDateTime(value: string) {
   return date.toISOString();
 }
 
+function isOverdue(task: Task) {
+  if (task.status === 'DONE' || !task.dueDate) return false;
+  const due = new Date(task.dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  return due.getTime() < Date.now();
+}
+
+function shouldTaskGlow(task: Task) {
+  if (task.status === 'DONE' || !task.dueDate) return false;
+  const due = new Date(task.dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const diff = due.getTime() - Date.now();
+  if (diff < 0) return true;
+  if (task.notifyBeforeMinutes === null) return false;
+  const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
+  return diff <= notifyBefore;
+}
+
+function hexToRgba(hexColor: string, alpha: number) {
+  const normalized = hexColor.trim().replace('#', '');
+  if (![3, 6].includes(normalized.length)) return null;
+  const full = normalized.length === 3
+    ? normalized.split('').map((char) => `${char}${char}`).join('')
+    : normalized;
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
+  if ([r, g, b].some((value) => Number.isNaN(value))) return null;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function MiniApp() {
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -103,6 +134,7 @@ export default function MiniApp() {
   const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -159,6 +191,7 @@ export default function MiniApp() {
 
     return tasks.filter((task) => {
       if (task.parentTaskId) return false;
+      if (task.status === 'DONE') return false;
       if (sphereFilter !== 'all') {
         const taskSphereValue = task.sphereId ?? 'without-sphere';
         if (taskSphereValue !== sphereFilter) return false;
@@ -193,6 +226,7 @@ export default function MiniApp() {
     const map: Record<string, Task[]> = {};
     for (const task of tasks) {
       if (!task.parentTaskId) continue;
+      if (task.status === 'DONE') continue;
       if (!map[task.parentTaskId]) map[task.parentTaskId] = [];
       map[task.parentTaskId].push(task);
     }
@@ -272,6 +306,19 @@ export default function MiniApp() {
     }
   };
 
+  const completeTask = async (taskId: string) => {
+    setCompletingId(taskId);
+    setError(null);
+    try {
+      await api.updateTask(taskId, { status: 'DONE' });
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось завершить задачу');
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
   if (loading) {
     return <main className="min-h-screen bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
   }
@@ -325,7 +372,16 @@ export default function MiniApp() {
         ) : null}
 
         {groupedBySphere.map((group) => (
-          <section key={group.sphereId} className="space-y-2 rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <section
+            key={group.sphereId}
+            className="space-y-2 rounded-xl border p-3"
+            style={{
+              borderColor: group.sphereId === 'without-sphere' ? 'rgba(71,85,105,0.8)' : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.7) ?? 'rgba(71,85,105,0.8)'),
+              background: group.sphereId === 'without-sphere'
+                ? 'rgba(15,23,42,0.82)'
+                : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.14) ?? 'rgba(15,23,42,0.82)')
+            }}
+          >
             <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
 
             {group.tasks.map((task) => {
@@ -336,9 +392,19 @@ export default function MiniApp() {
                 dueDate: toInputDateTime(task.dueDate)
               };
               const subtasks = subtasksByParent[task.id] ?? [];
+              const hasOverdueState = isOverdue(task);
+              const hasReminderState = !hasOverdueState && shouldTaskGlow(task);
 
               return (
-                <article key={task.id} className="rounded-lg border border-slate-700 bg-slate-800/80 p-3">
+                <article
+                  key={task.id}
+                  className="rounded-lg border border-slate-700 bg-slate-800/80 p-3"
+                  style={hasOverdueState
+                    ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                    : hasReminderState
+                      ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                      : undefined}
+                >
                   <button
                     type="button"
                     className="flex w-full items-start justify-between gap-2 text-left"
@@ -388,6 +454,14 @@ export default function MiniApp() {
                         <Save size={14} />
                         {savingId === task.id ? 'Сохраняем…' : 'Сохранить задачу'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => void completeTask(task.id)}
+                        disabled={completingId === task.id}
+                        className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                      >
+                        {completingId === task.id ? 'Завершаем…' : 'Выполнить'}
+                      </button>
 
                       <div className="space-y-2 rounded-md border border-slate-700 bg-slate-900/60 p-3">
                         <h4 className="text-sm font-semibold">Подзадачи</h4>
@@ -398,8 +472,18 @@ export default function MiniApp() {
                             description: subtask.description ?? '',
                             dueDate: toInputDateTime(subtask.dueDate)
                           };
+                          const hasOverdueSubtaskState = isOverdue(subtask);
+                          const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
                           return (
-                            <div key={subtask.id} className="space-y-2 rounded-md border border-slate-700 bg-slate-800 p-2">
+                            <div
+                              key={subtask.id}
+                              className="space-y-2 rounded-md border border-slate-700 bg-slate-800 p-2"
+                              style={hasOverdueSubtaskState
+                                ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                                : hasReminderSubtaskState
+                                  ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                                  : undefined}
+                            >
                               <input
                                 value={subtaskDraft.title}
                                 onChange={(event) => onChangeDraft(subtask.id, { title: event.target.value })}
@@ -425,6 +509,14 @@ export default function MiniApp() {
                                 className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
                               >
                                 {savingId === subtask.id ? 'Сохраняем…' : 'Сохранить подзадачу'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void completeTask(subtask.id)}
+                                disabled={completingId === subtask.id}
+                                className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                              >
+                                {completingId === subtask.id ? 'Завершаем…' : 'Выполнить'}
                               </button>
                             </div>
                           );
