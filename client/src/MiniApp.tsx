@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Save, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { Sphere, Task } from './lib/types';
 
@@ -131,10 +131,12 @@ export default function MiniApp() {
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
-  const [expandedTaskIds, setExpandedTaskIds] = useState<string[]>([]);
+  const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
+  const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -248,31 +250,39 @@ export default function MiniApp() {
     }));
   }, [filteredTasks, spheres]);
 
-  const toggleExpanded = (task: Task) => {
-    setExpandedTaskIds((prev) => {
-      if (prev.includes(task.id)) {
-        return prev.filter((id) => id !== task.id);
+  const openTaskModal = (task: Task) => {
+    setDraftByTaskId((drafts) => ({
+      ...drafts,
+      [task.id]: {
+        title: task.title,
+        description: task.description ?? '',
+        dueDate: toInputDateTime(task.dueDate)
       }
+    }));
+    const subtasks = subtasksByParent[task.id] ?? [];
+    for (const subtask of subtasks) {
       setDraftByTaskId((drafts) => ({
         ...drafts,
-        [task.id]: {
-          title: task.title,
-          description: task.description ?? '',
-          dueDate: toInputDateTime(task.dueDate)
+        [subtask.id]: {
+          title: subtask.title,
+          description: subtask.description ?? '',
+          dueDate: toInputDateTime(subtask.dueDate)
         }
       }));
-      for (const subtask of subtasksByParent[task.id] ?? []) {
-        setDraftByTaskId((drafts) => ({
-          ...drafts,
-          [subtask.id]: {
-            title: subtask.title,
-            description: subtask.description ?? '',
-            dueDate: toInputDateTime(subtask.dueDate)
-          }
-        }));
-      }
-      return [...prev, task.id];
-    });
+    }
+    setExpandedSubtaskIds([]);
+    setOpenedTaskId(task.id);
+  };
+
+  const closeTaskModal = () => {
+    setOpenedTaskId(null);
+    setExpandedSubtaskIds([]);
+  };
+
+  const toggleExpandedSubtask = (subtaskId: string) => {
+    setExpandedSubtaskIds((prev) => (
+      prev.includes(subtaskId) ? prev.filter((item) => item !== subtaskId) : [...prev, subtaskId]
+    ));
   };
 
   const onChangeDraft = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -318,6 +328,34 @@ export default function MiniApp() {
       setCompletingId(null);
     }
   };
+
+  const deleteTask = async (taskId: string) => {
+    setDeletingId(taskId);
+    setError(null);
+    try {
+      await api.deleteTask(taskId);
+      if (openedTaskId === taskId) {
+        closeTaskModal();
+      }
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить задачу');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const openedTask = openedTaskId
+    ? tasks.find((task) => task.id === openedTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
+    : null;
+  const openedTaskDraft = openedTask
+    ? (draftByTaskId[openedTask.id] ?? {
+      title: openedTask.title,
+      description: openedTask.description ?? '',
+      dueDate: toInputDateTime(openedTask.dueDate)
+    })
+    : null;
+  const openedTaskSubtasks = openedTask ? (subtasksByParent[openedTask.id] ?? []) : [];
 
   if (loading) {
     return <main className="min-h-screen bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
@@ -385,13 +423,6 @@ export default function MiniApp() {
             <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
 
             {group.tasks.map((task) => {
-              const isExpanded = expandedTaskIds.includes(task.id);
-              const taskDraft = draftByTaskId[task.id] ?? {
-                title: task.title,
-                description: task.description ?? '',
-                dueDate: toInputDateTime(task.dueDate)
-              };
-              const subtasks = subtasksByParent[task.id] ?? [];
               const hasOverdueState = isOverdue(task);
               const hasReminderState = !hasOverdueState && shouldTaskGlow(task);
 
@@ -408,128 +439,183 @@ export default function MiniApp() {
                   <button
                     type="button"
                     className="flex w-full items-start justify-between gap-2 text-left"
-                    onClick={() => toggleExpanded(task)}
+                    onClick={() => openTaskModal(task)}
                   >
                     <div>
                       <h3 className="font-medium">{task.title}</h3>
                       <p className="mt-1 text-xs text-slate-300">Дедлайн: {formatDueDate(task.dueDate)}</p>
                       <p className="text-xs text-sky-200">{formatRemaining(task.dueDate)}</p>
                     </div>
-                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    <ChevronDown size={18} />
                   </button>
-
-                  {isExpanded ? (
-                    <div className="mt-3 space-y-3 border-t border-slate-700 pt-3">
-                      <div className="space-y-2">
-                        <label className="block text-xs text-slate-300">Название задачи</label>
-                        <input
-                          value={taskDraft.title}
-                          onChange={(event) => onChangeDraft(task.id, { title: event.target.value })}
-                          className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-xs text-slate-300">Описание</label>
-                        <textarea
-                          value={taskDraft.description}
-                          onChange={(event) => onChangeDraft(task.id, { description: event.target.value })}
-                          className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="block text-xs text-slate-300">Срок</label>
-                        <input
-                          type="datetime-local"
-                          value={taskDraft.dueDate}
-                          onChange={(event) => onChangeDraft(task.id, { dueDate: event.target.value })}
-                          className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void saveTask(task.id)}
-                        disabled={savingId === task.id}
-                        className="inline-flex items-center gap-1 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
-                      >
-                        <Save size={14} />
-                        {savingId === task.id ? 'Сохраняем…' : 'Сохранить задачу'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void completeTask(task.id)}
-                        disabled={completingId === task.id}
-                        className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
-                      >
-                        {completingId === task.id ? 'Завершаем…' : 'Выполнить'}
-                      </button>
-
-                      <div className="space-y-2 rounded-md border border-slate-700 bg-slate-900/60 p-3">
-                        <h4 className="text-sm font-semibold">Подзадачи</h4>
-                        {subtasks.length === 0 ? <p className="text-xs text-slate-400">Подзадач пока нет.</p> : null}
-                        {subtasks.map((subtask) => {
-                          const subtaskDraft = draftByTaskId[subtask.id] ?? {
-                            title: subtask.title,
-                            description: subtask.description ?? '',
-                            dueDate: toInputDateTime(subtask.dueDate)
-                          };
-                          const hasOverdueSubtaskState = isOverdue(subtask);
-                          const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
-                          return (
-                            <div
-                              key={subtask.id}
-                              className="space-y-2 rounded-md border border-slate-700 bg-slate-800 p-2"
-                              style={hasOverdueSubtaskState
-                                ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
-                                : hasReminderSubtaskState
-                                  ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
-                                  : undefined}
-                            >
-                              <input
-                                value={subtaskDraft.title}
-                                onChange={(event) => onChangeDraft(subtask.id, { title: event.target.value })}
-                                className="w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-sm"
-                                placeholder="Название подзадачи"
-                              />
-                              <textarea
-                                value={subtaskDraft.description}
-                                onChange={(event) => onChangeDraft(subtask.id, { description: event.target.value })}
-                                className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-sm"
-                                placeholder="Описание подзадачи"
-                              />
-                              <input
-                                type="datetime-local"
-                                value={subtaskDraft.dueDate}
-                                onChange={(event) => onChangeDraft(subtask.id, { dueDate: event.target.value })}
-                                className="w-full rounded-md border border-slate-600 bg-slate-900 px-2 py-1 text-sm"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void saveTask(subtask.id)}
-                                disabled={savingId === subtask.id}
-                                className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
-                              >
-                                {savingId === subtask.id ? 'Сохраняем…' : 'Сохранить подзадачу'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void completeTask(subtask.id)}
-                                disabled={completingId === subtask.id}
-                                className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
-                              >
-                                {completingId === subtask.id ? 'Завершаем…' : 'Выполнить'}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
                 </article>
               );
             })}
           </section>
         ))}
       </div>
+
+      {openedTask && openedTaskDraft ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold">Задача</h2>
+              <button
+                type="button"
+                onClick={closeTaskModal}
+                className="rounded-md border border-slate-600 p-1 text-slate-300"
+                aria-label="Закрыть окно"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Название задачи</label>
+                <input
+                  value={openedTaskDraft.title}
+                  onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Описание</label>
+                <textarea
+                  value={openedTaskDraft.description}
+                  onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
+                  className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Срок</label>
+                <input
+                  type="datetime-local"
+                  value={openedTaskDraft.dueDate}
+                  onChange={(event) => onChangeDraft(openedTask.id, { dueDate: event.target.value })}
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => void saveTask(openedTask.id)}
+                  disabled={savingId === openedTask.id}
+                  className="inline-flex items-center justify-center gap-1 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                >
+                  <Save size={14} />
+                  {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить задачу'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void completeTask(openedTask.id)}
+                  disabled={completingId === openedTask.id}
+                  className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                >
+                  <CheckCircle2 size={14} />
+                  {completingId === openedTask.id ? 'Завершаем…' : 'Выполнить'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteTask(openedTask.id)}
+                  disabled={deletingId === openedTask.id}
+                  className="inline-flex items-center justify-center gap-1 rounded-md bg-rose-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                >
+                  <Trash2 size={14} />
+                  {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
+              <h3 className="text-sm font-semibold">Подзадачи</h3>
+              {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Подзадач пока нет.</p> : null}
+              {openedTaskSubtasks.map((subtask) => {
+                const isSubtaskExpanded = expandedSubtaskIds.includes(subtask.id);
+                const subtaskDraft = draftByTaskId[subtask.id] ?? {
+                  title: subtask.title,
+                  description: subtask.description ?? '',
+                  dueDate: toInputDateTime(subtask.dueDate)
+                };
+                const hasOverdueSubtaskState = isOverdue(subtask);
+                const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
+                return (
+                  <article
+                    key={subtask.id}
+                    className="rounded-md border border-slate-700 bg-slate-900 p-2"
+                    style={hasOverdueSubtaskState
+                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                      : hasReminderSubtaskState
+                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                        : undefined}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleExpandedSubtask(subtask.id)}
+                      className="flex w-full items-start justify-between gap-2 text-left"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">{subtask.title}</p>
+                        <p className="text-xs text-slate-300">Дедлайн: {formatDueDate(subtask.dueDate)}</p>
+                      </div>
+                      {isSubtaskExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+
+                    {isSubtaskExpanded ? (
+                      <div className="mt-2 space-y-2 border-t border-slate-700 pt-2">
+                        <input
+                          value={subtaskDraft.title}
+                          onChange={(event) => onChangeDraft(subtask.id, { title: event.target.value })}
+                          className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                          placeholder="Название подзадачи"
+                        />
+                        <textarea
+                          value={subtaskDraft.description}
+                          onChange={(event) => onChangeDraft(subtask.id, { description: event.target.value })}
+                          className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                          placeholder="Описание подзадачи"
+                        />
+                        <input
+                          type="datetime-local"
+                          value={subtaskDraft.dueDate}
+                          onChange={(event) => onChangeDraft(subtask.id, { dueDate: event.target.value })}
+                          className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                        />
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <button
+                            type="button"
+                            onClick={() => void saveTask(subtask.id)}
+                            disabled={savingId === subtask.id}
+                            className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                          >
+                            {savingId === subtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void completeTask(subtask.id)}
+                            disabled={completingId === subtask.id}
+                            className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                          >
+                            {completingId === subtask.id ? 'Завершаем…' : 'Выполнить'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteTask(subtask.id)}
+                            disabled={deletingId === subtask.id}
+                            className="rounded-md bg-rose-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                          >
+                            {deletingId === subtask.id ? 'Удаляем…' : 'Удалить'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
