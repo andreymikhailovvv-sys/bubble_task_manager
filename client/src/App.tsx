@@ -1473,7 +1473,7 @@ export default function App() {
       </header>
 
       <section className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="-ml-1 shrink-0" ref={displayModeMenuRef}>
+        <div className="relative -ml-1 shrink-0" ref={displayModeMenuRef}>
           <button
             className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/85 transition hover:border-cyan-300/70"
             onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
