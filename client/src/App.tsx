@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, Check, FileText, GripVertical, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -64,6 +64,12 @@ const HELP_WITH_TASK_PROMPT = [
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
+const DISPLAY_MODE_OPTIONS = [
+  { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
+  { value: 'list', label: 'Список', icon: List, iconClassName: 'text-violet-300' },
+  { value: 'timeline', label: 'Таймлайн', icon: CalendarDays, iconClassName: 'text-amber-300' }
+] as const;
+type DisplayMode = (typeof DISPLAY_MODE_OPTIONS)[number]['value'];
 
 function renderAiMessageContent(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
@@ -222,7 +228,8 @@ export default function App() {
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
-  const [displayMode, setDisplayMode] = useState<'bubbles' | 'list' | 'timeline'>('bubbles');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
+  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
@@ -265,6 +272,7 @@ export default function App() {
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
+  const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
@@ -465,6 +473,21 @@ export default function App() {
       return { ...prev, [focusedTaskId]: nextReadCount };
     });
   }, [aiDialogByTask, focusedTaskId]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      const targetElement = event.target instanceof Element ? event.target : null;
+      if (isSphereFilterOpen && targetElement && !targetElement.closest('[data-sphere-filter-root="true"]')) {
+        setIsSphereFilterOpen(false);
+      }
+      if (isDisplayModeMenuOpen && displayModeMenuRef.current && target && !displayModeMenuRef.current.contains(target)) {
+        setIsDisplayModeMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [isDisplayModeMenuOpen, isSphereFilterOpen]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -890,6 +913,11 @@ export default function App() {
     return diff <= notifyBefore;
   }
 
+  const selectedDisplayMode = DISPLAY_MODE_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_MODE_OPTIONS[0];
+  const isTimelineMode = displayMode === 'timeline';
+  const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
+  const shouldApplySphereFilter = !isTimelineMode;
+
   const visibleTasks = useMemo(
     () =>
       activeTasks.filter((task) => {
@@ -902,19 +930,19 @@ export default function App() {
         const getBoundary = () => {
           const now = new Date();
           const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (timeFilter === 'today') {
+          if (effectiveTimeFilter === 'today') {
             const endOfToday = new Date(startOfToday);
             endOfToday.setDate(endOfToday.getDate() + 1);
             return { start: startOfToday, end: endOfToday };
           }
-          if (timeFilter === 'tomorrow') {
+          if (effectiveTimeFilter === 'tomorrow') {
             const startOfTomorrow = new Date(startOfToday);
             startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
             const endOfTomorrow = new Date(startOfTomorrow);
             endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
             return { start: startOfTomorrow, end: endOfTomorrow };
           }
-          if (timeFilter === 'week') {
+          if (effectiveTimeFilter === 'week') {
             const day = startOfToday.getDay();
             const offsetToMonday = (day + 6) % 7;
             const startOfWeek = new Date(startOfToday);
@@ -930,11 +958,11 @@ export default function App() {
         const isDateInRange = (date: Date, start: Date, end: Date) => date >= start && date < end;
 
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
-        const isFilteringBySubset = spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
+        const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
-        if (timeFilter === 'focus') {
+        if (effectiveTimeFilter === 'focus') {
           if (!shouldTaskGlow(task)) return false;
-        } else if (timeFilter !== 'all') {
+        } else if (effectiveTimeFilter !== 'all') {
           const { start, end } = getBoundary();
           const ownDate = parseDate(task.dueDate ?? task.createdAt ?? task.updatedAt);
           const hasOwnDateMatch = ownDate ? isDateInRange(ownDate, start, end) : false;
@@ -947,7 +975,7 @@ export default function App() {
         }
         return true;
       }),
-    [activeTasks, search, selectedSphereIds, spheres.length, subtaskMap, timeFilter]
+    [activeTasks, effectiveTimeFilter, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
   );
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
@@ -1260,6 +1288,12 @@ export default function App() {
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
 
   const listTasks = [...visibleTasks].sort((a, b) => {
+    if (isTimelineMode) {
+      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+      if (aDue !== bDue) return aDue - bDue;
+      return a.title.localeCompare(b.title, 'ru');
+    }
     if (rankingMode === 'importance' && a.importance !== b.importance) return b.importance - a.importance;
     if (rankingMode === 'urgency' && a.urgency !== b.urgency) return b.urgency - a.urgency;
     if (a.urgency !== b.urgency) return b.urgency - a.urgency;
@@ -1332,9 +1366,51 @@ export default function App() {
       </header>
 
       <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-5">
-        <div className="relative">
+        <div className="relative" ref={displayModeMenuRef}>
           <button
             className="flex w-full items-center justify-between rounded bg-slate-800 p-2 text-left text-sm"
+            onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
+            aria-label="Выбрать режим отображения"
+          >
+            <span className="inline-flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
+                <selectedDisplayMode.icon size={16} className={selectedDisplayMode.iconClassName} />
+              </span>
+              <span className="truncate">{selectedDisplayMode.label}</span>
+            </span>
+            <ChevronDown size={14} className={`text-slate-400 transition ${isDisplayModeMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isDisplayModeMenuOpen ? (
+            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
+              {DISPLAY_MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition ${
+                    option.value === displayMode
+                      ? 'bg-slate-700/90 text-slate-50'
+                      : 'text-slate-200 hover:bg-slate-800/80'
+                  }`}
+                  onClick={() => {
+                    setDisplayMode(option.value);
+                    setIsDisplayModeMenuOpen(false);
+                  }}
+                >
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
+                    <option.icon size={14} className={option.iconClassName} />
+                  </span>
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="relative" data-sphere-filter-root="true">
+          <button
+            className={`flex w-full items-center justify-between rounded p-2 text-left text-sm ${
+              isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'
+            }`}
+            disabled={isTimelineMode}
             onClick={() => setIsSphereFilterOpen((prev) => !prev)}
           >
             <span className="truncate">{sphereFilterLabel}</span>
@@ -1369,8 +1445,9 @@ export default function App() {
         </div>
         <div>
           <select
-            className="w-full rounded bg-slate-800 p-2 text-sm"
+            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
             value={timeFilter}
+            disabled={isTimelineMode}
             onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
           >
             <option value="all">За все время</option>
@@ -1383,23 +1460,13 @@ export default function App() {
         </div>
         <div>
           <select
-            className="w-full rounded bg-slate-800 p-2 text-sm"
+            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
             value={rankingMode}
+            disabled={isTimelineMode}
             onChange={(event) => setRankingMode(event.target.value as BubbleRankingMode)}
           >
             <option value="urgency">По срочности</option>
             <option value="importance">По важности</option>
-          </select>
-        </div>
-        <div>
-          <select
-            className="w-full rounded bg-slate-800 p-2 text-sm"
-            value={displayMode}
-            onChange={(event) => setDisplayMode(event.target.value as 'bubbles' | 'list' | 'timeline')}
-          >
-            <option value="bubbles">Баблы</option>
-            <option value="list">Списком</option>
-            <option value="timeline">Таймлайн</option>
           </select>
         </div>
         <div className="lg:col-span-1 flex flex-wrap items-center justify-end gap-2">
@@ -1478,8 +1545,10 @@ export default function App() {
                 </li>
               ) : null}
               {listTasks.map((task) => {
-                const isExpandedTask = shouldTaskGlow(task) || isOverdue(task);
                 const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+                const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
+                const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
+                const isExpandedTask = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
                 const isHoveredTask = listHoveredTaskId === task.id;
@@ -1540,28 +1609,43 @@ export default function App() {
                           <p className="mb-1 text-slate-300">Подзадачи:</p>
                           <ul className="space-y-1">
                             {taskSubtasks.length === 0 ? <li className="text-slate-500">Подзадач пока нет</li> : null}
-                            {taskSubtasks.map((subtask) => (
-                              <li
-                                key={subtask.id}
-                                className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={subtask.status === 'DONE'}
-                                  onChange={() => {
-                                    void toggleSubtaskDone(subtask);
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-100'}`}
-                                  onClick={() => setEditorState({ task: subtask })}
+                            {taskSubtasks.map((subtask) => {
+                              const hasSubtaskOverdueState = subtask.status !== 'DONE' && isOverdue(subtask);
+                              const hasSubtaskReminderState = subtask.status !== 'DONE' && !hasSubtaskOverdueState && shouldTaskGlow(subtask);
+                              return (
+                                <li
+                                  key={subtask.id}
+                                  className={`flex items-center gap-2 rounded border px-2 py-1 ${
+                                    hasSubtaskOverdueState
+                                      ? 'border-rose-400/70 bg-rose-950/25'
+                                      : hasSubtaskReminderState
+                                        ? 'border-cyan-300/60 bg-cyan-950/25'
+                                        : 'border-slate-700/70 bg-slate-800/70'
+                                  }`}
+                                  style={hasSubtaskOverdueState
+                                    ? { animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                                    : hasSubtaskReminderState
+                                      ? { animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                                      : undefined}
+                                  onClick={(event) => event.stopPropagation()}
                                 >
-                                  <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
-                                </button>
-                              </li>
-                            ))}
+                                  <input
+                                    type="checkbox"
+                                    checked={subtask.status === 'DONE'}
+                                    onChange={() => {
+                                      void toggleSubtaskDone(subtask);
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-100'}`}
+                                    onClick={() => setEditorState({ task: subtask })}
+                                  >
+                                    <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       </div>
