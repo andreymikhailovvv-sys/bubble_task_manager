@@ -6,6 +6,10 @@ import { aiAssistantService } from './ai-assistant.service.js';
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
+const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
+  || process.env.MINI_APP_URL?.trim()
+  || process.env.APP_BASE_URL?.trim()
+  || 'https://bubble-task-manager.onrender.com/miniapp';
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
@@ -66,6 +70,13 @@ const formatAiTextWithBold = (value: string) => {
   return escaped.replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>');
 };
 
+const buildMiniAppTaskUrl = (taskId: string) => {
+  const normalizedBase = MINI_APP_URL.endsWith('/') ? MINI_APP_URL.slice(0, -1) : MINI_APP_URL;
+  const url = new URL(normalizedBase);
+  url.searchParams.set('taskId', taskId);
+  return url.toString();
+};
+
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
   const diffMs = dueDate.getTime() - Date.now();
@@ -107,6 +118,7 @@ const keyboardMain = (taskId: string) => ({
       { text: '⏳ Отложить', callback_data: `snooze:${taskId}` },
       { text: '✅ Выполнить', callback_data: `done:${taskId}` }
     ],
+    [{ text: '👀 Посмотреть в приложении', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
     [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
   ]
 });
