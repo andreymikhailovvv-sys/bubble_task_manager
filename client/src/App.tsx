@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Bot, CalendarDays, Check, ChevronDown, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
@@ -1286,6 +1286,60 @@ export default function App() {
   };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
+  const getTimelineTaskViewModel = (task: Task) => {
+    const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+    const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
+    const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
+    const hasOverdueState = task.status !== 'DONE' && (isOverdue(task) || hasOverdueSubtask);
+    const hasReminderState = task.status !== 'DONE' && !hasOverdueState && (shouldTaskGlow(task) || hasReminderSubtask);
+    const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
+    const sphereColor = taskSphere?.color ?? '#64748b';
+    return {
+      taskSubtasks,
+      hasOverdueState,
+      hasReminderState,
+      sphereColor
+    };
+  };
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
+    const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    return (
+      <button
+        key={task.id}
+        type="button"
+        className="flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition hover:brightness-110"
+        style={{
+          borderColor: hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor,
+          backgroundColor: hasOverdueState
+            ? 'rgba(136,19,55,0.45)'
+            : hexToRgba(sphereColor, 0.34) ?? 'rgba(100,116,139,0.34)',
+          boxShadow: hasOverdueState
+            ? '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)'
+            : hasReminderState
+              ? '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)'
+              : undefined,
+          animation: hasOverdueState
+            ? 'subtask-overdue-glow 2.3s ease-in-out infinite'
+            : hasReminderState
+              ? 'subtask-reminder-glow 2.3s ease-in-out infinite'
+              : undefined
+        }}
+        onClick={() => setFocusedTaskId(task.id)}
+      >
+        <span className="truncate">
+          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+          {options?.showTime && task.dueDate ? (
+            <span className="ml-1 text-slate-200/80">
+              ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
+            </span>
+          ) : null}
+        </span>
+        <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
+          {taskSubtasks.length}
+        </span>
+      </button>
+    );
+  };
 
   const listTasks = [...visibleTasks].sort((a, b) => {
     if (isTimelineMode) {
@@ -1368,17 +1422,14 @@ export default function App() {
       <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-5">
         <div className="relative" ref={displayModeMenuRef}>
           <button
-            className="flex w-full items-center justify-between rounded bg-slate-800 p-2 text-left text-sm"
+            className="flex w-full items-center justify-center rounded bg-slate-800 p-2 text-left text-sm"
             onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
             aria-label="Выбрать режим отображения"
           >
-            <span className="inline-flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
-                <selectedDisplayMode.icon size={16} className={selectedDisplayMode.iconClassName} />
-              </span>
-              <span className="truncate">{selectedDisplayMode.label}</span>
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
+              <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
             </span>
-            <ChevronDown size={14} className={`text-slate-400 transition ${isDisplayModeMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown size={14} className={`ml-2 text-slate-400 transition ${isDisplayModeMenuOpen ? 'rotate-180' : ''}`} />
           </button>
           {isDisplayModeMenuOpen ? (
             <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
@@ -1396,8 +1447,8 @@ export default function App() {
                     setIsDisplayModeMenuOpen(false);
                   }}
                 >
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
-                    <option.icon size={14} className={option.iconClassName} />
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
+                    <option.icon size={18} className={option.iconClassName} />
                   </span>
                   <span>{option.label}</span>
                 </button>
@@ -1728,28 +1779,32 @@ export default function App() {
               {timelineViewMode === 'month' ? (
                 <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
                   <div className="mb-2 grid grid-cols-7 gap-2">
-                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName) => (
-                      <div key={dayName} className="text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
+                      <div
+                        key={dayName}
+                        className={`text-center text-xs font-semibold uppercase tracking-wide ${index >= 5 ? 'text-rose-300/80' : 'text-slate-400'}`}
+                      >
                         {dayName}
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
                     {timelineViewData.monthCells.map((cell) => (
-                      <div key={cell.key} className={`min-h-32 rounded-xl border p-2 ${cell.date ? 'border-slate-700/70 bg-slate-900/75' : 'border-transparent bg-slate-900/20'}`}>
+                      <div
+                        key={cell.key}
+                        className={`min-h-32 rounded-xl border p-2 ${
+                          cell.date
+                            ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
+                              ? 'border-rose-800/60 bg-rose-950/18'
+                              : 'border-slate-700/70 bg-slate-900/75')
+                            : 'border-transparent bg-slate-900/20'
+                        }`}
+                      >
                         {cell.date ? (
                           <>
                             <p className="mb-2 text-xs font-semibold text-slate-300">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
-                              {cell.tasks.slice(0, 4).map((task) => (
-                                <li
-                                  key={task.id}
-                                  className="cursor-pointer truncate rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-xs text-slate-100 hover:border-cyan-300/70"
-                                  onClick={() => setFocusedTaskId(task.id)}
-                                >
-                                  <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                                </li>
-                              ))}
+                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
                               {cell.tasks.length > 4 ? <li className="text-[11px] text-slate-400">+ ещё {cell.tasks.length - 4}</li> : null}
                             </ul>
                           </>
@@ -1761,27 +1816,53 @@ export default function App() {
               ) : null}
 
               {timelineViewMode === 'week' ? (
-                <section className="grid grid-cols-1 gap-3 xl:grid-cols-7">
-                  {timelineViewData.dayGroups.map((day) => (
-                    <div key={day.key} className="rounded-xl border border-slate-700/70 bg-slate-900/75 p-3">
-                      <div className="mb-2 border-b border-slate-700/70 pb-2">
-                        <p className="text-xs text-slate-400">{day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}</p>
-                        <p className="text-sm font-semibold text-slate-100">{day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</p>
-                      </div>
-                      <ul className="space-y-2">
-                        {day.tasks.length === 0 ? <li className="text-xs text-slate-500">Нет задач</li> : null}
-                        {day.tasks.map((task) => (
-                          <li
-                            key={task.id}
-                            className="cursor-pointer rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-xs text-slate-100 hover:border-cyan-300/70"
-                            onClick={() => setFocusedTaskId(task.id)}
-                          >
-                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                <section className="overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/70">
+                  <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
+                    <div className="border-b border-r border-slate-800/80 bg-slate-900/90 p-2 text-xs text-slate-400">Время</div>
+                    {timelineViewData.dayGroups.map((day) => {
+                      const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                      return (
+                        <div
+                          key={`header-${day.key}`}
+                          className={`border-b border-r border-slate-800/80 p-2 text-center ${
+                            isWeekend ? 'bg-rose-950/20' : 'bg-slate-900/85'
+                          }`}
+                        >
+                          <p className={`text-xs ${isWeekend ? 'text-rose-200/90' : 'text-slate-400'}`}>
+                            {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
+                          </p>
+                          <p className={`text-sm font-semibold ${isWeekend ? 'text-rose-100' : 'text-slate-100'}`}>
+                            {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
+                      <Fragment key={`week-hour-${hour}`}>
+                        <div className="border-b border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">
+                          {String(hour).padStart(2, '0')}:00
+                        </div>
+                        {timelineViewData.dayGroups.map((day) => {
+                          const hourTasks = day.tasks.filter((task) => {
+                            if (!task.dueDate) return false;
+                            const dueDate = new Date(task.dueDate);
+                            return !Number.isNaN(dueDate.getTime()) && dueDate.getHours() === hour;
+                          });
+                          const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                          return (
+                            <div
+                              key={`${day.key}-${hour}`}
+                              className={`min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
+                                isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
+                              }`}
+                            >
+                              {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
+                            </div>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
+                  </div>
                 </section>
               ) : null}
 
@@ -1791,17 +1872,7 @@ export default function App() {
                     <div key={hourGroup.hour} className="grid grid-cols-[70px_minmax(0,1fr)] border-b border-slate-800/80 last:border-b-0">
                       <div className="border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">{String(hourGroup.hour).padStart(2, '0')}:00</div>
                       <div className="min-h-11 space-y-2 px-2 py-2">
-                        {hourGroup.tasks.map((task) => (
-                          <button
-                            key={task.id}
-                            type="button"
-                            className="block w-full rounded-md border border-slate-700/70 bg-slate-800/70 px-2 py-1 text-left text-xs text-slate-100 hover:border-cyan-300/70"
-                            onClick={() => setFocusedTaskId(task.id)}
-                          >
-                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                            <span className="ml-1 text-slate-400">({new Date(task.dueDate ?? '').toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})</span>
-                          </button>
-                        ))}
+                        {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
                       </div>
                     </div>
                   ))}
