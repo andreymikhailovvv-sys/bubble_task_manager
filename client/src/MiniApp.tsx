@@ -138,6 +138,10 @@ export default function MiniApp() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
+  const requestedTaskId = useMemo(() => {
+    const value = new URLSearchParams(window.location.search).get('taskId');
+    return value?.trim() ? value.trim() : null;
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -274,6 +278,13 @@ export default function MiniApp() {
     setExpandedSubtaskIds([]);
     setOpenedTaskId(task.id);
   };
+
+  useEffect(() => {
+    if (!requestedTaskId || loading || tasks.length === 0 || openedTaskId) return;
+    const requestedTask = tasks.find((task) => task.id === requestedTaskId && !task.parentTaskId && task.status !== 'DONE');
+    if (!requestedTask) return;
+    openTaskModal(requestedTask);
+  }, [loading, openedTaskId, requestedTaskId, tasks]);
 
   const closeTaskModal = () => {
     setOpenedTaskId(null);
