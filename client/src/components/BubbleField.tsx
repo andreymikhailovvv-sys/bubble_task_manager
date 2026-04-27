@@ -83,8 +83,9 @@ function shouldTaskGlow(task: Task) {
   if (Number.isNaN(due.getTime())) return false;
   const diff = due.getTime() - Date.now();
   if (diff < 0) return true;
-  if (task.notifyBeforeMinutes === null) return false;
-  const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
+  if (!Number.isFinite(task.notifyBeforeMinutes)) return false;
+  const notifyBefore = Number(task.notifyBeforeMinutes) * 60_000;
+  if (notifyBefore <= 0) return false;
   return diff <= notifyBefore;
 }
 
