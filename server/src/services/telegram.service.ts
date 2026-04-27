@@ -118,7 +118,7 @@ const keyboardMain = (taskId: string) => ({
       { text: '⏳ Отложить', callback_data: `snooze:${taskId}` },
       { text: '✅ Выполнить', callback_data: `done:${taskId}` }
     ],
-    [{ text: '👀 Посмотреть в приложении', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
+    [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
     [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
   ]
 });
@@ -1241,6 +1241,7 @@ export const telegramService = {
       },
       select: {
         id: true,
+        parentTaskId: true,
         dueDate: true,
         notifyBeforeMinutes: true,
         telegramNotifiedAt: true,
@@ -1258,7 +1259,7 @@ export const telegramService = {
       if (isShining && !task.telegramNotifiedAt) {
         const text = await getTaskNotificationText(task.id, task.userId);
         if (text && task.user.telegramChatId) {
-          await sendMessage(task.user.telegramChatId, text, keyboardMain(task.id));
+          await sendMessage(task.user.telegramChatId, text, keyboardMain(task.parentTaskId ?? task.id));
           await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: now } });
         }
       }
