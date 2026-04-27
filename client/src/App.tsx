@@ -92,6 +92,19 @@ function resolveAttachmentMimeType(file: File): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
+function hexToRgba(hexColor: string, alpha: number) {
+  const normalized = hexColor.trim().replace('#', '');
+  if (![3, 6].includes(normalized.length)) return null;
+  const full = normalized.length === 3
+    ? normalized.split('').map((char) => `${char}${char}`).join('')
+    : normalized;
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
+  if ([r, g, b].some((value) => Number.isNaN(value))) return null;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 type TimelineViewData = {
   title: string;
   tasksWithoutDate: Task[];
@@ -218,6 +231,7 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
+  const [listHoveredTaskId, setListHoveredTaskId] = useState<string | null>(null);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
   const [aiDraft, setAiDraft] = useState('');
@@ -1223,8 +1237,34 @@ export default function App() {
       minute: '2-digit'
     });
   };
+  const formatDeadlineLeft = (value?: string | null) => {
+    if (!value) return 'Без дедлайна';
+    const due = new Date(value);
+    if (Number.isNaN(due.getTime())) return 'Без дедлайна';
+    const diffMs = due.getTime() - Date.now();
+    if (diffMs < 0) {
+      const overdueMinutes = Math.floor(Math.abs(diffMs) / 60_000);
+      if (overdueMinutes < 1) return 'Просрочено только что';
+      const overdueHours = Math.floor(overdueMinutes / 60);
+      const overdueMins = overdueMinutes % 60;
+      if (overdueHours < 1) return `Просрочено на ${overdueMins} мин`;
+      return `Просрочено на ${overdueHours} ч ${overdueMins} мин`;
+    }
+    const totalMinutes = Math.floor(diffMs / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours < 1) return `Через ${Math.max(1, minutes)} мин`;
+    return `Через ${hours} ч ${minutes} мин`;
+  };
+
+  const sphereById = useMemo(
+    () => new Map(spheres.map((sphere) => [sphere.id, sphere])),
+    [spheres]
+  );
 
   const listTasks = [...visibleTasks].sort((a, b) => {
+    if (rankingMode === 'importance' && a.importance !== b.importance) return b.importance - a.importance;
+    if (rankingMode === 'urgency' && a.urgency !== b.urgency) return b.urgency - a.urgency;
     if (a.urgency !== b.urgency) return b.urgency - a.urgency;
     const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
     const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
@@ -1445,6 +1485,13 @@ export default function App() {
                 const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
+                const isHoveredTask = listHoveredTaskId === task.id;
+                const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
+                const sphereColor = taskSphere?.color ?? '#64748b';
+                const sectorBadgeStyle = {
+                  backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
+                  borderColor: sphereColor
+                };
                 return (
                   <motion.li
                     key={task.id}
@@ -1457,19 +1504,36 @@ export default function App() {
                           : 'border-slate-700/70 bg-slate-900/75'
                     }`}
                     style={hasOverdueState
-                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: `${isHoveredTask ? 'subtask-overdue-glow-static' : 'subtask-overdue-glow'} 2.3s ease-in-out infinite` }
                       : hasReminderState
-                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: `${isHoveredTask ? 'subtask-reminder-glow-static' : 'subtask-reminder-glow'} 2.3s ease-in-out infinite` }
                         : undefined}
+                    onMouseEnter={() => setListHoveredTaskId(task.id)}
+                    onMouseLeave={() => setListHoveredTaskId((prev) => (prev === task.id ? null : prev))}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
-                        <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                      </h3>
-                      <span className="shrink-0 rounded-full border border-slate-500 bg-slate-700/70 px-2 py-0.5 text-[11px] text-slate-100">
-                        Срочность: {task.urgency}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                          </h3>
+                          <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
+                            {formatDeadlineLeft(task.dueDate)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className="rounded-full border px-2 py-0.5 text-[11px] text-slate-100"
+                          style={sectorBadgeStyle}
+                        >
+                          Сектор: {taskSphere?.name ?? 'Без сектора'}
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
+                          Важность: {task.importance}
+                        </span>
+                      </div>
                     </div>
                     {isExpandedTask ? (
                       <div className="mt-2 space-y-2 text-xs text-slate-200">
