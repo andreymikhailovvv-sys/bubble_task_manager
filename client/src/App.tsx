@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, ChevronDown, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -232,6 +232,8 @@ export default function App() {
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
+  const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
+  const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -908,8 +910,9 @@ export default function App() {
     if (Number.isNaN(due.getTime())) return false;
     const diff = due.getTime() - Date.now();
     if (diff < 0) return true;
-    if (task.notifyBeforeMinutes === null) return false;
-    const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
+    if (!Number.isFinite(task.notifyBeforeMinutes)) return false;
+    const notifyBefore = Number(task.notifyBeforeMinutes) * 60_000;
+    if (notifyBefore <= 0) return false;
     return diff <= notifyBefore;
   }
 
@@ -961,7 +964,8 @@ export default function App() {
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
         if (effectiveTimeFilter === 'focus') {
-          if (!shouldTaskGlow(task)) return false;
+          const hasGlowingSubtask = taskSubtasks.some((subtask) => shouldTaskGlow(subtask));
+          if (!shouldTaskGlow(task) && !hasGlowingSubtask) return false;
         } else if (effectiveTimeFilter !== 'all') {
           const { start, end } = getBoundary();
           const ownDate = parseDate(task.dueDate ?? task.createdAt ?? task.updatedAt);
@@ -1303,11 +1307,17 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
     return (
-      <button
+      <motion.button
+        layout
         key={task.id}
         type="button"
-        className="flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition hover:brightness-110"
+        draggable={canDragTask}
+        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        className={`flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
+          canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
+        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
         style={{
           borderColor: hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor,
           backgroundColor: hasOverdueState
@@ -1324,6 +1334,13 @@ export default function App() {
               ? 'subtask-reminder-glow 2.3s ease-in-out infinite'
               : undefined
         }}
+        onDragStartCapture={(event) => {
+          if (!canDragTask) return;
+          setDraggedTimelineTaskId(task.id);
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/task-id', task.id);
+        }}
+        onDragEndCapture={() => setDraggedTimelineTaskId(null)}
         onClick={() => setFocusedTaskId(task.id)}
       >
         <span className="truncate">
@@ -1337,7 +1354,7 @@ export default function App() {
         <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
           {taskSubtasks.length}
         </span>
-      </button>
+      </motion.button>
     );
   };
 
@@ -1380,6 +1397,42 @@ export default function App() {
       } satisfies TimelineViewData;
     }
   })();
+  const isTimelineDragging = isTimelineDragEnabled && draggedTimelineTaskId !== null;
+
+  const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; keepOriginalTime?: boolean }) => {
+    const taskId = draggedTimelineTaskId;
+    if (!taskId) return;
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const previousDueDate = task.dueDate ?? null;
+    const currentDueDate = task.dueDate ? new Date(task.dueDate) : new Date();
+    if (Number.isNaN(currentDueDate.getTime())) return;
+
+    const nextDueDate = new Date(target.date);
+    if (target.keepOriginalTime) {
+      nextDueDate.setHours(currentDueDate.getHours(), currentDueDate.getMinutes(), 0, 0);
+    } else if (typeof target.hour === 'number') {
+      nextDueDate.setHours(target.hour, currentDueDate.getMinutes(), 0, 0);
+    }
+
+    const nextDueDateIso = nextDueDate.toISOString();
+    setTasks((prev) => prev.map((item) => (
+      item.id === taskId
+        ? { ...item, dueDate: nextDueDateIso, updatedAt: new Date().toISOString() }
+        : item
+    )));
+
+    try {
+      await api.updateTask(taskId, { dueDate: nextDueDateIso });
+    } catch {
+      setTasks((prev) => prev.map((item) => (
+        item.id === taskId
+          ? { ...item, dueDate: previousDueDate, updatedAt: new Date().toISOString() }
+          : item
+      )));
+      await load();
+    }
+  };
 
   return (
     <main
@@ -1419,20 +1472,17 @@ export default function App() {
         </button>
       </header>
 
-      <section className="mb-4 grid grid-cols-1 gap-2 lg:grid-cols-5">
-        <div className="relative" ref={displayModeMenuRef}>
+      <section className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="-ml-1 shrink-0" ref={displayModeMenuRef}>
           <button
-            className="flex w-full items-center justify-center rounded bg-slate-800 p-2 text-left text-sm"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/85 transition hover:border-cyan-300/70"
             onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
             aria-label="Выбрать режим отображения"
           >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
-              <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
-            </span>
-            <ChevronDown size={14} className={`ml-2 text-slate-400 transition ${isDisplayModeMenuOpen ? 'rotate-180' : ''}`} />
+            <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
           </button>
           {isDisplayModeMenuOpen ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
+            <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
               {DISPLAY_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -1456,7 +1506,7 @@ export default function App() {
             </div>
           ) : null}
         </div>
-        <div className="relative" data-sphere-filter-root="true">
+        <div className="relative w-full min-w-52 flex-1 sm:w-auto sm:flex-none" data-sphere-filter-root="true">
           <button
             className={`flex w-full items-center justify-between rounded p-2 text-left text-sm ${
               isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'
@@ -1494,7 +1544,7 @@ export default function App() {
             </div>
           ) : null}
         </div>
-        <div>
+        <div className="w-full min-w-44 flex-1 sm:w-auto sm:flex-none">
           <select
             className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
             value={timeFilter}
@@ -1509,7 +1559,7 @@ export default function App() {
             <option value="focus">Фокус</option>
           </select>
         </div>
-        <div>
+        <div className="w-full min-w-40 flex-1 sm:w-auto sm:flex-none">
           <select
             className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
             value={rankingMode}
@@ -1520,7 +1570,7 @@ export default function App() {
             <option value="importance">По важности</option>
           </select>
         </div>
-        <div className="lg:col-span-1 flex flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
@@ -1748,24 +1798,42 @@ export default function App() {
                     </button>
                   </div>
                   <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
-                  <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
-                    {([
-                      { key: 'day', label: 'День' },
-                      { key: 'week', label: 'Неделя' },
-                      { key: 'month', label: 'Месяц' }
-                    ] as const).map((mode) => (
-                      <button
-                        key={mode.key}
-                        className={`rounded-md px-2 py-1 text-xs transition ${
-                          timelineViewMode === mode.key
-                            ? 'bg-cyan-700 text-white'
-                            : 'text-slate-300 hover:bg-slate-800'
-                        }`}
-                        onClick={() => setTimelineViewMode(mode.key)}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                        isTimelineDragEnabled
+                          ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
+                          : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
+                      }`}
+                      onClick={() => {
+                        setIsTimelineDragEnabled((prev) => !prev);
+                        setDraggedTimelineTaskId(null);
+                      }}
+                      title="Перетаскивание задач"
+                      aria-label="Переключить перетаскивание задач в таймлайне"
+                    >
+                      <MousePointer2 size={14} />
+                    </button>
+                    <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
+                      {([
+                        { key: 'day', label: 'День' },
+                        { key: 'week', label: 'Неделя' },
+                        { key: 'month', label: 'Месяц' }
+                      ] as const).map((mode) => (
+                        <button
+                          key={mode.key}
+                          className={`rounded-md px-2 py-1 text-xs transition ${
+                            timelineViewMode === mode.key
+                              ? 'bg-cyan-700 text-white'
+                              : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                          onClick={() => setTimelineViewMode(mode.key)}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1798,7 +1866,20 @@ export default function App() {
                               ? 'border-rose-800/60 bg-rose-950/18'
                               : 'border-slate-700/70 bg-slate-900/75')
                             : 'border-transparent bg-slate-900/20'
-                        }`}
+                        } ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                        onDragOver={(event) => {
+                          if (!isTimelineDragEnabled || !cell.date) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={async (event) => {
+                          if (!isTimelineDragEnabled || !cell.date) return;
+                          event.preventDefault();
+                          const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                          setDraggedTimelineTaskId(taskId || null);
+                          await handleTimelineTaskDrop({ date: cell.date, keepOriginalTime: true });
+                          setDraggedTimelineTaskId(null);
+                        }}
                       >
                         {cell.date ? (
                           <>
@@ -1854,7 +1935,20 @@ export default function App() {
                               key={`${day.key}-${hour}`}
                               className={`min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
                                 isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
-                              }`}
+                              } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
+                              onDragOver={(event) => {
+                                if (!isTimelineDragEnabled) return;
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = 'move';
+                              }}
+                              onDrop={async (event) => {
+                                if (!isTimelineDragEnabled) return;
+                                event.preventDefault();
+                                const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                                setDraggedTimelineTaskId(taskId || null);
+                                await handleTimelineTaskDrop({ date: day.date, hour });
+                                setDraggedTimelineTaskId(null);
+                              }}
                             >
                               {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
                             </div>
@@ -1871,7 +1965,24 @@ export default function App() {
                   {timelineViewData.hourGroups.map((hourGroup) => (
                     <div key={hourGroup.hour} className="grid grid-cols-[70px_minmax(0,1fr)] border-b border-slate-800/80 last:border-b-0">
                       <div className="border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">{String(hourGroup.hour).padStart(2, '0')}:00</div>
-                      <div className="min-h-11 space-y-2 px-2 py-2">
+                      <div
+                        className={`min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
+                        onDragOver={(event) => {
+                          if (!isTimelineDragEnabled) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={async (event) => {
+                          if (!isTimelineDragEnabled) return;
+                          event.preventDefault();
+                          const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                          setDraggedTimelineTaskId(taskId || null);
+                          const dayDate = new Date(timelineAnchorDate);
+                          dayDate.setHours(0, 0, 0, 0);
+                          await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour });
+                          setDraggedTimelineTaskId(null);
+                        }}
+                      >
                         {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
                       </div>
                     </div>
