@@ -1257,10 +1257,7 @@ export default function App() {
     return `Через ${hours} ч ${minutes} мин`;
   };
 
-  const sphereById = useMemo(
-    () => new Map(spheres.map((sphere) => [sphere.id, sphere])),
-    [spheres]
-  );
+  const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
 
   const listTasks = [...visibleTasks].sort((a, b) => {
     if (rankingMode === 'importance' && a.importance !== b.importance) return b.importance - a.importance;
