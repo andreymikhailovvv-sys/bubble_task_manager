@@ -326,10 +326,10 @@ function extractOutputText(response: unknown): string {
 }
 
 type GeneralAssistantAction =
-  | { type: 'reschedule_task'; taskId?: string; taskTitle?: string; dueDate: string }
-  | { type: 'complete_task'; taskId?: string; taskTitle?: string }
-  | { type: 'reopen_task'; taskId?: string; taskTitle?: string }
-  | { type: 'rebalance_today'; taskIds?: string[]; taskTitles?: string[] };
+  | { type: 'reschedule_task'; taskId: string; dueDate: string }
+  | { type: 'complete_task'; taskId: string }
+  | { type: 'reopen_task'; taskId: string }
+  | { type: 'rebalance_today'; taskIds?: string[] };
 
 function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   let parsed: unknown;
@@ -358,25 +358,20 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
       const type = typeof value.type === 'string' ? value.type : '';
       if (type === 'reschedule_task') {
         const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
-        const taskTitle = typeof value.taskTitle === 'string' ? value.taskTitle.trim() : '';
         const dueDate = typeof value.dueDate === 'string' ? value.dueDate.trim() : '';
-        if ((!taskId && !taskTitle) || !dueDate) return null;
-        return { type, taskId: taskId || undefined, taskTitle: taskTitle || undefined, dueDate };
+        if (!taskId || !dueDate) return null;
+        return { type, taskId, dueDate };
       }
       if (type === 'complete_task' || type === 'reopen_task') {
         const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
-        const taskTitle = typeof value.taskTitle === 'string' ? value.taskTitle.trim() : '';
-        if (!taskId && !taskTitle) return null;
-        return { type, taskId: taskId || undefined, taskTitle: taskTitle || undefined };
+        if (!taskId) return null;
+        return { type, taskId };
       }
       if (type === 'rebalance_today') {
         const taskIds = Array.isArray(value.taskIds)
           ? value.taskIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
           : undefined;
-        const taskTitles = Array.isArray(value.taskTitles)
-          ? value.taskTitles.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
-          : undefined;
-        return { type, taskIds, taskTitles };
+        return { type, taskIds };
       }
       return null;
     })
@@ -399,11 +394,11 @@ function formatGeneralTasksContext(tasks: Array<{
     .map((task, index) => {
       const subtasksText = task.subtasks.length
         ? task.subtasks.map((subtask) => (
-          `    - ${subtask.title}; статус=${subtask.status}; дедлайн=${subtask.dueDate ? subtask.dueDate.toISOString() : 'нет'}; описание=${subtask.description ?? 'нет'}`
+          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; дедлайн=${subtask.dueDate ? subtask.dueDate.toISOString() : 'нет'}; описание=${subtask.description ?? 'нет'}`
         )).join('\n')
         : '    - нет подзадач';
       return [
-        `${index + 1}. ${task.title}`,
+        `${index + 1}. [${task.id}] ${task.title}`,
         `   статус=${task.status}; дедлайн=${task.dueDate ? task.dueDate.toISOString() : 'нет'}`,
         `   описание=${task.description ?? 'нет'}`,
         '   подзадачи:',
@@ -411,15 +406,6 @@ function formatGeneralTasksContext(tasks: Array<{
       ].join('\n');
     })
     .join('\n');
-}
-
-function sanitizeGeneralAssistantAnswer(answer: string): string {
-  return answer
-    .replace(/\[[a-z0-9]{16,}\]/gi, '')
-    .replace(/\b[a-z0-9]{20,}\b/gi, '')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 function normalizeAttachments(attachments: ChatAttachment[] | undefined): ChatAttachment[] {
@@ -883,10 +869,10 @@ export const aiAssistantService = {
       'Работаешь только в режиме fast.',
       'Ты не помогаешь выполнять задачи пошагово и не мотивируешь, а даёшь справку по существующим задачам пользователя.',
       'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
-      'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.).',
+      'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
       'Также можно управлять задачами через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
-      'action.type поддерживаются: reschedule_task (taskTitle ИЛИ taskId, dueDate ISO), complete_task (taskTitle ИЛИ taskId), reopen_task (taskTitle ИЛИ taskId), rebalance_today (taskTitles/taskIds опционально).',
+      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально).',
       'Если действий не нужно — actions: [].',
       'Текст для пользователя клади только в answer на русском.'
     ].join(' ');
@@ -939,7 +925,6 @@ export const aiAssistantService = {
             parentTaskId: null,
             status: { not: 'DONE' },
             ...(action.taskIds && action.taskIds.length > 0 ? { id: { in: action.taskIds } } : {}),
-            ...(action.taskTitles && action.taskTitles.length > 0 ? { title: { in: action.taskTitles } } : {}),
             dueDate: { gte: start, lt: end }
           },
           orderBy: { dueDate: 'asc' },
@@ -972,14 +957,7 @@ export const aiAssistantService = {
       }
 
       const task = await prisma.task.findFirst({
-        where: {
-          userId: input.userId,
-          ...(action.taskId
-            ? { id: action.taskId }
-            : action.taskTitle
-              ? { title: { equals: action.taskTitle, mode: 'insensitive' as const } }
-              : { id: '__missing__' })
-        },
+        where: { id: action.taskId, userId: input.userId },
         select: { id: true, title: true, dueDate: true, status: true }
       });
       if (!task) {
@@ -1027,7 +1005,7 @@ export const aiAssistantService = {
     }
 
     return {
-      answer: sanitizeGeneralAssistantAnswer(parsed.answer),
+      answer: parsed.answer,
       model: FAST_MODEL,
       actionReports,
       undoOperations
