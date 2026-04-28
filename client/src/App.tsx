@@ -253,6 +253,7 @@ export default function App() {
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
   const [focusedAiSearchQuery, setFocusedAiSearchQuery] = useState('');
+  const [isFocusedAiSearchOpen, setIsFocusedAiSearchOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -269,6 +270,7 @@ export default function App() {
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
   const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
+  const [isGeneralAiSearchOpen, setIsGeneralAiSearchOpen] = useState(false);
   const [generalAiDraft, setGeneralAiDraft] = useState('');
   const [isGeneralAiFullscreen, setIsGeneralAiFullscreen] = useState(false);
   const [generalAiLoading, setGeneralAiLoading] = useState(false);
@@ -689,15 +691,17 @@ export default function App() {
     [aiDialogByTask, focusedTask]
   );
   const filteredFocusedAiDialog = useMemo(() => {
+    if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
     if (!query) return focusedAiDialog;
     return focusedAiDialog.filter((message) => message.content.toLowerCase().includes(query));
-  }, [focusedAiDialog, focusedAiSearchQuery]);
+  }, [focusedAiDialog, focusedAiSearchQuery, isFocusedAiSearchOpen]);
   const filteredGeneralAiMessages = useMemo(() => {
+    if (!isGeneralAiSearchOpen) return generalAiMessages;
     const query = generalAiSearchQuery.trim().toLowerCase();
     if (!query) return generalAiMessages;
     return generalAiMessages.filter((message) => message.content.toLowerCase().includes(query));
-  }, [generalAiMessages, generalAiSearchQuery]);
+  }, [generalAiMessages, generalAiSearchQuery, isGeneralAiSearchOpen]);
 
   useEffect(() => {
     if (!focusedTask) {
@@ -712,6 +716,7 @@ export default function App() {
       setAiMode('fast');
       setAiPendingFiles([]);
       setFocusedAiSearchQuery('');
+      setIsFocusedAiSearchOpen(false);
       setHideClosedFocusedSubtasks(true);
       setFocusedTaskAttachments([]);
       setAiSubtasksLoadingTaskId(null);
@@ -2245,24 +2250,35 @@ export default function App() {
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
-              <button
-                className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
-                onClick={() => setIsGeneralAiFullscreen(true)}
-                title="Развернуть общий чат"
-              >
-                <Maximize2 size={14} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
+                  onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
+                  title="Поиск по диалогу"
+                >
+                  <Search size={14} />
+                </button>
+                <button
+                  className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                  onClick={() => setIsGeneralAiFullscreen(true)}
+                  title="Развернуть общий чат"
+                >
+                  <Maximize2 size={14} />
+                </button>
+              </div>
             </div>
             <div ref={generalAiDialogContainerRef} className="mb-2 h-[220px] overflow-y-auto rounded-xl bg-slate-900/90 p-2 text-xs">
-              <label className="mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
-                <Search size={12} />
-                <input
-                  className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
-                  placeholder="Поиск по сообщениям"
-                  value={generalAiSearchQuery}
-                  onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
-                />
-              </label>
+              {isGeneralAiSearchOpen ? (
+                <label className="mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                  <Search size={12} />
+                  <input
+                    className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    placeholder="Поиск по сообщениям"
+                    value={generalAiSearchQuery}
+                    onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
+                  />
+                </label>
+              ) : null}
               {filteredGeneralAiMessages.length === 0 ? <p className="text-slate-400">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
               <div className="space-y-2">
                 {filteredGeneralAiMessages.map((message) => (
@@ -2395,24 +2411,35 @@ export default function App() {
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
                 </div>
-                <button
-                  className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
-                  onClick={() => setIsAiExpanded(true)}
-                  title="Развернуть диалог"
-                >
-                  <Maximize2 size={14} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
+                    onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
+                    title="Поиск по диалогу"
+                  >
+                    <Search size={14} />
+                  </button>
+                  <button
+                    className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                    onClick={() => setIsAiExpanded(true)}
+                    title="Развернуть диалог"
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+                </div>
               </div>
               <div ref={focusedAiDialogContainerRef} className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
-                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
-                  <Search size={12} />
-                  <input
-                    className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
-                    placeholder="Поиск по сообщениям"
-                    value={focusedAiSearchQuery}
-                    onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
-                  />
-                </label>
+                {isFocusedAiSearchOpen ? (
+                  <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                    <Search size={12} />
+                    <input
+                      className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                      placeholder="Поиск по сообщениям"
+                      value={focusedAiSearchQuery}
+                      onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
+                    />
+                  </label>
+                ) : null}
                 {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
@@ -2808,6 +2835,13 @@ export default function App() {
                   </button>
                 </div>
                 <button
+                  className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}
+                  onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
+                  title="Поиск по диалогу"
+                >
+                  <Search size={14} />
+                </button>
+                <button
                   className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
                   onClick={clearFocusedAiDialog}
                   title="Очистить историю диалога по этой задаче"
@@ -2823,15 +2857,17 @@ export default function App() {
               </div>
             </div>
             <div ref={expandedAiDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
-              <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[12px] text-slate-300">
-                <Search size={12} />
-                <input
-                  className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
-                  placeholder="Поиск по сообщениям"
-                  value={focusedAiSearchQuery}
-                  onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
-                />
-              </label>
+              {isFocusedAiSearchOpen ? (
+                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[12px] text-slate-300">
+                  <Search size={12} />
+                  <input
+                    className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    placeholder="Поиск по сообщениям"
+                    value={focusedAiSearchQuery}
+                    onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
+                  />
+                </label>
+              ) : null}
               {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
@@ -2924,20 +2960,31 @@ export default function App() {
                 <p className="flex items-center gap-2 text-base font-semibold text-cyan-100"><Bot size={18} /> Общий чат с ИИ</p>
                 <p className="text-xs text-slate-300">Справка по задачам и команды для управления задачами.</p>
               </div>
-              <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
-                <Minimize2 size={14} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}
+                  onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
+                  title="Поиск по диалогу"
+                >
+                  <Search size={14} />
+                </button>
+                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
+                  <Minimize2 size={14} />
+                </button>
+              </div>
             </div>
             <div ref={generalAiFullscreenDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
-              <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-300">
-                <Search size={12} />
-                <input
-                  className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
-                  placeholder="Поиск по сообщениям"
-                  value={generalAiSearchQuery}
-                  onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
-                />
-              </label>
+              {isGeneralAiSearchOpen ? (
+                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-300">
+                  <Search size={12} />
+                  <input
+                    className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    placeholder="Поиск по сообщениям"
+                    value={generalAiSearchQuery}
+                    onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
+                  />
+                </label>
+              ) : null}
               {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-slate-400">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
               {filteredGeneralAiMessages.map((message) => (
                 <div
