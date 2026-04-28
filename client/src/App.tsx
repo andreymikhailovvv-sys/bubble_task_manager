@@ -53,7 +53,6 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
-const getGeneralAiChatStorageKey = (userId: string) => `btm:${userId}:general-ai-chat`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
 const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
@@ -421,6 +420,7 @@ export default function App() {
       loadedAiHistoryTaskIdsRef.current = new Set();
       return;
     }
+    let isCancelled = false;
     setAiDialogByTask({});
     loadedAiHistoryTaskIdsRef.current = new Set();
     setGeneralAiMessages([]);
@@ -442,21 +442,20 @@ export default function App() {
     } catch {
       setAiReadCursorByTask({});
     }
-    try {
-      const rawGeneralChat = localStorage.getItem(getGeneralAiChatStorageKey(currentUser.id));
-      if (rawGeneralChat) {
-        const parsed = JSON.parse(rawGeneralChat) as { date?: string; messages?: GeneralAiMessage[] };
-        const today = new Date().toISOString().slice(0, 10);
-        if (parsed?.date === today && Array.isArray(parsed.messages)) {
-          const normalized = parsed.messages
-            .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-            .map((message) => ({ id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content }));
-          setGeneralAiMessages(normalized);
-        }
+    const loadGeneralAiHistory = async () => {
+      try {
+        const result = await api.getGeneralAssistantHistory();
+        if (isCancelled) return;
+        const normalized = result.messages
+          .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
+        setGeneralAiMessages(normalized);
+      } catch {
+        if (isCancelled) return;
+        setGeneralAiMessages([]);
       }
-    } catch {
-      setGeneralAiMessages([]);
-    }
+    };
+    void loadGeneralAiHistory();
 
     setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
     const rawOverlayOpacity = localStorage.getItem(getBackgroundOverlayStorageKey(currentUser.id));
@@ -468,6 +467,9 @@ export default function App() {
       return;
     }
     setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -489,36 +491,6 @@ export default function App() {
     if (!currentUser) return;
     localStorage.setItem(getAiReadCursorStorageKey(currentUser.id), JSON.stringify(aiReadCursorByTask));
   }, [aiReadCursorByTask, currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    const today = new Date().toISOString().slice(0, 10);
-    localStorage.setItem(
-      getGeneralAiChatStorageKey(currentUser.id),
-      JSON.stringify({ date: today, messages: generalAiMessages })
-    );
-  }, [generalAiMessages, currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    const intervalId = window.setInterval(() => {
-      const today = new Date().toISOString().slice(0, 10);
-      const hasMessages = generalAiMessages.length > 0;
-      if (!hasMessages) return;
-      const storageRaw = localStorage.getItem(getGeneralAiChatStorageKey(currentUser.id));
-      if (!storageRaw) return;
-      try {
-        const parsed = JSON.parse(storageRaw) as { date?: string };
-        if (parsed?.date !== today) {
-          setGeneralAiMessages([]);
-          setLastGeneralAiUndoOperations([]);
-        }
-      } catch {
-        setGeneralAiMessages([]);
-      }
-    }, 60_000);
-    return () => window.clearInterval(intervalId);
-  }, [currentUser?.id, generalAiMessages.length]);
 
   useEffect(() => {
     if (!currentUser || !focusedTaskId) return;
@@ -1008,14 +980,13 @@ export default function App() {
     const question = generalAiDraft.trim();
     if (!question || generalAiLoading) return;
     const nextUserMessage: GeneralAiMessage = { id: crypto.randomUUID(), role: 'user', content: question };
-    const nextHistory = [...generalAiMessages, nextUserMessage].map(({ role, content }) => ({ role, content }));
     setGeneralAiMessages((prev) => [...prev, nextUserMessage]);
     setGeneralAiDraft('');
     setGeneralAiError(null);
     setGeneralAiLoading(true);
 
     try {
-      const result = await api.askGeneralAssistant({ question, history: nextHistory });
+      const result = await api.askGeneralAssistant({ question });
       const serviceReport = result.actionReports.length > 0
         ? `\n\nОтчёт сервиса:\n- ${result.actionReports.join('\n- ')}`
         : '';

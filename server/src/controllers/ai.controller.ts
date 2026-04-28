@@ -10,6 +10,20 @@ type ChatAttachment = {
 };
 
 export const aiController = {
+  getGeneralAssistantHistory: async (req: Request, res: Response) => {
+    try {
+      const todayUtc = new Date();
+      todayUtc.setUTCHours(0, 0, 0, 0);
+      const messages = await aiAssistantService.listGeneralDialog({
+        userId: req.user!.id,
+        since: todayUtc
+      });
+      res.json({ messages });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   askGeneralAssistant: async (req: Request, res: Response) => {
     try {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
@@ -17,21 +31,25 @@ export const aiController = {
         res.status(400).json({ error: 'question is required' });
         return;
       }
-      const historyRaw = Array.isArray(req.body?.history) ? req.body.history : [];
-      const history = historyRaw
-        .map((message: unknown) => {
-          if (typeof message !== 'object' || message === null) return null;
-          const role = 'role' in message ? (message as { role?: unknown }).role : null;
-          const content = 'content' in message ? (message as { content?: unknown }).content : null;
-          if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') return null;
-          return { role, content };
-        })
-        .filter((message: { role: 'user' | 'assistant'; content: string } | null): message is { role: 'user' | 'assistant'; content: string } => Boolean(message));
+      const todayUtc = new Date();
+      todayUtc.setUTCHours(0, 0, 0, 0);
+      const history = await aiAssistantService.listGeneralDialog({
+        userId: req.user!.id,
+        since: todayUtc
+      });
 
       const result = await aiAssistantService.askGeneralAssistant({
         userId: req.user!.id,
         question,
         history
+      });
+
+      await aiAssistantService.appendGeneralDialogMessages({
+        userId: req.user!.id,
+        messages: [
+          { role: 'user', content: question.trim() },
+          { role: 'assistant', content: result.answer }
+        ]
       });
       res.json(result);
     } catch (error) {

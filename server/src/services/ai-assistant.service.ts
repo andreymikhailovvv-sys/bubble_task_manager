@@ -113,6 +113,10 @@ function normalizeGeneralHistory(history: ChatMessage[]): ChatMessage[] {
   return normalizeHistory(history).slice(-12);
 }
 
+function normalizeGeneralPersistedHistory(history: ChatMessage[]): ChatMessage[] {
+  return normalizeHistory(history).slice(-60);
+}
+
 function trimHistoryForAttachments(history: ChatMessage[], hasAttachments: boolean): ChatMessage[] {
   if (!hasAttachments) return history;
   // Когда есть вложения, payload резко растёт (base64), и OpenAI может отсечь ранние сообщения.
@@ -649,6 +653,37 @@ export const aiAssistantService = {
     await prisma.taskAiMessage.createMany({
       data: normalizedMessages.map((message) => ({
         taskId: input.taskId,
+        userId: input.userId,
+        role: message.role,
+        content: message.content
+      }))
+    });
+  },
+
+  listGeneralDialog: async (input: { userId: string; since?: Date }): Promise<ChatMessage[]> => {
+    const messages = await prisma.generalAiMessage.findMany({
+      where: {
+        userId: input.userId,
+        ...(input.since ? { createdAt: { gte: input.since } } : {})
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { role: true, content: true }
+    });
+
+    return messages.map((message) => ({
+      role: message.role,
+      content: message.content
+    }));
+  },
+
+  appendGeneralDialogMessages: async (input: { userId: string; messages: ChatMessage[] }) => {
+    const normalizedMessages = normalizeGeneralPersistedHistory(input.messages);
+    if (normalizedMessages.length === 0) {
+      return;
+    }
+
+    await prisma.generalAiMessage.createMany({
+      data: normalizedMessages.map((message) => ({
         userId: input.userId,
         role: message.role,
         content: message.content
