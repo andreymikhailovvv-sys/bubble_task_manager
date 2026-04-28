@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -53,6 +53,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
+const getGeneralAiChatStorageKey = (userId: string) => `btm:${userId}:general-ai-chat`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
 const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
@@ -70,6 +71,11 @@ const DISPLAY_MODE_OPTIONS = [
   { value: 'timeline', label: 'Таймлайн', icon: CalendarDays, iconClassName: 'text-amber-300' }
 ] as const;
 type DisplayMode = (typeof DISPLAY_MODE_OPTIONS)[number]['value'];
+type GeneralAiUndoOperation = {
+  taskId: string;
+  previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
+};
+type GeneralAiMessage = ChatMessage & { id: string };
 
 function renderAiMessageContent(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
@@ -257,6 +263,12 @@ export default function App() {
   const [aiMode, setAiMode] = useState<ChatMode>('fast');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
+  const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
+  const [generalAiDraft, setGeneralAiDraft] = useState('');
+  const [isGeneralAiFullscreen, setIsGeneralAiFullscreen] = useState(false);
+  const [generalAiLoading, setGeneralAiLoading] = useState(false);
+  const [generalAiError, setGeneralAiError] = useState<string | null>(null);
+  const [lastGeneralAiUndoOperations, setLastGeneralAiUndoOperations] = useState<GeneralAiUndoOperation[]>([]);
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
@@ -270,6 +282,8 @@ export default function App() {
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -332,6 +346,12 @@ export default function App() {
       setAiMode('fast');
       setAiDialogByTask({});
       setAiReadCursorByTask({});
+      setGeneralAiMessages([]);
+      setGeneralAiDraft('');
+      setIsGeneralAiFullscreen(false);
+      setGeneralAiLoading(false);
+      setGeneralAiError(null);
+      setLastGeneralAiUndoOperations([]);
       loadedAiHistoryTaskIdsRef.current = new Set();
       setSubtaskOrderMap({});
       setBackgroundImage(null);
@@ -396,6 +416,8 @@ export default function App() {
     }
     setAiDialogByTask({});
     loadedAiHistoryTaskIdsRef.current = new Set();
+    setGeneralAiMessages([]);
+    setLastGeneralAiUndoOperations([]);
     try {
       const aiReadCursorRaw = localStorage.getItem(getAiReadCursorStorageKey(currentUser.id));
       if (!aiReadCursorRaw) {
@@ -412,6 +434,21 @@ export default function App() {
       }
     } catch {
       setAiReadCursorByTask({});
+    }
+    try {
+      const rawGeneralChat = localStorage.getItem(getGeneralAiChatStorageKey(currentUser.id));
+      if (rawGeneralChat) {
+        const parsed = JSON.parse(rawGeneralChat) as { date?: string; messages?: GeneralAiMessage[] };
+        const today = new Date().toISOString().slice(0, 10);
+        if (parsed?.date === today && Array.isArray(parsed.messages)) {
+          const normalized = parsed.messages
+            .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+            .map((message) => ({ id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content }));
+          setGeneralAiMessages(normalized);
+        }
+      }
+    } catch {
+      setGeneralAiMessages([]);
     }
 
     setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
@@ -445,6 +482,36 @@ export default function App() {
     if (!currentUser) return;
     localStorage.setItem(getAiReadCursorStorageKey(currentUser.id), JSON.stringify(aiReadCursorByTask));
   }, [aiReadCursorByTask, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const today = new Date().toISOString().slice(0, 10);
+    localStorage.setItem(
+      getGeneralAiChatStorageKey(currentUser.id),
+      JSON.stringify({ date: today, messages: generalAiMessages })
+    );
+  }, [generalAiMessages, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const intervalId = window.setInterval(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      const hasMessages = generalAiMessages.length > 0;
+      if (!hasMessages) return;
+      const storageRaw = localStorage.getItem(getGeneralAiChatStorageKey(currentUser.id));
+      if (!storageRaw) return;
+      try {
+        const parsed = JSON.parse(storageRaw) as { date?: string };
+        if (parsed?.date !== today) {
+          setGeneralAiMessages([]);
+          setLastGeneralAiUndoOperations([]);
+        }
+      } catch {
+        setGeneralAiMessages([]);
+      }
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [currentUser?.id, generalAiMessages.length]);
 
   useEffect(() => {
     if (!currentUser || !focusedTaskId) return;
@@ -720,6 +787,18 @@ export default function App() {
     return () => window.cancelAnimationFrame(frameId);
   }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
 
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      if (generalAiDialogContainerRef.current) {
+        generalAiDialogContainerRef.current.scrollTop = generalAiDialogContainerRef.current.scrollHeight;
+      }
+      if (generalAiFullscreenDialogContainerRef.current) {
+        generalAiFullscreenDialogContainerRef.current.scrollTop = generalAiFullscreenDialogContainerRef.current.scrollHeight;
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [generalAiMessages, generalAiLoading, isGeneralAiFullscreen]);
+
   const sendFocusedAiQuestion = async (options?: {
     questionOverride?: string;
     userContentOverride?: string;
@@ -901,6 +980,59 @@ export default function App() {
       return next;
     });
     setAiError(null);
+  };
+
+  const sendGeneralAiQuestion = async () => {
+    const question = generalAiDraft.trim();
+    if (!question || generalAiLoading) return;
+    const nextUserMessage: GeneralAiMessage = { id: crypto.randomUUID(), role: 'user', content: question };
+    const nextHistory = [...generalAiMessages, nextUserMessage].map(({ role, content }) => ({ role, content }));
+    setGeneralAiMessages((prev) => [...prev, nextUserMessage]);
+    setGeneralAiDraft('');
+    setGeneralAiError(null);
+    setGeneralAiLoading(true);
+
+    try {
+      const result = await api.askGeneralAssistant({ question, history: nextHistory });
+      const serviceReport = result.actionReports.length > 0
+        ? `\n\nОтчёт сервиса:\n- ${result.actionReports.join('\n- ')}`
+        : '';
+      setGeneralAiMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}` }
+      ]);
+      setLastGeneralAiUndoOperations(result.undoOperations);
+      await load();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось получить ответ общего ИИ-чата';
+      setGeneralAiError(message);
+      setGeneralAiMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: 'Не удалось выполнить запрос. Попробуйте ещё раз.' }
+      ]);
+    } finally {
+      setGeneralAiLoading(false);
+    }
+  };
+
+  const undoGeneralAiAction = async () => {
+    if (lastGeneralAiUndoOperations.length === 0 || generalAiLoading) return;
+    setGeneralAiLoading(true);
+    setGeneralAiError(null);
+    try {
+      await api.undoGeneralAssistantAction({ operations: lastGeneralAiUndoOperations });
+      setLastGeneralAiUndoOperations([]);
+      setGeneralAiMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: 'Последнее действие отменено.' }
+      ]);
+      await load();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось отменить действие';
+      setGeneralAiError(message);
+    } finally {
+      setGeneralAiLoading(false);
+    }
   };
 
   function shouldTaskGlow(task: Task) {
@@ -2080,6 +2212,62 @@ export default function App() {
             </ul>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
+              <button
+                className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                onClick={() => setIsGeneralAiFullscreen(true)}
+                title="Развернуть общий чат"
+              >
+                <Maximize2 size={14} />
+              </button>
+            </div>
+            <div ref={generalAiDialogContainerRef} className="mb-2 h-[220px] overflow-y-auto rounded-xl bg-slate-900/90 p-2 text-xs">
+              {generalAiMessages.length === 0 ? <p className="text-slate-400">Задайте вопрос по любым задачам или попросите изменить расписание.</p> : null}
+              <div className="space-y-2">
+                {generalAiMessages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                  >
+                    <p className="mb-1 text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                    <div>{message.content}</div>
+                  </div>
+                ))}
+              </div>
+              {generalAiLoading ? <p className="mt-2 text-[11px] text-cyan-200">ИИ обрабатывает запрос…</p> : null}
+            </div>
+            {generalAiError ? <p className="mb-2 text-[11px] text-rose-300">{generalAiError}</p> : null}
+            <textarea
+              className="mb-2 min-h-16 w-full resize-none rounded-lg bg-slate-800 px-2 py-1.5 text-xs"
+              placeholder="Например: сколько задач осталось на этой неделе?"
+              value={generalAiDraft}
+              onChange={(event) => setGeneralAiDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendGeneralAiQuestion();
+                }
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                className="inline-flex items-center gap-1 rounded bg-cyan-600 px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                onClick={() => void sendGeneralAiQuestion()}
+                disabled={generalAiLoading || !generalAiDraft.trim()}
+              >
+                <SendHorizontal size={12} /> Отправить
+              </button>
+              <button
+                className="inline-flex items-center gap-1 rounded bg-slate-700 px-2.5 py-1 text-xs text-slate-100 disabled:opacity-50"
+                onClick={() => void undoGeneralAiAction()}
+                disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
+              >
+                <RotateCcw size={12} /> Отменить
+              </button>
+            </div>
+          </section>
+          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold">Фон рабочего пространства</h3>
             <label className="mb-2 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200 transition hover:bg-slate-700/80">
               <span className="block font-medium">Загрузить изображение</span>
@@ -2653,6 +2841,66 @@ export default function App() {
                 >
                   <SendHorizontal size={14} />
                   Отправить ({aiMode === 'fast' ? 'Быстрый' : 'Умный'})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isGeneralAiFullscreen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsGeneralAiFullscreen(false)}>
+          <div className="w-full max-w-4xl rounded-3xl border border-cyan-200/30 bg-slate-950/95 p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="flex items-center gap-2 text-base font-semibold text-cyan-100"><Bot size={18} /> Общий чат с ИИ</p>
+                <p className="text-xs text-slate-300">Справка по задачам и команды для управления задачами.</p>
+              </div>
+              <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
+                <Minimize2 size={14} />
+              </button>
+            </div>
+            <div ref={generalAiFullscreenDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
+              {generalAiMessages.length === 0 ? <p className="text-sm text-slate-400">История чата очищается каждый день в 00:00.</p> : null}
+              {generalAiMessages.map((message) => (
+                <div
+                  key={`general-full-${message.id}`}
+                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                >
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <div>{message.content}</div>
+                </div>
+              ))}
+              {generalAiLoading ? <p className="text-sm text-cyan-200">ИИ обрабатывает запрос…</p> : null}
+            </div>
+            <textarea
+              className="mb-2 min-h-24 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+              placeholder="Например: перенеси задачу «Подготовить отчёт» на завтра 18:00"
+              value={generalAiDraft}
+              onChange={(event) => setGeneralAiDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendGeneralAiQuestion();
+                }
+              }}
+            />
+            <div className="flex items-center justify-between">
+              <p className="min-h-5 text-xs text-rose-300">{generalAiError ?? ''}</p>
+              <div className="flex items-center gap-2">
+                <button
+                  className="inline-flex items-center gap-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
+                  disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
+                  onClick={() => void undoGeneralAiAction()}
+                >
+                  <RotateCcw size={14} /> Отменить
+                </button>
+                <button
+                  className="inline-flex items-center gap-1 rounded bg-cyan-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  disabled={generalAiLoading || !generalAiDraft.trim()}
+                  onClick={() => void sendGeneralAiQuestion()}
+                >
+                  <SendHorizontal size={14} /> Отправить
                 </button>
               </div>
             </div>
