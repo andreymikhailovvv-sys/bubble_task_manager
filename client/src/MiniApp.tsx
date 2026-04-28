@@ -27,6 +27,7 @@ const extractInitDataFromUrl = () => {
 };
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
+const MAX_SHINE_WINDOW_MINUTES = 180;
 
 type TaskDraft = {
   title: string;
@@ -107,7 +108,7 @@ function shouldTaskGlow(task: Task) {
   const diff = due.getTime() - Date.now();
   if (diff < 0) return true;
   if (task.notifyBeforeMinutes === null) return false;
-  const notifyBefore = (task.notifyBeforeMinutes ?? 30) * 60_000;
+  const notifyBefore = Math.min(task.notifyBeforeMinutes ?? 30, MAX_SHINE_WINDOW_MINUTES) * 60_000;
   return diff <= notifyBefore;
 }
 
