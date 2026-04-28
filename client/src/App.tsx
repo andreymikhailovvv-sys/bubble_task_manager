@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -248,8 +248,11 @@ export default function App() {
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [listHoveredTaskId, setListHoveredTaskId] = useState<string | null>(null);
+  const [expandedListTaskIds, setExpandedListTaskIds] = useState<string[]>([]);
+  const [hideClosedFocusedSubtasks, setHideClosedFocusedSubtasks] = useState(true);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
+  const [focusedAiSearchQuery, setFocusedAiSearchQuery] = useState('');
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -265,6 +268,7 @@ export default function App() {
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
+  const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
   const [generalAiDraft, setGeneralAiDraft] = useState('');
   const [isGeneralAiFullscreen, setIsGeneralAiFullscreen] = useState(false);
   const [generalAiLoading, setGeneralAiLoading] = useState(false);
@@ -684,6 +688,16 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
+  const filteredFocusedAiDialog = useMemo(() => {
+    const query = focusedAiSearchQuery.trim().toLowerCase();
+    if (!query) return focusedAiDialog;
+    return focusedAiDialog.filter((message) => message.content.toLowerCase().includes(query));
+  }, [focusedAiDialog, focusedAiSearchQuery]);
+  const filteredGeneralAiMessages = useMemo(() => {
+    const query = generalAiSearchQuery.trim().toLowerCase();
+    if (!query) return generalAiMessages;
+    return generalAiMessages.filter((message) => message.content.toLowerCase().includes(query));
+  }, [generalAiMessages, generalAiSearchQuery]);
 
   useEffect(() => {
     if (!focusedTask) {
@@ -697,6 +711,8 @@ export default function App() {
       setIsAiExpanded(false);
       setAiMode('fast');
       setAiPendingFiles([]);
+      setFocusedAiSearchQuery('');
+      setHideClosedFocusedSubtasks(true);
       setFocusedTaskAttachments([]);
       setAiSubtasksLoadingTaskId(null);
       focusedAutosaveSignatureRef.current = null;
@@ -1507,6 +1523,7 @@ export default function App() {
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
+  const activeListTasks = listTasks.filter((task) => task.status !== 'DONE');
   const timelineViewData = (() => {
     try {
       return buildTimelineViewData(listTasks, timelineAnchorDate, timelineViewMode);
@@ -1773,16 +1790,17 @@ export default function App() {
         ) : displayMode === 'list' ? (
           <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
-              {listTasks.length === 0 ? (
+              {activeListTasks.length === 0 ? (
                 <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
                   Нет задач для выбранных фильтров
                 </li>
               ) : null}
-              {listTasks.map((task) => {
+              {activeListTasks.map((task) => {
                 const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
                 const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
                 const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
-                const isExpandedTask = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
+                const isExpandedByState = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
+                const isExpandedTask = isExpandedByState || expandedListTaskIds.includes(task.id);
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
                 const isHoveredTask = listHoveredTaskId === task.id;
@@ -1815,6 +1833,17 @@ export default function App() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
+                          <button
+                            type="button"
+                            className="mt-0.5 rounded p-0.5 text-slate-300 hover:bg-slate-700/70"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedListTaskIds((prev) => (prev.includes(task.id) ? prev.filter((id) => id !== task.id) : [...prev, task.id]));
+                            }}
+                            title={isExpandedTask ? 'Свернуть задачу' : 'Развернуть задачу'}
+                          >
+                            {isExpandedTask ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
                           <h3 className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
                             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                           </h3>
@@ -1999,7 +2028,7 @@ export default function App() {
                               ? 'border-rose-800/60 bg-rose-950/18'
                               : 'border-slate-700/70 bg-slate-900/75')
                             : 'border-transparent bg-slate-900/20'
-                        } ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                        } ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
                           if (!isTimelineDragEnabled || !cell.date) return;
                           event.preventDefault();
@@ -2035,17 +2064,18 @@ export default function App() {
                     <div className="border-b border-r border-slate-800/80 bg-slate-900/90 p-2 text-xs text-slate-400">Время</div>
                     {timelineViewData.dayGroups.map((day) => {
                       const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                      const isToday = day.date.toDateString() === new Date().toDateString();
                       return (
                         <div
                           key={`header-${day.key}`}
                           className={`border-b border-r border-slate-800/80 p-2 text-center ${
-                            isWeekend ? 'bg-rose-950/20' : 'bg-slate-900/85'
+                            isToday ? 'bg-cyan-950/30 ring-1 ring-cyan-400/60' : isWeekend ? 'bg-rose-950/20' : 'bg-slate-900/85'
                           }`}
                         >
-                          <p className={`text-xs ${isWeekend ? 'text-rose-200/90' : 'text-slate-400'}`}>
+                          <p className={`text-xs ${isToday ? 'text-cyan-200' : isWeekend ? 'text-rose-200/90' : 'text-slate-400'}`}>
                             {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
                           </p>
-                          <p className={`text-sm font-semibold ${isWeekend ? 'text-rose-100' : 'text-slate-100'}`}>
+                          <p className={`text-sm font-semibold ${isToday ? 'text-cyan-50' : isWeekend ? 'text-rose-100' : 'text-slate-100'}`}>
                             {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                           </p>
                         </div>
@@ -2224,9 +2254,18 @@ export default function App() {
               </button>
             </div>
             <div ref={generalAiDialogContainerRef} className="mb-2 h-[220px] overflow-y-auto rounded-xl bg-slate-900/90 p-2 text-xs">
-              {generalAiMessages.length === 0 ? <p className="text-slate-400">Задайте вопрос по любым задачам или попросите изменить расписание.</p> : null}
+              <label className="mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                <Search size={12} />
+                <input
+                  className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                  placeholder="Поиск по сообщениям"
+                  value={generalAiSearchQuery}
+                  onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
+                />
+              </label>
+              {filteredGeneralAiMessages.length === 0 ? <p className="text-slate-400">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
               <div className="space-y-2">
-                {generalAiMessages.map((message) => (
+                {filteredGeneralAiMessages.map((message) => (
                   <div
                     key={message.id}
                     className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
@@ -2365,8 +2404,17 @@ export default function App() {
                 </button>
               </div>
               <div ref={focusedAiDialogContainerRef} className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
-                {focusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">Спросите ИИ, как быстрее и качественнее выполнить задачу.</p> : null}
-                {focusedAiDialog.map((message, index) => (
+                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                  <Search size={12} />
+                  <input
+                    className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    placeholder="Поиск по сообщениям"
+                    value={focusedAiSearchQuery}
+                    onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
+                  />
+                </label>
+                {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+                {filteredFocusedAiDialog.map((message, index) => (
                   <div
                     key={`focused-ai-${message.role}-${index}`}
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
@@ -2560,7 +2608,17 @@ export default function App() {
               </div>
               <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-sm font-semibold">Подзадачи</h4>
+                  <h4 className="flex items-center gap-1.5 text-sm font-semibold">
+                    Подзадачи
+                    <button
+                      type="button"
+                      className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-slate-400 hover:text-slate-200'}`}
+                      onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
+                      title={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
+                    >
+                      {hideClosedFocusedSubtasks ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                  </h4>
                   <div className="flex items-center gap-2">
                     {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
                       <button
@@ -2626,13 +2684,13 @@ export default function App() {
                 )}
                 <Reorder.Group
                   axis="y"
-                  values={displayedSubtaskMap[focusedTask.id] ?? []}
+                  values={hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])}
                   onReorder={(nextOrder) => {
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
                 >
-                  {(displayedSubtaskMap[focusedTask.id] ?? []).map((subtask) => (
+                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).map((subtask) => (
                     <Reorder.Item
                       key={subtask.id}
                       value={subtask}
@@ -2674,7 +2732,7 @@ export default function App() {
                       />
                     </Reorder.Item>
                   ))}
-                  {(displayedSubtaskMap[focusedTask.id] ?? []).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
+                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
                 </Reorder.Group>
               </div>
             </div>
@@ -2765,8 +2823,17 @@ export default function App() {
               </div>
             </div>
             <div ref={expandedAiDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
-              {focusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
-              {focusedAiDialog.map((message, index) => (
+              <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[12px] text-slate-300">
+                <Search size={12} />
+                <input
+                  className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                  placeholder="Поиск по сообщениям"
+                  value={focusedAiSearchQuery}
+                  onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
+                />
+              </label>
+              {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredFocusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-ai-${message.role}-${index}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
@@ -2862,8 +2929,17 @@ export default function App() {
               </button>
             </div>
             <div ref={generalAiFullscreenDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
-              {generalAiMessages.length === 0 ? <p className="text-sm text-slate-400">История чата очищается каждый день в 00:00.</p> : null}
-              {generalAiMessages.map((message) => (
+              <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-300">
+                <Search size={12} />
+                <input
+                  className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                  placeholder="Поиск по сообщениям"
+                  value={generalAiSearchQuery}
+                  onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
+                />
+              </label>
+              {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-slate-400">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredGeneralAiMessages.map((message) => (
                 <div
                   key={`general-full-${message.id}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
