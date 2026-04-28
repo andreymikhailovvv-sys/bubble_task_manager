@@ -43,6 +43,7 @@ const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
 const SUBTASK_OVERDUE_GLOW =
   'subtask-overdue-glow 2.3s ease-in-out infinite';
+const MAX_SHINE_WINDOW_MINUTES = 180;
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -84,7 +85,7 @@ function shouldTaskGlow(task: Task) {
   const diff = due.getTime() - Date.now();
   if (diff < 0) return true;
   if (!Number.isFinite(task.notifyBeforeMinutes)) return false;
-  const notifyBefore = Number(task.notifyBeforeMinutes) * 60_000;
+  const notifyBefore = Math.min(Number(task.notifyBeforeMinutes), MAX_SHINE_WINDOW_MINUTES) * 60_000;
   if (notifyBefore <= 0) return false;
   return diff <= notifyBefore;
 }
