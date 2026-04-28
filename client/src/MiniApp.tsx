@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Save, Search, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, List, Save, Search, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { Sphere, Task } from './lib/types';
 
@@ -27,6 +27,7 @@ const extractInitDataFromUrl = () => {
 };
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
+type DisplayMode = 'list' | 'timeline';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 
 type TaskDraft = {
@@ -133,6 +134,8 @@ export default function MiniApp() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -140,6 +143,7 @@ export default function MiniApp() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
+  const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const requestedTaskId = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('taskId');
     return value?.trim() ? value.trim() : null;
@@ -174,6 +178,16 @@ export default function MiniApp() {
 
   useEffect(() => {
     void loadData();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!displayModeMenuRef.current) return;
+      if (displayModeMenuRef.current.contains(event.target as Node)) return;
+      setIsDisplayModeMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -261,6 +275,42 @@ export default function MiniApp() {
       tasks: sphereTasks.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
     }));
   }, [filteredTasks, spheres]);
+
+  const timelineGroups = useMemo(() => {
+    const tasksWithDate = filteredTasks
+      .filter((task) => Boolean(task.dueDate))
+      .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+    const grouped = new Map<string, Task[]>();
+
+    for (const task of tasksWithDate) {
+      const key = new Date(task.dueDate as string).toDateString();
+      const current = grouped.get(key) ?? [];
+      current.push(task);
+      grouped.set(key, current);
+    }
+
+    const withoutDate = filteredTasks.filter((task) => !task.dueDate);
+    return {
+      dated: Array.from(grouped.entries()).map(([key, value]) => ({
+        key,
+        label: new Date(key).toLocaleDateString('ru-RU', {
+          weekday: 'short',
+          day: '2-digit',
+          month: 'long'
+        }),
+        tasks: value
+      })),
+      withoutDate
+    };
+  }, [filteredTasks]);
+
+  const activeDisplayModeIcon = displayMode === 'list' ? List : CalendarDays;
+  const ActiveDisplayModeIcon = activeDisplayModeIcon;
+  const selectedSphereName = sphereFilter === 'all'
+    ? 'Все секторы'
+    : sphereFilter === 'without-sphere'
+      ? 'Без сектора'
+      : (spheres.find((sphere) => sphere.id === sphereFilter)?.name ?? 'Без сектора');
 
   const openTaskModal = (task: Task) => {
     setDraftByTaskId((drafts) => ({
@@ -427,38 +477,71 @@ export default function MiniApp() {
               className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
           </div>
-        </section>
-
-        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-          <label className="mb-1 block text-xs text-slate-300">Фильтр по времени</label>
-          <select
-            value={timeFilter}
-            onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-            className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-          >
-            {(Object.keys(timeFilterLabel) as TimeFilter[]).map((value) => (
-              <option key={value} value={value}>
-                {timeFilterLabel[value]}
-              </option>
-            ))}
-          </select>
-        </section>
-
-        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-          <label className="mb-1 block text-xs text-slate-300">Фильтр по сектору</label>
-          <select
-            value={sphereFilter}
-            onChange={(event) => setSphereFilter(event.target.value)}
-            className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-          >
-            <option value="all">Все секторы</option>
-            <option value="without-sphere">Без сектора</option>
-            {spheres.map((sphere) => (
-              <option key={sphere.id} value={sphere.id}>
-                {sphere.name}
-              </option>
-            ))}
-          </select>
+          <div className="mt-3 flex items-center gap-2">
+            <div ref={displayModeMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 text-slate-200"
+                aria-label="Режим отображения"
+              >
+                <ActiveDisplayModeIcon size={16} />
+              </button>
+              {isDisplayModeMenuOpen ? (
+                <div className="absolute left-0 z-20 mt-2 w-44 space-y-1 rounded-md border border-slate-600 bg-slate-900 p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisplayMode('list');
+                      setIsDisplayModeMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-800"
+                  >
+                    <List size={14} /> Список
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDisplayMode('timeline');
+                      setIsDisplayModeMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-800"
+                  >
+                    <CalendarDays size={14} /> Таймлайн
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
+              <select
+                value={timeFilter}
+                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                className="h-9 min-w-32 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
+              >
+                {(Object.keys(timeFilterLabel) as TimeFilter[]).map((value) => (
+                  <option key={value} value={value}>
+                    Срок: {timeFilterLabel[value]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sphereFilter}
+                onChange={(event) => setSphereFilter(event.target.value)}
+                className="h-9 min-w-36 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
+              >
+                <option value="all">Сектор: Все</option>
+                <option value="without-sphere">Сектор: Без сектора</option>
+                {spheres.map((sphere) => (
+                  <option key={sphere.id} value={sphere.id}>
+                    Сектор: {sphere.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Активно: {displayMode === 'list' ? 'Список' : 'Таймлайн'} · {timeFilterLabel[timeFilter]} · {selectedSphereName}
+          </p>
         </section>
 
         {error ? (
@@ -469,7 +552,7 @@ export default function MiniApp() {
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">Задачи не найдены.</div>
         ) : null}
 
-        {groupedBySphere.map((group) => (
+        {displayMode === 'list' ? groupedBySphere.map((group) => (
           <section
             key={group.sphereId}
             className="space-y-2 rounded-xl border p-3"
@@ -512,7 +595,55 @@ export default function MiniApp() {
               );
             })}
           </section>
-        ))}
+        )) : (
+          <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
+            <h2 className="mb-3 text-lg font-semibold">Таймлайн задач</h2>
+            <div className="space-y-4">
+              {timelineGroups.dated.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>
+                  {group.tasks.map((task) => {
+                    const hasOverdueState = isOverdue(task);
+                    const sphereName = task.sphereId
+                      ? (spheres.find((item) => item.id === task.sphereId)?.name ?? 'Без сектора')
+                      : 'Без сектора';
+                    return (
+                      <button
+                        type="button"
+                        key={task.id}
+                        className="relative flex w-full items-start gap-3 rounded-md border border-slate-700 bg-slate-800/75 px-3 py-2 text-left"
+                        style={hasOverdueState ? { boxShadow: '0 0 12px rgba(239,68,68,0.45)' } : undefined}
+                        onClick={() => openTaskModal(task)}
+                      >
+                        <span className="mt-1 h-2 w-2 rounded-full bg-sky-300" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{task.title}</p>
+                          <p className="text-xs text-slate-300">{formatDueDate(task.dueDate)}</p>
+                          <p className="text-xs text-slate-400">{sphereName}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+              {timelineGroups.withoutDate.length > 0 ? (
+                <div className="space-y-2 rounded-md border border-dashed border-slate-700 p-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Без дедлайна</p>
+                  {timelineGroups.withoutDate.map((task) => (
+                    <button
+                      type="button"
+                      key={task.id}
+                      className="w-full rounded-md border border-slate-700 bg-slate-800/65 px-3 py-2 text-left text-sm"
+                      onClick={() => openTaskModal(task)}
+                    >
+                      {task.title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        )}
       </div>
 
       {openedTask && openedTaskDraft ? (
