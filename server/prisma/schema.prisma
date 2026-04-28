@@ -39,6 +39,7 @@ model User {
   spheres      Sphere[]
   tasks        Task[]
   aiMessages   TaskAiMessage[]
+  generalAiMessages GeneralAiMessage[]
   taskAttachments TaskAttachment[]
   telegramSessions TelegramSession[]
   createdAt    DateTime @default(now())
@@ -109,6 +110,19 @@ model TaskAiMessage {
   @@index([userId])
   @@index([taskId, createdAt])
   @@index([taskId, userId, createdAt])
+}
+
+model GeneralAiMessage {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AiMessageRole
+  content   String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt])
 }
 
 

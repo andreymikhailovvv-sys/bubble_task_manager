@@ -126,7 +126,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
-  askGeneralAssistant: (payload: { question: string; history: ChatMessage[] }) =>
+  getGeneralAssistantHistory: () =>
+    request<{ messages: ChatMessage[] }>('/api/ai-general-chat'),
+  askGeneralAssistant: (payload: { question: string }) =>
     request<{
       answer: string;
       model: string;
