@@ -50,6 +50,22 @@ type TranscribeAudioInput = {
   mimeType: string;
   contentBase64: string;
 };
+type AskGeneralAssistantInput = {
+  userId: string;
+  question: string;
+  history: ChatMessage[];
+};
+type GeneralAssistantUndoOperation = {
+  taskId: string;
+  previous: {
+    dueDate: string | null;
+    status: 'TODO' | 'IN_PROGRESS' | 'DONE';
+  };
+};
+type UndoGeneralAssistantActionsInput = {
+  userId: string;
+  operations: GeneralAssistantUndoOperation[];
+};
 type ChatAttachment = {
   name: string;
   mimeType: string;
@@ -91,6 +107,10 @@ function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
     .map((message) => ({ role: message.role, content: message.content.trim() }))
     .filter((message) => message.content.length > 0)
     .slice(-20);
+}
+
+function normalizeGeneralHistory(history: ChatMessage[]): ChatMessage[] {
+  return normalizeHistory(history).slice(-12);
 }
 
 function trimHistoryForAttachments(history: ChatMessage[], hasAttachments: boolean): ChatMessage[] {
@@ -303,6 +323,89 @@ function extractOutputText(response: unknown): string {
   }
 
   return '';
+}
+
+type GeneralAssistantAction =
+  | { type: 'reschedule_task'; taskId: string; dueDate: string }
+  | { type: 'complete_task'; taskId: string }
+  | { type: 'reopen_task'; taskId: string }
+  | { type: 'rebalance_today'; taskIds?: string[] };
+
+function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawAnswer);
+  } catch {
+    return {
+      answer: rawAnswer.trim(),
+      actions: []
+    };
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { answer: rawAnswer.trim(), actions: [] };
+  }
+
+  const source = parsed as Record<string, unknown>;
+  const answer = typeof source.answer === 'string' && source.answer.trim()
+    ? source.answer.trim().slice(0, 6000)
+    : rawAnswer.trim().slice(0, 6000);
+  const actions = Array.isArray(source.actions) ? source.actions : [];
+  const normalizedActions = actions
+    .map((action): GeneralAssistantAction | null => {
+      if (typeof action !== 'object' || action === null) return null;
+      const value = action as Record<string, unknown>;
+      const type = typeof value.type === 'string' ? value.type : '';
+      if (type === 'reschedule_task') {
+        const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
+        const dueDate = typeof value.dueDate === 'string' ? value.dueDate.trim() : '';
+        if (!taskId || !dueDate) return null;
+        return { type, taskId, dueDate };
+      }
+      if (type === 'complete_task' || type === 'reopen_task') {
+        const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
+        if (!taskId) return null;
+        return { type, taskId };
+      }
+      if (type === 'rebalance_today') {
+        const taskIds = Array.isArray(value.taskIds)
+          ? value.taskIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
+          : undefined;
+        return { type, taskIds };
+      }
+      return null;
+    })
+    .filter((action): action is GeneralAssistantAction => Boolean(action))
+    .slice(0, 8);
+
+  return { answer, actions: normalizedActions };
+}
+
+function formatGeneralTasksContext(tasks: Array<{
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: Date | null;
+  status: string;
+  subtasks: Array<{ id: string; title: string; description: string | null; dueDate: Date | null; status: string }>;
+}>): string {
+  if (tasks.length === 0) return 'Задач нет.';
+  return tasks
+    .map((task, index) => {
+      const subtasksText = task.subtasks.length
+        ? task.subtasks.map((subtask) => (
+          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; дедлайн=${subtask.dueDate ? subtask.dueDate.toISOString() : 'нет'}; описание=${subtask.description ?? 'нет'}`
+        )).join('\n')
+        : '    - нет подзадач';
+      return [
+        `${index + 1}. [${task.id}] ${task.title}`,
+        `   статус=${task.status}; дедлайн=${task.dueDate ? task.dueDate.toISOString() : 'нет'}`,
+        `   описание=${task.description ?? 'нет'}`,
+        '   подзадачи:',
+        subtasksText
+      ].join('\n');
+    })
+    .join('\n');
 }
 
 function normalizeAttachments(attachments: ChatAttachment[] | undefined): ChatAttachment[] {
@@ -727,6 +830,205 @@ export const aiAssistantService = {
     }
 
     throw lastError ?? new Error('OpenAI request failed without details');
+  },
+
+  askGeneralAssistant: async (input: AskGeneralAssistantInput) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    const question = input.question.trim();
+    if (!question) {
+      throw new Error('Question is required');
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { userId: input.userId },
+      include: {
+        subtasks: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            dueDate: true,
+            status: true
+          },
+          orderBy: { createdAt: 'asc' }
+        }
+      },
+      orderBy: [
+        { dueDate: 'asc' },
+        { createdAt: 'asc' }
+      ]
+    });
+    const taskContext = formatGeneralTasksContext(tasks);
+    const history = normalizeGeneralHistory(input.history);
+    const systemPrompt = [
+      'Ты справочный ИИ-помощник Bubble Task Manager.',
+      'Работаешь только в режиме fast.',
+      'Ты не помогаешь выполнять задачи пошагово и не мотивируешь, а даёшь справку по существующим задачам пользователя.',
+      'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
+      'Также можно управлять задачами через actions.',
+      'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
+      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально).',
+      'Если действий не нужно — actions: [].',
+      'Текст для пользователя клади только в answer на русском.'
+    ].join(' ');
+
+    const messages: OpenAiTextMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `Контекст всех задач:\n${taskContext}` },
+      ...history,
+      { role: 'user', content: question }
+    ];
+
+    const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: FAST_MODEL,
+        input: messages,
+        reasoning: { effort: 'low' }
+      })
+    });
+
+    if (!openAiResponse.ok) {
+      const errorText = await openAiResponse.text();
+      throw new Error(`OpenAI request failed: ${openAiResponse.status}. ${errorText.slice(0, 400)}`);
+    }
+
+    const responseJson = await openAiResponse.json();
+    const rawAnswer = extractOutputText(responseJson);
+    if (!rawAnswer) {
+      throw new Error('OpenAI returned empty response');
+    }
+
+    const parsed = parseGeneralAssistantPayload(rawAnswer);
+    const actionReports: string[] = [];
+    const undoOperations: GeneralAssistantUndoOperation[] = [];
+
+    for (const action of parsed.actions) {
+      if (action.type === 'rebalance_today') {
+        const now = new Date();
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        const candidates = await prisma.task.findMany({
+          where: {
+            userId: input.userId,
+            parentTaskId: null,
+            status: { not: 'DONE' },
+            ...(action.taskIds && action.taskIds.length > 0 ? { id: { in: action.taskIds } } : {}),
+            dueDate: { gte: start, lt: end }
+          },
+          orderBy: { dueDate: 'asc' },
+          select: { id: true, title: true, dueDate: true, status: true }
+        });
+        if (candidates.length < 2) {
+          actionReports.push('Равномерное распределение не применено: на сегодня меньше двух активных задач.');
+          continue;
+        }
+        const stepMinutes = Math.max(45, Math.floor((12 * 60) / candidates.length));
+        for (let index = 0; index < candidates.length; index += 1) {
+          const task = candidates[index];
+          const nextDue = new Date(start);
+          nextDue.setHours(9, 0, 0, 0);
+          nextDue.setMinutes(nextDue.getMinutes() + (stepMinutes * index));
+          undoOperations.push({
+            taskId: task.id,
+            previous: {
+              dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+              status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
+            }
+          });
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { dueDate: nextDue }
+          });
+        }
+        actionReports.push(`Распределил задачи на сегодня более равномерно (${candidates.length} шт.).`);
+        continue;
+      }
+
+      const task = await prisma.task.findFirst({
+        where: { id: action.taskId, userId: input.userId },
+        select: { id: true, title: true, dueDate: true, status: true }
+      });
+      if (!task) {
+        actionReports.push(`Действие "${action.type}" пропущено: задача не найдена.`);
+        continue;
+      }
+      undoOperations.push({
+        taskId: task.id,
+        previous: {
+          dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+          status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
+        }
+      });
+
+      if (action.type === 'reschedule_task') {
+        const nextDueDate = new Date(action.dueDate);
+        if (Number.isNaN(nextDueDate.getTime())) {
+          actionReports.push(`Не удалось перенести "${task.title}": неверная дата.`);
+          continue;
+        }
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { dueDate: nextDueDate }
+        });
+        actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+        continue;
+      }
+
+      if (action.type === 'complete_task') {
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { status: 'DONE' }
+        });
+        actionReports.push(`Отметил задачу "${task.title}" выполненной.`);
+        continue;
+      }
+
+      if (action.type === 'reopen_task') {
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { status: 'TODO' }
+        });
+        actionReports.push(`Вернул задачу "${task.title}" в активные.`);
+      }
+    }
+
+    return {
+      answer: parsed.answer,
+      model: FAST_MODEL,
+      actionReports,
+      undoOperations
+    };
+  },
+
+  undoGeneralAssistantActions: async (input: UndoGeneralAssistantActionsInput) => {
+    const operations = Array.isArray(input.operations) ? input.operations : [];
+    for (const operation of operations) {
+      const task = await prisma.task.findFirst({
+        where: { id: operation.taskId, userId: input.userId },
+        select: { id: true }
+      });
+      if (!task) continue;
+      const dueDate = operation.previous.dueDate ? new Date(operation.previous.dueDate) : null;
+      await prisma.task.update({
+        where: { id: operation.taskId },
+        data: {
+          dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+          status: operation.previous.status
+        }
+      });
+    }
+    return { ok: true };
   },
 
   generateOverdueTaskNudge: async (input: GenerateOverdueNudgeInput) => {

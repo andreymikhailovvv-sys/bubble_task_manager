@@ -10,6 +10,48 @@ type ChatAttachment = {
 };
 
 export const aiController = {
+  askGeneralAssistant: async (req: Request, res: Response) => {
+    try {
+      const question = typeof req.body?.question === 'string' ? req.body.question : '';
+      if (!question.trim()) {
+        res.status(400).json({ error: 'question is required' });
+        return;
+      }
+      const historyRaw = Array.isArray(req.body?.history) ? req.body.history : [];
+      const history = historyRaw
+        .map((message: unknown) => {
+          if (typeof message !== 'object' || message === null) return null;
+          const role = 'role' in message ? (message as { role?: unknown }).role : null;
+          const content = 'content' in message ? (message as { content?: unknown }).content : null;
+          if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') return null;
+          return { role, content };
+        })
+        .filter((message: { role: 'user' | 'assistant'; content: string } | null): message is { role: 'user' | 'assistant'; content: string } => Boolean(message));
+
+      const result = await aiAssistantService.askGeneralAssistant({
+        userId: req.user!.id,
+        question,
+        history
+      });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
+  undoGeneralAssistantAction: async (req: Request, res: Response) => {
+    try {
+      const operations = Array.isArray(req.body?.operations) ? req.body.operations : [];
+      await aiAssistantService.undoGeneralAssistantActions({
+        userId: req.user!.id,
+        operations
+      });
+      res.json({ ok: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   getTaskAssistantHistory: async (req: Request, res: Response) => {
     try {
       const messages = await aiAssistantService.listTaskDialog({

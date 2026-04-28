@@ -304,6 +304,8 @@ apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.c
 apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
 
+apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
+apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAssistantAction);
 apiRouter.get('/tasks/:id/ai-chat', requireAuth, aiController.getTaskAssistantHistory);
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
 apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
