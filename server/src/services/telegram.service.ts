@@ -2,6 +2,7 @@ import { authService } from '../auth/auth.service.js';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
+import type { ChatMessage } from './ai-assistant.service.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -15,6 +16,7 @@ const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 
 const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
+const MENU_GENERAL_AI_CHAT = '💬 Общий чат с ИИ';
 const MENU_LIST_TASKS = '📋 Посмотреть задачи';
 const CREATE_TASK_TEXT_TRIGGERS = new Set(['создать', 'create']);
 
@@ -58,6 +60,7 @@ type ChatAttachment = {
 
 const listTaskIdsByChatId = new Map<string, string[]>();
 const pendingAiAttachmentByChatId = new Map<string, ChatAttachment>();
+const generalAiHistoryByChatId = new Map<string, ChatMessage[]>();
 
 const isEnabled = () => Boolean(BOT_TOKEN);
 
@@ -194,7 +197,7 @@ const keyboardSnooze = (taskId: string) => ({
 });
 
 const keyboardReplyMain = {
-  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_LIST_TASKS }]],
+  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_GENERAL_AI_CHAT }], [{ text: MENU_LIST_TASKS }]],
   resize_keyboard: true,
   one_time_keyboard: false,
   is_persistent: false
@@ -494,6 +497,7 @@ const setSession = async (chatId: string, patch: { userId?: string | null; mode?
 const resetBotMenuState = async (chatId: string) => {
   listTaskIdsByChatId.delete(chatId);
   pendingAiAttachmentByChatId.delete(chatId);
+  generalAiHistoryByChatId.delete(chatId);
   await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
 };
 
@@ -785,6 +789,46 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     return;
   }
 
+  if (descriptionText === MENU_GENERAL_AI_CHAT) {
+    await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
+    await sendMessage(
+      chatId,
+      '💬 <b>Общий чат с ИИ</b>\n\nНапишите любой вопрос по задачам. Я также могу создать новую задачу или подзадачу прямо из этого чата.',
+      keyboardReplyMain
+    );
+    return;
+  }
+
+  if (session.mode === 'GENERAL_AI_CHAT') {
+    if (!descriptionText) {
+      await sendMessage(chatId, '⚠️ Сообщение пустое. Напишите вопрос для ИИ.', keyboardReplyMain);
+      return;
+    }
+
+    const history = generalAiHistoryByChatId.get(chatId) ?? [];
+    const result = await aiAssistantService.askGeneralAssistant({
+      userId: session.userId,
+      question: descriptionText,
+      history
+    });
+    const nextHistory: ChatMessage[] = [
+      ...history,
+      { role: 'user' as const, content: descriptionText },
+      { role: 'assistant' as const, content: result.answer }
+    ].slice(-20);
+    generalAiHistoryByChatId.set(chatId, nextHistory);
+
+    const lines = [
+      `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
+    ];
+    if (result.actionReports.length > 0) {
+      lines.push('', '<b>Что изменил ИИ:</b>', ...result.actionReports.map((report) => `• ${escapeHtml(report)}`));
+    }
+
+    await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+    return;
+  }
+
   if ((session.mode === 'AI_CHAT' || session.mode === 'AWAITING_AI_MESSAGE') && session.activeTaskId) {
     let attachment: ChatAttachment | undefined;
     if (updateMessage.document || (updateMessage.photo && updateMessage.photo.length > 0)) {
@@ -923,7 +967,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     return;
   }
 
-  await sendMessage(chatId, 'ℹ️ Выберите действие через меню: «🤖 Создать задачу ИИ» или «📋 Посмотреть задачи».', keyboardReplyMain);
+  await sendMessage(chatId, 'ℹ️ Выберите действие через меню: «🤖 Создать задачу ИИ», «💬 Общий чат с ИИ» или «📋 Посмотреть задачи».', keyboardReplyMain);
 };
 
 const handleCallback = async (update: TelegramUpdate) => {
