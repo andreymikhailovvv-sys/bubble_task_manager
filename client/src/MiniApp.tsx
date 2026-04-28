@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, List, Save, Search, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { Sphere, Task } from './lib/types';
@@ -126,6 +126,15 @@ function hexToRgba(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function compareByDueDate(a: Task, b: Task) {
+  const aDate = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+  const bDate = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+  const safeADate = Number.isNaN(aDate) ? Number.POSITIVE_INFINITY : aDate;
+  const safeBDate = Number.isNaN(bDate) ? Number.POSITIVE_INFINITY : bDate;
+  if (safeADate !== safeBDate) return safeADate - safeBDate;
+  return a.title.localeCompare(b.title, 'ru-RU');
+}
+
 export default function MiniApp() {
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -135,7 +144,6 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
-  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -143,7 +151,6 @@ export default function MiniApp() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
-  const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const requestedTaskId = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('taskId');
     return value?.trim() ? value.trim() : null;
@@ -178,16 +185,6 @@ export default function MiniApp() {
 
   useEffect(() => {
     void loadData();
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!displayModeMenuRef.current) return;
-      if (displayModeMenuRef.current.contains(event.target as Node)) return;
-      setIsDisplayModeMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -258,6 +255,9 @@ export default function MiniApp() {
       if (!map[task.parentTaskId]) map[task.parentTaskId] = [];
       map[task.parentTaskId].push(task);
     }
+    for (const taskId of Object.keys(map)) {
+      map[taskId].sort(compareByDueDate);
+    }
     return map;
   }, [tasks]);
 
@@ -272,14 +272,14 @@ export default function MiniApp() {
     return Array.from(map.entries()).map(([sphereId, sphereTasks]) => ({
       sphereId,
       sphereName: sphereId === 'without-sphere' ? 'Без сектора' : (spheres.find((item) => item.id === sphereId)?.name ?? 'Без сектора'),
-      tasks: sphereTasks.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
+      tasks: sphereTasks.sort(compareByDueDate)
     }));
   }, [filteredTasks, spheres]);
 
   const timelineGroups = useMemo(() => {
     const tasksWithDate = filteredTasks
       .filter((task) => Boolean(task.dueDate))
-      .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''));
+      .sort(compareByDueDate);
     const grouped = new Map<string, Task[]>();
 
     for (const task of tasksWithDate) {
@@ -304,13 +304,14 @@ export default function MiniApp() {
     };
   }, [filteredTasks]);
 
-  const activeDisplayModeIcon = displayMode === 'list' ? List : CalendarDays;
-  const ActiveDisplayModeIcon = activeDisplayModeIcon;
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
     : sphereFilter === 'without-sphere'
       ? 'Без сектора'
       : (spheres.find((sphere) => sphere.id === sphereFilter)?.name ?? 'Без сектора');
+  const toggleDisplayMode = () => {
+    setDisplayMode((prev) => (prev === 'list' ? 'timeline' : 'list'));
+  };
 
   const openTaskModal = (task: Task) => {
     setDraftByTaskId((drafts) => ({
@@ -478,39 +479,23 @@ export default function MiniApp() {
             />
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <div ref={displayModeMenuRef} className="relative shrink-0">
+            <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
               <button
                 type="button"
-                onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 text-slate-200"
-                aria-label="Режим отображения"
+                onClick={toggleDisplayMode}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                aria-label={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
+                title={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
               >
-                <ActiveDisplayModeIcon size={16} />
+                {displayMode === 'list' ? (
+                  <List size={16} className="text-sky-400" />
+                ) : (
+                  <CalendarDays size={16} className="text-violet-400" />
+                )}
               </button>
-              {isDisplayModeMenuOpen ? (
-                <div className="absolute left-0 z-20 mt-2 w-44 space-y-1 rounded-md border border-slate-600 bg-slate-900 p-1 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisplayMode('list');
-                      setIsDisplayModeMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-800"
-                  >
-                    <List size={14} /> Список
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisplayMode('timeline');
-                      setIsDisplayModeMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-800"
-                  >
-                    <CalendarDays size={14} /> Таймлайн
-                  </button>
-                </div>
-              ) : null}
+              <span className="text-[11px] text-slate-300">
+                {displayMode === 'list' ? 'Список' : 'Таймлайн'}
+              </span>
             </div>
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
               <select
