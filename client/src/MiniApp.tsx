@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Save, Trash2, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Save, Search, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { Sphere, Task } from './lib/types';
 
@@ -132,6 +132,7 @@ export default function MiniApp() {
   const [error, setError] = useState<string | null>(null);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
+  const [taskSearch, setTaskSearch] = useState('');
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -227,8 +228,13 @@ export default function MiniApp() {
       const monthEnd = new Date(now);
       monthEnd.setDate(monthEnd.getDate() + 30);
       return due >= now && due <= monthEnd;
+    }).filter((task) => {
+      const query = taskSearch.trim().toLowerCase();
+      if (!query) return true;
+      const text = [task.title, task.description ?? ''].join(' ').toLowerCase();
+      return text.includes(query);
     });
-  }, [sphereFilter, tasks, timeFilter]);
+  }, [sphereFilter, taskSearch, tasks, timeFilter]);
 
   const subtasksByParent = useMemo(() => {
     const map: Record<string, Task[]> = {};
@@ -409,6 +415,19 @@ export default function MiniApp() {
           <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
           <p className="text-sm text-slate-300">Список задач с секторами, фильтром по времени и редактированием карточек.</p>
         </header>
+
+        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <label className="mb-1 block text-xs text-slate-300">Поиск по задачам</label>
+          <div className="flex items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
+            <Search size={14} className="text-slate-400" />
+            <input
+              value={taskSearch}
+              onChange={(event) => setTaskSearch(event.target.value)}
+              placeholder="Введите ключевое слово"
+              className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            />
+          </div>
+        </section>
 
         <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
           <label className="mb-1 block text-xs text-slate-300">Фильтр по времени</label>
