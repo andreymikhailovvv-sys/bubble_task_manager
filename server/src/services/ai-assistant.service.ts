@@ -932,12 +932,18 @@ export const aiAssistantService = {
     });
     const taskContext = formatGeneralTasksContext(tasks);
     const history = normalizeGeneralHistory(input.history);
+    const now = new Date();
+    const moscowNow = now.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE });
     const systemPrompt = [
       'Ты справочный ИИ-помощник Bubble Task Manager.',
       'Работаешь только в режиме fast.',
       'Ты не помогаешь выполнять задачи пошагово и не мотивируешь, а даёшь справку по существующим задачам пользователя.',
       'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
       'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
+      'Всегда учитывай текущие дату и время из контекста.',
+      'Для любых вычислений по времени и для дедлайнов используй московский часовой пояс (Europe/Moscow, UTC+3).',
+      'Если пользователь просит summary или список задач, отвечай на русском.',
+      'Названия задач в списках и summary указывай на русском (при необходимости переводи естественно, без технических идентификаторов).',
       'Также можно управлять задачами через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
       'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?).',
@@ -947,6 +953,14 @@ export const aiAssistantService = {
 
     const messages: OpenAiTextMessage[] = [
       { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          `Текущая дата и время (UTC): ${now.toISOString()}.`,
+          `Локальная дата и время (Москва): ${moscowNow} (Europe/Moscow, UTC+3).`,
+          'Считай все сроки и сравнения времени относительно Москвы.'
+        ].join('\n')
+      },
       { role: 'user', content: `Контекст всех задач:\n${taskContext}` },
       ...history,
       { role: 'user', content: question }
