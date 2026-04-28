@@ -329,7 +329,24 @@ type GeneralAssistantAction =
   | { type: 'reschedule_task'; taskId: string; dueDate: string }
   | { type: 'complete_task'; taskId: string }
   | { type: 'reopen_task'; taskId: string }
-  | { type: 'rebalance_today'; taskIds?: string[] };
+  | { type: 'rebalance_today'; taskIds?: string[] }
+  | {
+    type: 'create_task';
+    title: string;
+    description?: string;
+    dueDate?: string | null;
+    importance?: number;
+    urgency?: number;
+    notifyBeforeMinutes?: number | null;
+    subtasks?: Array<{ title: string; description?: string; dueDate?: string | null }>;
+  }
+  | {
+    type: 'create_subtask';
+    parentTaskId: string;
+    title: string;
+    description?: string;
+    dueDate?: string | null;
+  };
 
 function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   let parsed: unknown;
@@ -372,6 +389,57 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
           ? value.taskIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
           : undefined;
         return { type, taskIds };
+      }
+      if (type === 'create_task') {
+        const title = typeof value.title === 'string' ? value.title.trim() : '';
+        if (!title) return null;
+        const description = typeof value.description === 'string' ? value.description.trim() : '';
+        const dueDate = typeof value.dueDate === 'string' && value.dueDate.trim() ? value.dueDate.trim() : null;
+        const importance = typeof value.importance === 'number' ? value.importance : Number(value.importance);
+        const urgency = typeof value.urgency === 'number' ? value.urgency : Number(value.urgency);
+        const notifyBeforeMinutesRaw = value.notifyBeforeMinutes;
+        const notifyBeforeMinutes = notifyBeforeMinutesRaw === null || notifyBeforeMinutesRaw === undefined
+          ? null
+          : Number(notifyBeforeMinutesRaw);
+        const subtasks = Array.isArray(value.subtasks)
+          ? value.subtasks
+            .map((subtask) => {
+              if (typeof subtask !== 'object' || subtask === null) return null;
+              const source = subtask as Record<string, unknown>;
+              const subtaskTitle = typeof source.title === 'string' ? source.title.trim() : '';
+              if (!subtaskTitle) return null;
+              return {
+                title: subtaskTitle,
+                description: typeof source.description === 'string' ? source.description.trim() : '',
+                dueDate: typeof source.dueDate === 'string' && source.dueDate.trim() ? source.dueDate.trim() : null
+              };
+            })
+            .filter((subtask): subtask is { title: string; description: string; dueDate: string | null } => Boolean(subtask))
+            .slice(0, 12)
+          : [];
+
+        return {
+          type,
+          title,
+          description,
+          dueDate,
+          importance: Number.isFinite(importance) ? importance : undefined,
+          urgency: Number.isFinite(urgency) ? urgency : undefined,
+          notifyBeforeMinutes: notifyBeforeMinutes === null || Number.isFinite(notifyBeforeMinutes) ? notifyBeforeMinutes : undefined,
+          subtasks
+        };
+      }
+      if (type === 'create_subtask') {
+        const parentTaskId = typeof value.parentTaskId === 'string' ? value.parentTaskId.trim() : '';
+        const title = typeof value.title === 'string' ? value.title.trim() : '';
+        if (!parentTaskId || !title) return null;
+        return {
+          type,
+          parentTaskId,
+          title,
+          description: typeof value.description === 'string' ? value.description.trim() : '',
+          dueDate: typeof value.dueDate === 'string' && value.dueDate.trim() ? value.dueDate.trim() : null
+        };
       }
       return null;
     })
@@ -872,7 +940,7 @@ export const aiAssistantService = {
       'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
       'Также можно управлять задачами через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
-      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально).',
+      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?).',
       'Если действий не нужно — actions: [].',
       'Текст для пользователя клади только в answer на русском.'
     ].join(' ');
@@ -953,6 +1021,90 @@ export const aiAssistantService = {
           });
         }
         actionReports.push(`Распределил задачи на сегодня более равномерно (${candidates.length} шт.).`);
+        continue;
+      }
+
+      if (action.type === 'create_task') {
+        const rawImportance = action.importance;
+        const rawUrgency = action.urgency;
+        const importance = typeof rawImportance === 'number' && Number.isFinite(rawImportance)
+          ? Math.max(1, Math.min(5, Math.round(rawImportance)))
+          : 3;
+        const urgency = typeof rawUrgency === 'number' && Number.isFinite(rawUrgency)
+          ? Math.max(1, Math.min(5, Math.round(rawUrgency)))
+          : 3;
+        const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
+        const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+        const notifyBeforeMinutes = action.notifyBeforeMinutes === null || action.notifyBeforeMinutes === undefined
+          ? 30
+          : Math.max(1, Math.round(action.notifyBeforeMinutes));
+        const createdTask = await prisma.task.create({
+          data: {
+            title: action.title.slice(0, 180),
+            description: action.description?.slice(0, 4000) || '',
+            userId: input.userId,
+            sphereId: null,
+            importance,
+            urgency,
+            priorityScore,
+            status: 'TODO',
+            dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+            notifyBeforeMinutes
+          }
+        });
+
+        const subtasks = Array.isArray(action.subtasks) ? action.subtasks : [];
+        if (subtasks.length > 0) {
+          await prisma.$transaction(subtasks.map((subtask) => {
+            const subtaskDueDate = subtask.dueDate ? new Date(subtask.dueDate) : null;
+            return prisma.task.create({
+              data: {
+                title: subtask.title.slice(0, 180),
+                description: (subtask.description ?? '').slice(0, 2000),
+                userId: input.userId,
+                parentTaskId: createdTask.id,
+                sphereId: null,
+                importance: 3,
+                urgency: 3,
+                priorityScore: 3,
+                status: 'TODO',
+                dueDate: subtaskDueDate && !Number.isNaN(subtaskDueDate.getTime()) ? subtaskDueDate : null,
+                notifyBeforeMinutes: 30
+              }
+            });
+          }));
+        }
+
+        actionReports.push(`Создал новую задачу "${createdTask.title}"${subtasks.length > 0 ? ` и ${subtasks.length} подзадач(и)` : ''}.`);
+        continue;
+      }
+
+      if (action.type === 'create_subtask') {
+        const parentTask = await prisma.task.findFirst({
+          where: { id: action.parentTaskId, userId: input.userId, parentTaskId: null },
+          select: { id: true, title: true }
+        });
+        if (!parentTask) {
+          actionReports.push('Добавление подзадачи пропущено: родительская задача не найдена.');
+          continue;
+        }
+        const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+        const subtask = await prisma.task.create({
+          data: {
+            title: action.title.slice(0, 180),
+            description: (action.description ?? '').slice(0, 2000),
+            userId: input.userId,
+            parentTaskId: parentTask.id,
+            sphereId: null,
+            importance: 3,
+            urgency: 3,
+            priorityScore: 3,
+            status: 'TODO',
+            dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+            notifyBeforeMinutes: 30
+          }
+        });
+        actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
         continue;
       }
 
