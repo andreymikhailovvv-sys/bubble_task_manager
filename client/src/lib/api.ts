@@ -126,6 +126,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  askGeneralAssistant: (payload: { question: string; history: ChatMessage[] }) =>
+    request<{
+      answer: string;
+      model: string;
+      actionReports: string[];
+      undoOperations: Array<{
+        taskId: string;
+        previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
+      }>;
+    }>('/api/ai-general-chat', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  undoGeneralAssistantAction: (payload: {
+    operations: Array<{
+      taskId: string;
+      previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
+    }>;
+  }) =>
+    request<{ ok: true }>('/api/ai-general-chat/undo', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   reportClientError: (payload: {
     source: 'error-boundary' | 'window-error' | 'unhandledrejection' | 'timeline-render';
     message: string;
