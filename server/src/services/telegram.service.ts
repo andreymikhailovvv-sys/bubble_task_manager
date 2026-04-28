@@ -12,6 +12,7 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
   || 'https://bubble-task-manager.onrender.com/miniapp';
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
+const MAX_SHINE_WINDOW_MINUTES = 180;
 
 const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
 const MENU_LIST_TASKS = '📋 Посмотреть задачи';
@@ -1253,7 +1254,7 @@ export const telegramService = {
     for (const task of tasks) {
       const dueAt = task.dueDate?.getTime() ?? 0;
       const diffMs = dueAt - now.getTime();
-      const notifyWindowMs = (task.notifyBeforeMinutes ?? 0) * 60_000;
+      const notifyWindowMs = Math.min(task.notifyBeforeMinutes ?? 0, MAX_SHINE_WINDOW_MINUTES) * 60_000;
       const isShining = diffMs > 0 && diffMs <= notifyWindowMs;
 
       if (isShining && !task.telegramNotifiedAt) {

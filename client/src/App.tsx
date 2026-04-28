@@ -65,6 +65,7 @@ const HELP_WITH_TASK_PROMPT = [
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
+const MAX_SHINE_WINDOW_MINUTES = 180;
 const DISPLAY_MODE_OPTIONS = [
   { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
   { value: 'list', label: 'Список', icon: List, iconClassName: 'text-violet-300' },
@@ -1043,7 +1044,7 @@ export default function App() {
     const diff = due.getTime() - Date.now();
     if (diff < 0) return true;
     if (!Number.isFinite(task.notifyBeforeMinutes)) return false;
-    const notifyBefore = Number(task.notifyBeforeMinutes) * 60_000;
+    const notifyBefore = Math.min(Number(task.notifyBeforeMinutes), MAX_SHINE_WINDOW_MINUTES) * 60_000;
     if (notifyBefore <= 0) return false;
     return diff <= notifyBefore;
   }
