@@ -2101,8 +2101,6 @@ export default function App() {
                     const now = new Date();
                     const lineHour = now.getHours();
                     const lineOffsetPercent = (now.getMinutes() / 60) * 100;
-                    const todayKey = now.toDateString();
-                    const hasTodayInRange = timelineViewData.dayGroups.some((day) => day.date.toDateString() === todayKey);
                     return (
                   <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
                     <div className="border-b border-r border-slate-800/80 bg-slate-900/90 p-2 text-xs text-slate-400">Время</div>
@@ -2130,12 +2128,6 @@ export default function App() {
                         <div className="border-b border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">
                           <div className="relative">
                             {String(hour).padStart(2, '0')}:00
-                            {hasTodayInRange && hour === lineHour ? (
-                              <span
-                                className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
-                                style={{ top: `${lineOffsetPercent}%` }}
-                              />
-                            ) : null}
                           </div>
                         </div>
                         {timelineViewData.dayGroups.map((day) => {
