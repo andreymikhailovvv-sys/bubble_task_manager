@@ -242,7 +242,6 @@ export default function App() {
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [draggedListTaskId, setDraggedListTaskId] = useState<string | null>(null);
   const [listDropPreview, setListDropPreview] = useState<{ y: number; dueDateIso: string } | null>(null);
-  const [listDragAnchor, setListDragAnchor] = useState<{ startY: number; dueDateMs: number } | null>(null);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1533,21 +1532,6 @@ export default function App() {
   const isListDragging = isTaskDragEnabled && draggedListTaskId !== null;
 
   const getListDropDueDate = (clientY: number) => {
-    if (listDragAnchor) {
-      const nowMs = Date.now();
-      const { startY, dueDateMs } = listDragAnchor;
-      if (clientY <= startY) {
-        const topDistance = Math.max(startY, 1);
-        const progressToTop = Math.max(0, Math.min(1, (startY - clientY) / topDistance));
-        const nextMs = dueDateMs + (nowMs - dueDateMs) * progressToTop;
-        return new Date(nextMs).toISOString();
-      }
-      const bottomDistance = Math.max(window.innerHeight - startY, 1);
-      const progressToBottom = Math.max(0, Math.min(1, (clientY - startY) / bottomDistance));
-      const maxFutureMs = dueDateMs + (14 * 24 * 60 * 60 * 1000);
-      const nextMs = dueDateMs + (maxFutureMs - dueDateMs) * progressToBottom;
-      return new Date(nextMs).toISOString();
-    }
     const now = Date.now();
     const windowStart = now - (12 * 60 * 60 * 1000);
     const windowEnd = now + (14 * 24 * 60 * 60 * 1000);
@@ -1868,12 +1852,7 @@ export default function App() {
                     onMouseLeave={() => setListHoveredTaskId((prev) => (prev === task.id ? null : prev))}
                     onDragStartCapture={(event) => {
                       if (!isTaskDragEnabled) return;
-                      const dueDateMs = task.dueDate ? new Date(task.dueDate).getTime() : Date.now();
                       setDraggedListTaskId(task.id);
-                      setListDragAnchor({
-                        startY: event.clientY,
-                        dueDateMs: Number.isNaN(dueDateMs) ? Date.now() : dueDateMs
-                      });
                       event.dataTransfer.effectAllowed = 'move';
                       event.dataTransfer.setData('text/task-id', task.id);
                     }}
@@ -1890,12 +1869,10 @@ export default function App() {
                       if (taskId) await applyTaskDueDate(taskId, dueDateIso);
                       setDraggedListTaskId(null);
                       setListDropPreview(null);
-                      setListDragAnchor(null);
                     }}
                     onDragEndCapture={() => {
                       setDraggedListTaskId(null);
                       setListDropPreview(null);
-                      setListDragAnchor(null);
                     }}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
