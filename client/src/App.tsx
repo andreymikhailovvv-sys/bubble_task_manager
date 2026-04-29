@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -62,6 +62,7 @@ const HELP_WITH_TASK_PROMPT = [
   'Если данных недостаточно — сначала задай наводящие вопросы, чтобы уточнить контекст, а потом предложи конкретную помощь.'
 ].join(' ');
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
+const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -77,23 +78,48 @@ type GeneralAiUndoOperation = {
 };
 type GeneralAiMessage = ChatMessage & { id: string };
 
-function renderAiMessageContent(content: string): ReactNode {
+function renderInlineAiMarkup(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
     if (!part) return null;
     const isBoldMarkup = part.startsWith('**') && part.endsWith('**') && part.length > 4;
-    if (!isBoldMarkup) {
-      return <span key={`plain-${index}`}>{part}</span>;
-    }
-
+    if (!isBoldMarkup) return <span key={`plain-${index}`}>{part}</span>;
     const boldText = part.slice(2, -2);
-    if (!boldText) return null;
-
-    return (
-      <strong key={`bold-${index}`} className="font-semibold text-white">
-        {boldText}
-      </strong>
-    );
+    return <strong key={`bold-${index}`} className="font-semibold text-white">{boldText}</strong>;
   });
+}
+
+function renderAiMessageContent(content: string): ReactNode {
+  const blocks: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = CODE_BLOCK_PATTERN.exec(content)) !== null) {
+    const [full, language, code] = match;
+    const before = content.slice(lastIndex, match.index);
+    if (before) {
+      blocks.push(<div key={`text-${lastIndex}`} className="whitespace-pre-wrap">{renderInlineAiMarkup(before)}</div>);
+    }
+    const normalizedCode = code.replace(/\n$/, '');
+    blocks.push(
+      <div key={`code-${match.index}`} className="my-2 overflow-hidden rounded-lg border border-slate-600/70 bg-slate-950/95">
+        <div className="flex items-center justify-between border-b border-slate-700/70 px-2 py-1 text-[10px] text-slate-300">
+          <span>{language || 'code'}</span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded bg-slate-700/80 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
+            onClick={() => { void navigator.clipboard?.writeText(normalizedCode); }}
+            title="Скопировать код"
+          >
+            <Copy size={11} /> Копировать
+          </button>
+        </div>
+        <pre className="m-0 overflow-x-auto p-2 text-[12px] leading-5 text-cyan-100"><code>{normalizedCode}</code></pre>
+      </div>
+    );
+    lastIndex = match.index + full.length;
+  }
+  const tail = content.slice(lastIndex);
+  if (tail) blocks.push(<div key="text-tail" className="whitespace-pre-wrap">{renderInlineAiMarkup(tail)}</div>);
+  return blocks.length > 0 ? blocks : <span>{renderInlineAiMarkup(content)}</span>;
 }
 
 function resolveAttachmentMimeType(file: File): string {
@@ -1880,9 +1906,9 @@ export default function App() {
                                         : 'border-slate-700/70 bg-slate-800/70'
                                   }`}
                                   style={hasSubtaskOverdueState
-                                    ? { animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                                    ? { animation: `${isHoveredTask ? 'subtask-overdue-glow-static' : 'subtask-overdue-glow'} 2.3s ease-in-out infinite` }
                                     : hasSubtaskReminderState
-                                      ? { animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                                      ? { animation: `${isHoveredTask ? 'subtask-reminder-glow-static' : 'subtask-reminder-glow'} 2.3s ease-in-out infinite` }
                                       : undefined}
                                   onClick={(event) => event.stopPropagation()}
                                 >
@@ -2090,11 +2116,12 @@ export default function App() {
                             return !Number.isNaN(dueDate.getTime()) && dueDate.getHours() === hour;
                           });
                           const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+                          const isToday = day.date.toDateString() === new Date().toDateString();
                           return (
                             <div
                               key={`${day.key}-${hour}`}
                               className={`min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
-                                isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
+                                isToday ? 'bg-cyan-950/24 ring-1 ring-inset ring-cyan-400/55' : isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
                               } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
                               onDragOver={(event) => {
                                 if (!isTimelineDragEnabled) return;
@@ -2261,7 +2288,7 @@ export default function App() {
             </div>
             <div ref={generalAiDialogContainerRef} className="mb-2 h-[220px] overflow-y-auto rounded-xl bg-slate-900/90 p-2 text-xs">
               {isGeneralAiSearchOpen ? (
-                <label className="mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                <label className="sticky top-0 z-10 mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[11px] text-slate-300">
                   <Search size={12} />
                   <input
                     className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -2279,7 +2306,7 @@ export default function App() {
                     className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <p className="mb-1 text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
-                    <div>{message.content}</div>
+                    <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
               </div>
@@ -2422,7 +2449,7 @@ export default function App() {
               </div>
               <div ref={focusedAiDialogContainerRef} className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
                 {isFocusedAiSearchOpen ? (
-                  <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300">
+                  <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[11px] text-slate-300">
                     <Search size={12} />
                     <input
                       className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -2850,7 +2877,7 @@ export default function App() {
             </div>
             <div ref={expandedAiDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
               {isFocusedAiSearchOpen ? (
-                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-[12px] text-slate-300">
+                <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[12px] text-slate-300">
                   <Search size={12} />
                   <input
                     className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -2967,7 +2994,7 @@ export default function App() {
             </div>
             <div ref={generalAiFullscreenDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
               {isGeneralAiSearchOpen ? (
-                <label className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2 py-1 text-xs text-slate-300">
+                <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-xs text-slate-300">
                   <Search size={12} />
                   <input
                     className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -2984,7 +3011,7 @@ export default function App() {
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
-                  <div>{message.content}</div>
+                  <div>{renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
               {generalAiLoading ? <p className="text-sm text-cyan-200">ИИ обрабатывает запрос…</p> : null}
