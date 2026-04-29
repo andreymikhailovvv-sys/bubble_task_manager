@@ -274,6 +274,8 @@ export default function App() {
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [listHoveredTaskId, setListHoveredTaskId] = useState<string | null>(null);
   const [expandedListTaskIds, setExpandedListTaskIds] = useState<string[]>([]);
+  const [addingListSubtaskTaskId, setAddingListSubtaskTaskId] = useState<string | null>(null);
+  const [listSubtaskTitle, setListSubtaskTitle] = useState('');
   const [hideClosedFocusedSubtasks, setHideClosedFocusedSubtasks] = useState(true);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
@@ -312,6 +314,7 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const listSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -793,6 +796,11 @@ export default function App() {
     if (!isAddingFocusedSubtask) return;
     focusedSubtaskTitleInputRef.current?.focus();
   }, [isAddingFocusedSubtask]);
+
+  useEffect(() => {
+    if (!addingListSubtaskTaskId) return;
+    listSubtaskTitleInputRef.current?.focus();
+  }, [addingListSubtaskTaskId]);
 
   useEffect(() => {
     if (!focusedTask) return;
@@ -1324,6 +1332,13 @@ export default function App() {
     await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 30 });
     setFocusedSubtaskTitle('');
     setIsAddingFocusedSubtask(false);
+  };
+
+  const addListSubtask = async (parentTask: Task) => {
+    const title = listSubtaskTitle.trim() || 'Новая доп задача';
+    await createSubtaskForParent(parentTask, { title, notifyBeforeMinutes: 30 });
+    setListSubtaskTitle('');
+    setAddingListSubtaskTaskId(null);
   };
 
   const generateFocusedSubtasksWithAi = async () => {
@@ -1987,6 +2002,50 @@ export default function App() {
                               </li>
                             ) : null}
                           </ul>
+                          <div className="mt-2" onClick={(event) => event.stopPropagation()}>
+                            {addingListSubtaskTaskId === task.id ? (
+                              <div className="space-y-2">
+                                <input
+                                  ref={listSubtaskTitleInputRef}
+                                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
+                                  placeholder="Название доп задачи"
+                                  value={listSubtaskTitle}
+                                  onChange={(event) => setListSubtaskTitle(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      void addListSubtask(task);
+                                    }
+                                  }}
+                                />
+                                <div className="flex gap-2">
+                                  <button className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-xs" onClick={() => void addListSubtask(task)}>
+                                    Сохранить
+                                  </button>
+                                  <button
+                                    className="rounded bg-slate-700 px-2 py-1.5 text-xs"
+                                    onClick={() => {
+                                      setAddingListSubtaskTaskId(null);
+                                      setListSubtaskTitle('');
+                                    }}
+                                  >
+                                    Отмена
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="rounded bg-cyan-700 px-3 py-1 text-xs text-white"
+                                onClick={() => {
+                                  setListSubtaskTitle('');
+                                  setAddingListSubtaskTaskId(task.id);
+                                }}
+                              >
+                                + Добавить подзадачу
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : null}
