@@ -223,7 +223,7 @@ export default function MiniApp() {
       if (Number.isNaN(due.getTime())) return false;
 
       if (timeFilter === 'today') {
-        return due >= startOfToday && due < endOfToday;
+        return due < endOfToday;
       }
       if (timeFilter === 'tomorrow') {
         const tomorrowStart = new Date(endOfToday);
