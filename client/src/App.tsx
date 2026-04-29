@@ -2071,7 +2071,21 @@ export default function App() {
                             <p className="mb-2 text-xs font-semibold text-slate-300">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
                               {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {cell.tasks.length > 4 ? <li className="text-[11px] text-slate-400">+ ещё {cell.tasks.length - 4}</li> : null}
+                              {cell.tasks.length > 4 ? (
+                                <li>
+                                  <button
+                                    type="button"
+                                    className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200 transition hover:bg-cyan-500/20"
+                                    onClick={() => {
+                                      if (!cell.date) return;
+                                      setTimelineAnchorDate(new Date(cell.date));
+                                      setTimelineViewMode('day');
+                                    }}
+                                  >
+                                    + ещё {cell.tasks.length - 4}
+                                  </button>
+                                </li>
+                              ) : null}
                             </ul>
                           </>
                         ) : null}
@@ -2083,6 +2097,11 @@ export default function App() {
 
               {timelineViewMode === 'week' ? (
                 <section className="overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/70">
+                  {(() => {
+                    const now = new Date();
+                    const lineHour = now.getHours();
+                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
+                    return (
                   <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
                     <div className="border-b border-r border-slate-800/80 bg-slate-900/90 p-2 text-xs text-slate-400">Время</div>
                     {timelineViewData.dayGroups.map((day) => {
@@ -2107,7 +2126,9 @@ export default function App() {
                     {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
                       <Fragment key={`week-hour-${hour}`}>
                         <div className="border-b border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">
-                          {String(hour).padStart(2, '0')}:00
+                          <div className="relative">
+                            {String(hour).padStart(2, '0')}:00
+                          </div>
                         </div>
                         {timelineViewData.dayGroups.map((day) => {
                           const hourTasks = day.tasks.filter((task) => {
@@ -2120,8 +2141,10 @@ export default function App() {
                           return (
                             <div
                               key={`${day.key}-${hour}`}
-                              className={`min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
-                                isToday ? 'bg-cyan-950/24 ring-1 ring-inset ring-cyan-400/55' : isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
+                              className={`relative min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
+                                isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
+                              } ${
+                                isToday ? 'border-l border-r border-cyan-400/70' : ''
                               } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
                               onDragOver={(event) => {
                                 if (!isTimelineDragEnabled) return;
@@ -2137,6 +2160,12 @@ export default function App() {
                                 setDraggedTimelineTaskId(null);
                               }}
                             >
+                              {isToday && hour === lineHour ? (
+                                <span
+                                  className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
+                                  style={{ top: `${lineOffsetPercent}%` }}
+                                />
+                              ) : null}
                               {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
                             </div>
                           );
@@ -2144,16 +2173,23 @@ export default function App() {
                       </Fragment>
                     ))}
                   </div>
+                    );
+                  })()}
                 </section>
               ) : null}
 
               {timelineViewMode === 'day' ? (
                 <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70">
-                  {timelineViewData.hourGroups.map((hourGroup) => (
+                  {(() => {
+                    const now = new Date();
+                    const isCurrentDay = timelineAnchorDate.toDateString() === now.toDateString();
+                    const lineHour = now.getHours();
+                    const lineOffsetPercent = (now.getMinutes() / 60) * 100;
+                    return timelineViewData.hourGroups.map((hourGroup) => (
                     <div key={hourGroup.hour} className="grid grid-cols-[70px_minmax(0,1fr)] border-b border-slate-800/80 last:border-b-0">
                       <div className="border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">{String(hourGroup.hour).padStart(2, '0')}:00</div>
                       <div
-                        className={`min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
+                        className={`relative min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
                         onDragOver={(event) => {
                           if (!isTimelineDragEnabled) return;
                           event.preventDefault();
@@ -2170,10 +2206,17 @@ export default function App() {
                           setDraggedTimelineTaskId(null);
                         }}
                       >
+                        {isCurrentDay && hourGroup.hour === lineHour ? (
+                          <span
+                            className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
+                            style={{ top: `${lineOffsetPercent}%` }}
+                          />
+                        ) : null}
                         {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
                       </div>
                     </div>
-                  ))}
+                  ));
+                  })()}
                 </section>
               ) : null}
 
