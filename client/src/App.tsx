@@ -1083,7 +1083,10 @@ export default function App() {
           const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
           return { start: startOfMonth, end: endOfMonth };
         };
-        const isDateInRange = (date: Date, start: Date, end: Date) => date >= start && date < end;
+        const isDateInRange = (date: Date, start: Date, end: Date) => {
+          if (effectiveTimeFilter === 'today') return date < end;
+          return date >= start && date < end;
+        };
 
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
