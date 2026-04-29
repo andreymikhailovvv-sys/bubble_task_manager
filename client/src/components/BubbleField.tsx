@@ -25,6 +25,8 @@ type Props = {
   onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
+  isTaskMoveMode?: boolean;
+  onMoveTaskInTime?: (task: Task, dueDateIso: string) => Promise<void>;
   className?: string;
 };
 
@@ -144,6 +146,8 @@ export function BubbleField({
   onUpdateSubtaskDueDate,
   onRenameSphere,
   onAddTaskToSphere,
+  isTaskMoveMode = false,
+  onMoveTaskInTime,
   className
 }: Props) {
   const [zoom, setZoom] = useState(1);
@@ -152,6 +156,9 @@ export function BubbleField({
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragPreviewDueDateIso, setDragPreviewDueDateIso] = useState<string | null>(null);
+  const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,9 +175,23 @@ export function BubbleField({
     }));
   };
 
+
+  const getDueDateFromDistance = (distance: number) => {
+    const normalized = Math.max(0, Math.min(1, distance / (SIZE * 0.47)));
+    const now = Date.now();
+    const pastWindowMs = 12 * 60 * 60 * 1000;
+    const futureWindowMs = 21 * 24 * 60 * 60 * 1000;
+    const mapped = now - pastWindowMs + normalized * (pastWindowMs + futureWindowMs);
+    return new Date(mapped).toISOString();
+  };
+
+  const visualTasks = useMemo(() => {
+    if (!draggedTaskId || !dragPreviewDueDateIso) return tasks;
+    return tasks.map((task) => (task.id === draggedTaskId ? { ...task, dueDate: dragPreviewDueDateIso } : task));
+  }, [tasks, draggedTaskId, dragPreviewDueDateIso]);
   const bubbles = useMemo(
-    () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
-    [tasks, spheres, mode, rankingMode, subtaskMap]
+    () => buildBubbles(visualTasks, spheres, mode, SIZE, rankingMode, subtaskMap),
+    [visualTasks, spheres, mode, rankingMode, subtaskMap]
   );
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
   const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
@@ -186,8 +207,9 @@ export function BubbleField({
   }, [sectorCount, spheres, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
-  const activeBubble = hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
+  const hoverDisabled = isTaskMoveMode;
+  const inactiveBubbles = !hoverDisabled && hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
+  const activeBubble = !hoverDisabled && hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -299,7 +321,7 @@ export function BubbleField({
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
-    const isHovered = hoveredTaskId === bubble.task.id;
+    const isHovered = hoveredTaskId === bubble.task.id || draggedTaskId === bubble.task.id;
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
@@ -317,8 +339,17 @@ export function BubbleField({
         transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 30, stiffness: 140, mass: 0.95 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
-        onMouseEnter={() => activateHover(bubble.task.id)}
-        onMouseLeave={scheduleHoverExit}
+        onMouseEnter={() => { if (!isTaskMoveMode) activateHover(bubble.task.id); }}
+        onMouseLeave={() => { if (!isTaskMoveMode) scheduleHoverExit(); }}
+        onMouseDown={(event) => {
+          if (!isTaskMoveMode || bubble.task.status === 'DONE') return;
+          event.stopPropagation();
+          const dx = bubble.x - SIZE / 2;
+          const dy = bubble.y - SIZE / 2;
+          const dist = Math.hypot(dx, dy);
+          setDraggedTaskId(bubble.task.id);
+          setDragPreviewDueDateIso(getDueDateFromDistance(dist));
+        }}
         className="cursor-pointer"
       >
         <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
@@ -400,17 +431,36 @@ export function BubbleField({
         dragStart.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
       }}
       onMouseMove={(event) => {
-        if (isNativeCalendarOpen || !dragStart.current) return;
+        if (draggedTaskId) {
+          const svgRect = event.currentTarget.getBoundingClientRect();
+          const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
+          const mx = workspaceMin + ((event.clientX - svgRect.left) / svgRect.width) * workspaceSize;
+          const my = workspaceMin + ((event.clientY - svgRect.top) / svgRect.height) * workspaceSize;
+          const worldX = (mx - offset.x) / zoom;
+          const worldY = (my - offset.y) / zoom;
+          setDragPointer({ x: worldX, y: worldY });
+          const dist = Math.hypot(worldX - SIZE / 2, worldY - SIZE / 2);
+          setDragPreviewDueDateIso(getDueDateFromDistance(dist));
+          return;
+        }
+        if (isNativeCalendarOpen || !dragStart.current || isTaskMoveMode) return;
         setOffset({ x: event.clientX - dragStart.current.x, y: event.clientY - dragStart.current.y });
       }}
       onMouseUp={() => {
         if (isNativeCalendarOpen) return;
         dragStart.current = null;
+        if (draggedTaskId && dragPreviewDueDateIso && onMoveTaskInTime) {
+          const task = tasks.find((item) => item.id === draggedTaskId);
+          if (task) void onMoveTaskInTime(task, dragPreviewDueDateIso);
+        }
+        setDraggedTaskId(null);
+        setDragPreviewDueDateIso(null);
+        setDragPointer(null);
       }}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         dragStart.current = null;
-        scheduleHoverExit();
+        if (!isTaskMoveMode) scheduleHoverExit();
       }}
     >
       <svg viewBox={`${workspaceMin} ${workspaceMin} ${SIZE + WORKSPACE_PADDING * 2} ${SIZE + WORKSPACE_PADDING * 2}`} className="relative z-20 h-full w-full overflow-visible">
@@ -467,7 +517,7 @@ export function BubbleField({
             );
           })}
 
-          {hoveredBubble ? (
+          {!hoverDisabled && hoveredBubble ? (
             <>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
@@ -604,6 +654,14 @@ export function BubbleField({
                 </div>
               </foreignObject>
             </>
+          ) : null}
+
+          {isTaskMoveMode && draggedTaskId && dragPointer && dragPreviewDueDateIso ? (
+            <foreignObject x={dragPointer.x + 18} y={dragPointer.y - 14} width={220} height={44} pointerEvents="none">
+              <div className="rounded-lg border border-cyan-300/40 bg-slate-950/92 px-2 py-1 text-[11px] text-cyan-100">
+                Новое время: {formatDueDate(dragPreviewDueDateIso)}
+              </div>
+            </foreignObject>
           ) : null}
         </g>
       </svg>

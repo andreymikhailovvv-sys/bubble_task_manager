@@ -1823,6 +1823,10 @@ export default function App() {
             }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+            isTaskMoveMode={isTaskDragEnabled}
+            onMoveTaskInTime={async (task, dueDateIso) => {
+              await applyTaskDueDate(task.id, dueDateIso);
+            }}
           />
         ) : displayMode === 'list' ? (
           <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
