@@ -1888,6 +1888,7 @@ export default function App() {
                             </span>
                             {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление" className="absolute ml-1"><Sparkles size={14} className="text-violet-300" /></span> : null}
                           </h3>
+                          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="mt-0.5 shrink-0 text-violet-300" /></span> : null}
                           <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
                             Дедлайн задачи: {formatDeadlineLeft(task.dueDate)}
                           </span>
