@@ -159,6 +159,7 @@ export function BubbleField({
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragPreviewDueDateIso, setDragPreviewDueDateIso] = useState<string | null>(null);
   const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
+  const [dragCursorOffset, setDragCursorOffset] = useState<{ x: number; y: number } | null>(null);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -329,14 +330,17 @@ export function BubbleField({
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
     const aiBadgeX = bubble.radius * 0.66;
     const aiBadgeY = -bubble.radius * 0.66;
+    const isDraggingThisBubble = draggedTaskId === bubble.task.id;
+    const renderedX = isDraggingThisBubble && dragPointer && dragCursorOffset ? dragPointer.x + dragCursorOffset.x : bubble.x;
+    const renderedY = isDraggingThisBubble && dragPointer && dragCursorOffset ? dragPointer.y + dragCursorOffset.y : bubble.y;
 
     return (
       <motion.g
         key={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }}
-        exit={{ opacity: 1, scale: 1, x: bubble.x, y: bubble.y }}
-        transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 30, stiffness: 140, mass: 0.95 }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: renderedX, y: renderedY }}
+        exit={{ opacity: 1, scale: 1, x: renderedX, y: renderedY }}
+        transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 36, stiffness: 92, mass: 1.2 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
         onMouseEnter={() => { if (!isTaskMoveMode) activateHover(bubble.task.id); }}
@@ -344,10 +348,20 @@ export function BubbleField({
         onMouseDown={(event) => {
           if (!isTaskMoveMode || bubble.task.status === 'DONE') return;
           event.stopPropagation();
+          const container = event.currentTarget.ownerSVGElement?.closest('div');
+          if (!container) return;
+          const rect = container.getBoundingClientRect();
+          const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
+          const mx = workspaceMin + ((event.clientX - rect.left) / rect.width) * workspaceSize;
+          const my = workspaceMin + ((event.clientY - rect.top) / rect.height) * workspaceSize;
+          const worldX = (mx - offset.x) / zoom;
+          const worldY = (my - offset.y) / zoom;
           const dx = bubble.x - SIZE / 2;
           const dy = bubble.y - SIZE / 2;
           const dist = Math.hypot(dx, dy);
           setDraggedTaskId(bubble.task.id);
+          setDragPointer({ x: worldX, y: worldY });
+          setDragCursorOffset({ x: bubble.x - worldX, y: bubble.y - worldY });
           setDragPreviewDueDateIso(getDueDateFromDistance(dist));
         }}
         className="cursor-pointer"
@@ -456,6 +470,7 @@ export function BubbleField({
         setDraggedTaskId(null);
         setDragPreviewDueDateIso(null);
         setDragPointer(null);
+        setDragCursorOffset(null);
       }}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
