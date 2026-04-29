@@ -1416,6 +1416,20 @@ export default function App() {
     if (hours < 1) return `Через ${Math.max(1, minutes)} мин`;
     return `Через ${hours} ч ${minutes} мин`;
   };
+  const getActiveSubtasks = (taskId: string) => (displayedSubtaskMap[taskId] ?? []).filter((subtask) => subtask.status !== 'DONE');
+  const getNearestActiveSubtaskDueDate = (taskId: string) => {
+    const dueTimestamps = getActiveSubtasks(taskId)
+      .map((subtask) => (subtask.dueDate ? new Date(subtask.dueDate).getTime() : Number.POSITIVE_INFINITY))
+      .filter((timestamp) => Number.isFinite(timestamp));
+    if (dueTimestamps.length === 0) return null;
+    return new Date(Math.min(...dueTimestamps)).toISOString();
+  };
+  const getTaskUrgencyTimestamp = (task: Task) => {
+    const taskDue = task.dueDate ? new Date(task.dueDate).getTime() : Number.POSITIVE_INFINITY;
+    const nearestSubtaskDue = getNearestActiveSubtaskDueDate(task.id);
+    const subtaskDue = nearestSubtaskDue ? new Date(nearestSubtaskDue).getTime() : Number.POSITIVE_INFINITY;
+    return Math.min(taskDue, subtaskDue);
+  };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
   const getTimelineTaskViewModel = (task: Task) => {
@@ -1493,12 +1507,11 @@ export default function App() {
       if (aDue !== bDue) return aDue - bDue;
       return a.title.localeCompare(b.title, 'ru');
     }
+    const aUrgencyTime = getTaskUrgencyTimestamp(a);
+    const bUrgencyTime = getTaskUrgencyTimestamp(b);
+    if (aUrgencyTime !== bUrgencyTime) return aUrgencyTime - bUrgencyTime;
     if (rankingMode === 'importance' && a.importance !== b.importance) return b.importance - a.importance;
     if (rankingMode === 'urgency' && a.urgency !== b.urgency) return b.urgency - a.urgency;
-    if (a.urgency !== b.urgency) return b.urgency - a.urgency;
-    const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-    const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-    if (aDue !== bDue) return aDue - bDue;
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
   });
@@ -1776,6 +1789,8 @@ export default function App() {
               ) : null}
               {activeListTasks.map((task) => {
                 const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+                const activeTaskSubtasks = getActiveSubtasks(task.id);
+                const nearestSubtaskDueDate = getNearestActiveSubtaskDueDate(task.id);
                 const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
                 const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
                 const isExpandedByState = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
@@ -1827,7 +1842,7 @@ export default function App() {
                             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                           </h3>
                           <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
-                            {formatDeadlineLeft(task.dueDate)}
+                            Дедлайн задачи: {formatDeadlineLeft(task.dueDate)} · Ближ. подзадача: {formatDeadlineLeft(nearestSubtaskDueDate)}
                           </span>
                         </div>
                       </div>
@@ -1850,8 +1865,8 @@ export default function App() {
                         <div>
                           <p className="mb-1 text-slate-300">Подзадачи:</p>
                           <ul className="space-y-1">
-                            {taskSubtasks.length === 0 ? <li className="text-slate-500">Подзадач пока нет</li> : null}
-                            {taskSubtasks.map((subtask) => {
+                            {activeTaskSubtasks.length === 0 ? <li className="text-slate-500">Активных подзадач пока нет</li> : null}
+                            {activeTaskSubtasks.slice(0, 10).map((subtask) => {
                               const hasSubtaskOverdueState = subtask.status !== 'DONE' && isOverdue(subtask);
                               const hasSubtaskReminderState = subtask.status !== 'DONE' && !hasSubtaskOverdueState && shouldTaskGlow(subtask);
                               return (
@@ -1888,6 +1903,9 @@ export default function App() {
                                 </li>
                               );
                             })}
+                            {activeTaskSubtasks.length > 10 ? (
+                              <li className="text-slate-400">Еще {activeTaskSubtasks.length - 10} активных задач</li>
+                            ) : null}
                           </ul>
                         </div>
                       </div>
