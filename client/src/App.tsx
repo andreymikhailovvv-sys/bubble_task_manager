@@ -238,10 +238,8 @@ export default function App() {
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
-  const [isTaskDragEnabled, setIsTaskDragEnabled] = useState(false);
+  const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
-  const [draggedListTaskId, setDraggedListTaskId] = useState<string | null>(null);
-  const [listDropPreview, setListDropPreview] = useState<{ y: number; dueDateIso: string } | null>(null);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1437,7 +1435,7 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
-    const canDragTask = isTaskDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
+    const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
     return (
       <motion.button
         layout
@@ -1528,29 +1526,7 @@ export default function App() {
       } satisfies TimelineViewData;
     }
   })();
-  const isTimelineDragging = isTaskDragEnabled && draggedTimelineTaskId !== null;
-  const isListDragging = isTaskDragEnabled && draggedListTaskId !== null;
-
-  const getListDropDueDate = (clientY: number) => {
-    const now = Date.now();
-    const windowStart = now - (12 * 60 * 60 * 1000);
-    const windowEnd = now + (14 * 24 * 60 * 60 * 1000);
-    const ratio = Math.max(0, Math.min(1, clientY / window.innerHeight));
-    return new Date(windowStart + ratio * (windowEnd - windowStart)).toISOString();
-  };
-
-  const applyTaskDueDate = async (taskId: string, nextDueDateIso: string) => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    const previousDueDate = task.dueDate ?? null;
-    setTasks((prev) => prev.map((item) => (item.id === taskId ? { ...item, dueDate: nextDueDateIso, updatedAt: new Date().toISOString() } : item)));
-    try {
-      await api.updateTask(taskId, { dueDate: nextDueDateIso });
-    } catch {
-      setTasks((prev) => prev.map((item) => (item.id === taskId ? { ...item, dueDate: previousDueDate, updatedAt: new Date().toISOString() } : item)));
-      await load();
-    }
-  };
+  const isTimelineDragging = isTimelineDragEnabled && draggedTimelineTaskId !== null;
 
   const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
@@ -1724,24 +1700,6 @@ export default function App() {
           </select>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-md border text-xs transition ${
-              isTaskDragEnabled
-                ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
-                : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
-            }`}
-            onClick={() => {
-              setIsTaskDragEnabled((prev) => !prev);
-              setDraggedTimelineTaskId(null);
-              setDraggedListTaskId(null);
-              setListDropPreview(null);
-            }}
-            title="Перетаскивание задач (все режимы)"
-            aria-label="Переключить перетаскивание задач"
-          >
-            <MousePointer2 size={14} />
-          </button>
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
@@ -1835,7 +1793,6 @@ export default function App() {
                   <motion.li
                     key={task.id}
                     layout
-                    draggable={isTaskDragEnabled}
                     className={`cursor-pointer rounded-xl border px-4 py-3 transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
                       hasOverdueState
                         ? 'border-rose-400/70 bg-rose-950/25'
@@ -1850,30 +1807,6 @@ export default function App() {
                         : undefined}
                     onMouseEnter={() => setListHoveredTaskId(task.id)}
                     onMouseLeave={() => setListHoveredTaskId((prev) => (prev === task.id ? null : prev))}
-                    onDragStartCapture={(event) => {
-                      if (!isTaskDragEnabled) return;
-                      setDraggedListTaskId(task.id);
-                      event.dataTransfer.effectAllowed = 'move';
-                      event.dataTransfer.setData('text/task-id', task.id);
-                    }}
-                    onDragOverCapture={(event) => {
-                      if (!isListDragging) return;
-                      event.preventDefault();
-                      setListDropPreview({ y: event.clientY, dueDateIso: getListDropDueDate(event.clientY) });
-                    }}
-                    onDropCapture={async (event) => {
-                      if (!isTaskDragEnabled) return;
-                      event.preventDefault();
-                      const taskId = draggedListTaskId ?? event.dataTransfer.getData('text/task-id');
-                      const dueDateIso = getListDropDueDate(event.clientY);
-                      if (taskId) await applyTaskDueDate(taskId, dueDateIso);
-                      setDraggedListTaskId(null);
-                      setListDropPreview(null);
-                    }}
-                    onDragEndCapture={() => {
-                      setDraggedListTaskId(null);
-                      setListDropPreview(null);
-                    }}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -1963,14 +1896,6 @@ export default function App() {
                 );
               })}
             </ul>
-            {listDropPreview ? (
-              <div
-                className="pointer-events-none fixed z-40 -translate-y-full rounded-lg border border-cyan-300/70 bg-slate-900/95 px-2 py-1 text-xs text-cyan-100 shadow-lg"
-                style={{ left: 24, top: listDropPreview.y - 8 }}
-              >
-                Перенос на: {formatTaskDueDate(listDropPreview.dueDateIso)}
-              </div>
-            ) : null}
           </div>
         ) : (
           <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
@@ -2015,7 +1940,22 @@ export default function App() {
                   </div>
                   <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
                   <div className="flex items-center gap-2">
-
+                    <button
+                      type="button"
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                        isTimelineDragEnabled
+                          ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
+                          : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
+                      }`}
+                      onClick={() => {
+                        setIsTimelineDragEnabled((prev) => !prev);
+                        setDraggedTimelineTaskId(null);
+                      }}
+                      title="Перетаскивание задач"
+                      aria-label="Переключить перетаскивание задач в таймлайне"
+                    >
+                      <MousePointer2 size={14} />
+                    </button>
                     <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
                       {([
                         { key: 'day', label: 'День' },
@@ -2069,12 +2009,12 @@ export default function App() {
                             : 'border-transparent bg-slate-900/20'
                         } ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
-                          if (!isTaskDragEnabled || !cell.date) return;
+                          if (!isTimelineDragEnabled || !cell.date) return;
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
                         }}
                         onDrop={async (event) => {
-                          if (!isTaskDragEnabled || !cell.date) return;
+                          if (!isTimelineDragEnabled || !cell.date) return;
                           event.preventDefault();
                           const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                           setDraggedTimelineTaskId(taskId || null);
@@ -2139,12 +2079,12 @@ export default function App() {
                                 isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
                               } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
                               onDragOver={(event) => {
-                                if (!isTaskDragEnabled) return;
+                                if (!isTimelineDragEnabled) return;
                                 event.preventDefault();
                                 event.dataTransfer.dropEffect = 'move';
                               }}
                               onDrop={async (event) => {
-                                if (!isTaskDragEnabled) return;
+                                if (!isTimelineDragEnabled) return;
                                 event.preventDefault();
                                 const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                                 setDraggedTimelineTaskId(taskId || null);
@@ -2170,12 +2110,12 @@ export default function App() {
                       <div
                         className={`min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
                         onDragOver={(event) => {
-                          if (!isTaskDragEnabled) return;
+                          if (!isTimelineDragEnabled) return;
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
                         }}
                         onDrop={async (event) => {
-                          if (!isTaskDragEnabled) return;
+                          if (!isTimelineDragEnabled) return;
                           event.preventDefault();
                           const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                           setDraggedTimelineTaskId(taskId || null);
