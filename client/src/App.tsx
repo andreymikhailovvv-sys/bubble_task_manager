@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -1442,6 +1442,21 @@ export default function App() {
     if (hours < 1) return `Через ${Math.max(1, minutes)} мин`;
     return `Через ${hours} ч ${minutes} мин`;
   };
+  const formatSubtaskRelativeDeadline = (value?: string | null) => {
+    if (!value) return 'без дедлайна';
+    const due = new Date(value);
+    if (Number.isNaN(due.getTime())) return 'без дедлайна';
+    const diffMs = due.getTime() - Date.now();
+    const totalMinutes = Math.floor(Math.abs(diffMs) / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (diffMs < 0) {
+      if (hours < 1) return `${Math.max(1, minutes)} мин назад`;
+      return `${hours} ч ${minutes} мин назад`;
+    }
+    if (hours < 1) return `через ${Math.max(1, minutes)} минут`;
+    return `через ${hours} часов ${minutes} минут`;
+  };
   const getActiveSubtasks = (taskId: string) => (displayedSubtaskMap[taskId] ?? []).filter((subtask) => subtask.status !== 'DONE');
   const getNearestActiveSubtaskDueDate = (taskId: string) => {
     const dueTimestamps = getActiveSubtasks(taskId)
@@ -1519,9 +1534,12 @@ export default function App() {
             </span>
           ) : null}
         </span>
-        <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
-          {taskSubtasks.length}
-        </span>
+        <div className="flex items-center gap-1">
+          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="text-violet-200" /></span> : null}
+          <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
+            {taskSubtasks.length}
+          </span>
+        </div>
       </motion.button>
     );
   };
@@ -1821,6 +1839,7 @@ export default function App() {
                 const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
                 const isExpandedByState = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
                 const isExpandedTask = isExpandedByState || expandedListTaskIds.includes(task.id);
+                const isSubtasksFullyExpanded = expandedListTaskIds.includes(task.id);
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
                 const isHoveredTask = listHoveredTaskId === task.id;
@@ -1867,6 +1886,7 @@ export default function App() {
                           <h3 className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
                             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                           </h3>
+                          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="mt-0.5 shrink-0 text-violet-300" /></span> : null}
                           <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
                             Дедлайн задачи: {formatDeadlineLeft(task.dueDate)} · Ближ. подзадача: {formatDeadlineLeft(nearestSubtaskDueDate)}
                           </span>
@@ -1892,7 +1912,7 @@ export default function App() {
                           <p className="mb-1 text-slate-300">Подзадачи:</p>
                           <ul className="space-y-1">
                             {activeTaskSubtasks.length === 0 ? <li className="text-slate-500">Активных подзадач пока нет</li> : null}
-                            {activeTaskSubtasks.slice(0, 10).map((subtask) => {
+                            {(isSubtasksFullyExpanded ? activeTaskSubtasks : activeTaskSubtasks.slice(0, 10)).map((subtask) => {
                               const hasSubtaskOverdueState = subtask.status !== 'DONE' && isOverdue(subtask);
                               const hasSubtaskReminderState = subtask.status !== 'DONE' && !hasSubtaskOverdueState && shouldTaskGlow(subtask);
                               return (
@@ -1926,11 +1946,41 @@ export default function App() {
                                   >
                                     <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                                   </button>
+                                  <span className="shrink-0 text-[11px] text-slate-300">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span>
+                                  <InlineDateTimePickerIcon
+                                    value={subtask.dueDate}
+                                    title="Изменить срок подзадачи"
+                                    onChange={(dueDate) => {
+                                      void api.updateTask(subtask.id, { dueDate }).then(load);
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="shrink-0 rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                                    title="Удалить подзадачу"
+                                    onClick={async () => {
+                                      await api.deleteTask(subtask.id);
+                                      await load();
+                                    }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
                                 </li>
                               );
                             })}
-                            {activeTaskSubtasks.length > 10 ? (
-                              <li className="text-slate-400">Еще {activeTaskSubtasks.length - 10} активных задач</li>
+                            {activeTaskSubtasks.length > 10 && !isSubtasksFullyExpanded ? (
+                              <li>
+                                <button
+                                  type="button"
+                                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200 transition hover:bg-cyan-500/20"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setExpandedListTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+                                  }}
+                                >
+                                  + еще {activeTaskSubtasks.length - 10} подзадач
+                                </button>
+                              </li>
                             ) : null}
                           </ul>
                         </div>
@@ -2235,6 +2285,7 @@ export default function App() {
                       >
                         <p className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={13} className="ml-1 inline-block text-violet-300" /></span> : null}
                         </p>
                         <p className="mt-1 text-xs text-slate-400">Срок: Без дедлайна</p>
                       </li>

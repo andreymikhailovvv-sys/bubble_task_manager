@@ -173,7 +173,7 @@ export function BubbleField({
     [tasks, spheres, mode, rankingMode, subtaskMap]
   );
   const hoveredBubble = useMemo(() => bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [bubbles, hoveredTaskId]);
-  const hoveredSubtasks = hoveredBubble ? subtaskMap[hoveredBubble.task.id] ?? [] : [];
+  const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
   const sectorTaskCounts = useMemo(() => {
     if (sectorCount === 1) return [tasks.length];
