@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { Gauge, LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildBubbles, buildSectorGeometry, type BubbleRankingMode } from '../lib/layout';
+import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -123,6 +123,16 @@ function getBubbleShade(hex: string, distanceRatio: number) {
   const nextG = Math.round(g + (255 - g) * fade);
   const nextB = Math.round(b + (255 - b) * fade);
   return `rgb(${nextR}, ${nextG}, ${nextB})`;
+}
+
+
+
+function getCoefficientBadgeColor(coefficient: number) {
+  const intensity = Math.max(0, Math.min(1, coefficient));
+  const red = Math.round(80 + intensity * 170);
+  const green = Math.round(165 - intensity * 95);
+  const blue = Math.round(220 - intensity * 190);
+  return `rgba(${red}, ${green}, ${blue}, 0.32)`;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -340,7 +350,7 @@ export function BubbleField({
           cx={0}
           cy={0}
           r={bubble.radius}
-          fill={getBubbleShade(rankingMode === 'importance' ? (IMPORTANCE_BUBBLE_COLORS[bubble.task.importance] ?? bubble.color) : bubble.color, bubble.distanceRatio)}
+          fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={0.48}
           stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
           strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
@@ -499,6 +509,16 @@ export function BubbleField({
                     {formatDeadlineLeft(hoveredBubble.task.dueDate)}
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                   </p>
+                  <div className="mt-1">
+                    <p className="mb-1 text-[11px] text-slate-300">Коэффициент важности</p>
+                    <div
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-400/50 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                      style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(hoveredBubble.task, subtaskMap)) }}
+                    >
+                      <Gauge size={11} />
+                      {getTaskCoefficient(hoveredBubble.task, subtaskMap).toFixed(2)}
+                    </div>
+                  </div>
                   <div className="mt-2 border-t border-slate-700/80 pt-2">
                     <div className="flex items-center gap-2">
                       <button
