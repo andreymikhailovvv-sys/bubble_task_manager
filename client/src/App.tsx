@@ -1882,12 +1882,16 @@ export default function App() {
                 .map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate }))
                 .sort((a, b) => new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime())
                 .slice(0, 20);
+              const taskSubtasks = subtaskMap[task.id] ?? [];
+              const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
 
               const prompt = [
                 'Подбери ближайшее доступное окно для переноса задачи.',
                 'Ответ верни строго JSON формата {"dueDate":"ISO-8601","reason":"кратко"} без markdown.',
+                'Если у задачи есть просроченные подзадачи, предложи время так, чтобы их тоже можно было отложить примерно на тот же период.',
                 `Текущее время (UTC): ${now.toISOString()}`,
                 `Задача: ${JSON.stringify({ title: task.title, description: task.description ?? '', dueDate: task.dueDate ?? null, importance: task.importance, urgency: task.urgency })}`,
+                `Подзадачи задачи и их дедлайны: ${JSON.stringify(taskSubtasks.map((subtask) => ({ id: subtask.id, title: subtask.title, status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
                 `Ближайшие задачи и дедлайны: ${JSON.stringify(nearbyTasks)}`
               ].join('\n');
 
@@ -1899,6 +1903,10 @@ export default function App() {
               const aiDate = new Date(parsed.dueDate);
               if (Number.isNaN(aiDate.getTime())) return;
               await updateDueDate(aiDate);
+              if (overdueSubtasks.length > 0) {
+                await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
+                await load();
+              }
             }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Sparkles } from 'lucide-react';
+import { LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, buildSectorGeometry, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -157,6 +157,7 @@ export function BubbleField({
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [smartPostponeTaskId, setSmartPostponeTaskId] = useState<string | null>(null);
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
   const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -484,7 +485,7 @@ export function BubbleField({
             <>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
-                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 20, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 32, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
                 width={hoverInfoCard.width}
                 height={hoverInfoCard.height}
                 onMouseEnter={cancelHoverExit}
@@ -509,6 +510,10 @@ export function BubbleField({
                       </button>
                       <div className="ml-auto flex items-center gap-2">
                         <div className="flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
+                            Отложить
+                            {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
+                          </span>
                           <select
                             className="h-7 max-w-[140px] rounded bg-slate-800 px-2 text-[11px] text-white"
                             defaultValue=""
@@ -516,7 +521,15 @@ export function BubbleField({
                             onChange={(event) => {
                               const value = event.target.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart' | '';
                               if (!value) return;
-                              void onQuickPostponeTask(hoveredBubble.task, value);
+                              if (value === 'smart') {
+                                setSmartPostponeTaskId(hoveredBubble.task.id);
+                              }
+                              void onQuickPostponeTask(hoveredBubble.task, value)
+                                .finally(() => {
+                                  if (value === 'smart') {
+                                    setSmartPostponeTaskId((prev) => (prev === hoveredBubble.task.id ? null : prev));
+                                  }
+                                });
                               event.target.value = '';
                             }}
                           >
@@ -526,7 +539,7 @@ export function BubbleField({
                             <option value="1h">На час</option>
                             <option value="3h">На 3 часа</option>
                             <option value="tomorrow">На завтра</option>
-                            <option value="smart">✨ На ближайшее окно</option>
+                            <option value="smart">✦ Ближайшее окно</option>
                           </select>
                         </div>
                         <div className="flex items-center gap-1">
