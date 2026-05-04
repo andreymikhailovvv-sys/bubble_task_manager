@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, CheckCircle2, ChevronDown, ChevronUp, List, Save, Search, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, List, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
-import type { Sphere, Task } from './lib/types';
+import type { ChatMessage, Sphere, Task } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -151,6 +151,10 @@ export default function MiniApp() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
+  const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const [aiDraft, setAiDraft] = useState('');
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const requestedTaskId = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('taskId');
     return value?.trim() ? value.trim() : null;
@@ -347,6 +351,8 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setExpandedSubtaskIds([]);
+    setIsAiDialogOpen(false);
+    setAiDraft('');
   };
 
   const toggleExpandedSubtask = (subtaskId: string) => {
@@ -454,6 +460,44 @@ export default function MiniApp() {
     })
     : null;
   const openedTaskSubtasks = openedTask ? (subtasksByParent[openedTask.id] ?? []) : [];
+  const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
+
+  useEffect(() => {
+    if (!openedTaskId || !isAiDialogOpen) return;
+    const loadTaskChatHistory = async () => {
+      try {
+        const result = await api.getTaskAssistantHistory(openedTaskId);
+        setAiDialogByTask((prev) => ({ ...prev, [openedTaskId]: result.messages }));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить чат ИИ');
+      }
+    };
+    void loadTaskChatHistory();
+  }, [isAiDialogOpen, openedTaskId]);
+
+  const sendAiMessage = async () => {
+    if (!openedTask) return;
+    const question = aiDraft.trim();
+    if (!question) return;
+    setAiLoadingTaskId(openedTask.id);
+    setError(null);
+    const baseDialog = aiDialogByTask[openedTask.id] ?? [];
+    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: question }];
+    setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
+    setAiDraft('');
+    try {
+      const result = await api.askTaskAssistant(openedTask.id, { question, mode: 'fast' });
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
+      }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ');
+      setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: baseDialog }));
+    } finally {
+      setAiLoadingTaskId(null);
+    }
+  };
 
   if (loading) {
     return <main className="min-h-screen bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
@@ -493,9 +537,6 @@ export default function MiniApp() {
                   <CalendarDays size={16} className="text-violet-400" />
                 )}
               </button>
-              <span className="text-[11px] text-slate-300">
-                {displayMode === 'list' ? 'Список' : 'Таймлайн'}
-              </span>
             </div>
             <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
               <select
@@ -525,7 +566,7 @@ export default function MiniApp() {
             </div>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            Активно: {displayMode === 'list' ? 'Список' : 'Таймлайн'} · {timeFilterLabel[timeFilter]} · {selectedSphereName}
+            Активно: {timeFilterLabel[timeFilter]} · {selectedSphereName}
           </p>
         </section>
 
@@ -701,7 +742,53 @@ export default function MiniApp() {
                   {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsAiDialogOpen((prev) => !prev)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-violet-600 px-3 py-2 text-sm font-medium"
+              >
+                <Bot size={14} />
+                Диалог с ИИ
+              </button>
             </div>
+            {isAiDialogOpen ? (
+              <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
+                <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
+                <div className="max-h-52 space-y-2 overflow-y-auto rounded-md bg-slate-900/80 p-2 text-xs">
+                  {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
+                  {openedTaskAiDialog.map((message, index) => (
+                    <div key={`mini-ai-${index}`} className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5">
+                      <p className="mb-1 text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                  ))}
+                  {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={aiDraft}
+                    onChange={(event) => setAiDraft(event.target.value)}
+                    placeholder="Напишите сообщение для ИИ"
+                    className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendAiMessage();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendAiMessage()}
+                    disabled={aiLoadingTaskId === openedTask.id}
+                    className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                    title="Отправить"
+                  >
+                    <SendHorizontal size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
               <div className="flex items-center justify-between gap-2">
