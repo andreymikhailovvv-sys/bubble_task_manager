@@ -20,6 +20,9 @@ type Props = {
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
+  onQuickCompleteTask: (task: Task) => Promise<void>;
+  onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
+  onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<void>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
@@ -142,6 +145,9 @@ export function BubbleField({
   onToggleSubtaskFilter,
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
+  onQuickCompleteTask,
+  onQuickChangeTaskImportance,
+  onQuickPostponeTask,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -273,7 +279,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 290, height: 170 };
+  const hoverInfoCard = { width: 340, height: 170 };
   const hoverSubtasksCard = { width: 360, height: 310 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -482,6 +488,59 @@ export function BubbleField({
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                  <div className="mt-2 border-t border-slate-700/80 pt-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-500"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onQuickCompleteTask(hoveredBubble.task);
+                        }}
+                      >
+                        Выполнить
+                      </button>
+                      <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <select
+                            className="h-7 max-w-[140px] rounded bg-slate-800 px-2 text-[11px] text-white"
+                            defaultValue=""
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => {
+                              const value = event.target.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart' | '';
+                              if (!value) return;
+                              void onQuickPostponeTask(hoveredBubble.task, value);
+                              event.target.value = '';
+                            }}
+                          >
+                            <option value="" disabled>Отложить</option>
+                            <option value="15m">На 15 мин</option>
+                            <option value="30m">На 30 мин</option>
+                            <option value="1h">На час</option>
+                            <option value="3h">На 3 часа</option>
+                            <option value="tomorrow">На завтра</option>
+                            <option value="smart">✨ На ближайшее окно</option>
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, -1);
+                          }}>-</button>
+                          <div
+                            className="h-7 min-w-8 rounded px-2 text-center text-[11px] font-semibold leading-7 text-white"
+                            style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                          >
+                            {hoveredBubble.task.importance}
+                          </div>
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, 1);
+                          }}>+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </foreignObject>
               <foreignObject

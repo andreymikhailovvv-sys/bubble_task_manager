@@ -1845,6 +1845,61 @@ export default function App() {
               await api.updateTask(subtask.id, { dueDate });
               await load();
             }}
+            onQuickCompleteTask={async (task) => {
+              await api.updateTask(task.id, { status: 'DONE' });
+              await load();
+            }}
+            onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
+              if (nextImportance === task.importance) return;
+              await api.updateTask(task.id, { importance: nextImportance });
+              await load();
+            }}
+            onQuickPostponeTask={async (task, option) => {
+              const now = new Date();
+              const updateDueDate = async (date: Date) => {
+                await api.updateTask(task.id, { dueDate: date.toISOString() });
+                await load();
+              };
+
+              if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
+                const minutesByOption = { '15m': 15, '30m': 30, '1h': 60, '3h': 180 } as const;
+                const next = new Date(now);
+                next.setMinutes(next.getMinutes() + minutesByOption[option]);
+                await updateDueDate(next);
+                return;
+              }
+
+              if (option === 'tomorrow') {
+                const next = new Date(now);
+                next.setDate(next.getDate() + 1);
+                await updateDueDate(next);
+                return;
+              }
+
+              const nearbyTasks = tasks
+                .filter((item) => item.id !== task.id && item.status !== 'DONE' && item.dueDate)
+                .map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate }))
+                .sort((a, b) => new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime())
+                .slice(0, 20);
+
+              const prompt = [
+                'Подбери ближайшее доступное окно для переноса задачи.',
+                'Ответ верни строго JSON формата {"dueDate":"ISO-8601","reason":"кратко"} без markdown.',
+                `Текущее время (UTC): ${now.toISOString()}`,
+                `Задача: ${JSON.stringify({ title: task.title, description: task.description ?? '', dueDate: task.dueDate ?? null, importance: task.importance, urgency: task.urgency })}`,
+                `Ближайшие задачи и дедлайны: ${JSON.stringify(nearbyTasks)}`
+              ].join('\n');
+
+              const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'smart' });
+              const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
+              if (!jsonMatch) return;
+              const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };
+              if (!parsed.dueDate) return;
+              const aiDate = new Date(parsed.dueDate);
+              if (Number.isNaN(aiDate.getTime())) return;
+              await updateDueDate(aiDate);
+            }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
