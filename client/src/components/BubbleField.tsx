@@ -20,6 +20,9 @@ type Props = {
   onSelectSubtask: (subtask: Task) => void;
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
+  onQuickCompleteTask: (task: Task) => Promise<void>;
+  onQuickShiftTaskDeadline: (task: Task, minutesDelta: number) => Promise<void>;
+  onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
@@ -142,6 +145,9 @@ export function BubbleField({
   onToggleSubtaskFilter,
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
+  onQuickCompleteTask,
+  onQuickShiftTaskDeadline,
+  onQuickChangeTaskImportance,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -152,6 +158,7 @@ export function BubbleField({
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
+  const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -167,6 +174,12 @@ export function BubbleField({
       [taskId]: { ...getDraftForTask(taskId), ...patch }
     }));
   };
+
+  const parsedDeadlineShiftMinutes = (() => {
+    const parsed = Number.parseInt(deadlineShiftMinutes, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 30;
+    return Math.min(parsed, 1440);
+  })();
 
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
@@ -482,6 +495,52 @@ export function BubbleField({
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                  <div className="mt-3 space-y-2 border-t border-slate-700/80 pt-2">
+                    <button
+                      type="button"
+                      className="w-full rounded bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white transition hover:bg-emerald-500"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onQuickCompleteTask(hoveredBubble.task);
+                      }}
+                    >
+                      Выполнить
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                        event.stopPropagation();
+                        void onQuickShiftTaskDeadline(hoveredBubble.task, -parsedDeadlineShiftMinutes);
+                      }}>-</button>
+                      <input
+                        className="h-7 w-12 rounded bg-slate-800 px-1 text-center text-[11px] text-white"
+                        value={deadlineShiftMinutes}
+                        inputMode="numeric"
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => setDeadlineShiftMinutes(event.target.value.replace(/[^\d]/g, ''))}
+                      />
+                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                        event.stopPropagation();
+                        void onQuickShiftTaskDeadline(hoveredBubble.task, parsedDeadlineShiftMinutes);
+                      }}>+</button>
+                      <span className="ml-1 text-[10px] text-slate-400">мин</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                        event.stopPropagation();
+                        void onQuickChangeTaskImportance(hoveredBubble.task, -1);
+                      }}>-</button>
+                      <div
+                        className="h-7 min-w-9 rounded px-2 text-center text-[11px] font-semibold leading-7 text-white"
+                        style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                      >
+                        {hoveredBubble.task.importance}
+                      </div>
+                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                        event.stopPropagation();
+                        void onQuickChangeTaskImportance(hoveredBubble.task, 1);
+                      }}>+</button>
+                    </div>
+                  </div>
                 </div>
               </foreignObject>
               <foreignObject

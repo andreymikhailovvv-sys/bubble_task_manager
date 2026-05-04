@@ -1845,6 +1845,24 @@ export default function App() {
               await api.updateTask(subtask.id, { dueDate });
               await load();
             }}
+            onQuickCompleteTask={async (task) => {
+              await api.updateTask(task.id, { status: 'DONE' });
+              await load();
+            }}
+            onQuickShiftTaskDeadline={async (task, minutesDelta) => {
+              if (!task.dueDate) return;
+              const dueDate = new Date(task.dueDate);
+              if (Number.isNaN(dueDate.getTime())) return;
+              dueDate.setMinutes(dueDate.getMinutes() + minutesDelta);
+              await api.updateTask(task.id, { dueDate: dueDate.toISOString() });
+              await load();
+            }}
+            onQuickChangeTaskImportance={async (task, importanceDelta) => {
+              const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
+              if (nextImportance === task.importance) return;
+              await api.updateTask(task.id, { importance: nextImportance });
+              await load();
+            }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
