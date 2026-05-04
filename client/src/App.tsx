@@ -65,7 +65,6 @@ const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
-const LIVE_SYNC_INTERVAL_MS = 5_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const DISPLAY_MODE_OPTIONS = [
   { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
@@ -421,14 +420,6 @@ export default function App() {
     if (!currentUser) return;
     void load();
   }, [currentUser?.id]);
-  useEffect(() => {
-    if (!currentUser) return;
-    const intervalId = window.setInterval(() => {
-      void load();
-    }, LIVE_SYNC_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [currentUser?.id]);
-
   useEffect(() => {
     if (!currentUser) return;
     const intervalId = window.setInterval(() => {
