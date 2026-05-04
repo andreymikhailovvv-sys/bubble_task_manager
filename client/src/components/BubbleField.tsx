@@ -495,7 +495,10 @@ export function BubbleField({
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
-                  <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                  <p className="inline-flex items-center gap-1 text-slate-300">
+                    {formatDeadlineLeft(hoveredBubble.task.dueDate)}
+                    {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
+                  </p>
                   <div className="mt-2 border-t border-slate-700/80 pt-2">
                     <div className="flex items-center gap-2">
                       <button
@@ -509,12 +512,9 @@ export function BubbleField({
                         Выполнить
                       </button>
                       <div className="ml-auto flex items-center gap-2">
-                        <div className="relative flex items-center">
-                          {smartPostponeTaskId === hoveredBubble.task.id ? (
-                            <LoaderCircle size={12} className="pointer-events-none absolute left-2 animate-spin text-cyan-200" />
-                          ) : null}
+                        <div className="flex items-center">
                           <select
-                            className="h-7 max-w-[136px] rounded bg-slate-800 pr-6 text-[11px] text-white pl-2"
+                            className="h-7 max-w-[136px] rounded bg-slate-800 px-2 text-[11px] text-white"
                             defaultValue=""
                             onClick={(event) => event.stopPropagation()}
                             onChange={(event) => {
