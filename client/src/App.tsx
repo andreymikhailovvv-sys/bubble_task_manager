@@ -65,6 +65,7 @@ const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
+const LIVE_SYNC_INTERVAL_MS = 5_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const DISPLAY_MODE_OPTIONS = [
   { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
@@ -419,6 +420,13 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     void load();
+  }, [currentUser?.id]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const intervalId = window.setInterval(() => {
+      void load();
+    }, LIVE_SYNC_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -1541,8 +1549,11 @@ export default function App() {
         onDragEndCapture={() => setDraggedTimelineTaskId(null)}
         onClick={() => setFocusedTaskId(task.id)}
       >
-        <span className="truncate">
-          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate">
+            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+          </span>
+          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="shrink-0 text-violet-200" /></span> : null}
           {options?.showTime && task.dueDate ? (
             <span className="ml-1 text-slate-200/80">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
@@ -1550,7 +1561,6 @@ export default function App() {
           ) : null}
         </span>
         <div className="flex items-center gap-1">
-          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="text-violet-200" /></span> : null}
           <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
             {taskSubtasks.length}
           </span>
@@ -1903,7 +1913,6 @@ export default function App() {
                             </span>
                             {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление" className="absolute ml-1"><Sparkles size={14} className="text-violet-300" /></span> : null}
                           </h3>
-                          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="mt-0.5 shrink-0 text-violet-300" /></span> : null}
                           <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
                             Дедлайн задачи: {formatDeadlineLeft(task.dueDate)}
                           </span>
@@ -2367,63 +2376,6 @@ export default function App() {
           }}
         >
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
-            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
-              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
-              {upcomingSubtasksForPanel.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
-                  <input
-                    type="checkbox"
-                    checked={false}
-                    onChange={async () => {
-                      await api.updateTask(task.id, { status: 'DONE' });
-                      if (task.parentTaskId) {
-                        await syncParentStatusBySubtasks(task.parentTaskId);
-                      }
-                      await load();
-                    }}
-                  />
-                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Выполненные задания</h3>
-              <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
-                <button
-                  className={`rounded px-2 py-0.5 ${completedFilter === 'today' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
-                  onClick={() => setCompletedFilter('today')}
-                >
-                  сегодня
-                </button>
-                <button
-                  className={`rounded px-2 py-0.5 ${completedFilter === 'all' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
-                  onClick={() => setCompletedFilter('all')}
-                >
-                  все
-                </button>
-              </div>
-            </div>
-            <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
-              {completedTasksForPanel.length === 0 ? <li className="text-slate-400">Нет выполненных задач для выбранного фильтра</li> : null}
-              {completedTasksForPanel.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
-                  <input
-                    type="checkbox"
-                    checked
-                    onChange={async () => {
-                      await api.updateTask(task.id, { status: 'TODO' });
-                      await load();
-                    }}
-                  />
-                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
               <div className="flex items-center gap-1.5">
@@ -2498,6 +2450,63 @@ export default function App() {
                 <RotateCcw size={12} /> Отменить
               </button>
             </div>
+          </section>
+          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
+            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
+              {upcomingSubtasksForPanel.map((task) => (
+                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={async () => {
+                      await api.updateTask(task.id, { status: 'DONE' });
+                      if (task.parentTaskId) {
+                        await syncParentStatusBySubtasks(task.parentTaskId);
+                      }
+                      await load();
+                    }}
+                  />
+                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Выполненные задания</h3>
+              <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
+                <button
+                  className={`rounded px-2 py-0.5 ${completedFilter === 'today' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  onClick={() => setCompletedFilter('today')}
+                >
+                  сегодня
+                </button>
+                <button
+                  className={`rounded px-2 py-0.5 ${completedFilter === 'all' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  onClick={() => setCompletedFilter('all')}
+                >
+                  все
+                </button>
+              </div>
+            </div>
+            <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+              {completedTasksForPanel.length === 0 ? <li className="text-slate-400">Нет выполненных задач для выбранного фильтра</li> : null}
+              {completedTasksForPanel.map((task) => (
+                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked
+                    onChange={async () => {
+                      await api.updateTask(task.id, { status: 'TODO' });
+                      await load();
+                    }}
+                  />
+                  <span className="truncate"><LinkifiedText text={task.title} stopPropagationOnLinkClick /></span>
+                </li>
+              ))}
+            </ul>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold">Фон рабочего пространства</h3>
