@@ -1,6 +1,6 @@
 import type { Sphere, Task } from './types';
 
-export type BubbleRankingMode = 'urgency' | 'importance';
+export type BubbleRankingMode = 'urgency' | 'coefficient';
 
 export type Bubble = {
   task: Task;
@@ -65,6 +65,34 @@ function getUrgencyWeight(dueDate?: string | null) {
   return Math.max(0.08, 0.28 - Math.min(0.2, diffHours / (24 * 45)));
 }
 
+
+
+function getUrgencyCoefficient(dueDate?: string | null) {
+  const diffMs = getDueDateDiffMs(dueDate);
+  if (!Number.isFinite(diffMs)) return 0;
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs <= -7 * day) return 0.7;
+  if (diffMs <= -3 * day) return 0.55;
+  if (diffMs <= -1 * day) return 0.45;
+  if (diffMs <= 0) return 0.35;
+  if (diffMs <= 10 * minute) return 0.15;
+  if (diffMs <= 30 * minute) return 0.07;
+  if (diffMs <= hour) return 0.05;
+  return 0;
+}
+
+function getImportanceCoefficient(importance: number) {
+  const map: Record<number, number> = { 1: 0.05, 2: 0.07, 3: 0.15, 4: 0.25, 5: 0.4 };
+  return map[importance] ?? 0.15;
+}
+
+export function getTaskCoefficient(task: Task, subtaskMap: Record<string, Task[]> = {}) {
+  const overdueSubtasks = (subtaskMap[task.id] ?? []).filter((subtask) => isOverdueNow(subtask.dueDate) && subtask.status !== 'DONE').length;
+  const score = getUrgencyCoefficient(task.dueDate) + getImportanceCoefficient(task.importance) + overdueSubtasks * 0.05;
+  return Math.min(1, Number(score.toFixed(4)));
+}
 function polarToCartesian(center: number, angle: number, distance: number) {
   return {
     x: center + Math.cos(angle) * distance,
@@ -245,7 +273,7 @@ function getRadiusByRank(
   const base = mode === 'global' ? 19 + deadlineScale * 35 : 20 + deadlineScale * 30;
   const proximityBoost = mode === 'global' ? proximity * 11 : proximity * 9;
   const urgencyBoost = mode === 'global' ? urgencyWeight * 17 : urgencyWeight * 14;
-  const importanceBoost = rankingMode === 'importance' ? (importance - 1) * (mode === 'global' ? 4.2 : 3.4) : 0;
+  const importanceBoost = rankingMode === 'coefficient' ? (importance - 1) * (mode === 'global' ? 4.2 : 3.4) : 0;
   const tieBonus = tieBoost * 4;
   const maxRadius = mode === 'global' ? 90 : 80;
   return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus + importanceBoost + overdueBoost));
@@ -335,9 +363,10 @@ export function buildBubbles(
       const overdueA = isOverdueNow(a.dueDate);
       const overdueB = isOverdueNow(b.dueDate);
       if (overdueA !== overdueB) return overdueA ? -1 : 1;
-      if (rankingMode === 'importance') {
-        if (a.importance !== b.importance) return b.importance - a.importance;
-        if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
+      if (rankingMode === 'coefficient') {
+        const coefficientA = getTaskCoefficient(a, subtaskMap);
+        const coefficientB = getTaskCoefficient(b, subtaskMap);
+        if (coefficientA !== coefficientB) return coefficientB - coefficientA;
       }
       const diffA = getDueDateDiffMs(a.dueDate);
       const diffB = getDueDateDiffMs(b.dueDate);
@@ -363,8 +392,9 @@ export function buildBubbles(
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost);
-      const distance = rankingMode === 'importance'
-        ? 18 + (1 - (task.importance - 1) / 4) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
+      const coefficient = getTaskCoefficient(task, subtaskMap);
+      const distance = rankingMode === 'coefficient'
+        ? 18 + (1 - coefficient) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
@@ -408,9 +438,10 @@ export function buildBubbles(
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
     const ranked = [...sectorTasks]
       .sort((a, b) => {
-        if (rankingMode === 'importance') {
-          if (a.importance !== b.importance) return b.importance - a.importance;
-          if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
+        if (rankingMode === 'coefficient') {
+          const coefficientA = getTaskCoefficient(a, subtaskMap);
+          const coefficientB = getTaskCoefficient(b, subtaskMap);
+          if (coefficientA !== coefficientB) return coefficientB - coefficientA;
         }
         const diffA = getDueDateDiffMs(a.dueDate);
         const diffB = getDueDateDiffMs(b.dueDate);
@@ -426,8 +457,8 @@ export function buildBubbles(
       const dx = bubble.x - center;
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
-      const targetDistance = rankingMode === 'importance'
-        ? 18 + (1 - (bubble.task.importance - 1) / 4) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
+      const targetDistance = rankingMode === 'coefficient'
+        ? 18 + (1 - getTaskCoefficient(bubble.task, subtaskMap)) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
         : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
