@@ -287,7 +287,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 340, height: 170 };
+  const hoverInfoCard = { width: 340, height: 196 };
   const hoverSubtasksCard = { width: 360, height: 310 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -485,7 +485,7 @@ export function BubbleField({
             <>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
-                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 32, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
                 width={hoverInfoCard.width}
                 height={hoverInfoCard.height}
                 onMouseEnter={cancelHoverExit}
@@ -495,7 +495,10 @@ export function BubbleField({
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
-                  <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                  <p className="inline-flex items-center gap-1 text-slate-300">
+                    {formatDeadlineLeft(hoveredBubble.task.dueDate)}
+                    {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
+                  </p>
                   <div className="mt-2 border-t border-slate-700/80 pt-2">
                     <div className="flex items-center gap-2">
                       <button
@@ -509,13 +512,9 @@ export function BubbleField({
                         Выполнить
                       </button>
                       <div className="ml-auto flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
-                            Отложить
-                            {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
-                          </span>
+                        <div className="flex items-center">
                           <select
-                            className="h-7 max-w-[140px] rounded bg-slate-800 px-2 text-[11px] text-white"
+                            className="h-7 max-w-[136px] rounded bg-slate-800 px-2 text-[11px] text-white"
                             defaultValue=""
                             onClick={(event) => event.stopPropagation()}
                             onChange={(event) => {
@@ -533,7 +532,7 @@ export function BubbleField({
                               event.target.value = '';
                             }}
                           >
-                            <option value="" disabled>Выбрать</option>
+                            <option value="" disabled>Отложить</option>
                             <option value="15m">На 15 мин</option>
                             <option value="30m">На 30 мин</option>
                             <option value="1h">На час</option>
