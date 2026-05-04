@@ -744,7 +744,7 @@ export default function MiniApp() {
               </div>
               <button
                 type="button"
-                onClick={() => setIsAiDialogOpen((prev) => !prev)}
+                onClick={() => setIsAiDialogOpen(true)}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-violet-600 px-3 py-2 text-sm font-medium"
               >
                 <Bot size={14} />
@@ -885,6 +885,59 @@ export default function MiniApp() {
                   </article>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {openedTask && isAiDialogOpen ? (
+        <div className="fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6">
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-violet-100">Диалог с ИИ</h3>
+                <p className="text-xs text-slate-300">{openedTask.title}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAiDialogOpen(false)}
+                className="rounded-md border border-slate-600 p-1 text-slate-300"
+                aria-label="Закрыть диалог с ИИ"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md bg-slate-950/70 p-3 text-sm">
+              {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
+              {openedTaskAiDialog.map((message, index) => (
+                <div key={`mini-ai-full-${index}`} className="rounded border border-slate-700 bg-slate-800 px-3 py-2">
+                  <p className="mb-1 text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                </div>
+              ))}
+              {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                value={aiDraft}
+                onChange={(event) => setAiDraft(event.target.value)}
+                placeholder="Напишите сообщение для ИИ"
+                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendAiMessage();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void sendAiMessage()}
+                disabled={aiLoadingTaskId === openedTask.id}
+                className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                title="Отправить"
+              >
+                <SendHorizontal size={14} />
+              </button>
             </div>
           </div>
         </div>
