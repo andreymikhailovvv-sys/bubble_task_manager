@@ -286,7 +286,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 290, height: 170 };
+  const hoverInfoCard = { width: 340, height: 170 };
   const hoverSubtasksCard = { width: 360, height: 310 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -495,50 +495,53 @@ export function BubbleField({
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="text-slate-300">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
-                  <div className="mt-3 space-y-2 border-t border-slate-700/80 pt-2">
-                    <button
-                      type="button"
-                      className="w-full rounded bg-emerald-600 px-2 py-1.5 text-[11px] font-semibold text-white transition hover:bg-emerald-500"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onQuickCompleteTask(hoveredBubble.task);
-                      }}
-                    >
-                      Выполнить
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                        event.stopPropagation();
-                        void onQuickShiftTaskDeadline(hoveredBubble.task, -parsedDeadlineShiftMinutes);
-                      }}>-</button>
-                      <input
-                        className="h-7 w-12 rounded bg-slate-800 px-1 text-center text-[11px] text-white"
-                        value={deadlineShiftMinutes}
-                        inputMode="numeric"
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => setDeadlineShiftMinutes(event.target.value.replace(/[^\d]/g, ''))}
-                      />
-                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                        event.stopPropagation();
-                        void onQuickShiftTaskDeadline(hoveredBubble.task, parsedDeadlineShiftMinutes);
-                      }}>+</button>
-                      <span className="ml-1 text-[10px] text-slate-400">мин</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                        event.stopPropagation();
-                        void onQuickChangeTaskImportance(hoveredBubble.task, -1);
-                      }}>-</button>
-                      <div
-                        className="h-7 min-w-9 rounded px-2 text-center text-[11px] font-semibold leading-7 text-white"
-                        style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                  <div className="mt-2 border-t border-slate-700/80 pt-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-500"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onQuickCompleteTask(hoveredBubble.task);
+                        }}
                       >
-                        {hoveredBubble.task.importance}
+                        Выполнить
+                      </button>
+                      <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickShiftTaskDeadline(hoveredBubble.task, -parsedDeadlineShiftMinutes);
+                          }}>-</button>
+                          <input
+                            className="h-7 w-11 rounded bg-slate-800 px-1 text-center text-[11px] text-white"
+                            value={deadlineShiftMinutes}
+                            inputMode="numeric"
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => setDeadlineShiftMinutes(event.target.value.replace(/[^\d]/g, ''))}
+                          />
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickShiftTaskDeadline(hoveredBubble.task, parsedDeadlineShiftMinutes);
+                          }}>+</button>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, -1);
+                          }}>-</button>
+                          <div
+                            className="h-7 min-w-8 rounded px-2 text-center text-[11px] font-semibold leading-7 text-white"
+                            style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                          >
+                            {hoveredBubble.task.importance}
+                          </div>
+                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, 1);
+                          }}>+</button>
+                        </div>
                       </div>
-                      <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                        event.stopPropagation();
-                        void onQuickChangeTaskImportance(hoveredBubble.task, 1);
-                      }}>+</button>
                     </div>
                   </div>
                 </div>
