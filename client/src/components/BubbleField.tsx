@@ -158,6 +158,7 @@ export function BubbleField({
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
+  const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,6 +174,12 @@ export function BubbleField({
       [taskId]: { ...getDraftForTask(taskId), ...patch }
     }));
   };
+
+  const parsedDeadlineShiftMinutes = (() => {
+    const parsed = Number.parseInt(deadlineShiftMinutes, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 30;
+    return Math.min(parsed, 1440);
+  })();
 
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
