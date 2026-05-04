@@ -340,7 +340,7 @@ export function BubbleField({
           cx={0}
           cy={0}
           r={bubble.radius}
-          fill={getBubbleShade(rankingMode === 'importance' ? (IMPORTANCE_BUBBLE_COLORS[bubble.task.importance] ?? bubble.color) : bubble.color, bubble.distanceRatio)}
+          fill={getBubbleShade(rankingMode === 'coefficient' ? (IMPORTANCE_BUBBLE_COLORS[bubble.task.importance] ?? bubble.color) : bubble.color, bubble.distanceRatio)}
           fillOpacity={0.48}
           stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
           strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
