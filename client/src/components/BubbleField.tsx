@@ -21,8 +21,8 @@ type Props = {
   onToggleSubtaskDone: (subtask: Task) => Promise<void>;
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
   onQuickCompleteTask: (task: Task) => Promise<void>;
-  onQuickShiftTaskDeadline: (task: Task, minutesDelta: number) => Promise<void>;
   onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
+  onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<void>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
@@ -146,8 +146,8 @@ export function BubbleField({
   onToggleSubtaskDone,
   onUpdateSubtaskDueDate,
   onQuickCompleteTask,
-  onQuickShiftTaskDeadline,
   onQuickChangeTaskImportance,
+  onQuickPostponeTask,
   onRenameSphere,
   onAddTaskToSphere,
   className
@@ -509,21 +509,25 @@ export function BubbleField({
                       </button>
                       <div className="ml-auto flex items-center gap-2">
                         <div className="flex items-center gap-1">
-                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                            event.stopPropagation();
-                            void onQuickShiftTaskDeadline(hoveredBubble.task, -parsedDeadlineShiftMinutes);
-                          }}>-</button>
-                          <input
-                            className="h-7 w-11 rounded bg-slate-800 px-1 text-center text-[11px] text-white"
-                            value={deadlineShiftMinutes}
-                            inputMode="numeric"
+                          <select
+                            className="h-7 max-w-[140px] rounded bg-slate-800 px-2 text-[11px] text-white"
+                            defaultValue=""
                             onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => setDeadlineShiftMinutes(event.target.value.replace(/[^\d]/g, ''))}
-                          />
-                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
-                            event.stopPropagation();
-                            void onQuickShiftTaskDeadline(hoveredBubble.task, parsedDeadlineShiftMinutes);
-                          }}>+</button>
+                            onChange={(event) => {
+                              const value = event.target.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart' | '';
+                              if (!value) return;
+                              void onQuickPostponeTask(hoveredBubble.task, value);
+                              event.target.value = '';
+                            }}
+                          >
+                            <option value="" disabled>Отложить</option>
+                            <option value="15m">На 15 мин</option>
+                            <option value="30m">На 30 мин</option>
+                            <option value="1h">На час</option>
+                            <option value="3h">На 3 часа</option>
+                            <option value="tomorrow">На завтра</option>
+                            <option value="smart">✨ На ближайшее окно</option>
+                          </select>
                         </div>
                         <div className="flex items-center gap-1">
                           <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
