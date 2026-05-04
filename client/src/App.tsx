@@ -271,6 +271,7 @@ export default function App() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [isRankingSettingsOpen, setIsRankingSettingsOpen] = useState(false);
+  const [isCoefficientHelpOpen, setIsCoefficientHelpOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
@@ -574,6 +575,7 @@ export default function App() {
       }
       if (isRankingSettingsOpen && rankingSettingsRef.current && target && !rankingSettingsRef.current.contains(target)) {
         setIsRankingSettingsOpen(false);
+        setIsCoefficientHelpOpen(false);
       }
     };
     window.addEventListener('mousedown', onPointerDown);
@@ -1794,12 +1796,30 @@ export default function App() {
               <p className="mb-2 text-xs text-slate-300">Режим важности задач</p>
               <label className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-slate-800/80">
                 <input type="radio" name="rankingMode" checked={rankingMode === 'urgency'} onChange={() => setRankingMode('urgency')} />
-                <span>По срочности (текущий режим)</span>
+                <span>По срочности</span>
               </label>
               <label className="mt-1 flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-slate-800/80">
                 <input type="radio" name="rankingMode" checked={rankingMode === 'coefficient'} onChange={() => setRankingMode('coefficient')} />
-                <span>По коэффициенту (экспериментальный)</span>
+                <span>По коэффициенту</span>
+                <button
+                  type="button"
+                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400/60 text-[10px] font-bold text-slate-200 hover:bg-slate-700/70"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsCoefficientHelpOpen((prev) => !prev);
+                  }}
+                  aria-label="Как работает режим по коэффициенту"
+                >
+                  ?
+                </button>
               </label>
+              {isCoefficientHelpOpen ? (
+                <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-950/80 p-2 text-[11px] leading-relaxed text-slate-300">
+                  Режим «По коэффициенту» суммирует три фактора: срочность по дедлайну, оценку важности 1–5 и +0.05 за каждую просроченную подзадачу.
+                  Чем выше итог (максимум 1.00), тем выше задача в списке и тем заметнее она в режиме бабблов.
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -2018,7 +2038,7 @@ export default function App() {
                           >
                             <Gauge size={12} />
                             {getTaskCoefficient(task, subtaskMap).toFixed(2)}
-                            <span className="hidden pl-1 text-[10px] text-slate-100/90 group-hover:inline">Коэффициент важности задачи</span>
+                            
                           </span>
                         ) : (
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
