@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -128,6 +128,16 @@ function resolveAttachmentMimeType(file: File): string {
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (!extension) return 'application/octet-stream';
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
+}
+
+
+
+function getCoefficientBadgeColor(coefficient: number) {
+  const intensity = Math.max(0, Math.min(1, coefficient));
+  const red = Math.round(80 + intensity * 170);
+  const green = Math.round(165 - intensity * 95);
+  const blue = Math.round(220 - intensity * 190);
+  return `rgba(${red}, ${green}, ${blue}, 0.32)`;
 }
 
 function hexToRgba(hexColor: string, alpha: number) {
@@ -2000,9 +2010,21 @@ export default function App() {
                         >
                           Сектор: {taskSphere?.name ?? 'Без сектора'}
                         </span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
-                          Важность: {task.importance}
-                        </span>
+                        {rankingMode === 'coefficient' ? (
+                          <span
+                            className="group inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                            style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(task, subtaskMap)) }}
+                            title="Коэффициент важности задачи"
+                          >
+                            <Gauge size={12} />
+                            {getTaskCoefficient(task, subtaskMap).toFixed(2)}
+                            <span className="hidden pl-1 text-[10px] text-slate-100/90 group-hover:inline">Коэффициент важности задачи</span>
+                          </span>
+                        ) : (
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
+                            Важность: {task.importance}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {isExpandedTask ? (
