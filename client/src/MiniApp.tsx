@@ -751,6 +751,44 @@ export default function MiniApp() {
                 Диалог с ИИ
               </button>
             </div>
+            {isAiDialogOpen ? (
+              <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
+                <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
+                <div className="max-h-52 space-y-2 overflow-y-auto rounded-md bg-slate-900/80 p-2 text-xs">
+                  {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
+                  {openedTaskAiDialog.map((message, index) => (
+                    <div key={`mini-ai-${index}`} className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5">
+                      <p className="mb-1 text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                  ))}
+                  {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={aiDraft}
+                    onChange={(event) => setAiDraft(event.target.value)}
+                    placeholder="Напишите сообщение для ИИ"
+                    className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendAiMessage();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendAiMessage()}
+                    disabled={aiLoadingTaskId === openedTask.id}
+                    className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                    title="Отправить"
+                  >
+                    <SendHorizontal size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
               <div className="flex items-center justify-between gap-2">
