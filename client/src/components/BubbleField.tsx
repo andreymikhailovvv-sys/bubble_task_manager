@@ -287,7 +287,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 340, height: 170 };
+  const hoverInfoCard = { width: 340, height: 196 };
   const hoverSubtasksCard = { width: 360, height: 310 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -485,7 +485,7 @@ export function BubbleField({
             <>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
-                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 32, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
                 width={hoverInfoCard.width}
                 height={hoverInfoCard.height}
                 onMouseEnter={cancelHoverExit}
@@ -509,13 +509,12 @@ export function BubbleField({
                         Выполнить
                       </button>
                       <div className="ml-auto flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-300">
-                            Отложить
-                            {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
-                          </span>
+                        <div className="relative flex items-center">
+                          {smartPostponeTaskId === hoveredBubble.task.id ? (
+                            <LoaderCircle size={12} className="pointer-events-none absolute left-2 animate-spin text-cyan-200" />
+                          ) : null}
                           <select
-                            className="h-7 max-w-[140px] rounded bg-slate-800 px-2 text-[11px] text-white"
+                            className="h-7 max-w-[136px] rounded bg-slate-800 pr-6 text-[11px] text-white pl-2"
                             defaultValue=""
                             onClick={(event) => event.stopPropagation()}
                             onChange={(event) => {
@@ -533,7 +532,7 @@ export function BubbleField({
                               event.target.value = '';
                             }}
                           >
-                            <option value="" disabled>Выбрать</option>
+                            <option value="" disabled>Отложить</option>
                             <option value="15m">На 15 мин</option>
                             <option value="30m">На 30 мин</option>
                             <option value="1h">На час</option>
