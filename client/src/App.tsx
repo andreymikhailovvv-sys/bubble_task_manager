@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -7,7 +7,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
-import { calcScore, type BubbleRankingMode } from './lib/layout';
+import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
@@ -128,6 +128,16 @@ function resolveAttachmentMimeType(file: File): string {
   const extension = file.name.split('.').pop()?.toLowerCase();
   if (!extension) return 'application/octet-stream';
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
+}
+
+
+
+function getCoefficientBadgeColor(coefficient: number) {
+  const intensity = Math.max(0, Math.min(1, coefficient));
+  const red = Math.round(80 + intensity * 170);
+  const green = Math.round(165 - intensity * 95);
+  const blue = Math.round(220 - intensity * 190);
+  return `rgba(${red}, ${green}, ${blue}, 0.32)`;
 }
 
 function hexToRgba(hexColor: string, alpha: number) {
@@ -260,6 +270,8 @@ export default function App() {
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
+  const [isRankingSettingsOpen, setIsRankingSettingsOpen] = useState(false);
+  const [isCoefficientHelpOpen, setIsCoefficientHelpOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
@@ -324,6 +336,7 @@ export default function App() {
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
+  const rankingSettingsRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
@@ -560,10 +573,14 @@ export default function App() {
       if (isDisplayModeMenuOpen && displayModeMenuRef.current && target && !displayModeMenuRef.current.contains(target)) {
         setIsDisplayModeMenuOpen(false);
       }
+      if (isRankingSettingsOpen && rankingSettingsRef.current && target && !rankingSettingsRef.current.contains(target)) {
+        setIsRankingSettingsOpen(false);
+        setIsCoefficientHelpOpen(false);
+      }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [isDisplayModeMenuOpen, isSphereFilterOpen]);
+  }, [isDisplayModeMenuOpen, isRankingSettingsOpen, isSphereFilterOpen]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1570,7 +1587,11 @@ export default function App() {
     const aUrgencyTime = getTaskUrgencyTimestamp(a);
     const bUrgencyTime = getTaskUrgencyTimestamp(b);
     if (aUrgencyTime !== bUrgencyTime) return aUrgencyTime - bUrgencyTime;
-    if (rankingMode === 'importance' && a.importance !== b.importance) return b.importance - a.importance;
+    if (rankingMode === 'coefficient') {
+      const aCoefficient = getTaskCoefficient(a, subtaskMap);
+      const bCoefficient = getTaskCoefficient(b, subtaskMap);
+      if (aCoefficient !== bCoefficient) return bCoefficient - aCoefficient;
+    }
     if (rankingMode === 'urgency' && a.urgency !== b.urgency) return b.urgency - a.urgency;
     if (a.importance !== b.importance) return b.importance - a.importance;
     return a.title.localeCompare(b.title, 'ru');
@@ -1761,16 +1782,46 @@ export default function App() {
             <option value="focus">Фокус</option>
           </select>
         </div>
-        <div className="w-full min-w-40 flex-1 sm:w-auto sm:flex-none">
-          <select
-            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
-            value={rankingMode}
+        <div className="relative" data-ranking-settings-root="true" ref={rankingSettingsRef}>
+          <button
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-md border ${isTimelineMode ? 'cursor-not-allowed border-slate-700/70 bg-slate-800/55 text-slate-500' : 'border-slate-600 bg-slate-900/85 text-slate-200 hover:border-cyan-300/70'}`}
+            onClick={() => !isTimelineMode && setIsRankingSettingsOpen((prev) => !prev)}
+            aria-label="Настройки ранжирования"
             disabled={isTimelineMode}
-            onChange={(event) => setRankingMode(event.target.value as BubbleRankingMode)}
           >
-            <option value="urgency">По срочности</option>
-            <option value="importance">По важности</option>
-          </select>
+            <Settings size={18} />
+          </button>
+          {isRankingSettingsOpen ? (
+            <div className="absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-slate-700/70 bg-slate-900/95 p-3 shadow-2xl backdrop-blur">
+              <p className="mb-2 text-xs text-slate-300">Режим важности задач</p>
+              <label className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-slate-800/80">
+                <input type="radio" name="rankingMode" checked={rankingMode === 'urgency'} onChange={() => setRankingMode('urgency')} />
+                <span>По срочности</span>
+              </label>
+              <label className="mt-1 flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-slate-800/80">
+                <input type="radio" name="rankingMode" checked={rankingMode === 'coefficient'} onChange={() => setRankingMode('coefficient')} />
+                <span>По коэффициенту</span>
+                <button
+                  type="button"
+                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400/60 text-[10px] font-bold text-slate-200 hover:bg-slate-700/70"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsCoefficientHelpOpen((prev) => !prev);
+                  }}
+                  aria-label="Как работает режим по коэффициенту"
+                >
+                  ?
+                </button>
+              </label>
+              {isCoefficientHelpOpen ? (
+                <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-950/80 p-2 text-[11px] leading-relaxed text-slate-300">
+                  Режим «По коэффициенту» суммирует три фактора: срочность по дедлайну, оценку важности 1–5 и +0.05 за каждую просроченную подзадачу.
+                  Чем выше итог (максимум 1.00), тем выше задача в списке и тем заметнее она в режиме бабблов.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
@@ -1979,9 +2030,21 @@ export default function App() {
                         >
                           Сектор: {taskSphere?.name ?? 'Без сектора'}
                         </span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
-                          Важность: {task.importance}
-                        </span>
+                        {rankingMode === 'coefficient' ? (
+                          <span
+                            className="group inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                            style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(task, subtaskMap)) }}
+                            title="Коэффициент важности задачи"
+                          >
+                            <Gauge size={12} />
+                            {getTaskCoefficient(task, subtaskMap).toFixed(2)}
+                            
+                          </span>
+                        ) : (
+                          <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
+                            Важность: {task.importance}
+                          </span>
+                        )}
                       </div>
                     </div>
                     {isExpandedTask ? (
