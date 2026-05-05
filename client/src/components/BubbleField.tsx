@@ -297,7 +297,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 340, height: 196 };
+  const hoverInfoCard = { width: 340, height: 228 };
   const hoverSubtasksCard = { width: 360, height: 310 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -509,8 +509,8 @@ export function BubbleField({
                     {formatDeadlineLeft(hoveredBubble.task.dueDate)}
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                   </p>
-                  <div className="mt-1">
-                    <p className="mb-1 text-[11px] text-slate-300">Коэффициент важности</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-[11px] text-slate-300">Коэффициент важности</p>
                     <div
                       className="inline-flex items-center gap-1 rounded-full border border-slate-400/50 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
                       style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(hoveredBubble.task, subtaskMap)) }}
