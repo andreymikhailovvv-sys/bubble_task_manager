@@ -1,6 +1,6 @@
 import type { Sphere, Task } from './types';
 
-export type BubbleRankingMode = 'urgency' | 'coefficient';
+export type BubbleRankingMode = 'urgency' | 'importance' | 'coefficient';
 
 export type Bubble = {
   task: Task;
@@ -88,9 +88,29 @@ function getImportanceCoefficient(importance: number) {
   return map[importance] ?? 0.15;
 }
 
+function getSubtaskDeadlineBoost(dueDate?: string | null) {
+  const diffMs = getDueDateDiffMs(dueDate);
+  if (!Number.isFinite(diffMs)) return 0;
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs <= -7 * day) return 0.4;
+  if (diffMs <= -3 * day) return 0.35;
+  if (diffMs <= -1 * day) return 0.25;
+  if (diffMs <= 0) return 0.15;
+  if (diffMs <= 10 * minute) return 0.1;
+  if (diffMs <= 30 * minute) return 0.05;
+  if (diffMs <= hour) return 0.03;
+  return 0;
+}
+
 export function getTaskCoefficient(task: Task, subtaskMap: Record<string, Task[]> = {}) {
-  const overdueSubtasks = (subtaskMap[task.id] ?? []).filter((subtask) => isOverdueNow(subtask.dueDate) && subtask.status !== 'DONE').length;
-  const score = getUrgencyCoefficient(task.dueDate) + getImportanceCoefficient(task.importance) + overdueSubtasks * 0.05;
+  const subtaskBoost = (subtaskMap[task.id] ?? []).reduce((acc, subtask) => {
+    if (subtask.status === 'DONE') return acc;
+    return acc + getSubtaskDeadlineBoost(subtask.dueDate);
+  }, 0);
+  const score = getUrgencyCoefficient(task.dueDate) + getImportanceCoefficient(task.importance) + subtaskBoost;
   return Math.min(1, Number(score.toFixed(4)));
 }
 function polarToCartesian(center: number, angle: number, distance: number) {
