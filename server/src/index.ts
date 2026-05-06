@@ -8,6 +8,8 @@ import { apiRouter } from './routes/api.js';
 import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
+import { prisma } from './db/prisma.js';
+import { aiAssistantService } from './services/ai-assistant.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -41,6 +43,32 @@ if (telegramService.isEnabled()) {
     });
   }, telegramPollIntervalMs).unref();
 }
+
+const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
+let lastCheckupSlotKey = '';
+setInterval(() => {
+  const now = new Date();
+  const mskNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }));
+  const hh = mskNow.getHours();
+  const mm = mskNow.getMinutes();
+  if (hh !== 10 || mm !== 0) return;
+  const slotKey = `${mskNow.getFullYear()}-${mskNow.getMonth() + 1}-${mskNow.getDate()}`;
+  if (slotKey === lastCheckupSlotKey) return;
+  lastCheckupSlotKey = slotKey;
+  void (async () => {
+    const users = await prisma.user.findMany({ select: { id: true } });
+    for (const user of users) {
+      const text = await aiAssistantService.generateDailyCheckup({ userId: user.id });
+      await aiAssistantService.appendGeneralDialogMessages({
+        userId: user.id,
+        messages: [{ role: 'assistant', content: text }]
+      });
+      await telegramService.notifyDailyAiCheckup({ userId: user.id, text });
+    }
+  })().catch((error) => {
+    console.error('[AI] daily checkup failed', error);
+  });
+}, CHECKUP_POLL_INTERVAL_MS).unref();
 
 app.listen(port, () => {
   console.log(`Server started on http://localhost:${port}`);

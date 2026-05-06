@@ -626,6 +626,35 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
+  async generateDailyCheckup(input: { userId: string }) {
+    const tasks = await prisma.task.findMany({
+      where: { userId: input.userId, parentTaskId: null, status: { not: 'DONE' } },
+      include: {
+        subtasks: {
+          where: { status: { not: 'DONE' } },
+          select: { id: true, title: true }
+        }
+      },
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      take: 12
+    });
+    const totalSubtasks = tasks.reduce((sum, task) => sum + task.subtasks.length, 0);
+    const lines = [
+      '🌤️ **Утренний ИИ-чек-ап**',
+      `📌 Активных задач: **${tasks.length}**`,
+      `🧩 Активных подзадач: **${totalSubtasks}**`,
+      '',
+      'Что сегодня в фокусе:'
+    ];
+    if (tasks.length === 0) {
+      lines.push('— Активных задач на сегодня нет. Можно запланировать день заранее ✨');
+    } else {
+      tasks.forEach((task, index) => {
+        lines.push(`${index + 1}. **${task.title}** — подзадач: ${task.subtasks.length}`);
+      });
+    }
+    return lines.join('\n');
+  },
   transcribeAudio: async (input: TranscribeAudioInput) => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
