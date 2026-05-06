@@ -119,14 +119,18 @@ export const aiController = {
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
 
-      const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : question.trim();
+      const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
       await aiAssistantService.appendTaskDialogMessages({
         userId: req.user!.id,
         taskId: req.params.id,
-        messages: [
-          { role: 'user', content: normalizedUserMessage },
-          { role: 'assistant', content: result.answer }
-        ]
+        messages: normalizedUserMessage
+          ? [
+            { role: 'user', content: normalizedUserMessage },
+            { role: 'assistant', content: result.answer }
+          ]
+          : [
+            { role: 'assistant', content: result.answer }
+          ]
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {

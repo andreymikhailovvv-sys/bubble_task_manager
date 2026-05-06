@@ -1318,5 +1318,15 @@ export const telegramService = {
     if (!BOT_TOKEN) return;
     if (!input.aiMessage.trim()) return;
     await sendOverdueTaskNotification(input.taskId, input.userId, input.aiMessage);
+  },
+  async notifyDailyAiCheckup(input: { userId: string; text: string }) {
+    if (!BOT_TOKEN) return;
+    if (!input.text.trim()) return;
+    const user = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { telegramChatId: true }
+    });
+    if (!user?.telegramChatId) return;
+    await sendMessage(user.telegramChatId, input.text);
   }
 };
