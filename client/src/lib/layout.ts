@@ -84,7 +84,7 @@ function getUrgencyCoefficient(dueDate?: string | null) {
 }
 
 function getImportanceCoefficient(importance: number) {
-  const map: Record<number, number> = { 1: 0.05, 2: 0.07, 3: 0.15, 4: 0.25, 5: 0.4 };
+  const map: Record<number, number> = { 1: 0.05, 2: 0.07, 3: 0.2, 4: 0.3, 5: 0.6 };
   return map[importance] ?? 0.15;
 }
 
@@ -113,6 +113,40 @@ export function getTaskCoefficient(task: Task, subtaskMap: Record<string, Task[]
   const score = getUrgencyCoefficient(task.dueDate) + getImportanceCoefficient(task.importance) + subtaskBoost;
   return Math.min(1, Number(score.toFixed(4)));
 }
+
+function getImportanceBubbleColor(importance: number) {
+  const map: Record<number, string> = {
+    1: '#38bdf8',
+    2: '#22d3ee',
+    3: '#a78bfa',
+    4: '#fb923c',
+    5: '#fb7185'
+  };
+  return map[importance] ?? '#60a5fa';
+}
+
+function compareTasksForRanking(a: Task, b: Task, rankingMode: BubbleRankingMode, subtaskMap: Record<string, Task[]>) {
+  const overdueA = isOverdueNow(a.dueDate);
+  const overdueB = isOverdueNow(b.dueDate);
+  if (overdueA !== overdueB) return overdueA ? -1 : 1;
+
+  if (rankingMode === 'coefficient') {
+    const coefficientA = getTaskCoefficient(a, subtaskMap);
+    const coefficientB = getTaskCoefficient(b, subtaskMap);
+    if (coefficientA !== coefficientB) return coefficientB - coefficientA;
+  }
+
+  if (rankingMode === 'importance' && a.importance !== b.importance) {
+    return b.importance - a.importance;
+  }
+
+  const diffA = getDueDateDiffMs(a.dueDate);
+  const diffB = getDueDateDiffMs(b.dueDate);
+  if (diffA !== diffB) return diffA - diffB;
+  if (a.importance !== b.importance) return b.importance - a.importance;
+  return b.priorityScore - a.priorityScore;
+}
+
 function polarToCartesian(center: number, angle: number, distance: number) {
   return {
     x: center + Math.cos(angle) * distance,
@@ -379,21 +413,7 @@ export function buildBubbles(
     const geometry = sectorGeometry[sectorIndex] ?? sectorGeometry[0];
     const startAngle = geometry.startAngle;
     const endAngle = geometry.endAngle;
-    const sorted = [...sectorTasks].sort((a, b) => {
-      const overdueA = isOverdueNow(a.dueDate);
-      const overdueB = isOverdueNow(b.dueDate);
-      if (overdueA !== overdueB) return overdueA ? -1 : 1;
-      if (rankingMode === 'coefficient') {
-        const coefficientA = getTaskCoefficient(a, subtaskMap);
-        const coefficientB = getTaskCoefficient(b, subtaskMap);
-        if (coefficientA !== coefficientB) return coefficientB - coefficientA;
-      }
-      const diffA = getDueDateDiffMs(a.dueDate);
-      const diffB = getDueDateDiffMs(b.dueDate);
-      if (diffA !== diffB) return diffA - diffB;
-      if (a.importance !== b.importance) return b.importance - a.importance;
-      return b.priorityScore - a.priorityScore;
-    });
+    const sorted = [...sectorTasks].sort((a, b) => compareTasksForRanking(a, b, rankingMode, subtaskMap));
 
     const dueCounts = sorted.reduce<Record<string, number>>((acc, task) => {
       const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
@@ -443,7 +463,9 @@ export function buildBubbles(
         x: point.x,
         y: point.y,
         radius,
-        color: spheres.find((s) => s.id === task.sphereId)?.color ?? '#60a5fa',
+        color: rankingMode === 'importance'
+          ? getImportanceBubbleColor(task.importance)
+          : spheres.find((s) => s.id === task.sphereId)?.color ?? '#60a5fa',
         sectorIndex,
         distanceRatio: Math.min(1, distance / maxDistance)
       });
@@ -457,18 +479,7 @@ export function buildBubbles(
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
     const ranked = [...sectorTasks]
-      .sort((a, b) => {
-        if (rankingMode === 'coefficient') {
-          const coefficientA = getTaskCoefficient(a, subtaskMap);
-          const coefficientB = getTaskCoefficient(b, subtaskMap);
-          if (coefficientA !== coefficientB) return coefficientB - coefficientA;
-        }
-        const diffA = getDueDateDiffMs(a.dueDate);
-        const diffB = getDueDateDiffMs(b.dueDate);
-        if (diffA !== diffB) return diffA - diffB;
-        if (a.importance !== b.importance) return b.importance - a.importance;
-        return b.priorityScore - a.priorityScore;
-      })
+      .sort((a, b) => compareTasksForRanking(a, b, rankingMode, subtaskMap))
       .map((task) => sectorBubbles.find((bubble) => bubble.task.id === task.id))
       .filter((bubble): bubble is Bubble => Boolean(bubble));
 
