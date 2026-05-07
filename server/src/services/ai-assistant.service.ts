@@ -627,32 +627,154 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 
 export const aiAssistantService = {
   async generateDailyCheckup(input: { userId: string }) {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const todayEnd = new Date(now);
+    todayEnd.setUTCHours(23, 59, 59, 999);
+    const formatSlot = (value: Date | null) => {
+      if (!value) return 'Без времени';
+      const hh = String(value.getUTCHours()).padStart(2, '0');
+      const mm = String(value.getUTCMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    };
+    const escapeHtml = (value: string) => value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
     const tasks = await prisma.task.findMany({
-      where: { userId: input.userId, parentTaskId: null, status: { not: 'DONE' } },
+      where: {
+        userId: input.userId,
+        parentTaskId: null,
+        status: { not: 'DONE' },
+        dueDate: { gte: todayStart, lte: todayEnd }
+      },
       include: {
         subtasks: {
-          where: { status: { not: 'DONE' } },
-          select: { id: true, title: true }
+          where: {
+            status: { not: 'DONE' },
+            dueDate: { gte: todayStart, lte: todayEnd }
+          },
+          select: { id: true, title: true, dueDate: true }
         }
       },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
-      take: 12
+      take: 50
     });
     const totalSubtasks = tasks.reduce((sum, task) => sum + task.subtasks.length, 0);
+    const timelineItems = tasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      load: task.subtasks.length + Math.max(1, task.importance + task.urgency - 4)
+    }));
+    const slotMap = new Map<string, typeof timelineItems>();
+    for (const item of timelineItems) {
+      const key = formatSlot(item.dueDate);
+      const list = slotMap.get(key) ?? [];
+      list.push(item);
+      slotMap.set(key, list);
+    }
+
+    const nowPlus3h = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    const nearestThreeHours = tasks.filter((task) => !!task.dueDate && task.dueDate >= now && task.dueDate <= nowPlus3h);
+    const daytimeTasks = tasks.filter((task) => {
+      if (!task.dueDate) return false;
+      const hour = task.dueDate.getUTCHours();
+      return hour >= 12 && hour < 18;
+    });
+    const eveningTasks = tasks.filter((task) => {
+      if (!task.dueDate) return false;
+      const hour = task.dueDate.getUTCHours();
+      return hour >= 18 && hour <= 23;
+    });
+
     const lines = [
-      '🌤️ **Утренний ИИ-чек-ап**',
-      `📌 Активных задач: **${tasks.length}**`,
-      `🧩 Активных подзадач: **${totalSubtasks}**`,
+      '🌤️ <b>Утренний ИИ-чек-ап</b>',
+      `📌 Задач на сегодня: <b>${tasks.length}</b>`,
+      `🧩 Подзадач на сегодня: <b>${totalSubtasks}</b>`,
       '',
-      'Что сегодня в фокусе:'
+      '<b>Таймлайн на сегодня:</b>',
+      '<b>Задачи на ближайшие 3 часа:</b>'
     ];
-    if (tasks.length === 0) {
-      lines.push('— Активных задач на сегодня нет. Можно запланировать день заранее ✨');
+    if (nearestThreeHours.length === 0) {
+      lines.push('— Нет задач в ближайшие 3 часа.');
     } else {
-      tasks.forEach((task, index) => {
-        lines.push(`${index + 1}. **${task.title}** — подзадач: ${task.subtasks.length}`);
+      nearestThreeHours.forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
       });
     }
+    lines.push('', '<b>Задачи днём:</b>');
+    if (daytimeTasks.length === 0) {
+      lines.push('— Днём задач не запланировано.');
+    } else {
+      daytimeTasks.forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+      });
+    }
+    lines.push('', '<b>Задачи на вечер:</b>');
+    if (eveningTasks.length === 0) {
+      lines.push('— На вечер задач не запланировано.');
+    } else {
+      eveningTasks.forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+      });
+    }
+
+    if (tasks.length === 0) {
+      lines.push('', '— На сегодня активных задач нет. Можно запланировать день заранее ✨');
+    }
+
+    lines.push('', '<b>Точки пересечения:</b>');
+    const overlaps = Array.from(slotMap.entries()).filter(([, items]) => items.length > 1 && items[0]?.dueDate);
+    if (overlaps.length === 0) {
+      lines.push('— Пересечений по одинаковому времени не найдено.');
+    } else {
+      overlaps.forEach(([slot, items]) => {
+        lines.push(`— ${slot}: ${items.map((item) => `<b>${escapeHtml(item.title)}</b>`).join(', ')}`);
+      });
+    }
+
+    const heavySlots = Array.from(slotMap.entries())
+      .map(([slot, items]) => ({ slot, items, totalLoad: items.reduce((sum, item) => sum + item.load, 0) }))
+      .filter((entry) => entry.items.length >= 3 || entry.totalLoad >= 14)
+      .sort((a, b) => b.totalLoad - a.totalLoad);
+
+    lines.push('', '<b>Где перегруз:</b>');
+    if (heavySlots.length === 0) {
+      lines.push('— Критичных перегрузов по времени не видно.');
+    } else {
+      heavySlots.forEach((entry) => {
+        lines.push(`— ${entry.slot}: ${entry.items.length} задач(и), суммарная нагрузка ${entry.totalLoad}.`);
+      });
+      const freeSlots = ['09:00', '11:00', '13:00', '15:00', '17:00', '19:00'].filter((slot) => !slotMap.has(slot));
+      const topHeavy = heavySlots[0];
+      const movable = [...topHeavy.items]
+        .sort((a, b) => a.load - b.load)
+        .slice(0, Math.min(2, freeSlots.length));
+      if (movable.length > 0) {
+        lines.push('— Рекомендация по выравниванию:');
+        movable.forEach((item, index) => {
+          lines.push(`  • Перенести <b>${escapeHtml(item.title)}</b> из ${topHeavy.slot} на ${freeSlots[index]}.`);
+        });
+      }
+    }
+
+    lines.push('', '<b>Где ИИ особенно поможет:</b>');
+    if (tasks.length === 0) {
+      lines.push('— Пока нет задач на сегодня, где нужна помощь ИИ.');
+    } else {
+      const candidates = [...tasks]
+        .sort((a, b) => (b.subtasks.length + b.importance + b.urgency) - (a.subtasks.length + a.importance + a.urgency))
+        .slice(0, 3);
+      candidates.forEach((task) => {
+        lines.push(`— <b>${escapeHtml(task.title)}</b>: помогу разбить на шаги, оценить приоритет и подготовить черновики/тексты по задаче.`);
+      });
+    }
+    lines.push('', '💬 Чтобы ответить ИИ или попросить его о чём-то, нажмите кнопку <b>«Общий чат с ИИ»</b>.');
     return lines.join('\n');
   },
   transcribeAudio: async (input: TranscribeAudioInput) => {
