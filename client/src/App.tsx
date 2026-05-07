@@ -891,9 +891,12 @@ export default function App() {
         mode: options?.modeOverride ?? aiMode,
         attachments: attachmentsPayload
       });
+      const serviceReport = result.actionReports && result.actionReports.length > 0
+        ? `\n\nЧто изменил ИИ:\n- ${result.actionReports.join('\n- ')}`
+        : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: `${result.answer}${serviceReport}` }]
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
