@@ -356,7 +356,7 @@ type GeneralAssistantAction =
     dueDate?: string | null;
   }
   | { type: 'rename_task'; taskId: string; title: string }
-  | { type: 'update_task'; taskId: string; description?: string; importance?: number; urgency?: number; notifyBeforeMinutes?: number | null }
+  | { type: 'update_task'; taskId: string; title?: string; description?: string; dueDate?: string | null; importance?: number; urgency?: number; notifyBeforeMinutes?: number | null }
   | { type: 'rename_subtask'; subtaskId: string; title: string }
   | { type: 'update_subtask'; subtaskId: string; description?: string; dueDate?: string | null }
   | { type: 'delete_task'; taskId: string }
@@ -414,7 +414,9 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
       if (type === 'update_task') {
         const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
         if (!taskId) return null;
+        const title = typeof value.title === 'string' ? value.title.trim() : undefined;
         const description = typeof value.description === 'string' ? value.description.trim() : undefined;
+        const dueDate = typeof value.dueDate === 'string' && value.dueDate.trim() ? value.dueDate.trim() : value.dueDate === null ? null : undefined;
         const importance = typeof value.importance === 'number' ? value.importance : Number(value.importance);
         const urgency = typeof value.urgency === 'number' ? value.urgency : Number(value.urgency);
         const notifyRaw = value.notifyBeforeMinutes;
@@ -422,7 +424,9 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
         return {
           type,
           taskId,
+          title,
           description,
+          dueDate,
           importance: Number.isFinite(importance) ? importance : undefined,
           urgency: Number.isFinite(urgency) ? urgency : undefined,
           notifyBeforeMinutes: notifyBeforeMinutes === null || notifyBeforeMinutes === undefined || Number.isFinite(notifyBeforeMinutes)
@@ -1160,7 +1164,12 @@ export const aiAssistantService = {
             await prisma.task.update({
               where: { id: task.id },
               data: {
+                ...(action.title !== undefined ? { title: action.title.slice(0, 180) } : {}),
                 ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+                ...(action.dueDate !== undefined ? (() => {
+                  const parsedDueDate = action.dueDate === null ? null : new Date(action.dueDate);
+                  return { dueDate: parsedDueDate === null ? null : (!Number.isNaN(parsedDueDate.getTime()) ? parsedDueDate : null) };
+                })() : {}),
                 ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
                 ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
                 ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
