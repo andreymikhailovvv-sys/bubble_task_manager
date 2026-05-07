@@ -679,19 +679,53 @@ export const aiAssistantService = {
       slotMap.set(key, list);
     }
 
+    const nowPlus3h = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+    const nearestThreeHours = tasks.filter((task) => !!task.dueDate && task.dueDate >= now && task.dueDate <= nowPlus3h);
+    const daytimeTasks = tasks.filter((task) => {
+      if (!task.dueDate) return false;
+      const hour = task.dueDate.getUTCHours();
+      return hour >= 12 && hour < 18;
+    });
+    const eveningTasks = tasks.filter((task) => {
+      if (!task.dueDate) return false;
+      const hour = task.dueDate.getUTCHours();
+      return hour >= 18 && hour <= 23;
+    });
+
     const lines = [
       '🌤️ <b>Утренний ИИ-чек-ап</b>',
       `📌 Задач на сегодня: <b>${tasks.length}</b>`,
       `🧩 Подзадач на сегодня: <b>${totalSubtasks}</b>`,
       '',
-      '<b>Таймлайн на сегодня:</b>'
+      '<b>Таймлайн на сегодня:</b>',
+      '<b>Задачи на ближайшие 3 часа:</b>'
     ];
-    if (tasks.length === 0) {
-      lines.push('— На сегодня активных задач нет. Можно запланировать день заранее ✨');
+    if (nearestThreeHours.length === 0) {
+      lines.push('— Нет задач в ближайшие 3 часа.');
     } else {
-      tasks.forEach((task, index) => {
+      nearestThreeHours.forEach((task, index) => {
         lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
       });
+    }
+    lines.push('', '<b>Задачи днём:</b>');
+    if (daytimeTasks.length === 0) {
+      lines.push('— Днём задач не запланировано.');
+    } else {
+      daytimeTasks.forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+      });
+    }
+    lines.push('', '<b>Задачи на вечер:</b>');
+    if (eveningTasks.length === 0) {
+      lines.push('— На вечер задач не запланировано.');
+    } else {
+      eveningTasks.forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+      });
+    }
+
+    if (tasks.length === 0) {
+      lines.push('', '— На сегодня активных задач нет. Можно запланировать день заранее ✨');
     }
 
     lines.push('', '<b>Точки пересечения:</b>');
