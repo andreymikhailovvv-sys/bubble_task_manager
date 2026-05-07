@@ -331,6 +331,35 @@ function extractOutputText(response: unknown): string {
   return '';
 }
 
+function safeJsonParse(raw: string): unknown | null {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function extractJsonObjectFromText(raw: string): unknown | null {
+  const direct = safeJsonParse(raw);
+  if (direct !== null) return direct;
+
+  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedMatch?.[1]) {
+    const fencedParsed = safeJsonParse(fencedMatch[1].trim());
+    if (fencedParsed !== null) return fencedParsed;
+  }
+
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const candidate = raw.slice(firstBrace, lastBrace + 1);
+    const parsedCandidate = safeJsonParse(candidate);
+    if (parsedCandidate !== null) return parsedCandidate;
+  }
+
+  return null;
+}
+
 type GeneralAssistantAction =
   | { type: 'reschedule_task'; taskId: string; dueDate: string }
   | { type: 'reschedule_subtask'; subtaskId: string; dueDate: string }
@@ -364,10 +393,8 @@ type GeneralAssistantAction =
   | { type: 'change_task_sphere'; taskId: string; sphereId: string | null };
 
 function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(rawAnswer);
-  } catch {
+  const parsed = extractJsonObjectFromText(rawAnswer);
+  if (parsed === null) {
     return {
       answer: rawAnswer.trim(),
       actions: []
