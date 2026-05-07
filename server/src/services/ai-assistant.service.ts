@@ -1141,21 +1141,43 @@ export const aiAssistantService = {
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
         const actionReports: string[] = [];
+        let appliedActionsCount = 0;
         for (const action of parsed.actions) {
-          if (action.type === 'reschedule_task' && action.taskId === task.id) {
-            const nextDueDate = new Date(action.dueDate);
-            if (!Number.isNaN(nextDueDate.getTime())) {
-              await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
-              actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+          if (action.type === 'reschedule_task') {
+            if (action.taskId !== task.id) {
+              actionReports.push('Перенос задачи пропущен: action.taskId не совпадает с текущей задачей.');
+              continue;
             }
+            const nextDueDate = new Date(action.dueDate);
+            if (Number.isNaN(nextDueDate.getTime())) {
+              actionReports.push('Перенос задачи пропущен: неверный формат даты.');
+              continue;
+            }
+            await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
+            actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+            appliedActionsCount += 1;
             continue;
           }
-          if (action.type === 'rename_task' && action.taskId === task.id) {
+          if (action.type === 'rename_task') {
+            if (action.taskId !== task.id) {
+              actionReports.push('Переименование задачи пропущено: action.taskId не совпадает с текущей задачей.');
+              continue;
+            }
             await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
             actionReports.push(`Переименовал задачу "${task.title}".`);
+            appliedActionsCount += 1;
             continue;
           }
-          if (action.type === 'update_task' && action.taskId === task.id) {
+          if (action.type === 'update_task') {
+            if (action.taskId !== task.id) {
+              actionReports.push('Обновление задачи пропущено: action.taskId не совпадает с текущей задачей.');
+              continue;
+            }
+            const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+            if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+              actionReports.push('Обновление задачи пропущено: неверный формат dueDate.');
+              continue;
+            }
             const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
             const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
             const importance = nextImportance ?? task.importance;
@@ -1166,10 +1188,7 @@ export const aiAssistantService = {
               data: {
                 ...(action.title !== undefined ? { title: action.title.slice(0, 180) } : {}),
                 ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
-                ...(action.dueDate !== undefined ? (() => {
-                  const parsedDueDate = action.dueDate === null ? null : new Date(action.dueDate);
-                  return { dueDate: parsedDueDate === null ? null : (!Number.isNaN(parsedDueDate.getTime()) ? parsedDueDate : null) };
-                })() : {}),
+                ...(dueDate === undefined ? {} : { dueDate }),
                 ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
                 ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
                 ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
@@ -1177,45 +1196,87 @@ export const aiAssistantService = {
               }
             });
             actionReports.push(`Обновил параметры задачи "${task.title}".`);
+            appliedActionsCount += 1;
             continue;
           }
-          if (action.type === 'change_task_sphere' && action.taskId === task.id) {
+          if (action.type === 'change_task_sphere') {
+            if (action.taskId !== task.id) {
+              actionReports.push('Смена сектора пропущена: action.taskId не совпадает с текущей задачей.');
+              continue;
+            }
+            if (action.sphereId) {
+              const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId: input.userId }, select: { id: true } });
+              if (!sphere) {
+                actionReports.push('Смена сектора пропущена: сектор не найден.');
+                continue;
+              }
+            }
             await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
             actionReports.push(`Изменил сектор задачи "${task.title}".`);
+            appliedActionsCount += 1;
             continue;
           }
-          if (action.type === 'create_subtask' && action.parentTaskId === task.id) {
+          if (action.type === 'create_subtask') {
+            if (action.parentTaskId !== task.id) {
+              actionReports.push('Создание подзадачи пропущено: parentTaskId не совпадает с текущей задачей.');
+              continue;
+            }
             const dueDate = action.dueDate ? new Date(action.dueDate) : null;
             const subtask = await prisma.task.create({
               data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 30 }
             });
             actionReports.push(`Добавил подзадачу "${subtask.title}".`);
+            appliedActionsCount += 1;
             continue;
           }
           if ('subtaskId' in action) {
             const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: task.id }, select: { id: true, title: true } });
-            if (!subtask) continue;
+            if (!subtask) {
+              actionReports.push('Действие с подзадачей пропущено: подзадача не найдена в текущей задаче.');
+              continue;
+            }
             if (action.type === 'reschedule_subtask') {
               const dueDate = new Date(action.dueDate);
-              if (!Number.isNaN(dueDate.getTime())) await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
+              if (Number.isNaN(dueDate.getTime())) {
+                actionReports.push(`Перенос подзадачи "${subtask.title}" пропущен: неверная дата.`);
+                continue;
+              }
+              await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
               actionReports.push(`Перенёс подзадачу "${subtask.title}".`);
+              appliedActionsCount += 1;
             }
             if (action.type === 'rename_subtask') {
               await prisma.task.update({ where: { id: subtask.id }, data: { title: action.title.slice(0, 180) } });
               actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
+              appliedActionsCount += 1;
             }
             if (action.type === 'update_subtask') {
               const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
-              await prisma.task.update({ where: { id: subtask.id }, data: { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null }) } });
+              if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+                actionReports.push(`Обновление подзадачи "${subtask.title}" пропущено: неверный формат dueDate.`);
+                continue;
+              }
+              await prisma.task.update({ where: { id: subtask.id }, data: { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) } });
               actionReports.push(`Обновил подзадачу "${subtask.title}".`);
+              appliedActionsCount += 1;
             }
             if (action.type === 'delete_subtask') {
               await prisma.task.delete({ where: { id: subtask.id } });
               actionReports.push(`Удалил подзадачу "${subtask.title}".`);
+              appliedActionsCount += 1;
             }
+            continue;
           }
+          actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
         }
-        return { model, answer: parsed.answer, actionReports };
+
+        const answer = parsed.actions.length > 0 && appliedActionsCount === 0
+          ? `Не удалось применить изменения по запросу. Проверьте формулировку и попробуйте ещё раз.
+
+${parsed.answer}`
+          : parsed.answer;
+
+        return { model, answer, actionReports };
       } catch (error) {
         const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
         lastError = normalizedError;
