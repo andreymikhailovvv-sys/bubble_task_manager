@@ -898,6 +898,7 @@ export default function App() {
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: `${result.answer}${serviceReport}` }]
       }));
+      await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setAiError(message);
