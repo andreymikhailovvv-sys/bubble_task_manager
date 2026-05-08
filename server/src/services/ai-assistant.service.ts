@@ -1167,9 +1167,27 @@ export const aiAssistantService = {
         });
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
+        console.info('[AI] Parsed task assistant payload', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          taskId: input.taskId,
+          userId: input.userId,
+          actionsCount: parsed.actions.length,
+          answerLength: parsed.answer.length,
+          actions: parsed.actions
+        });
         const actionReports: string[] = [];
         let appliedActionsCount = 0;
         for (const action of parsed.actions) {
+          console.info('[AI] Applying task action', {
+            requestId,
+            mode: input.mode ?? 'fast',
+            model,
+            taskId: input.taskId,
+            userId: input.userId,
+            action
+          });
           if (action.type === 'reschedule_task') {
             if (action.taskId !== task.id) {
               actionReports.push('Перенос задачи пропущен: action.taskId не совпадает с текущей задачей.');
@@ -1183,6 +1201,7 @@ export const aiAssistantService = {
             await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
             actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
             appliedActionsCount += 1;
+            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
             continue;
           }
           if (action.type === 'rename_task') {
@@ -1193,6 +1212,7 @@ export const aiAssistantService = {
             await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
             actionReports.push(`Переименовал задачу "${task.title}".`);
             appliedActionsCount += 1;
+            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
             continue;
           }
           if (action.type === 'update_task') {
@@ -1224,6 +1244,7 @@ export const aiAssistantService = {
             });
             actionReports.push(`Обновил параметры задачи "${task.title}".`);
             appliedActionsCount += 1;
+            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
             continue;
           }
           if (action.type === 'change_task_sphere') {
@@ -1241,6 +1262,7 @@ export const aiAssistantService = {
             await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
             actionReports.push(`Изменил сектор задачи "${task.title}".`);
             appliedActionsCount += 1;
+            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
             continue;
           }
           if (action.type === 'create_subtask') {
@@ -1254,6 +1276,7 @@ export const aiAssistantService = {
             });
             actionReports.push(`Добавил подзадачу "${subtask.title}".`);
             appliedActionsCount += 1;
+            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             continue;
           }
           if ('subtaskId' in action) {
@@ -1271,11 +1294,13 @@ export const aiAssistantService = {
               await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
               actionReports.push(`Перенёс подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'rename_subtask') {
               await prisma.task.update({ where: { id: subtask.id }, data: { title: action.title.slice(0, 180) } });
               actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'update_subtask') {
               const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
@@ -1286,11 +1311,13 @@ export const aiAssistantService = {
               await prisma.task.update({ where: { id: subtask.id }, data: { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) } });
               actionReports.push(`Обновил подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'delete_subtask') {
               await prisma.task.delete({ where: { id: subtask.id } });
               actionReports.push(`Удалил подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             continue;
           }
@@ -1302,6 +1329,17 @@ export const aiAssistantService = {
 
 ${parsed.answer}`
           : parsed.answer;
+
+        console.info('[AI] Task assistant request completed', {
+          requestId,
+          mode: input.mode ?? 'fast',
+          model,
+          taskId: input.taskId,
+          userId: input.userId,
+          actionsRequested: parsed.actions.length,
+          actionsApplied: appliedActionsCount,
+          actionReports
+        });
 
         return { model, answer, actionReports };
       } catch (error) {
