@@ -55,6 +55,31 @@ const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-im
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
+const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
+const DEFAULT_TIMEZONE = 'Europe/Moscow';
+const TIMEZONE_OPTIONS = [
+  'Europe/Moscow',
+  'Europe/Kaliningrad',
+  'Europe/Samara',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Yakutsk',
+  'Asia/Vladivostok',
+  'Asia/Magadan',
+  'Asia/Kamchatka',
+  'Europe/Minsk',
+  'Europe/Berlin',
+  'Europe/London',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Almaty',
+  'Asia/Tokyo'
+] as const;
 const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
 const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
 const HELP_WITH_TASK_PROMPT = [
@@ -273,6 +298,16 @@ export default function App() {
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userTimeZone, setUserTimeZone] = useState<string>(() => {
+    const saved = localStorage.getItem(USER_TIMEZONE_STORAGE_KEY);
+    if (saved?.trim()) return saved.trim();
+    try {
+      const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (detected?.trim()) return detected.trim();
+    } catch {}
+    return DEFAULT_TIMEZONE;
+  });
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
@@ -335,6 +370,7 @@ export default function App() {
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
+  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
@@ -547,6 +583,10 @@ export default function App() {
   }, [aiReadCursorByTask, currentUser?.id]);
 
   useEffect(() => {
+    localStorage.setItem(USER_TIMEZONE_STORAGE_KEY, userTimeZone);
+  }, [userTimeZone]);
+
+  useEffect(() => {
     if (!currentUser || !focusedTaskId) return;
     if (loadedAiHistoryTaskIdsRef.current.has(focusedTaskId)) return;
     let isCancelled = false;
@@ -586,10 +626,13 @@ export default function App() {
       if (isDisplayModeMenuOpen && displayModeMenuRef.current && target && !displayModeMenuRef.current.contains(target)) {
         setIsDisplayModeMenuOpen(false);
       }
+      if (isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
+        setIsSettingsOpen(false);
+      }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [isDisplayModeMenuOpen, isSphereFilterOpen]);
+  }, [isDisplayModeMenuOpen, isSettingsOpen, isSphereFilterOpen]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1750,6 +1793,37 @@ export default function App() {
                   <span>{option.label}</span>
                 </button>
               ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="relative -ml-1 shrink-0" ref={settingsMenuRef}>
+          <button
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/85 text-lg transition hover:border-cyan-300/70"
+            onClick={() => setIsSettingsOpen((prev) => !prev)}
+            aria-label="Настройки"
+            title="Настройки"
+          >
+            ⚙️
+          </button>
+          {isSettingsOpen ? (
+            <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-slate-700/70 bg-slate-900/95 p-3 shadow-2xl backdrop-blur">
+              <div className="mb-2 text-xs text-slate-300">Часовой пояс пользователя</div>
+              <select
+                className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+                value={userTimeZone}
+                onChange={(event) => setUserTimeZone(event.target.value)}
+              >
+                {[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => (
+                  <option key={timeZone} value={timeZone}>{timeZone}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="mt-2 rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
+                onClick={() => setUserTimeZone(DEFAULT_TIMEZONE)}
+              >
+                Сбросить на Москву
+              </button>
             </div>
           ) : null}
         </div>
