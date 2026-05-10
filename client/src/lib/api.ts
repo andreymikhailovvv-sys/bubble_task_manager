@@ -4,9 +4,23 @@ type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
+const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
+const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
 export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
   unauthorizedHandler = handler;
+}
+
+function resolveUserTimeZone(): string {
+  const saved = typeof window !== 'undefined' ? localStorage.getItem(USER_TIMEZONE_STORAGE_KEY) : null;
+  if (saved?.trim()) return saved.trim();
+  try {
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (detected?.trim()) return detected.trim();
+  } catch {
+    // ignore timezone detection failures
+  }
+  return DEFAULT_TIMEZONE;
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -88,25 +102,26 @@ export const api = {
     request<{ ok: true }>(`/api/tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' }),
 
   getTaskAssistantHistory: (taskId: string) =>
-    request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat`),
+    request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) =>
     request<{ answer: string; model: string; actionReports?: string[] }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   appendTaskAssistantMessages: (taskId: string, payload: { messages: ChatMessage[] }) =>
     request<{ ok: true }>(`/api/tasks/${taskId}/ai-chat/messages`, {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   generateTaskSubtasks: (taskId: string, payload?: { note?: string }) =>
     request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST',
-      body: JSON.stringify(payload ?? {})
+      body: JSON.stringify({ ...(payload ?? {}), userTimeZone: resolveUserTimeZone() })
     }),
   generateOverdueTaskNudge: (taskId: string) =>
     request<{ sent: boolean; answer?: string; model?: string }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
-      method: 'POST'
+      method: 'POST',
+      body: JSON.stringify({ userTimeZone: resolveUserTimeZone() })
     }),
   generateTaskFromAi: (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments?: ChatAttachmentPayload[] }) =>
     request<{
@@ -124,10 +139,10 @@ export const api = {
       firstAssistantMessage: string;
     }>('/api/tasks/ai-generate', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   getGeneralAssistantHistory: () =>
-    request<{ messages: ChatMessage[] }>('/api/ai-general-chat'),
+    request<{ messages: ChatMessage[] }>(`/api/ai-general-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askGeneralAssistant: (payload: { question: string }) =>
     request<{
       answer: string;
@@ -139,7 +154,7 @@ export const api = {
       }>;
     }>('/api/ai-general-chat', {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   undoGeneralAssistantAction: (payload: {
     operations: Array<{

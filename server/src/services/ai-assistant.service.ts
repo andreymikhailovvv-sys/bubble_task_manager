@@ -27,16 +27,19 @@ type AskTaskAssistantInput = {
   history: ChatMessage[];
   mode?: 'fast' | 'smart';
   attachments?: ChatAttachment[];
+  userTimeZone?: string;
 };
 
 type GenerateSubtasksInput = {
   userId: string;
   taskId: string;
   note?: string;
+  userTimeZone?: string;
 };
 type GenerateOverdueNudgeInput = {
   userId: string;
   taskId: string;
+  userTimeZone?: string;
 };
 type GenerateTaskFromPromptInput = {
   userId: string;
@@ -44,6 +47,7 @@ type GenerateTaskFromPromptInput = {
   sphereId?: string | null;
   autoAssignSphere?: boolean;
   attachments?: ChatAttachment[];
+  userTimeZone?: string;
 };
 type TranscribeAudioInput = {
   fileName: string;
@@ -54,6 +58,7 @@ type AskGeneralAssistantInput = {
   userId: string;
   question: string;
   history: ChatMessage[];
+  userTimeZone?: string;
 };
 type GeneralAssistantUndoOperation = {
   taskId: string;
@@ -81,6 +86,7 @@ const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] a
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
+const formatTimeZoneLabel = (timeZone: string) => `${timeZone}${timeZone === MOSCOW_TIMEZONE ? ', UTC+3' : ''}`;
 
 type ReasoningEffort = typeof SUPPORTED_REASONING_EFFORTS[number];
 
@@ -986,7 +992,7 @@ export const aiAssistantService = {
     });
   },
 
-  listGeneralDialog: async (input: { userId: string; since?: Date }): Promise<ChatMessage[]> => {
+  listGeneralDialog: async (input: { userId: string; since?: Date; userTimeZone?: string }): Promise<ChatMessage[]> => {
     const messages = await prisma.generalAiMessage.findMany({
       where: {
         userId: input.userId,
@@ -1060,6 +1066,8 @@ export const aiAssistantService = {
       throw new TypeError('Question is required');
     }
 
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const now = new Date();
     const systemPrompt = [
       'Ты ИИ-помощник в задачнике Bubble Task Manager.',
       'Твоя роль — помогать пользователю выполнять конкретную задачу: планировать, разбивать на шаги, снимать блокеры, предлагать приоритеты и практичные действия.',
@@ -1070,6 +1078,7 @@ export const aiAssistantService = {
       'По умолчанию давай 3-6 коротких пунктов или 2-4 предложения.',
       'Если вопрос простой — отвечай одной короткой репликой.',
       'Если тема сложная — только ключевые шаги и конкретные действия.',
+      'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Ты можешь менять только текущую задачу и её подзадачи через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
@@ -1083,6 +1092,13 @@ export const aiAssistantService = {
     const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          `Текущая дата и время (UTC): ${now.toISOString()}.`,
+          `Локальная дата и время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).`
+        ].join('\n')
+      },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),
@@ -1260,7 +1276,7 @@ export const aiAssistantService = {
               continue;
             }
             await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
-            actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+            actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
             appliedActionsCount += 1;
             console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
             continue;
@@ -1478,7 +1494,8 @@ ${parsed.answer}`
     const taskContext = formatGeneralTasksContext(tasks);
     const history = normalizeGeneralHistory(input.history);
     const now = new Date();
-    const moscowNow = now.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE });
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const localNow = now.toLocaleString('ru-RU', { timeZone: userTimeZone });
     const systemPrompt = [
       'Ты справочный ИИ-помощник Bubble Task Manager.',
       'Работаешь только в режиме fast.',
@@ -1486,7 +1503,7 @@ ${parsed.answer}`
       'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
       'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
       'Всегда учитывай текущие дату и время из контекста.',
-      'Для любых вычислений по времени и для дедлайнов используй московский часовой пояс (Europe/Moscow, UTC+3).',
+      'Для любых вычислений по времени и для дедлайнов используй часовой пояс пользователя из контекста.',
       'Если пользователь просит summary или список задач, отвечай на русском.',
       'Названия задач в списках и summary указывай на русском (при необходимости переводи естественно, без технических идентификаторов).',
       'Также можно управлять задачами через actions.',
@@ -1502,8 +1519,8 @@ ${parsed.answer}`
         role: 'user',
         content: [
           `Текущая дата и время (UTC): ${now.toISOString()}.`,
-          `Локальная дата и время (Москва): ${moscowNow} (Europe/Moscow, UTC+3).`,
-          'Считай все сроки и сравнения времени относительно Москвы.'
+          `Локальная дата и время пользователя: ${localNow} (${formatTimeZoneLabel(userTimeZone)}).`,
+          'Считай все сроки и сравнения времени относительно часового пояса пользователя.'
         ].join('\n')
       },
       { role: 'user', content: `Контекст всех задач:\n${taskContext}` },
@@ -1723,7 +1740,7 @@ ${parsed.answer}`
           continue;
         }
         await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
-        actionReports.push(`Перенёс подзадачу "${subtask.title}" на ${dueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+        actionReports.push(`Перенёс подзадачу "${subtask.title}" на ${dueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
         appliedActionsCount += 1;
         continue;
       }
@@ -1754,7 +1771,7 @@ ${parsed.answer}`
           where: { id: task.id },
           data: { dueDate: nextDueDate }
         });
-        actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })}.`);
+        actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
         appliedActionsCount += 1;
         continue;
       }
@@ -2014,7 +2031,7 @@ ${parsed.answer}`
             content: [
               `Разбей задачу на подзадачи:\n${taskContext}`,
               `Текущая дата и время: ${new Date().toISOString()}.`,
-              'Для подзадач старайся ставить реалистичные dueDate (ISO-8601, Europe/Moscow), если срок можно оценить.'
+              `Для подзадач старайся ставить реалистичные dueDate (ISO-8601, ${input.userTimeZone || MOSCOW_TIMEZONE}), если срок можно оценить.`
             ].join('\n')
           },
           ...(input.note?.trim()
@@ -2116,7 +2133,7 @@ ${parsed.answer}`
               'firstAssistantMessage должно содержать практическую помощь по первому шагу: мини-инструкцию, пример, чеклист, готовый фрагмент или точечное предложение помочь с первым шагом.',
               'Не пиши общие фразы и не используй формулировки в стиле "Я сделаю...".',
               'Учитывай текущие дату и время из контекста.',
-              'Для всех сроков и дедлайнов используй московский часовой пояс (Europe/Moscow, UTC+3).',
+              'Для всех сроков и дедлайнов используй часовой пояс пользователя из контекста.',
               'Поле dueDate заполняй обязательно, если задачу реально можно оценить по сроку: определи примерную длительность выполнения и поставь дедлайн относительно текущей даты.',
               'Если по описанию срок не оценить вообще, только тогда верни dueDate = null.',
               input.autoAssignSphere
@@ -2128,8 +2145,8 @@ ${parsed.answer}`
             role: 'user',
             content: [
               `Текущая дата и время: ${now.toISOString()}.`,
-              `Локальная дата и время (Москва): ${now.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE })} (Europe/Moscow, UTC+3).`,
-              'Считай дедлайны относительно московского времени.',
+              `Локальная дата и время пользователя: ${now.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })} (${formatTimeZoneLabel(input.userTimeZone || MOSCOW_TIMEZONE)}).`,
+              'Считай дедлайны относительно часового пояса пользователя.',
               `Сектор задачи: ${input.sphereId ? `выбран (${input.sphereId})` : 'не выбран'}.`,
               input.autoAssignSphere
                 ? `Доступные секторы пользователя: ${spheresPromptLine}.`
