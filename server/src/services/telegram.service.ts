@@ -861,6 +861,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
 
     const history = await aiAssistantService.listTaskDialog({ userId: session.userId, taskId: session.activeTaskId });
+    const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { timeZone: true } });
     const userMessage = attachment
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файл: ${attachment.name}`
       : question;
@@ -870,7 +871,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файла и ответь по задаче.',
       history,
       mode: 'fast',
-      attachments: attachment ? [attachment] : []
+      attachments: attachment ? [attachment] : [],
+      userTimeZone: user?.timeZone || MOSCOW_TIMEZONE
     });
 
     await aiAssistantService.appendTaskDialogMessages({

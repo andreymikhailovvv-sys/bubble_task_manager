@@ -1066,6 +1066,8 @@ export const aiAssistantService = {
       throw new TypeError('Question is required');
     }
 
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const now = new Date();
     const systemPrompt = [
       'Ты ИИ-помощник в задачнике Bubble Task Manager.',
       'Твоя роль — помогать пользователю выполнять конкретную задачу: планировать, разбивать на шаги, снимать блокеры, предлагать приоритеты и практичные действия.',
@@ -1076,6 +1078,7 @@ export const aiAssistantService = {
       'По умолчанию давай 3-6 коротких пунктов или 2-4 предложения.',
       'Если вопрос простой — отвечай одной короткой репликой.',
       'Если тема сложная — только ключевые шаги и конкретные действия.',
+      'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Ты можешь менять только текущую задачу и её подзадачи через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
@@ -1089,6 +1092,13 @@ export const aiAssistantService = {
     const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          `Текущая дата и время (UTC): ${now.toISOString()}.`,
+          `Локальная дата и время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).`
+        ].join('\n')
+      },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),

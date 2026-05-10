@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
+import { prisma } from '../db/prisma.js';
 
 type ChatAttachment = {
   name: string;
@@ -9,20 +10,38 @@ type ChatAttachment = {
   size: number;
 };
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
-const resolveUserTimeZone = (req: Request): string => {
+const normalizeTimeZone = (candidate: string): string | null => {
+  const normalized = candidate.trim();
+  if (!normalized) return null;
+  try {
+    Intl.DateTimeFormat('ru-RU', { timeZone: normalized }).format(new Date());
+    return normalized;
+  } catch {
+    return null;
+  }
+};
+const resolveUserTimeZone = async (req: Request): Promise<string> => {
   const candidate = typeof req.body?.userTimeZone === 'string'
     ? req.body.userTimeZone
     : typeof req.query?.userTimeZone === 'string'
       ? req.query.userTimeZone
       : '';
-  const normalized = candidate.trim();
-  if (!normalized) return DEFAULT_TIMEZONE;
-  try {
-    Intl.DateTimeFormat('ru-RU', { timeZone: normalized }).format(new Date());
-    return normalized;
-  } catch {
-    return DEFAULT_TIMEZONE;
+  const fromRequest = normalizeTimeZone(candidate);
+  if (fromRequest) {
+    if (req.user?.id) {
+      await prisma.user.updateMany({
+        where: { id: req.user.id, OR: [{ timeZone: null }, { NOT: { timeZone: fromRequest } }] },
+        data: { timeZone: fromRequest }
+      });
+    }
+    return fromRequest;
   }
+  if (req.user?.id) {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { timeZone: true } });
+    const fromProfile = normalizeTimeZone(user?.timeZone ?? '');
+    if (fromProfile) return fromProfile;
+  }
+  return DEFAULT_TIMEZONE;
 };
 
 export const aiController = {
@@ -30,10 +49,11 @@ export const aiController = {
     try {
       const todayUtc = new Date();
       todayUtc.setUTCHours(0, 0, 0, 0);
+      const userTimeZone = await resolveUserTimeZone(req);
       const messages = await aiAssistantService.listGeneralDialog({
         userId: req.user!.id,
         since: todayUtc,
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
       res.json({ messages });
     } catch (error) {
@@ -50,17 +70,18 @@ export const aiController = {
       }
       const todayUtc = new Date();
       todayUtc.setUTCHours(0, 0, 0, 0);
+      const userTimeZone = await resolveUserTimeZone(req);
       const history = await aiAssistantService.listGeneralDialog({
         userId: req.user!.id,
         since: todayUtc,
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
 
       const result = await aiAssistantService.askGeneralAssistant({
         userId: req.user!.id,
         question,
         history,
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
 
       await aiAssistantService.appendGeneralDialogMessages({
@@ -129,6 +150,7 @@ export const aiController = {
         taskId: req.params.id
       });
 
+      const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.askTaskAssistant({
         userId: req.user!.id,
         taskId: req.params.id,
@@ -136,7 +158,7 @@ export const aiController = {
         history: persistedHistory,
         mode,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
@@ -207,11 +229,12 @@ export const aiController = {
   },
   generateSubtasks: async (req: Request, res: Response) => {
     try {
+      const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.generateSubtasks({
         userId: req.user!.id,
         taskId: req.params.id,
         note: typeof req.body?.note === 'string' ? req.body.note : undefined,
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
       res.json(result);
     } catch (error) {
@@ -222,10 +245,11 @@ export const aiController = {
   },
   generateOverdueTaskNudge: async (req: Request, res: Response) => {
     try {
+      const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.generateOverdueTaskNudge({
         userId: req.user!.id,
         taskId: req.params.id,
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
 
       if (
@@ -253,13 +277,14 @@ export const aiController = {
         res.status(400).json({ error: 'prompt is required' });
         return;
       }
+      const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.generateTaskFromPrompt({
         userId: req.user!.id,
         prompt,
         sphereId: typeof req.body?.sphereId === 'string' ? req.body.sphereId : null,
         autoAssignSphere: req.body?.autoAssignSphere === true,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        userTimeZone: resolveUserTimeZone(req)
+        userTimeZone
       });
       res.json(result);
     } catch (error) {
