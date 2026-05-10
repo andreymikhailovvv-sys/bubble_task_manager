@@ -8,6 +8,22 @@ type ChatAttachment = {
   contentBase64: string;
   size: number;
 };
+const DEFAULT_TIMEZONE = 'Europe/Moscow';
+const resolveUserTimeZone = (req: Request): string => {
+  const candidate = typeof req.body?.userTimeZone === 'string'
+    ? req.body.userTimeZone
+    : typeof req.query?.userTimeZone === 'string'
+      ? req.query.userTimeZone
+      : '';
+  const normalized = candidate.trim();
+  if (!normalized) return DEFAULT_TIMEZONE;
+  try {
+    Intl.DateTimeFormat('ru-RU', { timeZone: normalized }).format(new Date());
+    return normalized;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
+};
 
 export const aiController = {
   getGeneralAssistantHistory: async (req: Request, res: Response) => {
@@ -16,7 +32,8 @@ export const aiController = {
       todayUtc.setUTCHours(0, 0, 0, 0);
       const messages = await aiAssistantService.listGeneralDialog({
         userId: req.user!.id,
-        since: todayUtc
+        since: todayUtc,
+        userTimeZone: resolveUserTimeZone(req)
       });
       res.json({ messages });
     } catch (error) {
@@ -35,13 +52,15 @@ export const aiController = {
       todayUtc.setUTCHours(0, 0, 0, 0);
       const history = await aiAssistantService.listGeneralDialog({
         userId: req.user!.id,
-        since: todayUtc
+        since: todayUtc,
+        userTimeZone: resolveUserTimeZone(req)
       });
 
       const result = await aiAssistantService.askGeneralAssistant({
         userId: req.user!.id,
         question,
-        history
+        history,
+        userTimeZone: resolveUserTimeZone(req)
       });
 
       await aiAssistantService.appendGeneralDialogMessages({
@@ -116,7 +135,8 @@ export const aiController = {
         question,
         history: persistedHistory,
         mode,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        userTimeZone: resolveUserTimeZone(req)
       });
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
@@ -190,7 +210,8 @@ export const aiController = {
       const result = await aiAssistantService.generateSubtasks({
         userId: req.user!.id,
         taskId: req.params.id,
-        note: typeof req.body?.note === 'string' ? req.body.note : undefined
+        note: typeof req.body?.note === 'string' ? req.body.note : undefined,
+        userTimeZone: resolveUserTimeZone(req)
       });
       res.json(result);
     } catch (error) {
@@ -203,7 +224,8 @@ export const aiController = {
     try {
       const result = await aiAssistantService.generateOverdueTaskNudge({
         userId: req.user!.id,
-        taskId: req.params.id
+        taskId: req.params.id,
+        userTimeZone: resolveUserTimeZone(req)
       });
 
       if (
@@ -236,7 +258,8 @@ export const aiController = {
         prompt,
         sphereId: typeof req.body?.sphereId === 'string' ? req.body.sphereId : null,
         autoAssignSphere: req.body?.autoAssignSphere === true,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        userTimeZone: resolveUserTimeZone(req)
       });
       res.json(result);
     } catch (error) {
