@@ -57,6 +57,29 @@ const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
+const TIMEZONE_OPTIONS = [
+  'Europe/Moscow',
+  'Europe/Kaliningrad',
+  'Europe/Samara',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Yakutsk',
+  'Asia/Vladivostok',
+  'Asia/Magadan',
+  'Asia/Kamchatka',
+  'Europe/Minsk',
+  'Europe/Berlin',
+  'Europe/London',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'Asia/Dubai',
+  'Asia/Almaty',
+  'Asia/Tokyo'
+] as const;
 const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
 const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
 const HELP_WITH_TASK_PROMPT = [
@@ -1785,12 +1808,15 @@ export default function App() {
           {isSettingsOpen ? (
             <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-slate-700/70 bg-slate-900/95 p-3 shadow-2xl backdrop-blur">
               <div className="mb-2 text-xs text-slate-300">Часовой пояс пользователя</div>
-              <input
+              <select
                 className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
                 value={userTimeZone}
                 onChange={(event) => setUserTimeZone(event.target.value)}
-                placeholder="Например: Europe/Moscow"
-              />
+              >
+                {[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => (
+                  <option key={timeZone} value={timeZone}>{timeZone}</option>
+                ))}
+              </select>
               <button
                 type="button"
                 className="mt-2 rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
