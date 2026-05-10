@@ -715,6 +715,28 @@ export const aiAssistantService = {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+    const suggestTaskHelp = (title: string) => {
+      const normalized = title.toLowerCase();
+      if (/распис|график|план/.test(normalized)) {
+        return 'могу собрать удобное расписание с приоритетами и окнами времени, если пришлёте длительность задач и жёсткие дедлайны.';
+      }
+      if (/продаж|продать|анонс|продвиж|маркет|реклам/.test(normalized)) {
+        return 'могу подготовить оффер, короткие тексты для анонсов и скрипт общения с клиентом под вашу аудиторию, если дадите УТП и площадку размещения.';
+      }
+      if (/обуч|инструк|сотрудник|работник/.test(normalized)) {
+        return 'могу составить пошаговую инструкцию и чек-лист обучения, если пришлёте цель обучения и текущие ошибки команды.';
+      }
+      if (/квест|задани|сценар|иде[яй]/.test(normalized)) {
+        return 'могу предложить 3–5 вариантов сценария и готовые формулировки заданий, если уточните возраст, длительность и ограничения.';
+      }
+      if (/музе|экскурс|vr|мастер-класс|программ/.test(normalized)) {
+        return 'могу подготовить структуру программы, тексты для ведущего и блок ответов на частые вопросы, если пришлёте формат мероприятия и целевую аудиторию.';
+      }
+      if (/таблич|макет|дизайн|говорител|социальн/.test(normalized)) {
+        return 'могу оформить понятный черновик текста и критерии проверки качества перед запуском, если пришлёте исходники и требования.';
+      }
+      return 'могу разбить задачу на конкретные шаги, оценить приоритет и подготовить рабочий черновик, если пришлёте ожидаемый результат и дедлайн.';
+    };
 
     const tasks = await prisma.task.findMany({
       where: {
@@ -734,6 +756,24 @@ export const aiAssistantService = {
       },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
       take: 50
+    });
+    const overdueTasks = await prisma.task.findMany({
+      where: {
+        userId: input.userId,
+        parentTaskId: null,
+        status: { not: 'DONE' },
+        dueDate: { lt: todayStart }
+      },
+      include: {
+        subtasks: {
+          where: {
+            status: { not: 'DONE' }
+          },
+          select: { id: true }
+        }
+      },
+      orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+      take: 20
     });
     const totalSubtasks = tasks.reduce((sum, task) => sum + task.subtasks.length, 0);
     const timelineItems = tasks.map((task) => ({
@@ -764,34 +804,34 @@ export const aiAssistantService = {
     });
 
     const lines = [
-      '🌤️ <b>Утренний ИИ-чек-ап</b>',
-      `📌 Задач на сегодня: <b>${tasks.length}</b>`,
-      `🧩 Подзадач на сегодня: <b>${totalSubtasks}</b>`,
+      '🌤️ Утренний ИИ-чек-ап',
+      `📌 Задач на сегодня: ${tasks.length}`,
+      `🧩 Подзадач на сегодня: ${totalSubtasks}`,
       '',
-      '<b>Таймлайн на сегодня:</b>',
-      '<b>Задачи на ближайшие 3 часа:</b>'
+      'Таймлайн на сегодня:',
+      'Задачи на ближайшие 3 часа:'
     ];
     if (nearestThreeHours.length === 0) {
       lines.push('— Нет задач в ближайшие 3 часа.');
     } else {
       nearestThreeHours.forEach((task, index) => {
-        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — ${escapeHtml(task.title)} (подзадач: ${task.subtasks.length})`);
       });
     }
-    lines.push('', '<b>Задачи днём:</b>');
+    lines.push('', 'Задачи днём:');
     if (daytimeTasks.length === 0) {
       lines.push('— Днём задач не запланировано.');
     } else {
       daytimeTasks.forEach((task, index) => {
-        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — ${escapeHtml(task.title)} (подзадач: ${task.subtasks.length})`);
       });
     }
-    lines.push('', '<b>Задачи на вечер:</b>');
+    lines.push('', 'Задачи на вечер:');
     if (eveningTasks.length === 0) {
       lines.push('— На вечер задач не запланировано.');
     } else {
       eveningTasks.forEach((task, index) => {
-        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — <b>${escapeHtml(task.title)}</b> (подзадач: ${task.subtasks.length})`);
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — ${escapeHtml(task.title)} (подзадач: ${task.subtasks.length})`);
       });
     }
 
@@ -799,13 +839,13 @@ export const aiAssistantService = {
       lines.push('', '— На сегодня активных задач нет. Можно запланировать день заранее ✨');
     }
 
-    lines.push('', '<b>Точки пересечения:</b>');
+    lines.push('', 'Точки пересечения:');
     const overlaps = Array.from(slotMap.entries()).filter(([, items]) => items.length > 1 && items[0]?.dueDate);
     if (overlaps.length === 0) {
       lines.push('— Пересечений по одинаковому времени не найдено.');
     } else {
       overlaps.forEach(([slot, items]) => {
-        lines.push(`— ${slot}: ${items.map((item) => `<b>${escapeHtml(item.title)}</b>`).join(', ')}`);
+        lines.push(`— ${slot}: ${items.map((item) => escapeHtml(item.title)).join(', ')}`);
       });
     }
 
@@ -814,7 +854,7 @@ export const aiAssistantService = {
       .filter((entry) => entry.items.length >= 3 || entry.totalLoad >= 14)
       .sort((a, b) => b.totalLoad - a.totalLoad);
 
-    lines.push('', '<b>Где перегруз:</b>');
+    lines.push('', 'Где перегруз:');
     if (heavySlots.length === 0) {
       lines.push('— Критичных перегрузов по времени не видно.');
     } else {
@@ -829,23 +869,44 @@ export const aiAssistantService = {
       if (movable.length > 0) {
         lines.push('— Рекомендация по выравниванию:');
         movable.forEach((item, index) => {
-          lines.push(`  • Перенести <b>${escapeHtml(item.title)}</b> из ${topHeavy.slot} на ${freeSlots[index]}.`);
+          lines.push(`  • Перенести ${escapeHtml(item.title)} из ${topHeavy.slot} на ${freeSlots[index]}.`);
         });
       }
     }
 
-    lines.push('', '<b>Где ИИ особенно поможет:</b>');
+    lines.push('', 'Просроченные задачи:');
+    if (overdueTasks.length === 0) {
+      lines.push('— Просроченных задач нет.');
+    } else {
+      lines.push(`— Всего просроченных задач: ${overdueTasks.length}.`);
+      overdueTasks.slice(0, 5).forEach((task, index) => {
+        lines.push(`${index + 1}. ${formatSlot(task.dueDate)} — ${escapeHtml(task.title)} (подзадач: ${task.subtasks.length})`);
+      });
+      if (overdueTasks.length > 5) {
+        lines.push(`— И ещё ${overdueTasks.length - 5} просроченных задач(и).`);
+      }
+    }
+
+    lines.push('', 'Где ИИ особенно поможет:');
     if (tasks.length === 0) {
-      lines.push('— Пока нет задач на сегодня, где нужна помощь ИИ.');
+      if (overdueTasks.length === 0) {
+        lines.push('— Пока нет задач на сегодня и просроченных задач, где нужна помощь ИИ.');
+      } else {
+        overdueTasks
+          .slice(0, 3)
+          .forEach((task) => {
+            lines.push(`— ${escapeHtml(task.title)}: ${suggestTaskHelp(task.title)}`);
+          });
+      }
     } else {
       const candidates = [...tasks]
         .sort((a, b) => (b.subtasks.length + b.importance + b.urgency) - (a.subtasks.length + a.importance + a.urgency))
         .slice(0, 3);
       candidates.forEach((task) => {
-        lines.push(`— <b>${escapeHtml(task.title)}</b>: помогу разбить на шаги, оценить приоритет и подготовить черновики/тексты по задаче.`);
+        lines.push(`— ${escapeHtml(task.title)}: ${suggestTaskHelp(task.title)}`);
       });
     }
-    lines.push('', '💬 Чтобы ответить ИИ или попросить его о чём-то, нажмите кнопку <b>«Общий чат с ИИ»</b>.');
+    lines.push('', '💬 Чтобы ответить ИИ или попросить его о чём-то, нажмите кнопку «Общий чат с ИИ».');
     return lines.join('\n');
   },
   transcribeAudio: async (input: TranscribeAudioInput) => {
