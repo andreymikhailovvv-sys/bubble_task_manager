@@ -327,20 +327,12 @@ function getRadiusByRank(
   const maxRadius = mode === 'global' ? 92 : 82;
 
   if (rankingMode === 'coefficient') {
-    const minRadius = mode === 'global' ? 24 : 22;
-    const baselineCoefficient = 0.35;
-    const adjustedCoefficient = Math.max(baselineCoefficient, normalizedCoefficient);
-    const normalizedRange = (adjustedCoefficient - baselineCoefficient) / (1 - baselineCoefficient);
-    const coefficientScale = Math.pow(normalizedRange, 1.2);
+    const minReadableRadius = mode === 'global' ? 30 : 27;
+    const scaledMaxRadius = mode === 'global' ? 110 : 98;
+    const proportionalRadius = normalizedCoefficient * scaledMaxRadius;
     const importanceSupport = (importance - 1) * (mode === 'global' ? 1 : 0.8);
-    const radius = minRadius + (maxRadius - minRadius) * coefficientScale + importanceSupport;
-
-    const lowCoefficientBoost = mode === 'global' ? 17 : 15;
-    const highCoefficientBoost = mode === 'global' ? 7 : 6;
-    const boostIntensity = 1 - Math.pow(normalizedRange, 0.7);
-    const sizeBoost = highCoefficientBoost + (lowCoefficientBoost - highCoefficientBoost) * boostIntensity;
-
-    return Math.max(minRadius, Math.min(maxRadius, radius + sizeBoost));
+    const radius = Math.max(minReadableRadius, proportionalRadius) + importanceSupport;
+    return Math.max(minReadableRadius, Math.min(scaledMaxRadius, radius));
   }
 
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
