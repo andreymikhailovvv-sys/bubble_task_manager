@@ -334,7 +334,13 @@ function getRadiusByRank(
     const coefficientScale = Math.pow(normalizedRange, 1.2);
     const importanceSupport = (importance - 1) * (mode === 'global' ? 1 : 0.8);
     const radius = minRadius + (maxRadius - minRadius) * coefficientScale + importanceSupport;
-    return Math.max(minRadius, Math.min(maxRadius, radius));
+
+    const lowCoefficientBoost = mode === 'global' ? 17 : 15;
+    const highCoefficientBoost = mode === 'global' ? 7 : 6;
+    const boostIntensity = 1 - Math.pow(normalizedRange, 0.7);
+    const sizeBoost = highCoefficientBoost + (lowCoefficientBoost - highCoefficientBoost) * boostIntensity;
+
+    return Math.max(minRadius, Math.min(maxRadius, radius + sizeBoost));
   }
 
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
