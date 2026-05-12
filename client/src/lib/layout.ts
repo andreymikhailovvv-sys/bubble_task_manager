@@ -320,7 +320,8 @@ function getRadiusByRank(
   mode: 'global' | 'sectors',
   rankingMode: BubbleRankingMode,
   importance: number,
-  overdueBoost: number
+  overdueBoost: number,
+  coefficient: number
 ) {
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
   const deadlineScale = 1 - rankRatio;
@@ -330,7 +331,11 @@ function getRadiusByRank(
   const importanceBoost = rankingMode === 'coefficient' ? (importance - 1) * (mode === 'global' ? 4.2 : 3.4) : 0;
   const tieBonus = tieBoost * 4;
   const maxRadius = mode === 'global' ? 90 : 80;
-  return Math.max(18, Math.min(maxRadius, base + proximityBoost + urgencyBoost + tieBonus + importanceBoost + overdueBoost));
+  const coefficientSizeBoost = rankingMode === 'coefficient'
+    ? Math.pow(Math.max(0, Math.min(1, coefficient)), 1.25) * (mode === 'global' ? 34 : 30)
+    : 0;
+  const rawRadius = base + proximityBoost + urgencyBoost + tieBonus + importanceBoost + overdueBoost + coefficientSizeBoost;
+  return Math.max(16, Math.min(maxRadius, rawRadius));
 }
 
 
@@ -431,8 +436,8 @@ export function buildBubbles(
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
-      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost);
       const coefficient = getTaskCoefficient(task, subtaskMap);
+      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient);
       const distance = rankingMode === 'coefficient'
         ? 18 + (1 - coefficient) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
@@ -449,12 +454,16 @@ export function buildBubbles(
             return midAngle + laneShift + (sectorIndex === 0 ? -ringShift : ringShift);
           }
           const angleSpan = endAngle - startAngle;
+          const midAngle = startAngle + angleSpan / 2;
           const slotCount = Math.max(4, Math.ceil(Math.sqrt(sorted.length + 1)));
           const ring = Math.floor(i / slotCount);
           const slot = i % slotCount;
-          const baseAngle = startAngle + (angleSpan / (slotCount + 1)) * (slot + 1);
-          const ringOffset = (ring % 2 === 0 ? 1 : -1) * (0.05 + ring * 0.015);
-          const dueOffset = -rankInDue * 0.02;
+          const wideSector = angleSpan >= Math.PI * 0.9;
+          const usableSpan = wideSector ? angleSpan * 0.6 : angleSpan * 0.88;
+          const localStart = midAngle - usableSpan / 2;
+          const baseAngle = localStart + (usableSpan / (slotCount + 1)) * (slot + 1);
+          const ringOffset = (ring % 2 === 0 ? 1 : -1) * (wideSector ? 0.028 : 0.05) + ring * (wideSector ? 0.008 : 0.015);
+          const dueOffset = wideSector ? -rankInDue * 0.01 : -rankInDue * 0.02;
           return baseAngle + ringOffset + dueOffset;
         })();
       const point = polarToCartesian(center, angle, distance);
