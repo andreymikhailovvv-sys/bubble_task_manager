@@ -327,20 +327,21 @@ function getRadiusByRank(
   const maxRadius = mode === 'global' ? 92 : 82;
 
   if (rankingMode === 'coefficient') {
-    const minRadius = mode === 'global' ? 14 : 12;
-    const coefficientScale = Math.pow(normalizedCoefficient, 1.75);
-    const importanceSupport = (importance - 1) * (mode === 'global' ? 1.6 : 1.2);
+    const minRadius = mode === 'global' ? 16 : 14;
+    const coefficientScale = Math.pow(normalizedCoefficient, 1.45);
+    const importanceSupport = (importance - 1) * (mode === 'global' ? 1.2 : 0.9);
     const radius = minRadius + (maxRadius - minRadius) * coefficientScale + importanceSupport;
     return Math.max(minRadius, Math.min(maxRadius, radius));
   }
 
   const rankRatio = total <= 1 ? 0 : index / (total - 1);
   const deadlineScale = 1 - rankRatio;
-  const base = mode === 'global' ? 19 + deadlineScale * 35 : 20 + deadlineScale * 30;
-  const proximityBoost = mode === 'global' ? proximity * 11 : proximity * 9;
-  const urgencyBoost = mode === 'global' ? urgencyWeight * 17 : urgencyWeight * 14;
-  const tieBonus = tieBoost * 4;
-  const rawRadius = base + proximityBoost + urgencyBoost + tieBonus + overdueBoost;
+  const base = mode === 'global' ? 17 + deadlineScale * 40 : 18 + deadlineScale * 35;
+  const proximityBoost = mode === 'global' ? proximity * 14 : proximity * 12;
+  const urgencyBoost = mode === 'global' ? urgencyWeight * 22 : urgencyWeight * 19;
+  const importanceBoost = rankingMode === 'importance' ? (importance - 1) * (mode === 'global' ? 5.2 : 4.4) : 0;
+  const tieBonus = tieBoost * 5;
+  const rawRadius = base + proximityBoost + urgencyBoost + importanceBoost + tieBonus + overdueBoost;
   return Math.max(16, Math.min(maxRadius, rawRadius));
 }
 
