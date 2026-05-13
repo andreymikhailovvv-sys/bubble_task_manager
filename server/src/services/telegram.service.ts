@@ -15,11 +15,6 @@ const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 
-const MENU_CREATE_AI_TASK = '🤖 Создать задачу ИИ';
-const MENU_GENERAL_AI_CHAT = '💬 Общий чат с ИИ';
-const MENU_LIST_TASKS = '📋 Посмотреть задачи';
-const CREATE_TASK_TEXT_TRIGGERS = new Set(['создать', 'create']);
-
 type TelegramFile = {
   file_id: string;
   file_size?: number;
@@ -123,7 +118,7 @@ const keyboardMain = (taskId: string) => ({
       { text: '✅ Выполнить', callback_data: `done:${taskId}` }
     ],
     [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
-    [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }]
+    [{ text: '🤖 Написать ИИ в Mini App', web_app: { url: buildMiniAppTaskUrl(taskId) } }]
   ]
 });
 
@@ -147,7 +142,7 @@ const keyboardTaskDetails = (taskId: string, page = 1, totalPages = 1) => {
         { text: '✅ Выполнить', callback_data: `done:${taskId}` },
         { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
       ],
-      [{ text: '🤖 Написать ИИ', callback_data: `ai:${taskId}` }],
+      [{ text: '🤖 Написать ИИ в Mini App', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
       [{ text: '⬅️ Назад к списку', callback_data: 'backlist' }]
     ]
   };
@@ -197,10 +192,7 @@ const keyboardSnooze = (taskId: string) => ({
 });
 
 const keyboardReplyMain = {
-  keyboard: [[{ text: MENU_CREATE_AI_TASK }], [{ text: MENU_GENERAL_AI_CHAT }], [{ text: MENU_LIST_TASKS }]],
-  resize_keyboard: true,
-  one_time_keyboard: false,
-  is_persistent: false
+  remove_keyboard: true
 };
 
 const telegramRequest = async <T>(method: string, payload: Record<string, unknown>): Promise<T | null> => {
@@ -529,7 +521,7 @@ const handleLoginInput = async (chatId: string, text: string) => {
   await setSession(chatId, { userId: user.id });
   await sendMessage(
     chatId,
-    `✅ <b>Аккаунт подключён.</b>\nТеперь я буду присылать уведомления по задачам, ${escapeHtml(user.name ?? user.username ?? '')} 🙌\n\nВыберите действие в меню ⤵️`,
+    `✅ <b>Аккаунт подключён.</b>\nТеперь я буду присылать уведомления по задачам, ${escapeHtml(user.name ?? user.username ?? '')} 🙌\n\nПросто напишите сообщение — я сразу отправлю его в общий чат с ИИ.`,
     keyboardReplyMain
   );
 };
@@ -742,9 +734,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   }
 
   if (isVoiceMessage) {
-    pendingAiAttachmentByChatId.delete(chatId);
-    await setSession(chatId, { mode: 'AWAITING_AI_TASK_PROMPT', activeTaskId: null });
-    await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и запускаю создание задачи через ИИ...');
+    await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и отправляю в общий чат с ИИ...');
 
     try {
       const voiceAttachment = await loadTelegramAttachment(updateMessage);
@@ -759,7 +749,30 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         contentBase64: voiceAttachment.contentBase64
       });
 
-      await createTaskFromPromptAndNotify(chatId, session.userId, transcript, undefined, transcript);
+      const history = generalAiHistoryByChatId.get(chatId) ?? [];
+      const result = await aiAssistantService.askGeneralAssistant({
+        userId: session.userId,
+        question: transcript,
+        history
+      });
+      const nextHistory: ChatMessage[] = [
+        ...history,
+        { role: 'user' as const, content: transcript },
+        { role: 'assistant' as const, content: result.answer }
+      ].slice(-20);
+      generalAiHistoryByChatId.set(chatId, nextHistory);
+
+      const lines = [
+        `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}`,
+        '',
+        `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
+      ];
+      if (result.actionReports.length > 0) {
+        lines.push('', '<b>Что изменил ИИ:</b>', ...result.actionReports.map((report) => `• ${escapeHtml(report)}`));
+      }
+
+      await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
+      await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось обработать голосовое.';
@@ -768,38 +781,11 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
   }
 
-  const normalizedText = descriptionText.toLowerCase();
-  if (descriptionText === MENU_CREATE_AI_TASK || CREATE_TASK_TEXT_TRIGGERS.has(normalizedText)) {
-    pendingAiAttachmentByChatId.delete(chatId);
-    await setSession(chatId, { mode: 'AWAITING_AI_TASK_PROMPT', activeTaskId: null });
-    await sendMessage(
-      chatId,
-      '🤖 <b>Создание задачи через ИИ</b>\n\nОтправьте описание задачи текстом или голосовым. Можно сразу прикрепить файл — я учту его при формировании задачи.',
-      keyboardReplyMain
-    );
-    return;
-  }
-
-  if (descriptionText === MENU_LIST_TASKS) {
-    await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
-    const listParts = await buildTaskListTextParts(session.userId, chatId);
-    for (const listPart of listParts) {
-      await sendMessage(chatId, listPart, keyboardReplyMain);
-    }
-    return;
-  }
-
-  if (descriptionText === MENU_GENERAL_AI_CHAT) {
+  if (descriptionText) {
     await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
-    await sendMessage(
-      chatId,
-      '💬 <b>Общий чат с ИИ</b>\n\nНапишите любой вопрос по задачам. Я также могу создать новую задачу или подзадачу прямо из этого чата.',
-      keyboardReplyMain
-    );
-    return;
   }
 
-  if (session.mode === 'GENERAL_AI_CHAT') {
+  if (session.mode === 'GENERAL_AI_CHAT' || descriptionText) {
     if (!descriptionText) {
       await sendMessage(chatId, '⚠️ Сообщение пустое. Напишите вопрос для ИИ.', keyboardReplyMain);
       return;
@@ -969,7 +955,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     return;
   }
 
-  await sendMessage(chatId, 'ℹ️ Выберите действие через меню: «🤖 Создать задачу ИИ», «💬 Общий чат с ИИ» или «📋 Посмотреть задачи».', keyboardReplyMain);
+  await sendMessage(chatId, '⚠️ Сообщение пустое. Напишите вопрос для ИИ.', keyboardReplyMain);
 };
 
 const handleCallback = async (update: TelegramUpdate) => {
@@ -1175,13 +1161,6 @@ const handleCallback = async (update: TelegramUpdate) => {
       deleted.count ? '🗑 <b>Подзадача удалена.</b>' : '⚠️ <b>Подзадача не найдена.</b>',
       keyboardBackTask(subtask.parentTaskId)
     );
-    return;
-  }
-
-  if (action === 'ai') {
-    await setSession(chatId, { mode: 'AWAITING_AI_MESSAGE', activeTaskId: resolvedTaskId });
-    await answerCallback(callback.id);
-    await editMessage(chatId, messageId, '🤖 <b>Напишите сообщение для ИИ</b>\n\nЯ отправлю его в диалог задачи.', keyboardBackTask(resolvedTaskId));
     return;
   }
 
