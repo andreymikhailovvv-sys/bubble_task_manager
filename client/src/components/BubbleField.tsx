@@ -192,6 +192,9 @@ export function BubbleField({
     return Math.min(parsed, 1440);
   })();
 
+  const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
+
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
     [tasks, spheres, mode, rankingMode, subtaskMap]
@@ -513,10 +516,10 @@ export function BubbleField({
                     <p className="text-[11px] text-slate-300">Коэффициент важности</p>
                     <div
                       className="inline-flex items-center gap-1 rounded-full border border-slate-400/50 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
-                      style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(hoveredBubble.task, subtaskMap)) }}
+                      style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap)) }}
                     >
                       <Gauge size={11} />
-                      {getTaskCoefficient(hoveredBubble.task, subtaskMap).toFixed(2)}
+                      {getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap).toFixed(2)}
                     </div>
                   </div>
                   <div className="mt-2 border-t border-slate-700/80 pt-2">

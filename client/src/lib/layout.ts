@@ -321,15 +321,18 @@ function getRadiusByRank(
   rankingMode: BubbleRankingMode,
   importance: number,
   overdueBoost: number,
-  coefficient: number
+  coefficient: number,
+  sectorMaxCoefficient: number
 ) {
   const normalizedCoefficient = Math.max(0, Math.min(1, coefficient));
+  const safeSectorMaxCoefficient = Math.max(0.0001, sectorMaxCoefficient);
+  const relativeCoefficient = Math.max(0, Math.min(1, normalizedCoefficient / safeSectorMaxCoefficient));
   const maxRadius = mode === 'global' ? 92 : 82;
 
   if (rankingMode === 'coefficient') {
     const minReadableRadius = mode === 'global' ? 30 : 27;
     const scaledMaxRadius = mode === 'global' ? 110 : 98;
-    const proportionalRadius = normalizedCoefficient * scaledMaxRadius;
+    const proportionalRadius = relativeCoefficient * scaledMaxRadius;
     const importanceSupport = (importance - 1) * (mode === 'global' ? 1 : 0.8);
     const radius = Math.max(minReadableRadius, proportionalRadius) + importanceSupport;
     return Math.max(minReadableRadius, Math.min(scaledMaxRadius, radius));
@@ -403,6 +406,9 @@ export function buildBubbles(
     return earliestSubtaskDueDate < taskDueDate ? earliestSubtaskDueDate : taskDueDate;
   };
 
+  const sourceTaskById = new Map(tasks.map((task) => [task.id, task]));
+  const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
+
   const tasksWithEffectiveDueDate = tasks.map((task) => {
     const effectiveDueDate = getEffectiveDueDate(task);
     const effectiveDueDateIso = effectiveDueDate ? effectiveDueDate.toISOString() : task.dueDate ?? null;
@@ -428,6 +434,8 @@ export function buildBubbles(
     const endAngle = geometry.endAngle;
     const sorted = [...sectorTasks].sort((a, b) => compareTasksForRanking(a, b, rankingMode, subtaskMap));
 
+    const sectorMaxCoefficient = sorted.reduce((max, candidate) => Math.max(max, getTaskCoefficient(getSourceTask(candidate), subtaskMap)), 0);
+
     const dueCounts = sorted.reduce<Record<string, number>>((acc, task) => {
       const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
       acc[key] = (acc[key] ?? 0) + 1;
@@ -444,8 +452,8 @@ export function buildBubbles(
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
-      const coefficient = getTaskCoefficient(task, subtaskMap);
-      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient);
+      const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
+      const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
       const distance = rankingMode === 'coefficient'
         ? 18 + (1 - coefficient) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
@@ -506,7 +514,7 @@ export function buildBubbles(
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = rankingMode === 'coefficient'
-        ? 18 + (1 - getTaskCoefficient(bubble.task, subtaskMap)) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
+        ? 18 + (1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap)) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
         : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
