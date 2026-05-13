@@ -1642,8 +1642,8 @@ export default function App() {
     }
 
     if (rankingMode === 'coefficient') {
-      const aCoefficient = getTaskCoefficient(a, subtaskMap);
-      const bCoefficient = getTaskCoefficient(b, subtaskMap);
+      const aCoefficient = getTaskCoefficient(a, displayedSubtaskMap);
+      const bCoefficient = getTaskCoefficient(b, displayedSubtaskMap);
       if (aCoefficient !== bCoefficient) return bCoefficient - aCoefficient;
       return a.title.localeCompare(b.title, 'ru');
     }
@@ -2102,11 +2102,11 @@ export default function App() {
                         {rankingMode === 'coefficient' ? (
                           <span
                             className="group inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
-                            style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(task, subtaskMap)) }}
+                            style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(task, displayedSubtaskMap)) }}
                             title="Коэффициент важности задачи"
                           >
                             <Gauge size={12} />
-                            {getTaskCoefficient(task, subtaskMap).toFixed(2)}
+                            {getTaskCoefficient(task, displayedSubtaskMap).toFixed(2)}
                             
                           </span>
                         ) : (
