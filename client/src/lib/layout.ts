@@ -406,6 +406,9 @@ export function buildBubbles(
     return earliestSubtaskDueDate < taskDueDate ? earliestSubtaskDueDate : taskDueDate;
   };
 
+  const sourceTaskById = new Map(tasks.map((task) => [task.id, task]));
+  const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
+
   const tasksWithEffectiveDueDate = tasks.map((task) => {
     const effectiveDueDate = getEffectiveDueDate(task);
     const effectiveDueDateIso = effectiveDueDate ? effectiveDueDate.toISOString() : task.dueDate ?? null;
@@ -431,7 +434,7 @@ export function buildBubbles(
     const endAngle = geometry.endAngle;
     const sorted = [...sectorTasks].sort((a, b) => compareTasksForRanking(a, b, rankingMode, subtaskMap));
 
-    const sectorMaxCoefficient = sorted.reduce((max, candidate) => Math.max(max, getTaskCoefficient(candidate, subtaskMap)), 0);
+    const sectorMaxCoefficient = sorted.reduce((max, candidate) => Math.max(max, getTaskCoefficient(getSourceTask(candidate), subtaskMap)), 0);
 
     const dueCounts = sorted.reduce<Record<string, number>>((acc, task) => {
       const key = Number.isFinite(getDueDateDiffMs(task.dueDate)) ? new Date(task.dueDate as string).toISOString().slice(0, 16) : 'none';
@@ -449,7 +452,7 @@ export function buildBubbles(
       const sameDueCount = dueCounts[key] ?? 1;
       const importanceTieBoost = sameDueCount > 1 ? (task.importance - 1) / 4 : 0;
       const overdueBoost = isOverdueNow(task.dueDate) ? 2.2 : 0;
-      const coefficient = getTaskCoefficient(task, subtaskMap);
+      const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
       const distance = rankingMode === 'coefficient'
         ? 18 + (1 - coefficient) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + i * 0.6
@@ -511,7 +514,7 @@ export function buildBubbles(
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = rankingMode === 'coefficient'
-        ? 18 + (1 - getTaskCoefficient(bubble.task, subtaskMap)) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
+        ? 18 + (1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap)) * Math.max(20, maxDistance * (mode === 'global' ? 0.35 : 0.5)) + idx * 0.4
         : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
