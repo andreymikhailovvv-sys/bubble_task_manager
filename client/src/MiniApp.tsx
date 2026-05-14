@@ -169,6 +169,7 @@ export default function MiniApp() {
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const [aiDraft, setAiDraft] = useState('');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -356,6 +357,34 @@ export default function MiniApp() {
       isTodayVisible: timeFilter === 'all' || timeFilter === 'today'
     };
   }, [filteredTasks, timeFilter, timelineNow]);
+
+  const timelineTaskPlacements = useMemo(() => {
+    const byTime = new Map<string, Task[]>();
+    for (const task of timelineToday.todayTasks) {
+      const due = new Date(task.dueDate as string);
+      const key = `${due.getHours()}-${due.getMinutes()}`;
+      const current = byTime.get(key) ?? [];
+      current.push(task);
+      byTime.set(key, current);
+    }
+
+    const placements = new Map<string, { column: number; columnsTotal: number }>();
+    for (const sameTimeTasks of byTime.values()) {
+      const columnsTotal = sameTimeTasks.length;
+      sameTimeTasks.forEach((task, column) => {
+        placements.set(task.id, { column, columnsTotal });
+      });
+    }
+    return placements;
+  }, [timelineToday.todayTasks]);
+
+  useEffect(() => {
+    if (displayMode !== 'timeline') return;
+    const container = timelineScrollRef.current;
+    if (!container) return;
+    const centeredTop = Math.max(0, timelineToday.currentTimeTop - (container.clientHeight / 2));
+    container.scrollTo({ top: centeredTop });
+  }, [displayMode, timelineToday.currentTimeTop]);
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -697,7 +726,7 @@ export default function MiniApp() {
             <h2 className="mb-3 text-lg font-semibold">Таймлайн задач</h2>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
-                <div className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
                   <div className="relative" style={{ height: `${HOURS_IN_DAY * TIMELINE_HOUR_HEIGHT}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
                       <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${hourIndex * TIMELINE_HOUR_HEIGHT}px` }}>
@@ -715,12 +744,21 @@ export default function MiniApp() {
                       const minuteOffset = (dueDate.getHours() * 60) + dueDate.getMinutes();
                       const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
                       const hasOverdueState = isOverdue(task);
+                      const placement = timelineTaskPlacements.get(task.id) ?? { column: 0, columnsTotal: 1 };
+                      const laneWidthPercent = 100 / placement.columnsTotal;
+                      const leftPercent = laneWidthPercent * placement.column;
                       return (
                         <button
                           type="button"
                           key={task.id}
-                          className="absolute left-16 right-2 rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-1 text-left"
-                          style={{ top: `${top + 4}px`, minHeight: '42px', boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined }}
+                          className="absolute rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-1 text-left"
+                          style={{
+                            top: `${top + 4}px`,
+                            minHeight: `${42 + ((placement.columnsTotal - 1) * 10)}px`,
+                            left: `calc(4rem + ${leftPercent}% + 2px)`,
+                            width: `calc(${laneWidthPercent}% - 8px)`,
+                            boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
+                          }}
                           onClick={() => openTaskModal(task)}
                         >
                           <p className="truncate text-sm font-medium">{task.title}</p>
