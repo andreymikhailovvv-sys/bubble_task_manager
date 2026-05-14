@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { ChatMessage, Sphere, Task } from './lib/types';
@@ -79,6 +79,18 @@ function formatRemaining(value?: string | null) {
   return diffMs >= 0 ? `Через ${text}` : `Просрочено на ${text}`;
 }
 
+function renderMiniAiText(content: string) {
+  return content.split('\n').map((line, lineIndex) => (
+    <p key={`mini-ai-line-${lineIndex}`} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+      {line.split(/(\*\*[^*]+\*\*)/g).map((part, partIndex) => {
+        const isBold = part.startsWith('**') && part.endsWith('**') && part.length > 4;
+        if (!isBold) return <span key={`mini-ai-part-${lineIndex}-${partIndex}`}>{part}</span>;
+        return <strong key={`mini-ai-part-${lineIndex}-${partIndex}`} className="font-semibold text-slate-100">{part.slice(2, -2)}</strong>;
+      })}
+    </p>
+  ));
+}
+
 function toInputDateTime(value?: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -152,6 +164,8 @@ export default function MiniApp() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const [aiDraft, setAiDraft] = useState('');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -511,6 +525,16 @@ export default function MiniApp() {
     }
   };
 
+  useEffect(() => {
+    if (!isAiDialogOpen) return;
+    const scrollToBottom = (container: HTMLDivElement | null) => {
+      if (!container) return;
+      container.scrollTop = container.scrollHeight;
+    };
+    scrollToBottom(inlineAiDialogContainerRef.current);
+    scrollToBottom(fullscreenAiDialogContainerRef.current);
+  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
+
   if (loading) {
     return <main className="min-h-screen bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
   }
@@ -766,12 +790,12 @@ export default function MiniApp() {
             {isAiDialogOpen ? (
               <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
                 <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
-                <div className="max-h-52 space-y-2 overflow-y-auto rounded-md bg-slate-900/80 p-2 text-xs">
+                <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
                   {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
                   {openedTaskAiDialog.map((message, index) => (
-                    <div key={`mini-ai-${index}`} className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5">
-                      <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    <div key={`mini-ai-${index}`} className={`max-w-[94%] rounded-xl border px-2.5 py-2 ${message.role === 'assistant' ? 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
+                      <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
+                      <div className="text-[13px] leading-relaxed">{renderMiniAiText(message.content)}</div>
                     </div>
                   ))}
                   {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
@@ -918,12 +942,12 @@ export default function MiniApp() {
                 <X size={16} />
               </button>
             </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-md bg-slate-950/70 p-3 text-sm">
+            <div ref={fullscreenAiDialogContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-950/70 p-3 text-sm">
               {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
               {openedTaskAiDialog.map((message, index) => (
-                <div key={`mini-ai-full-${index}`} className="rounded border border-slate-700 bg-slate-800 px-3 py-2">
-                  <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                <div key={`mini-ai-full-${index}`} className={`max-w-[94%] rounded-xl border px-3 py-2.5 ${message.role === 'assistant' ? 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
+                  <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
+                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
                 </div>
               ))}
               {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
