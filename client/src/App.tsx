@@ -1356,7 +1356,7 @@ export default function App() {
     const parentTask = allTasks.find((task) => task.id === parentTaskId);
     if (!parentTask) return allDone;
     if (allDone && parentTask.status !== 'DONE') {
-      await api.updateTask(parentTaskId, { status: 'DONE' });
+      return true;
     }
     if (!allDone && parentTask.status === 'DONE') {
       await api.updateTask(parentTaskId, { status: 'TODO' });
@@ -1364,11 +1364,42 @@ export default function App() {
     return allDone;
   };
 
+
+  const getLatestSubtaskDueDate = (parentTaskId: string): string | null => {
+    const subtasks = (subtaskMap[parentTaskId] ?? []).filter((item) => Boolean(item.dueDate));
+    if (subtasks.length === 0) return null;
+    return subtasks
+      .map((item) => item.dueDate as string)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+  };
+
+  const maybeSuggestParentDeadlineShift = async (parentTaskId: string) => {
+    const allTasks = await api.getTasks();
+    const parent = allTasks.find((task) => task.id === parentTaskId);
+    if (!parent?.dueDate) return;
+    const latestSubtask = allTasks
+      .filter((task) => task.parentTaskId === parentTaskId && task.dueDate)
+      .sort((a, b) => new Date(b.dueDate as string).getTime() - new Date(a.dueDate as string).getTime())[0];
+    if (!latestSubtask?.dueDate) return;
+    if (new Date(parent.dueDate).getTime() >= new Date(latestSubtask.dueDate).getTime()) return;
+    const shouldShift = window.confirm(`Дедлайн основной задачи раньше, чем у подзадач. Перенести дедлайн основной задачи на ${new Date(latestSubtask.dueDate).toLocaleString('ru-RU')}?`);
+    if (shouldShift) {
+      await api.updateTask(parentTaskId, { dueDate: latestSubtask.dueDate });
+    }
+  };
+
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
     await api.updateTask(subtask.id, { status: nextStatus });
     if (subtask.parentTaskId) {
       const parentCompleted = await syncParentStatusBySubtasks(subtask.parentTaskId);
+      if (parentCompleted) {
+        const shouldCloseParent = window.confirm('Все подзадачи закрыты. Закрыть основную задачу тоже?');
+        if (shouldCloseParent) {
+          await api.updateTask(subtask.parentTaskId, { status: 'DONE' });
+        }
+      }
+      await maybeSuggestParentDeadlineShift(subtask.parentTaskId);
       if (parentCompleted && focusedTaskId === subtask.parentTaskId) {
         setFocusedTaskId(null);
         setFocusedDraft(null);
@@ -1394,6 +1425,7 @@ export default function App() {
     if (parentTask.status === 'DONE') {
       await api.updateTask(parentTask.id, { status: 'TODO' });
     }
+    await maybeSuggestParentDeadlineShift(parentTask.id);
     await load();
     return createdSubtask;
   };
@@ -2600,7 +2632,7 @@ export default function App() {
                     key={message.id}
                     className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
-                    <p className="mb-1 text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                    <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} title="Копировать" className="text-slate-300 hover:text-white"><Copy size={12} /></button> : null}</div>
                     <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
@@ -2817,7 +2849,7 @@ export default function App() {
                     key={`focused-ai-${message.role}-${index}`}
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                    <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300 hover:text-white" title="Копировать"><Copy size={12} /></button> : null}</div>
                     <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}

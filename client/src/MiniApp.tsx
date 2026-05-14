@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, List, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { ChatMessage, Sphere, Task } from './lib/types';
 
@@ -397,6 +397,15 @@ export default function MiniApp() {
     setError(null);
     try {
       await api.updateTask(taskId, { status: 'DONE' });
+      const completed = tasks.find((item) => item.id === taskId);
+      if (completed?.parentTaskId) {
+        const siblings = tasks.filter((item) => item.parentTaskId === completed.parentTaskId && item.id !== taskId);
+        const allOthersDone = siblings.every((item) => item.status === 'DONE');
+        if (allOthersDone) {
+          const shouldCloseParent = window.confirm('Это была последняя подзадача. Закрыть основную задачу?');
+          if (shouldCloseParent) await api.updateTask(completed.parentTaskId, { status: 'DONE' });
+        }
+      }
       await loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить задачу');
@@ -761,7 +770,7 @@ export default function MiniApp() {
                   {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
                   {openedTaskAiDialog.map((message, index) => (
                     <div key={`mini-ai-${index}`} className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5">
-                      <p className="mb-1 text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                      <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
                       <p className="whitespace-pre-wrap">{message.content}</p>
                     </div>
                   ))}
@@ -913,7 +922,7 @@ export default function MiniApp() {
               {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
               {openedTaskAiDialog.map((message, index) => (
                 <div key={`mini-ai-full-${index}`} className="rounded border border-slate-700 bg-slate-800 px-3 py-2">
-                  <p className="mb-1 text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-400">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300" title="Копировать"><Copy size={12} /></button> : null}</div>
                   <p className="whitespace-pre-wrap">{message.content}</p>
                 </div>
               ))}

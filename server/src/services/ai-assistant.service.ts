@@ -704,16 +704,20 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 
 export const aiAssistantService = {
   async generateDailyCheckup(input: { userId: string }) {
+    const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
+    const userTimeZone = user?.timeZone || MOSCOW_TIMEZONE;
     const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setUTCHours(0, 0, 0, 0);
-    const todayEnd = new Date(now);
-    todayEnd.setUTCHours(23, 59, 59, 999);
+    const localNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
+    const todayStartLocal = new Date(localNow);
+    todayStartLocal.setHours(0, 0, 0, 0);
+    const todayEndLocal = new Date(localNow);
+    todayEndLocal.setHours(23, 59, 59, 999);
+    const shiftMs = localNow.getTime() - now.getTime();
+    const todayStart = new Date(todayStartLocal.getTime() - shiftMs);
+    const todayEnd = new Date(todayEndLocal.getTime() - shiftMs);
     const formatSlot = (value: Date | null) => {
       if (!value) return 'Без времени';
-      const hh = String(value.getUTCHours()).padStart(2, '0');
-      const mm = String(value.getUTCMinutes()).padStart(2, '0');
-      return `${hh}:${mm}`;
+      return value.toLocaleTimeString('ru-RU', { timeZone: userTimeZone, hour: '2-digit', minute: '2-digit' });
     };
     const escapeHtml = (value: string) => value
       .replace(/&/g, '&amp;')
@@ -800,12 +804,12 @@ export const aiAssistantService = {
     const nearestThreeHours = tasks.filter((task) => !!task.dueDate && task.dueDate >= now && task.dueDate <= nowPlus3h);
     const daytimeTasks = tasks.filter((task) => {
       if (!task.dueDate) return false;
-      const hour = task.dueDate.getUTCHours();
+      const hour = Number(task.dueDate.toLocaleString('en-US', { timeZone: userTimeZone, hour: '2-digit', hour12: false }));
       return hour >= 12 && hour < 18;
     });
     const eveningTasks = tasks.filter((task) => {
       if (!task.dueDate) return false;
-      const hour = task.dueDate.getUTCHours();
+      const hour = Number(task.dueDate.toLocaleString('en-US', { timeZone: userTimeZone, hour: '2-digit', hour12: false }));
       return hour >= 18 && hour <= 23;
     });
 

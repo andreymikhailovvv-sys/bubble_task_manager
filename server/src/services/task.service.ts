@@ -54,7 +54,7 @@ export const taskService = {
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
 
-    return prisma.task.create({
+    const created = await prisma.task.create({
       data: {
         title: input.title,
         user: { connect: { id: userId } },
@@ -69,6 +69,8 @@ export const taskService = {
         notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
       }
     });
+    console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
+    return created;
   },
   update: async (id: string, userId: string, input: TaskInput) => {
     const patch: Prisma.TaskUpdateInput = {};
@@ -114,12 +116,12 @@ export const taskService = {
     }
 
     const currentTask = await prisma.task.findFirstOrThrow({
-      where: { id, userId },
-      select: { id: true, parentTaskId: true }
+      where: { id, userId }
     });
 
     return prisma.$transaction(async (tx) => {
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
       if (input.status === 'DONE' && !currentTask.parentTaskId) {
         await tx.task.updateMany({
@@ -132,9 +134,11 @@ export const taskService = {
     });
   },
   remove: async (id: string, userId: string) => {
+    const existing = await prisma.task.findFirst({ where: { id, userId }, select: { id: true, parentTaskId: true, status: true, dueDate: true } });
     const deleted = await prisma.task.deleteMany({ where: { id, userId } });
     if (deleted.count === 0) {
       throw new Error('Task not found');
     }
+    console.info('[Task] remove', { userId, taskId: id, parentTaskId: existing?.parentTaskId ?? null, status: existing?.status ?? null, dueDate: existing?.dueDate?.toISOString() ?? null });
   }
 };
