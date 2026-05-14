@@ -99,3 +99,14 @@ body {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+.miniapp-scrollless,
+.miniapp-scrollless * {
+  scrollbar-width: none;
+}
+
+.miniapp-scrollless::-webkit-scrollbar,
+.miniapp-scrollless *::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
