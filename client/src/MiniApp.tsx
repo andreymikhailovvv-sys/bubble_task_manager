@@ -29,6 +29,8 @@ const extractInitDataFromUrl = () => {
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
 const MAX_SHINE_WINDOW_MINUTES = 180;
+const HOURS_IN_DAY = 24;
+const TIMELINE_HOUR_HEIGHT = 88;
 
 type TaskDraft = {
   title: string;
@@ -156,6 +158,7 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+  const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -166,6 +169,7 @@ export default function MiniApp() {
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const [aiDraft, setAiDraft] = useState('');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -220,6 +224,14 @@ export default function MiniApp() {
       document.documentElement.style.overflow = prevRootOverflow;
     };
   }, []);
+
+  useEffect(() => {
+    if (displayMode !== 'timeline') return;
+    const intervalId = window.setInterval(() => {
+      setTimelineNow(new Date());
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [displayMode]);
 
   const filteredTasks = useMemo(() => {
     const now = new Date();
@@ -321,6 +333,58 @@ export default function MiniApp() {
       withoutDate
     };
   }, [filteredTasks]);
+
+  const timelineToday = useMemo(() => {
+    const now = timelineNow;
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    const todayTasks = filteredTasks
+      .filter((task) => {
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate);
+        if (Number.isNaN(dueDate.getTime())) return false;
+        return dueDate >= startOfDay && dueDate < endOfDay;
+      })
+      .sort(compareByDueDate);
+
+    const nowOffsetMinutes = (now.getHours() * 60) + now.getMinutes();
+    const currentTimeTop = (nowOffsetMinutes / 60) * TIMELINE_HOUR_HEIGHT;
+    return {
+      todayTasks,
+      currentTimeTop,
+      isTodayVisible: timeFilter === 'all' || timeFilter === 'today'
+    };
+  }, [filteredTasks, timeFilter, timelineNow]);
+
+  const timelineTaskPlacements = useMemo(() => {
+    const byTime = new Map<string, Task[]>();
+    for (const task of timelineToday.todayTasks) {
+      const due = new Date(task.dueDate as string);
+      const key = `${due.getHours()}-${due.getMinutes()}`;
+      const current = byTime.get(key) ?? [];
+      current.push(task);
+      byTime.set(key, current);
+    }
+
+    const placements = new Map<string, { column: number; columnsTotal: number }>();
+    for (const sameTimeTasks of byTime.values()) {
+      const columnsTotal = sameTimeTasks.length;
+      sameTimeTasks.forEach((task, column) => {
+        placements.set(task.id, { column, columnsTotal });
+      });
+    }
+    return placements;
+  }, [timelineToday.todayTasks]);
+
+  useEffect(() => {
+    if (displayMode !== 'timeline') return;
+    const container = timelineScrollRef.current;
+    if (!container) return;
+    const centeredTop = Math.max(0, timelineToday.currentTimeTop - (container.clientHeight / 2));
+    container.scrollTo({ top: centeredTop });
+  }, [displayMode, timelineToday.currentTimeTop]);
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -661,33 +725,50 @@ export default function MiniApp() {
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
             <h2 className="mb-3 text-lg font-semibold">Таймлайн задач</h2>
             <div className="space-y-4">
-              {timelineGroups.dated.map((group) => (
-                <div key={group.key} className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.label}</p>
-                  {group.tasks.map((task) => {
-                    const hasOverdueState = isOverdue(task);
-                    const sphereName = task.sphereId
-                      ? (spheres.find((item) => item.id === task.sphereId)?.name ?? 'Без сектора')
-                      : 'Без сектора';
-                    return (
-                      <button
-                        type="button"
-                        key={task.id}
-                        className="relative flex w-full items-start gap-3 rounded-md border border-slate-700 bg-slate-800/75 px-3 py-2 text-left"
-                        style={hasOverdueState ? { boxShadow: '0 0 12px rgba(239,68,68,0.45)' } : undefined}
-                        onClick={() => openTaskModal(task)}
-                      >
-                        <span className="mt-1 h-2 w-2 rounded-full bg-sky-300" />
-                        <div className="min-w-0 flex-1">
+              <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
+                <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                  <div className="relative" style={{ height: `${HOURS_IN_DAY * TIMELINE_HOUR_HEIGHT}px` }}>
+                    {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
+                      <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${hourIndex * TIMELINE_HOUR_HEIGHT}px` }}>
+                        <span className="absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
+                      </div>
+                    ))}
+                    {timelineToday.isTodayVisible ? (
+                      <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
+                        <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
+                        <span className="h-[2px] w-full bg-rose-400/90" />
+                      </div>
+                    ) : null}
+                    {timelineToday.todayTasks.map((task) => {
+                      const dueDate = new Date(task.dueDate as string);
+                      const minuteOffset = (dueDate.getHours() * 60) + dueDate.getMinutes();
+                      const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
+                      const hasOverdueState = isOverdue(task);
+                      const placement = timelineTaskPlacements.get(task.id) ?? { column: 0, columnsTotal: 1 };
+                      const laneWidthPercent = 100 / placement.columnsTotal;
+                      const leftPercent = laneWidthPercent * placement.column;
+                      return (
+                        <button
+                          type="button"
+                          key={task.id}
+                          className="absolute rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-1 text-left"
+                          style={{
+                            top: `${top + 4}px`,
+                            minHeight: `${42 + ((placement.columnsTotal - 1) * 10)}px`,
+                            left: `calc(4rem + ${leftPercent}% + 2px)`,
+                            width: `calc(${laneWidthPercent}% - 8px)`,
+                            boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
+                          }}
+                          onClick={() => openTaskModal(task)}
+                        >
                           <p className="truncate text-sm font-medium">{task.title}</p>
                           <p className="text-xs text-slate-300">{formatDueDate(task.dueDate)}</p>
-                          <p className="text-xs text-slate-400">{sphereName}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+              </div>
               {timelineGroups.withoutDate.length > 0 ? (
                 <div className="space-y-2 rounded-md border border-dashed border-slate-700 p-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Без дедлайна</p>
