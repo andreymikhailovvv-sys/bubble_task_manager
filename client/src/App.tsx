@@ -1758,7 +1758,7 @@ export default function App() {
 
   return (
     <main
-      className="flex h-screen flex-col overflow-hidden p-4 text-slate-100 lg:p-6"
+      className="flex h-screen flex-col overflow-y-auto p-4 text-slate-100 lg:p-6"
       style={{
         backgroundImage: backgroundImage
           ? `linear-gradient(rgba(2,6,23,${backgroundOverlayOpacity}), rgba(2,6,23,${backgroundOverlayOpacity})), url(${backgroundImage})`
