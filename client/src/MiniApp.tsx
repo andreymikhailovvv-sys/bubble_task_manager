@@ -604,7 +604,7 @@ export default function MiniApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
+    <main className="miniapp-scrollless min-h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto max-w-2xl space-y-4">
         <header className="space-y-2">
           <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
