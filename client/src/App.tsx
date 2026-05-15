@@ -2071,6 +2071,7 @@ export default function App() {
 
               const prompt = [
                 'Верни только JSON: {"dueDate":"ISO-8601"}.',
+                'Постарайся выбрать время с зазором примерно 30 минут от ближайших соседних задач. Если это невозможно — выбери самое близкое доступное время.',
                 `now=${now.toISOString()}`,
                 `task=${JSON.stringify({ title: task.title, dueDate: task.dueDate ?? null, importance: task.importance })}`,
                 `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
