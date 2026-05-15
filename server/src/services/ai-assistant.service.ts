@@ -1084,6 +1084,7 @@ export const aiAssistantService = {
       'Если тема сложная — только ключевые шаги и конкретные действия.',
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Ты можешь менять только текущую задачу и её подзадачи через actions.',
+      'Никогда не показывай пользователю технические идентификаторы (taskId, subtaskId, UUID). В тексте answer упоминай только понятные названия задач и подзадач.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
