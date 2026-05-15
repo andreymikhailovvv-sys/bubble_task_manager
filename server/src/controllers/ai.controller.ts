@@ -270,6 +270,33 @@ export const aiController = {
       res.status(500).json({ error: message });
     }
   },
+  optimizeTimelineSchedule: async (req: Request, res: Response) => {
+    try {
+      const userTimeZone = await resolveUserTimeZone(req);
+      const result = await aiAssistantService.optimizeTimelineSchedule({
+        userId: req.user!.id,
+        scope: req.body?.scope,
+        periodStartIso: req.body?.periodStartIso,
+        periodEndIso: req.body?.periodEndIso,
+        userNote: typeof req.body?.userNote === 'string' ? req.body.userNote : undefined,
+        userTimeZone
+      });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
+  applyTimelineOptimization: async (req: Request, res: Response) => {
+    try {
+      const plan = Array.isArray(req.body?.plan) ? req.body.plan : [];
+      const result = await aiAssistantService.applyTimelineOptimization({ userId: req.user!.id, plan });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   generateTaskFromPrompt: async (req: Request, res: Response) => {
     try {
       const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
