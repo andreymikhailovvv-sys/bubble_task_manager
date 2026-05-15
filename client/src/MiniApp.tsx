@@ -587,12 +587,9 @@ export default function MiniApp() {
     setAiDraft('');
     try {
       const result = await api.askTaskAssistant(openedTask.id, { question, mode: 'fast' });
-      const serviceReport = result.actionReports && result.actionReports.length > 0
-        ? `\n\nЧто изменил ИИ:\n- ${result.actionReports.join('\n- ')}`
-        : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${result.answer}${serviceReport}` }]
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
       }));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ');
