@@ -166,6 +166,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+
+  optimizeTimeline: (payload: { scope: 'day' | 'week' | 'month'; periodStartIso: string; periodEndIso: string; userNote?: string }) =>
+    request<{ model: string; summary: string; plan: Array<{ taskId: string; dueDate: string | null }> }>('/api/timeline/ai-optimize', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
+    }),
+  applyTimelineOptimization: (payload: { plan: Array<{ taskId: string; dueDate: string | null }> }) =>
+    request<{ ok: true }>('/api/timeline/ai-optimize/apply', { method: 'POST', body: JSON.stringify(payload) }),
+
   reportClientError: (payload: {
     source: 'error-boundary' | 'window-error' | 'unhandledrejection' | 'timeline-render';
     message: string;
