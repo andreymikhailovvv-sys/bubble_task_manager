@@ -1076,6 +1076,7 @@ export const aiAssistantService = {
     }
 
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const isSmartPostponeRequest = question.includes('SMART_POSTPONE_REQUEST');
     const now = new Date();
     const systemPrompt = [
       'Ты ИИ-помощник в задачнике Bubble Task Manager.',
@@ -1128,7 +1129,8 @@ export const aiAssistantService = {
       userId: input.userId,
       questionLength: question.length,
       historyLength: history.length,
-      historyLengthUsed: trimmedHistory.length
+      historyLengthUsed: trimmedHistory.length,
+      isSmartPostponeRequest
     });
 
     let lastError: Error | null = null;
@@ -1254,6 +1256,33 @@ export const aiAssistantService = {
         });
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
+        if (isSmartPostponeRequest) {
+          const rawJsonMatch = parsed.answer.match(/\{[\s\S]*\}/);
+          let parsedDueDate: string | null = null;
+          let parsedDueDateValid = false;
+          if (rawJsonMatch) {
+            try {
+              const candidate = JSON.parse(rawJsonMatch[0]) as { dueDate?: string };
+              if (candidate?.dueDate) {
+                parsedDueDate = candidate.dueDate;
+                parsedDueDateValid = !Number.isNaN(new Date(candidate.dueDate).getTime());
+              }
+            } catch {
+              // no-op diagnostic branch
+            }
+          }
+          console.info('[AI] Smart postpone diagnostic', {
+            requestId,
+            model,
+            taskId: input.taskId,
+            userId: input.userId,
+            answerPreview: parsed.answer.slice(0, 280),
+            hasJsonObjectInAnswer: Boolean(rawJsonMatch),
+            parsedDueDate,
+            parsedDueDateValid,
+            actionsCount: parsed.actions.length
+          });
+        }
         console.info('[AI] Parsed task assistant payload', {
           requestId,
           mode: input.mode ?? 'fast',

@@ -2079,6 +2079,7 @@ export default function App() {
               const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
 
               const prompt = [
+                'SMART_POSTPONE_REQUEST',
                 'Верни только JSON: {"dueDate":"ISO-8601"}.',
                 'Постарайся выбрать время с зазором примерно 30 минут от ближайших соседних задач. Если это невозможно — выбери самое близкое доступное время.',
                 `now=${now.toISOString()}`,
