@@ -3582,8 +3582,18 @@ export default function App() {
             <ul className="flex-1 space-y-2 overflow-y-auto rounded-2xl bg-slate-900/95 p-3 pr-2 text-sm">
               {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
               {filteredUpcomingSubtasksForModal.map((subtask) => (
-                <li key={subtask.id} className="flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2">
-                  <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
+                <li
+                  key={subtask.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] hover:border-cyan-300/60 hover:bg-slate-700/75 hover:shadow-[0_0_0_1px_rgba(34,211,238,0.25)]"
+                  onClick={() => setEditorState({ task: subtask })}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={subtask.status === 'DONE'}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={async () => { await toggleSubtaskDone(subtask); }}
+                  />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
                     <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
@@ -3595,16 +3605,19 @@ export default function App() {
                     <InlineDateTimePickerIcon
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"
+                      detachedPopup
                       onChange={async (dueDate) => {
                         await api.updateTask(subtask.id, { dueDate });
                         await load();
                       }}
+                      className="rounded p-1 hover:bg-slate-700/70"
                     />
                     <button
                       type="button"
                       className="rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
                       title="Удалить подзадачу"
-                      onClick={async () => {
+                      onClick={async (event) => {
+                        event.stopPropagation();
                         await api.deleteTask(subtask.id);
                         await load();
                       }}
