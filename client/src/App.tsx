@@ -2731,6 +2731,79 @@ export default function App() {
               ))}
             </ul>
           </section>
+          {isUpcomingSubtasksModalOpen ? (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-[1px]" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+              <aside
+                role="dialog"
+                aria-modal="true"
+                aria-label="Окно ближайших подзадач"
+                className="flex h-[84vh] w-[min(1100px,95vw)] flex-col rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-slate-700/70 px-4 py-3">
+                  <h4 className="text-base font-semibold text-slate-100">Ближайшие подзадачи</h4>
+                  <button type="button" className="rounded p-1 text-slate-300 transition hover:bg-slate-700/60 hover:text-white" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="border-b border-slate-700/70 px-4 py-3">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                  {([
+                    { key: 'today', label: 'на сегодня' },
+                    { key: 'tomorrow', label: 'на завтра' },
+                    { key: 'week', label: 'на неделю' },
+                    { key: 'no_due', label: 'без срока' }
+                  ] as const).map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-100' : 'border-slate-600/80 text-slate-300 hover:bg-slate-800/80'}`}
+                      onClick={() => setUpcomingSubtasksFilter(filter.key)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                  </div>
+                </div>
+                <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 pr-3 text-sm">
+                  {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
+                  {filteredUpcomingSubtasksForModal.map((subtask) => (
+                    <li key={subtask.id} className="flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2">
+                      <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <InlineDateTimePickerIcon
+                          value={subtask.dueDate}
+                          title="Изменить срок подзадачи"
+                          onChange={async (dueDate) => {
+                            await api.updateTask(subtask.id, { dueDate });
+                            await load();
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                          title="Удалить подзадачу"
+                          onClick={async () => {
+                            await api.deleteTask(subtask.id);
+                            await load();
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </aside>
+            </div>
+          ) : null}
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Выполненные задания</h3>
