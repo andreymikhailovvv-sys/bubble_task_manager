@@ -173,6 +173,28 @@ function formatTaskContext(task: {
   ].join('\n');
 }
 
+
+
+type TimelineOptimizationScope = 'day' | 'week' | 'month';
+type TimelineOptimizationTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  importance: number;
+  sphere: string | null;
+  subtasks: Array<{ id: string; title: string; dueDate: string | null }>;
+};
+type TimelineOptimizationPlan = {
+  summary: string;
+  tasks: Array<{ taskId: string; dueDate: string | null; subtasks?: Array<{ subtaskId: string; dueDate: string | null }> }>;
+};
+function parseTimelineOptimizationPlan(raw: string): TimelineOptimizationPlan {
+  const parsed = JSON.parse(raw) as TimelineOptimizationPlan;
+  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.tasks)) throw new Error('ИИ вернул неверный формат оптимизации');
+  return { summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : '', tasks: parsed.tasks };
+}
+
 type GeneratedSubtask = {
   title: string;
   description: string;
@@ -2004,6 +2026,39 @@ ${parsed.answer}`
       throw error;
     }
   },
+
+  optimizeTimelineSchedule: async (input: { userId: string; scope: TimelineOptimizationScope; periodStartIso: string; periodEndIso: string; userNote?: string; userTimeZone?: string }) => {
+    const periodStart = new Date(input.periodStartIso);
+    const periodEnd = new Date(input.periodEndIso);
+    if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
+    const tasks = await prisma.task.findMany({ where: { userId: input.userId, parentTaskId: null, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, subtasks: { select: { id: true, title: true, dueDate: true }, orderBy: { createdAt: 'asc' } } }, orderBy: { dueDate: 'asc' } });
+    const payload = tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, dueDate: t.dueDate ? t.dueDate.toISOString() : null, importance: t.importance, sphere: t.sphere?.name ?? null, subtasks: t.subtasks.map((st) => ({ id: st.id, title: st.title, dueDate: st.dueDate ? st.dueDate.toISOString() : null })) }));
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси. Дедлайн родительской задачи должен быть позже подзадач. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null","subtasks":[{"subtaskId":"...","dueDate":"ISO|null"}]}]}. Данные: ${JSON.stringify(payload)}` }] }) });
+    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+    const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
+    return { model: FULL_MODEL, summary: parsed.summary, plan: parsed.tasks };
+  },
+
+  applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null; subtasks?: Array<{ subtaskId: string; dueDate: string | null }> }> }) => {
+    await prisma.$transaction(async (tx) => {
+      for (const item of input.plan) {
+        const task = await tx.task.findFirst({ where: { id: item.taskId, userId: input.userId, parentTaskId: null } });
+        if (!task) continue;
+        let latestSubtaskDue: Date | null = null;
+        for (const subtask of item.subtasks ?? []) {
+          const due = subtask.dueDate ? new Date(subtask.dueDate) : null;
+          await tx.task.updateMany({ where: { id: subtask.subtaskId, userId: input.userId, parentTaskId: task.id }, data: { dueDate: due } });
+          if (due && !Number.isNaN(due.getTime()) && (!latestSubtaskDue || due > latestSubtaskDue)) latestSubtaskDue = due;
+        }
+        let taskDue = item.dueDate ? new Date(item.dueDate) : null;
+        if (taskDue && Number.isNaN(taskDue.getTime())) taskDue = null;
+        if (latestSubtaskDue && (!taskDue || taskDue <= latestSubtaskDue)) taskDue = new Date(latestSubtaskDue.getTime() + 60 * 60 * 1000);
+        await tx.task.update({ where: { id: task.id }, data: { dueDate: taskDue } });
+      }
+    });
+    return { ok: true as const };
+  },
+
 
   generateSubtasks: async (input: GenerateSubtasksInput) => {
     const apiKey = process.env.OPENAI_API_KEY;
