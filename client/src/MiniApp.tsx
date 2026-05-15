@@ -600,11 +600,11 @@ export default function MiniApp() {
   }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
 
   if (loading) {
-    return <main className="min-h-screen bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
+    return <main className="h-screen overflow-y-auto miniapp-scrollless bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
   }
 
   return (
-    <main className="miniapp-scrollless min-h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
+    <main className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto max-w-2xl space-y-4">
         <header className="space-y-2">
           <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
