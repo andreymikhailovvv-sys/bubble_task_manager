@@ -2044,21 +2044,20 @@ export default function App() {
               const updateDueDate = async (date: Date) => {
                 await api.updateTask(task.id, { dueDate: date.toISOString() });
                 await load();
+                return date.toISOString();
               };
 
               if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
                 const minutesByOption = { '15m': 15, '30m': 30, '1h': 60, '3h': 180 } as const;
                 const next = new Date(now);
                 next.setMinutes(next.getMinutes() + minutesByOption[option]);
-                await updateDueDate(next);
-                return;
+                return await updateDueDate(next);
               }
 
               if (option === 'tomorrow') {
                 const next = new Date(now);
                 next.setDate(next.getDate() + 1);
-                await updateDueDate(next);
-                return;
+                return await updateDueDate(next);
               }
 
               const nearbyTasks = tasks
@@ -2080,16 +2079,17 @@ export default function App() {
 
               const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
               const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
-              if (!jsonMatch) return;
+              if (!jsonMatch) return null;
               const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };
-              if (!parsed.dueDate) return;
+              if (!parsed.dueDate) return null;
               const aiDate = new Date(parsed.dueDate);
-              if (Number.isNaN(aiDate.getTime())) return;
-              await updateDueDate(aiDate);
+              if (Number.isNaN(aiDate.getTime())) return null;
+              const nextDueDateIso = await updateDueDate(aiDate);
               if (overdueSubtasks.length > 0) {
                 await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
                 await load();
               }
+              return nextDueDateIso;
             }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}

@@ -22,7 +22,7 @@ type Props = {
   onUpdateSubtaskDueDate: (subtask: Task, dueDate: string | null) => Promise<void>;
   onQuickCompleteTask: (task: Task) => Promise<void>;
   onQuickChangeTaskImportance: (task: Task, importanceDelta: number) => Promise<void>;
-  onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<void>;
+  onQuickPostponeTask: (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => Promise<string | null>;
   onCreateSubtask: (parentTask: Task, payload: Partial<Task>) => Promise<void>;
   isSubtaskFilterActive: boolean;
   onToggleSubtaskFilter: () => void;
@@ -135,6 +135,23 @@ function getCoefficientBadgeColor(coefficient: number) {
   return `rgba(${red}, ${green}, ${blue}, 0.32)`;
 }
 
+
+function formatPostponeDelta(previousDueDate: string | null | undefined, nextDueDate: string | null | undefined) {
+  if (!previousDueDate || !nextDueDate) return null;
+  const prev = new Date(previousDueDate);
+  const next = new Date(nextDueDate);
+  if (Number.isNaN(prev.getTime()) || Number.isNaN(next.getTime())) return null;
+  const diffMinutes = Math.round((next.getTime() - prev.getTime()) / 60_000);
+  if (diffMinutes === 0) return null;
+  const sign = diffMinutes > 0 ? '+' : '-';
+  const absMinutes = Math.abs(diffMinutes);
+  const hours = Math.floor(absMinutes / 60);
+  const minutes = absMinutes % 60;
+  if (hours > 0 && minutes > 0) return `${sign}${hours} ч ${minutes} мин`;
+  if (hours > 0) return `${sign}${hours} ч`;
+  return `${sign}${minutes} мин`;
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -169,6 +186,7 @@ export function BubbleField({
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [smartPostponeTaskId, setSmartPostponeTaskId] = useState<string | null>(null);
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
+  const [postponeResultByTaskId, setPostponeResultByTaskId] = useState<Record<string, string>>({});
   const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
@@ -436,6 +454,15 @@ export function BubbleField({
             </foreignObject>
           </motion.g>
         ) : null}
+
+        {postponeResultByTaskId[bubble.task.id] ? (
+          <motion.g initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: -8 }} exit={{ opacity: 0, y: -14 }} pointerEvents="none">
+            <foreignObject x={-44} y={-bubble.radius - 26} width={88} height={16}>
+              <div className="w-full text-center text-[10px] font-semibold text-cyan-100">{postponeResultByTaskId[bubble.task.id]}</div>
+            </foreignObject>
+          </motion.g>
+        ) : null}
+
         {hasAiMessage ? (
           <motion.g
             animate={{ scale: [1, 1.08, 1] }}
@@ -599,7 +626,22 @@ export function BubbleField({
                                 setSmartPostponeTaskId(hoveredBubble.task.id);
                                 centerBubbleInViewport(hoveredBubble);
                               }
+                              const previousDueDate = hoveredBubble.task.dueDate ?? null;
                               void onQuickPostponeTask(hoveredBubble.task, value)
+                                .then((nextDueDate) => {
+                                  if (value !== 'smart') return;
+                                  const deltaLabel = formatPostponeDelta(previousDueDate, nextDueDate);
+                                  if (!deltaLabel) return;
+                                  setPostponeResultByTaskId((prev) => ({ ...prev, [hoveredBubble.task.id]: deltaLabel }));
+                                  setTimeout(() => {
+                                    setPostponeResultByTaskId((prev) => {
+                                      if (!prev[hoveredBubble.task.id]) return prev;
+                                      const next = { ...prev };
+                                      delete next[hoveredBubble.task.id];
+                                      return next;
+                                    });
+                                  }, 1000);
+                                })
                                 .finally(() => {
                                   if (value === 'smart') {
                                     setSmartPostponeTaskId((prev) => (prev === hoveredBubble.task.id ? null : prev));
