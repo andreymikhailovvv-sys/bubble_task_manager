@@ -3579,7 +3579,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <ul className="flex-1 space-y-2 overflow-y-auto rounded-2xl bg-slate-900/95 p-3 pr-2 text-sm">
+            <ul className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-2xl bg-slate-900/95 p-3 pr-2 text-sm">
               {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
@@ -3595,8 +3595,8 @@ export default function App() {
                     onChange={async () => { await toggleSubtaskDone(subtask); }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="text-sm font-medium text-slate-100 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                     <p className="mt-1 text-[11px] text-slate-400">
                       Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </p>

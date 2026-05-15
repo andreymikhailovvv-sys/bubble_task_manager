@@ -1,5 +1,5 @@
 import { CalendarDays, Check, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 type Props = {
@@ -67,6 +67,11 @@ export function DateTimePickerWithApply({
     onOpenChange?.(isOpen);
   }, [isOpen, onOpenChange]);
   useEffect(() => {
+    if (!isOpen) {
+      setDetachedPosition(null);
+    }
+  }, [isOpen]);
+  useEffect(() => {
     if (!isOpen) return;
     const parts = toLocalParts(value);
     setDraftDate(parts.date);
@@ -84,7 +89,7 @@ export function DateTimePickerWithApply({
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isOpen]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen || !detachedPopup) return;
     const updatePosition = () => {
       const triggerRect = triggerRef.current?.getBoundingClientRect();
@@ -183,7 +188,13 @@ export function DateTimePickerWithApply({
         title={title}
         onClick={(event) => {
           event.stopPropagation();
-          setIsOpen((prev) => !prev);
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (next && detachedPopup) {
+              setDetachedPosition(null);
+            }
+            return next;
+          });
         }}
       >
         {iconOnly ? null : <span className="truncate text-left">{formattedValue}</span>}
