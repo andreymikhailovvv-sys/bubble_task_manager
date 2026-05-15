@@ -975,12 +975,9 @@ export default function App() {
         mode: options?.modeOverride ?? aiMode,
         attachments: attachmentsPayload
       });
-      const serviceReport = result.actionReports && result.actionReports.length > 0
-        ? `\n\nЧто изменил ИИ:\n- ${result.actionReports.join('\n- ')}`
-        : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: `${result.answer}${serviceReport}` }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
       }));
       await load();
     } catch (error) {
@@ -2081,7 +2078,9 @@ export default function App() {
               const prompt = [
                 'SMART_POSTPONE_REQUEST',
                 'Верни только JSON: {"dueDate":"ISO-8601"}.',
-                'Постарайся выбрать время с зазором примерно 30 минут от ближайших соседних задач. Если это невозможно — выбери самое близкое доступное время.',
+                'Выбирай только будущее время: dueDate должен быть строго позже now минимум на 5 минут.',
+                'Никогда не возвращай текущее или прошедшее время.',
+                'Постарайся выбрать окно с зазором примерно 30 минут от ближайших соседних задач в будущем. Если это невозможно — выбери самое близкое доступное будущее время.',
                 `now=${now.toISOString()}`,
                 `task=${JSON.stringify({ title: task.title, dueDate: task.dueDate ?? null, importance: task.importance })}`,
                 `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
@@ -2095,6 +2094,7 @@ export default function App() {
               if (!parsed.dueDate) return null;
               const aiDate = new Date(parsed.dueDate);
               if (Number.isNaN(aiDate.getTime())) return null;
+              if (aiDate.getTime() <= now.getTime() + (5 * 60 * 1000)) return null;
               const nextDueDateIso = await updateDueDate(aiDate);
               if (overdueSubtasks.length > 0) {
                 await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
