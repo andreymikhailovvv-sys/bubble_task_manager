@@ -1785,11 +1785,13 @@ export default function App() {
     } finally { setTimelineOptimizeLoading(false); }
   };
   const currentOptimizeState = timelineOptimizeStateByMode[timelineViewMode];
-  const previewTasks = useMemo(() => {
-    const map = new Map(currentOptimizeState.plan.map((x)=>[x.taskId,x.dueDate]));
-    return listTasks.map((task)=> map.has(task.id) ? { ...task, dueDate: map.get(task.id) ?? null } : task);
-  }, [currentOptimizeState.plan, listTasks]);
-  const previewTimelineData = useMemo(() => buildTimelineViewData(previewTasks, timelineAnchorDate, timelineViewMode), [previewTasks, timelineAnchorDate, timelineViewMode]);
+  const previewDueDateByTaskId = new Map(currentOptimizeState.plan.map((item) => [item.taskId, item.dueDate]));
+  const previewTasks = listTasks.map((task) => (
+    previewDueDateByTaskId.has(task.id)
+      ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null }
+      : task
+  ));
+  const previewTimelineData = buildTimelineViewData(previewTasks, timelineAnchorDate, timelineViewMode);
 
   const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
