@@ -1817,6 +1817,24 @@ ${parsed.answer}`
         appliedActionsCount += 1;
         continue;
       }
+      if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        if (!subtask) {
+          actionReports.push('Изменение статуса подзадачи пропущено: подзадача не найдена.');
+          continue;
+        }
+        await prisma.task.update({
+          where: { id: subtask.id },
+          data: { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' }
+        });
+        actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
+        appliedActionsCount += 1;
+        continue;
+      }
+      if (!('taskId' in action)) {
+        actionReports.push('Действие пропущено: нет taskId.');
+        continue;
+      }
 
       const task = await prisma.task.findFirst({
         where: { id: action.taskId, userId: input.userId },
