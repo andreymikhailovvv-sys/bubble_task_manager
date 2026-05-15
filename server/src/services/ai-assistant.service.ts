@@ -420,6 +420,8 @@ type GeneralAssistantAction =
   | { type: 'update_task'; taskId: string; title?: string; description?: string; dueDate?: string | null; importance?: number; urgency?: number; notifyBeforeMinutes?: number | null }
   | { type: 'rename_subtask'; subtaskId: string; title: string }
   | { type: 'update_subtask'; subtaskId: string; description?: string; dueDate?: string | null }
+  | { type: 'complete_subtask'; subtaskId: string }
+  | { type: 'reopen_subtask'; subtaskId: string }
   | { type: 'delete_task'; taskId: string }
   | { type: 'delete_subtask'; subtaskId: string }
   | { type: 'change_task_sphere'; taskId: string; sphereId: string | null };
@@ -508,6 +510,11 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
           description: typeof value.description === 'string' ? value.description.trim() : undefined,
           dueDate: typeof value.dueDate === 'string' && value.dueDate.trim() ? value.dueDate.trim() : value.dueDate === null ? null : undefined
         };
+      }
+      if (type === 'complete_subtask' || type === 'reopen_subtask') {
+        const subtaskId = typeof value.subtaskId === 'string' ? value.subtaskId.trim() : '';
+        if (!subtaskId) return null;
+        return { type, subtaskId };
       }
       if (type === 'delete_task') {
         const taskId = typeof value.taskId === 'string' ? value.taskId.trim() : '';
@@ -1113,7 +1120,7 @@ export const aiAssistantService = {
       'Ты можешь менять только текущую задачу и её подзадачи через actions.',
       'Никогда не показывай пользователю технические идентификаторы (taskId, subtaskId, UUID). В тексте answer упоминай только понятные названия задач и подзадач.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
-      'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
+      'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
       'Текст пользователю пиши только в answer.'
     ].join(' ');
@@ -1453,6 +1460,12 @@ export const aiAssistantService = {
             if (action.type === 'delete_subtask') {
               await prisma.task.delete({ where: { id: subtask.id } });
               actionReports.push(`Удалил подзадачу "${subtask.title}".`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+            }
+            if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
+              await prisma.task.update({ where: { id: subtask.id }, data: { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' } });
+              actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
