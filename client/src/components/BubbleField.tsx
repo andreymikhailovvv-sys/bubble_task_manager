@@ -574,10 +574,11 @@ export function BubbleField({
                               if (value === 'smart') {
                                 setSmartPostponeTaskId(hoveredBubble.task.id);
                               }
+                              const previousDueDateSnapshot = hoveredBubble.task.dueDate ?? null;
                               void onQuickPostponeTask(hoveredBubble.task, value)
                                 .then((nextDueDate) => {
                                   if (value !== 'smart') return;
-                                  const deltaLabel = formatPostponeDelta(previousDueDate, nextDueDate);
+                                  const deltaLabel = formatPostponeDelta(previousDueDateSnapshot, nextDueDate);
                                   if (!deltaLabel) return;
                                   setPostponeResultByTaskId((prev) => ({ ...prev, [hoveredBubble.task.id]: deltaLabel }));
                                   setTimeout(() => {
