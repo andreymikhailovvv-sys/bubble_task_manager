@@ -353,6 +353,7 @@ export function BubbleField({
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
     const aiBadgeX = bubble.radius * 0.66;
     const aiBadgeY = -bubble.radius * 0.66;
+    const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
 
     return (
       <motion.g
@@ -414,6 +415,16 @@ export function BubbleField({
             <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
                 <Sparkles size={12} color="#ffffff" />
+              </div>
+            </foreignObject>
+          </motion.g>
+        ) : null}
+
+        {isSmartPostponing ? (
+          <motion.g initial={{ opacity: 0, y: -1 }} animate={{ opacity: 1, y: -6 }} exit={{ opacity: 0, y: -10 }} pointerEvents="none">
+            <foreignObject x={-10} y={-bubble.radius - 30} width={20} height={20}>
+              <div className="flex h-full w-full items-center justify-center">
+                <LoaderCircle size={14} className="animate-spin text-cyan-200" />
               </div>
             </foreignObject>
           </motion.g>
@@ -537,6 +548,7 @@ export function BubbleField({
                   <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="inline-flex items-center gap-1 text-slate-300">
+                    {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                     {formatDeadlineLeft(hoveredBubble.task.dueDate)}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
@@ -551,7 +563,6 @@ export function BubbleField({
                   </div>
                   <div className="mt-2 border-t border-slate-700/80 pt-2">
                     <div className="flex items-center gap-2">
-                      {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                       <button
                         type="button"
                         className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-500"
