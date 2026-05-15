@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -323,6 +323,11 @@ export default function App() {
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
+  const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
+  const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
+  const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
+  const [timelineOptimizePreviewOpen, setTimelineOptimizePreviewOpen] = useState(false);
+  const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null; subtasks?: Array<{ subtaskId: string; dueDate: string | null }> }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -1761,6 +1766,35 @@ export default function App() {
     }
   })();
   const isTimelineDragging = isTimelineDragEnabled && draggedTimelineTaskId !== null;
+  const getTimelineRange = () => {
+    const dayStart = new Date(timelineAnchorDate); dayStart.setHours(0,0,0,0);
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
+    if (timelineViewMode === 'day') return { start: dayStart, end: dayEnd };
+    if (timelineViewMode === 'week') {
+      const start = new Date(dayStart); const offset=(start.getDay()+6)%7; start.setDate(start.getDate()-offset);
+      const end = new Date(start); end.setDate(end.getDate()+7); return { start, end };
+    }
+    const start = new Date(dayStart.getFullYear(), dayStart.getMonth(), 1);
+    const end = new Date(dayStart.getFullYear(), dayStart.getMonth()+1, 1);
+    return { start, end };
+  };
+  const handleOptimizeTimeline = async () => {
+    setIsTimelineOptimizeModalOpen(false);
+    setTimelineOptimizeLoading(true);
+    try {
+      const range = getTimelineRange();
+      const result = await api.optimizeTimeline({ scope: timelineViewMode, periodStartIso: range.start.toISOString(), periodEndIso: range.end.toISOString(), userNote: timelineOptimizeNote.trim() || undefined });
+      setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: result.plan, summary: result.summary || 'Оптимизация готова.' } }));
+    } finally { setTimelineOptimizeLoading(false); }
+  };
+  const currentOptimizeState = timelineOptimizeStateByMode[timelineViewMode];
+  const previewDueDateByTaskId = new Map(currentOptimizeState.plan.map((item) => [item.taskId, item.dueDate]));
+  const previewTasks = listTasks.map((task) => (
+    previewDueDateByTaskId.has(task.id)
+      ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null }
+      : task
+  ));
+  const previewTimelineData = buildTimelineViewData(previewTasks, timelineAnchorDate, timelineViewMode);
 
   const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
@@ -2378,6 +2412,10 @@ export default function App() {
                   </div>
                   <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
                   <div className="flex items-center gap-2">
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${currentOptimizeState.plan.length>0 ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50':'border-slate-600 bg-slate-800 text-slate-500'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewOpen(true)} title="Предпросмотр ИИ-оптимизации"><Eye size={14} /></button>
+                    <button type="button" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
+                      {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
+                    </button>
                     <button
                       type="button"
                       className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
@@ -2394,7 +2432,7 @@ export default function App() {
                     >
                       <MousePointer2 size={14} />
                     </button>
-                    <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
+                                        <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
                       {([
                         { key: 'day', label: 'День' },
                         { key: 'week', label: 'Неделя' },
@@ -3671,6 +3709,9 @@ export default function App() {
           }}
         />
       ) : null}
-    </main>
+    
+      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
+      {timelineOptimizePreviewOpen && currentOptimizeState.plan.length > 0 ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="h-[90vh] w-full max-w-6xl overflow-auto rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Предпросмотр оптимизации</h3><p className="mt-1 whitespace-pre-line text-sm text-slate-300">{currentOptimizeState.summary}</p><div className="mt-3 rounded-xl border border-slate-700 bg-slate-950/40 p-3">{timelineViewMode==='month' ? <div className="grid grid-cols-7 gap-2">{previewTimelineData.monthCells.filter((c)=>c.date).map((cell)=><div key={cell.key} className="min-h-24 rounded border border-slate-700 p-1"><p className="text-[10px] text-slate-400">{cell.date?.getDate()}</p>{cell.tasks.slice(0,3).map((t)=><div key={t.id} className="truncate rounded px-1 text-[10px] text-slate-100" title={t.description ?? ''}>{t.title}</div>)}</div>)}</div> : timelineViewMode==='week' ? <div className="grid grid-cols-7 gap-2">{previewTimelineData.dayGroups.map((d)=><div key={d.key} className="min-h-40 rounded border border-slate-700 p-1"><p className="text-[10px] text-slate-400">{d.date.toLocaleDateString('ru-RU',{weekday:'short', day:'numeric'})}</p>{d.tasks.slice(0,8).map((t)=><div key={t.id} className="truncate rounded px-1 text-[10px] text-slate-100" title={t.description ?? ''}>{t.title}</div>)}</div>)}</div> : <div className="grid grid-cols-2 gap-2">{previewTimelineData.hourGroups.map((h)=><div key={h.hour} className="rounded border border-slate-700 p-1"><p className="text-[10px] text-slate-400">{String(h.hour).padStart(2,'0')}:00</p>{h.tasks.map((t)=><div key={t.id} className="truncate rounded px-1 text-[10px] text-slate-100" title={t.description ?? ''}>{t.title}</div>)}</div>)}</div>}</div><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setTimelineOptimizePreviewOpen(false)}>Закрыть</button><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setTimelineOptimizeStateByMode((prev)=>({...prev,[timelineViewMode]:{plan:[],summary:''}}))}>Отменить</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={async ()=>{await api.applyTimelineOptimization({plan: currentOptimizeState.plan});setTimelineOptimizePreviewOpen(false);await load();}}>Принять</button></div></div></div>) : null}
+</main>
   );
 }
