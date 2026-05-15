@@ -107,6 +107,11 @@ function resolveReasoningEffort(mode: AskTaskAssistantInput['mode']): ReasoningE
   return effort;
 }
 
+
+function supportsReasoningEffort(model: string) {
+  return model.startsWith('gpt-5');
+}
+
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
     .filter((message) => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
@@ -1149,7 +1154,7 @@ export const aiAssistantService = {
           body: JSON.stringify({
             model,
             input: messages,
-            reasoning: { effort: reasoningEffort }
+            ...(supportsReasoningEffort(model) ? { reasoning: { effort: reasoningEffort } } : {})
           })
         });
         const latencyMs = Date.now() - startedAt;
@@ -1543,7 +1548,7 @@ ${parsed.answer}`
       body: JSON.stringify({
         model: FAST_MODEL,
         input: messages,
-        reasoning: { effort: 'low' }
+        ...(supportsReasoningEffort(FAST_MODEL) ? { reasoning: { effort: 'low' } } : {})
       })
     });
 
@@ -2047,7 +2052,7 @@ ${parsed.answer}`
             : []),
           ...(taskAttachmentsMessage ? [taskAttachmentsMessage] : [])
         ],
-        reasoning: { effort: 'low' }
+        ...(supportsReasoningEffort(FAST_MODEL) ? { reasoning: { effort: 'low' } } : {})
       })
     });
 
@@ -2161,7 +2166,7 @@ ${parsed.answer}`
           },
           ...(attachmentsMessage ? [attachmentsMessage] : [])
         ],
-        reasoning: { effort: 'low' }
+        ...(supportsReasoningEffort(FAST_MODEL) ? { reasoning: { effort: 'low' } } : {})
       })
     });
 
