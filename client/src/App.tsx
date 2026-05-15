@@ -297,6 +297,17 @@ export default function App() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
+
+  const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
+  const copiedAiMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const copyAiMessage = (key: string, text: string) => {
+    void navigator.clipboard?.writeText(text);
+    if (copiedAiMessageTimerRef.current) clearTimeout(copiedAiMessageTimerRef.current);
+    setCopiedAiMessageKey(key);
+    copiedAiMessageTimerRef.current = setTimeout(() => setCopiedAiMessageKey((prev) => (prev === key ? null : prev)), 1300);
+  };
+
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [userTimeZone, setUserTimeZone] = useState<string>(() => {
@@ -2059,16 +2070,14 @@ export default function App() {
               const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
 
               const prompt = [
-                'Подбери ближайшее доступное окно для переноса задачи.',
-                'Ответ верни строго JSON формата {"dueDate":"ISO-8601","reason":"кратко"} без markdown.',
-                'Если у задачи есть просроченные подзадачи, предложи время так, чтобы их тоже можно было отложить примерно на тот же период.',
-                `Текущее время (UTC): ${now.toISOString()}`,
-                `Задача: ${JSON.stringify({ title: task.title, description: task.description ?? '', dueDate: task.dueDate ?? null, importance: task.importance, urgency: task.urgency })}`,
-                `Подзадачи задачи и их дедлайны: ${JSON.stringify(taskSubtasks.map((subtask) => ({ id: subtask.id, title: subtask.title, status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
-                `Ближайшие задачи и дедлайны: ${JSON.stringify(nearbyTasks)}`
+                'Верни только JSON: {"dueDate":"ISO-8601"}.',
+                `now=${now.toISOString()}`,
+                `task=${JSON.stringify({ title: task.title, dueDate: task.dueDate ?? null, importance: task.importance })}`,
+                `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
+                `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
               ].join('\n');
 
-              const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'smart' });
+              const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
               const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
               if (!jsonMatch) return;
               const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };
@@ -2657,12 +2666,12 @@ export default function App() {
               ) : null}
               {filteredGeneralAiMessages.length === 0 ? <p className="text-slate-400">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
               <div className="space-y-2">
-                {filteredGeneralAiMessages.map((message) => (
+                {filteredGeneralAiMessages.map((message, index) => (
                   <div
                     key={message.id}
                     className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} title="Копировать" className="text-slate-300 hover:text-white"><Copy size={12} /></button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`general-${index}`, message.content)} title="Копировать" className="text-slate-300 hover:text-white transition">{copiedAiMessageKey === `general-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
@@ -2962,7 +2971,7 @@ export default function App() {
                     key={`focused-ai-${message.role}-${index}`}
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => void navigator.clipboard?.writeText(message.content)} className="text-slate-300 hover:text-white" title="Копировать"><Copy size={12} /></button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
@@ -3390,7 +3399,7 @@ export default function App() {
                   key={`expanded-ai-${message.role}-${index}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
@@ -3502,12 +3511,12 @@ export default function App() {
                 </label>
               ) : null}
               {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-slate-400">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
-              {filteredGeneralAiMessages.map((message) => (
+              {filteredGeneralAiMessages.map((message, index) => (
                 <div
                   key={`general-full-${message.id}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>
+                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
