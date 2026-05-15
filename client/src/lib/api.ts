@@ -168,11 +168,11 @@ export const api = {
     }),
 
   optimizeTimeline: (payload: { scope: 'day' | 'week' | 'month'; periodStartIso: string; periodEndIso: string; userNote?: string }) =>
-    request<{ model: string; summary: string; plan: Array<{ taskId: string; dueDate: string | null; subtasks?: Array<{ subtaskId: string; dueDate: string | null }> }> }>('/api/timeline/ai-optimize', {
+    request<{ model: string; summary: string; plan: Array<{ taskId: string; dueDate: string | null }> }>('/api/timeline/ai-optimize', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
-  applyTimelineOptimization: (payload: { plan: Array<{ taskId: string; dueDate: string | null; subtasks?: Array<{ subtaskId: string; dueDate: string | null }> }> }) =>
+  applyTimelineOptimization: (payload: { plan: Array<{ taskId: string; dueDate: string | null }> }) =>
     request<{ ok: true }>('/api/timeline/ai-optimize/apply', { method: 'POST', body: JSON.stringify(payload) }),
 
   reportClientError: (payload: {
