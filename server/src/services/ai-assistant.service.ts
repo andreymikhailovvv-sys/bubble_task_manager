@@ -78,7 +78,7 @@ type ChatAttachment = {
   size: number;
 };
 
-const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
+const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || FULL_MODEL;
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];

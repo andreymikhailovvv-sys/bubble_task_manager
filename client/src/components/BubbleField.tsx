@@ -174,6 +174,7 @@ export function BubbleField({
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const offsetAnimationRef = useRef<number | null>(null);
 
   const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '30' } satisfies SubtaskDraft);
 
@@ -244,6 +245,7 @@ export function BubbleField({
     if (nativeCalendarCloseTimer.current) {
       clearTimeout(nativeCalendarCloseTimer.current);
     }
+    if (offsetAnimationRef.current) cancelAnimationFrame(offsetAnimationRef.current);
   }, []);
 
   const sectorLabels = useMemo(() => {
@@ -320,6 +322,46 @@ export function BubbleField({
   const workspaceMin = -WORKSPACE_PADDING;
   const workspaceMax = SIZE + WORKSPACE_PADDING;
 
+
+  const animateOffsetTo = (target: { x: number; y: number }) => {
+    if (offsetAnimationRef.current) cancelAnimationFrame(offsetAnimationRef.current);
+    const start = performance.now();
+    const from = offset;
+    const duration = 260;
+    const step = (nowTs: number) => {
+      const progress = Math.min(1, (nowTs - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setOffset({
+        x: from.x + (target.x - from.x) * eased,
+        y: from.y + (target.y - from.y) * eased
+      });
+      if (progress < 1) offsetAnimationRef.current = requestAnimationFrame(step);
+      else offsetAnimationRef.current = null;
+    };
+    offsetAnimationRef.current = requestAnimationFrame(step);
+  };
+
+  const centerBubbleInViewport = (bubble: (typeof bubbles)[number]) => {
+    const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
+    const target = {
+      x: workspaceSize / 2 - bubble.x * zoom,
+      y: workspaceSize / 2 - bubble.y * zoom
+    };
+    animateOffsetTo(target);
+  };
+
+
+  useEffect(() => {
+    if (!hoveredBubble) return;
+    const infoX = clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8);
+    const infoY = clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8);
+    const subtasksY = getSubtasksCardY(hoveredBubble.y, hoveredBubble.radius);
+    const isNearEdge = infoX <= workspaceMin + 10
+      || infoX + hoverInfoCard.width >= workspaceMax - 10
+      || infoY <= workspaceMin + 10
+      || subtasksY + hoverSubtasksCard.height >= workspaceMax - 10;
+    if (isNearEdge) centerBubbleInViewport(hoveredBubble);
+  }, [hoveredBubble]);
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
@@ -384,6 +426,16 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
+        {smartPostponeTaskId === bubble.task.id ? (
+          <motion.g initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} pointerEvents="none">
+            <circle cx={0} cy={-bubble.radius - 15} r={11} fill="rgba(15,23,42,0.9)" stroke="rgba(125,211,252,0.7)" />
+            <foreignObject x={-6} y={-bubble.radius - 21} width={12} height={12}>
+              <div className="flex h-full w-full items-center justify-center">
+                <LoaderCircle size={12} className="animate-spin text-cyan-200" />
+              </div>
+            </foreignObject>
+          </motion.g>
+        ) : null}
         {hasAiMessage ? (
           <motion.g
             animate={{ scale: [1, 1.08, 1] }}
@@ -545,6 +597,7 @@ export function BubbleField({
                               if (!value) return;
                               if (value === 'smart') {
                                 setSmartPostponeTaskId(hoveredBubble.task.id);
+                                centerBubbleInViewport(hoveredBubble);
                               }
                               void onQuickPostponeTask(hoveredBubble.task, value)
                                 .finally(() => {
