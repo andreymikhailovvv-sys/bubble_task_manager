@@ -624,6 +624,7 @@ export function BubbleField({
                               if (!value) return;
                               if (value === 'smart') {
                                 setSmartPostponeTaskId(hoveredBubble.task.id);
+                                centerBubbleInViewport(hoveredBubble);
                               }
                               const previousDueDate = hoveredBubble.task.dueDate ?? null;
                               void onQuickPostponeTask(hoveredBubble.task, value)
