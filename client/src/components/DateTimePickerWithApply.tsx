@@ -90,7 +90,9 @@ export function DateTimePickerWithApply({
       const triggerRect = triggerRef.current?.getBoundingClientRect();
       if (!triggerRect) return;
       const popupWidth = 288;
+      const popupHeight = 220;
       const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       const preferredLeft = popupAlign === 'right'
         ? triggerRect.right - popupWidth
         : triggerRect.left;
@@ -98,8 +100,11 @@ export function DateTimePickerWithApply({
         ? Math.min(preferredLeft, triggerRect.left - popupWidth - detachedOffset)
         : preferredLeft;
       const clampedLeft = Math.max(8, Math.min(alignedLeft, viewportWidth - popupWidth - 8));
+      const preferredTop = triggerRect.bottom + detachedOffset;
+      const shouldOpenUpward = preferredTop + popupHeight > viewportHeight - 8;
+      const upwardTop = triggerRect.top - popupHeight - detachedOffset;
       setDetachedPosition({
-        top: Math.max(8, triggerRect.bottom + detachedOffset),
+        top: shouldOpenUpward ? Math.max(8, upwardTop) : Math.max(8, preferredTop),
         left: clampedLeft
       });
     };

@@ -344,6 +344,8 @@ export default function App() {
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
   const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
   const [isGeneralAiSearchOpen, setIsGeneralAiSearchOpen] = useState(false);
+  const [isUpcomingSubtasksModalOpen, setIsUpcomingSubtasksModalOpen] = useState(false);
+  const [upcomingSubtasksFilter, setUpcomingSubtasksFilter] = useState<'today' | 'tomorrow' | 'week' | 'no_due'>('today');
   const [generalAiDraft, setGeneralAiDraft] = useState('');
   const [isGeneralAiFullscreen, setIsGeneralAiFullscreen] = useState(false);
   const [generalAiLoading, setGeneralAiLoading] = useState(false);
@@ -754,6 +756,34 @@ export default function App() {
       .slice(0, 5)
       .map(({ task }) => task);
   }, [subtasks]);
+  const filteredUpcomingSubtasksForModal = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfDayAfterTomorrow = new Date(startOfTomorrow);
+    startOfDayAfterTomorrow.setDate(startOfDayAfterTomorrow.getDate() + 1);
+    const endOfWeekWindow = new Date(startOfToday);
+    endOfWeekWindow.setDate(endOfWeekWindow.getDate() + 7);
+
+    return subtasks
+      .filter((task) => task.status !== 'DONE')
+      .filter((task) => {
+        if (!task.dueDate) return upcomingSubtasksFilter === 'no_due';
+        const due = new Date(task.dueDate);
+        if (Number.isNaN(due.getTime())) return upcomingSubtasksFilter === 'no_due';
+        if (upcomingSubtasksFilter === 'today') return due >= startOfToday && due < startOfTomorrow;
+        if (upcomingSubtasksFilter === 'tomorrow') return due >= startOfTomorrow && due < startOfDayAfterTomorrow;
+        if (upcomingSubtasksFilter === 'week') return due >= startOfToday && due < endOfWeekWindow;
+        return false;
+      })
+      .sort((a, b) => {
+        const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        if (aDue !== bDue) return aDue - bDue;
+        return a.title.localeCompare(b.title, 'ru');
+      });
+  }, [subtasks, upcomingSubtasksFilter]);
   const focusedTask = useMemo(() => rootTasks.find((task) => task.id === focusedTaskId) ?? null, [rootTasks, focusedTaskId]);
   const focusedAiDialog = useMemo(
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
@@ -2670,7 +2700,17 @@ export default function App() {
             </div>
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold">Ближайшие подзадачи</h3>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
+              <button
+                type="button"
+                className="rounded p-1 text-slate-300 transition hover:bg-slate-700/60 hover:text-white"
+                title="Развернуть список подзадач"
+                onClick={() => setIsUpcomingSubtasksModalOpen(true)}
+              >
+                <Maximize2 size={14} />
+              </button>
+            </div>
             <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
               {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
               {upcomingSubtasksForPanel.map((task) => (
@@ -3432,6 +3472,90 @@ export default function App() {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {isUpcomingSubtasksModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Окно ближайших подзадач"
+            className="flex h-[84vh] w-full max-w-5xl flex-col rounded-3xl border border-cyan-300/30 bg-slate-950/98 p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h4 className="text-base font-semibold text-cyan-100">Ближайшие подзадачи</h4>
+              <button type="button" className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="mb-3 flex flex-wrap gap-2 text-xs">
+              {([
+                { key: 'today', label: 'на сегодня' },
+                { key: 'tomorrow', label: 'на завтра' },
+                { key: 'week', label: 'на неделю' },
+                { key: 'no_due', label: 'без срока' }
+              ] as const).map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-100' : 'border-slate-600/80 text-slate-300 hover:bg-slate-800/80'}`}
+                  onClick={() => setUpcomingSubtasksFilter(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <ul className="flex-1 space-y-2 overflow-y-auto rounded-2xl bg-slate-900/95 p-3 pr-2 text-sm">
+              {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
+              {filteredUpcomingSubtasksForModal.map((subtask) => (
+                <li
+                  key={subtask.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] hover:border-cyan-300/60 hover:bg-slate-700/75 hover:shadow-[0_0_0_1px_rgba(34,211,238,0.25)]"
+                  onClick={() => setEditorState({ task: subtask })}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={subtask.status === 'DONE'}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={async () => { await toggleSubtaskDone(subtask); }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <InlineDateTimePickerIcon
+                      value={subtask.dueDate}
+                      title="Изменить срок подзадачи"
+                      detachedPopup
+                      onChange={async (dueDate) => {
+                        await api.updateTask(subtask.id, { dueDate });
+                        await load();
+                      }}
+                      className="rounded p-1 hover:bg-slate-700/70"
+                    />
+                    <button
+                      type="button"
+                      className="rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                      title="Удалить подзадачу"
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        await api.deleteTask(subtask.id);
+                        await load();
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </aside>
         </div>
       ) : null}
 
