@@ -2041,6 +2041,16 @@ export default function App() {
             }}
             onQuickPostponeTask={async (task, option) => {
               const now = new Date();
+              const userTz = userTimeZone || DEFAULT_TIMEZONE;
+              const formatLocal = (iso: string | null) => {
+                if (!iso) return 'без дедлайна';
+                const date = new Date(iso);
+                if (Number.isNaN(date.getTime())) return 'без дедлайна';
+                return date.toLocaleString('ru-RU', { timeZone: userTz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+              };
+              const appendSystemGeneralAiMessage = (text: string) => {
+                setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
+              };
               const updateDueDate = async (date: Date) => {
                 await api.updateTask(task.id, { dueDate: date.toISOString() });
                 await load();
@@ -2069,6 +2079,7 @@ export default function App() {
               const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
 
               const prompt = [
+                'SMART_POSTPONE_REQUEST',
                 'Верни только JSON: {"dueDate":"ISO-8601"}.',
                 'Постарайся выбрать время с зазором примерно 30 минут от ближайших соседних задач. Если это невозможно — выбери самое близкое доступное время.',
                 `now=${now.toISOString()}`,
@@ -2089,6 +2100,9 @@ export default function App() {
                 await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
                 await load();
               }
+              appendSystemGeneralAiMessage(
+                `Задача «${task.title}» перенесена на ${formatLocal(nextDueDateIso)} (${userTz}).\nНовый дедлайн: ${formatLocal(nextDueDateIso)}.${overdueSubtasks.length > 0 ? `\nПодзадач перенесено: ${overdueSubtasks.length}.` : ''}`
+              );
               return nextDueDateIso;
             }}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}

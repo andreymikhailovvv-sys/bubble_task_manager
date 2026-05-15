@@ -79,8 +79,8 @@ type ChatAttachment = {
 };
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
-const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4';
-const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || FULL_MODEL;
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
+const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-mini';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
@@ -1076,6 +1076,7 @@ export const aiAssistantService = {
     }
 
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const isSmartPostponeRequest = question.includes('SMART_POSTPONE_REQUEST');
     const now = new Date();
     const systemPrompt = [
       'Ты ИИ-помощник в задачнике Bubble Task Manager.',
@@ -1128,7 +1129,8 @@ export const aiAssistantService = {
       userId: input.userId,
       questionLength: question.length,
       historyLength: history.length,
-      historyLengthUsed: trimmedHistory.length
+      historyLengthUsed: trimmedHistory.length,
+      isSmartPostponeRequest
     });
 
     let lastError: Error | null = null;
@@ -1254,6 +1256,33 @@ export const aiAssistantService = {
         });
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
+        if (isSmartPostponeRequest) {
+          const rawJsonMatch = parsed.answer.match(/\{[\s\S]*\}/);
+          let parsedDueDate: string | null = null;
+          let parsedDueDateValid = false;
+          if (rawJsonMatch) {
+            try {
+              const candidate = JSON.parse(rawJsonMatch[0]) as { dueDate?: string };
+              if (candidate?.dueDate) {
+                parsedDueDate = candidate.dueDate;
+                parsedDueDateValid = !Number.isNaN(new Date(candidate.dueDate).getTime());
+              }
+            } catch {
+              // no-op diagnostic branch
+            }
+          }
+          console.info('[AI] Smart postpone diagnostic', {
+            requestId,
+            model,
+            taskId: input.taskId,
+            userId: input.userId,
+            answerPreview: parsed.answer.slice(0, 280),
+            hasJsonObjectInAnswer: Boolean(rawJsonMatch),
+            parsedDueDate,
+            parsedDueDateValid,
+            actionsCount: parsed.actions.length
+          });
+        }
         console.info('[AI] Parsed task assistant payload', {
           requestId,
           mode: input.mode ?? 'fast',
@@ -2016,6 +2045,8 @@ ${parsed.answer}`
     const taskAttachmentsMessage = buildAttachmentsPromptMessage(task.attachments);
     const modelForSubtasks = taskAttachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
 
+    const now = new Date();
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -2040,7 +2071,8 @@ ${parsed.answer}`
             role: 'user',
             content: [
               `Разбей задачу на подзадачи:\n${taskContext}`,
-              `Текущая дата и время: ${new Date().toISOString()}.`,
+              `Текущая дата и время (UTC): ${now.toISOString()}.`,
+              `Локальная дата и время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).`,
               `Для подзадач старайся ставить реалистичные dueDate (ISO-8601, ${input.userTimeZone || MOSCOW_TIMEZONE}), если срок можно оценить.`
             ].join('\n')
           },
