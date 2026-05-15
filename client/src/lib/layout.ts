@@ -70,16 +70,38 @@ function getUrgencyWeight(dueDate?: string | null) {
 function getUrgencyCoefficient(dueDate?: string | null) {
   const diffMs = getDueDateDiffMs(dueDate);
   if (!Number.isFinite(diffMs)) return 0;
+
   const minute = 60_000;
   const hour = 60 * minute;
   const day = 24 * hour;
-  if (diffMs <= -7 * day) return 0.7;
-  if (diffMs <= -3 * day) return 0.55;
-  if (diffMs <= -1 * day) return 0.45;
-  if (diffMs <= 0) return 0.35;
-  if (diffMs <= 10 * minute) return 0.15;
-  if (diffMs <= 30 * minute) return 0.07;
-  if (diffMs <= hour) return 0.05;
+
+  const anchors: Array<{ diffMs: number; coefficient: number }> = [
+    { diffMs: -7 * day, coefficient: 0.7 },
+    { diffMs: -3 * day, coefficient: 0.55 },
+    { diffMs: -1 * day, coefficient: 0.45 },
+    { diffMs: 0, coefficient: 0.35 },
+    { diffMs: 10 * minute, coefficient: 0.15 },
+    { diffMs: 30 * minute, coefficient: 0.07 },
+    { diffMs: hour, coefficient: 0.05 }
+  ];
+
+  if (diffMs <= anchors[0].diffMs) return anchors[0].coefficient;
+  if (diffMs > anchors[anchors.length - 1].diffMs) return 0;
+
+  for (let i = 0; i < anchors.length - 1; i += 1) {
+    const left = anchors[i];
+    const right = anchors[i + 1];
+
+    if (diffMs > right.diffMs) continue;
+
+    const range = right.diffMs - left.diffMs;
+    if (range <= 0) return right.coefficient;
+
+    const progress = (diffMs - left.diffMs) / range;
+    const value = left.coefficient + (right.coefficient - left.coefficient) * progress;
+    return Math.max(0, Math.round(value * 100) / 100);
+  }
+
   return 0;
 }
 
