@@ -360,22 +360,34 @@ export default function MiniApp() {
   }, [filteredTasks, timeFilter, timelineNow]);
 
   const timelineTaskPlacements = useMemo(() => {
-    const byTime = new Map<string, Task[]>();
-    for (const task of timelineToday.todayTasks) {
+    const TASK_HEIGHT = 42;
+    const placements = new Map<string, { depth: number; overlapCount: number }>();
+    const tasksWithTop = timelineToday.todayTasks.map((task) => {
       const due = new Date(task.dueDate as string);
-      const key = `${due.getHours()}-${due.getMinutes()}`;
-      const current = byTime.get(key) ?? [];
-      current.push(task);
-      byTime.set(key, current);
+      const minuteOffset = (due.getHours() * 60) + due.getMinutes();
+      const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
+      return { task, top };
+    });
+
+    let groupStart = 0;
+    while (groupStart < tasksWithTop.length) {
+      let groupEnd = groupStart;
+      let maxBottom = tasksWithTop[groupStart].top + TASK_HEIGHT;
+
+      while (groupEnd + 1 < tasksWithTop.length && tasksWithTop[groupEnd + 1].top < maxBottom) {
+        groupEnd += 1;
+        const nextBottom = tasksWithTop[groupEnd].top + TASK_HEIGHT;
+        if (nextBottom > maxBottom) maxBottom = nextBottom;
+      }
+
+      const overlapCount = groupEnd - groupStart + 1;
+      for (let index = groupStart; index <= groupEnd; index += 1) {
+        placements.set(tasksWithTop[index].task.id, { depth: index - groupStart, overlapCount });
+      }
+
+      groupStart = groupEnd + 1;
     }
 
-    const placements = new Map<string, { column: number; columnsTotal: number }>();
-    for (const sameTimeTasks of byTime.values()) {
-      const columnsTotal = sameTimeTasks.length;
-      sameTimeTasks.forEach((task, column) => {
-        placements.set(task.id, { column, columnsTotal });
-      });
-    }
     return placements;
   }, [timelineToday.todayTasks]);
 
@@ -745,9 +757,8 @@ export default function MiniApp() {
                       const minuteOffset = (dueDate.getHours() * 60) + dueDate.getMinutes();
                       const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
                       const hasOverdueState = isOverdue(task);
-                      const placement = timelineTaskPlacements.get(task.id) ?? { column: 0, columnsTotal: 1 };
-                      const laneWidthPercent = 100 / placement.columnsTotal;
-                      const leftPercent = laneWidthPercent * placement.column;
+                      const placement = timelineTaskPlacements.get(task.id) ?? { depth: 0, overlapCount: 1 };
+                      const widthShrinkPercent = Math.min(placement.depth * 12, 45);
                       return (
                         <button
                           type="button"
@@ -755,9 +766,10 @@ export default function MiniApp() {
                           className="absolute rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-1 text-left"
                           style={{
                             top: `${top + 4}px`,
-                            minHeight: `${42 + ((placement.columnsTotal - 1) * 10)}px`,
-                            left: `calc(4rem + ${leftPercent}% + 2px)`,
-                            width: `calc(${laneWidthPercent}% - 8px)`,
+                            minHeight: `${42 + ((placement.overlapCount - 1) * 10)}px`,
+                            left: 'calc(4rem + 2px)',
+                            width: `calc(100% - 4rem - 8px - ${widthShrinkPercent}%)`,
+                            zIndex: 10 + placement.depth,
                             boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
                           }}
                           onClick={() => openTaskModal(task)}
