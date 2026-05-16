@@ -1653,6 +1653,16 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const upcomingSubtasks = taskSubtasks
+      .filter((subtask) => subtask.status !== 'DONE')
+      .sort((a, b) => {
+        const aTs = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        const bTs = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        if (aTs !== bTs) return aTs - bTs;
+        return a.title.localeCompare(b.title, 'ru');
+      });
+    const previewSubtasks = upcomingSubtasks.slice(0, 3);
+    const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
     return (
       <motion.button
@@ -1705,13 +1715,22 @@ export default function App() {
             {taskSubtasks.length}
           </span>
         </div>
-        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-600/90 bg-slate-900/95 p-2 text-[11px] shadow-2xl group-hover:block">
+        <div className="pointer-events-none absolute left-1/2 top-full z-[220] mt-1 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)] group-hover:block">
           <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)}</p>
-          <div className="pointer-events-auto mt-2 flex items-center gap-1.5">
-            <button type="button" className="rounded bg-emerald-600 px-2 py-1 text-[10px] text-white hover:bg-emerald-500" onClick={(e) => { e.stopPropagation(); void api.updateTask(task.id, { status: 'DONE' }).then(load); }}>Выполнить</button>
-            <button type="button" className="rounded bg-amber-600 px-2 py-1 text-[10px] text-white hover:bg-amber-500" onClick={(e) => { e.stopPropagation(); const d = new Date(); d.setHours(d.getHours() + 1); void api.updateTask(task.id, { dueDate: d.toISOString() }).then(load); }}>+1ч</button>
-            <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600" onClick={(e) => { e.stopPropagation(); setFocusedTaskId(task.id); }}>Фокус</button>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
+          <div className="mt-2 border-t border-slate-700/80 pt-2">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
+            {previewSubtasks.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {previewSubtasks.map((subtask) => (
+                  <li key={subtask.id} className="truncate text-slate-200">
+                    • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-slate-400">Нет активных подзадач</p>}
+            {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
           </div>
         </div>
       </motion.button>
