@@ -1635,6 +1635,7 @@ export default function App() {
   };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
     const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
@@ -1652,6 +1653,16 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const upcomingSubtasks = taskSubtasks
+      .filter((subtask) => subtask.status !== 'DONE')
+      .sort((a, b) => {
+        const aTs = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        const bTs = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
+        if (aTs !== bTs) return aTs - bTs;
+        return a.title.localeCompare(b.title, 'ru');
+      });
+    const previewSubtasks = upcomingSubtasks.slice(0, 3);
+    const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
     return (
       <motion.button
@@ -1660,7 +1671,7 @@ export default function App() {
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
+        className={`group relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
         style={{
@@ -1703,6 +1714,24 @@ export default function App() {
           <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
             {taskSubtasks.length}
           </span>
+        </div>
+        <div className="pointer-events-none absolute left-1/2 top-full z-[220] mt-1 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)] group-hover:block">
+          <p className="font-semibold text-slate-100">{task.title}</p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
+          <div className="mt-2 border-t border-slate-700/80 pt-2">
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
+            {previewSubtasks.length > 0 ? (
+              <ul className="mt-1 space-y-1">
+                {previewSubtasks.map((subtask) => (
+                  <li key={subtask.id} className="truncate text-slate-200">
+                    • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-slate-400">Нет активных подзадач</p>}
+            {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
+          </div>
         </div>
       </motion.button>
     );
@@ -2831,7 +2860,7 @@ export default function App() {
                 <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 pr-3 text-sm">
                   {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
-                    <li key={subtask.id} className="flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2">
+                    <li key={subtask.id} className={`flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}>
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
@@ -2841,6 +2870,11 @@ export default function App() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
+                        {subtask.parentTaskId ? (
+                          <button type="button" className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20" onClick={() => { setIsUpcomingSubtasksModalOpen(false); setFocusedTaskId(subtask.parentTaskId!); }}>
+                            {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
+                          </button>
+                        ) : null}
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
@@ -3647,7 +3681,7 @@ export default function App() {
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] hover:border-cyan-300/60 hover:bg-slate-700/75 hover:shadow-[0_0_0_1px_rgba(34,211,238,0.25)]"
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] hover:border-cyan-300/60 hover:bg-slate-700/75 hover:shadow-[0_0_0_1px_rgba(34,211,238,0.25)] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input
@@ -3665,6 +3699,19 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
+                    {subtask.parentTaskId ? (
+                      <button
+                        type="button"
+                        className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsUpcomingSubtasksModalOpen(false);
+                          setFocusedTaskId(subtask.parentTaskId!);
+                        }}
+                      >
+                        {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
+                      </button>
+                    ) : null}
                     <InlineDateTimePickerIcon
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"
