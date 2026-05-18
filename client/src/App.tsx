@@ -326,6 +326,7 @@ export default function App() {
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
+  const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number; openUpward: boolean } | null>(null);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
@@ -1664,6 +1665,7 @@ export default function App() {
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
+    const isHoverCardVisible = timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
@@ -1671,7 +1673,7 @@ export default function App() {
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`group relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
+        className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
         style={{
@@ -1697,6 +1699,22 @@ export default function App() {
           event.dataTransfer.setData('text/task-id', task.id);
         }}
         onDragEndCapture={() => setDraggedTimelineTaskId(null)}
+        onMouseEnter={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const cardWidth = 288;
+          const cardHeight = 250;
+          const margin = 12;
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const openUpward = spaceBelow < (cardHeight + margin);
+          const top = openUpward ? rect.top - margin : rect.bottom + margin;
+          const minLeft = 16;
+          const maxLeft = window.innerWidth - cardWidth - 16;
+          const left = Math.max(minLeft, Math.min(rect.left + rect.width / 2 - cardWidth / 2, maxLeft));
+          setTimelineHoverCard({ taskId: task.id, top, left, openUpward });
+        }}
+        onMouseLeave={() => {
+          setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
+        }}
         onClick={() => setFocusedTaskId(task.id)}
       >
         <span className="flex min-w-0 items-center gap-1">
@@ -1715,7 +1733,15 @@ export default function App() {
             {taskSubtasks.length}
           </span>
         </div>
-        <div className="pointer-events-none absolute left-1/2 top-full z-[220] mt-1 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)] group-hover:block">
+        {isHoverCardVisible ? (
+        <div
+          className="pointer-events-none fixed z-[9999] w-72 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)]"
+          style={{
+            left: `${timelineHoverCard.left}px`,
+            top: timelineHoverCard.openUpward ? 'auto' : `${timelineHoverCard.top}px`,
+            bottom: timelineHoverCard.openUpward ? `${Math.max(8, window.innerHeight - timelineHoverCard.top)}px` : 'auto'
+          }}
+        >
           <p className="font-semibold text-slate-100">{task.title}</p>
           <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
@@ -1733,6 +1759,7 @@ export default function App() {
             {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
           </div>
         </div>
+        ) : null}
       </motion.button>
     );
   };
