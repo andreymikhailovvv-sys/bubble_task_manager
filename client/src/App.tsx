@@ -1750,11 +1750,11 @@ export default function App() {
         </div>
         {isHoverCardVisible ? createPortal((
         <div
-          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.92)]"
+          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 250 ? `${task.description.slice(0, 250)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           <div className="mt-2 border-t border-slate-700/80 pt-2">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
@@ -3066,7 +3066,7 @@ export default function App() {
                   <select
                     value={aiMode}
                     onChange={(event) => setAiMode(event.target.value as ChatMode)}
-                    className="rounded bg-slate-700/80 px-2 py-1.5 text-[11px] text-slate-100 hover:bg-slate-600 focus:outline-none"
+                    className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
                     title="Режим ИИ"
                   >
                     <option value="fast">Быстрый</option>
