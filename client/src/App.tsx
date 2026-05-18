@@ -323,6 +323,7 @@ export default function App() {
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
+  const [isTimelineDragHintActive, setIsTimelineDragHintActive] = useState(false);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
@@ -385,6 +386,7 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -1194,6 +1196,19 @@ export default function App() {
 
   const selectedDisplayMode = DISPLAY_MODE_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_MODE_OPTIONS[0];
   const isTimelineMode = displayMode === 'timeline';
+  useEffect(() => {
+    if (!isTimelineMode || (timelineViewMode !== 'day' && timelineViewMode !== 'week')) return;
+    const container = timelineScrollContainerRef.current;
+    if (!container) return;
+    const now = new Date();
+    const minutesFromDayStart = now.getHours() * 60 + now.getMinutes();
+    const dayRatio = minutesFromDayStart / (24 * 60);
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetScrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollHeight * dayRatio - container.clientHeight / 2));
+    requestAnimationFrame(() => {
+      container.scrollTop = targetScrollTop;
+    });
+  }, [isTimelineMode, timelineViewMode, timelineAnchorDate]);
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
@@ -1666,7 +1681,7 @@ export default function App() {
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
-    const isHoverCardVisible = timelineHoverCard?.taskId === task.id;
+    const isHoverCardVisible = !isTimelineDragEnabled && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
@@ -1701,6 +1716,7 @@ export default function App() {
         }}
         onDragEndCapture={() => setDraggedTimelineTaskId(null)}
         onMouseEnter={(event) => {
+          if (isTimelineDragEnabled) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const cardWidth = 288;
           const cardHeight = 250;
@@ -1716,7 +1732,14 @@ export default function App() {
         onMouseLeave={() => {
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
         }}
-        onClick={() => setFocusedTaskId(task.id)}
+        onClick={() => {
+          if (isTimelineDragEnabled) {
+            setIsTimelineDragHintActive(true);
+            setTimeout(() => setIsTimelineDragHintActive(false), 280);
+            return;
+          }
+          setFocusedTaskId(task.id);
+        }}
       >
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate">
@@ -1736,11 +1759,11 @@ export default function App() {
         </div>
         {isHoverCardVisible ? createPortal((
         <div
-          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.92)]"
+          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 250 ? `${task.description.slice(0, 250)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           <div className="mt-2 border-t border-slate-700/80 pt-2">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
@@ -2195,7 +2218,7 @@ export default function App() {
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
         ) : displayMode === 'list' ? (
-          <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {activeListTasks.length === 0 ? (
                 <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
@@ -2472,7 +2495,10 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                        isTimelineDragHintActive
+                          ? 'border-cyan-200 bg-cyan-500/90 text-white shadow-[0_0_16px_rgba(34,211,238,0.8)]'
+                          :
                         isTimelineDragEnabled
                           ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
                           : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
@@ -3049,6 +3075,15 @@ export default function App() {
                   <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <select
+                    value={aiMode}
+                    onChange={(event) => setAiMode(event.target.value as ChatMode)}
+                    className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
+                    title="Режим ИИ"
+                  >
+                    <option value="fast" className="bg-white text-slate-900">Быстрый</option>
+                    <option value="smart" className="bg-white text-slate-900">Умный</option>
+                  </select>
                   <button
                     className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
                     onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
