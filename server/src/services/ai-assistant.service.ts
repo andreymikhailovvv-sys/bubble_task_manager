@@ -264,7 +264,11 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawAnswer);
-  } catch {
+  } catch (error) {
+    console.error('[AI] parseGeneratedTaskDraft invalid JSON', {
+      error: error instanceof Error ? error.message : String(error),
+      rawAnswerPreview: rawAnswer.slice(0, 1200)
+    });
     throw new Error('ИИ вернул невалидный JSON для генерации задачи');
   }
   if (typeof parsed !== 'object' || parsed === null) {

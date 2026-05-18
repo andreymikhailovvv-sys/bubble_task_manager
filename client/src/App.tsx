@@ -385,6 +385,7 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -1194,6 +1195,19 @@ export default function App() {
 
   const selectedDisplayMode = DISPLAY_MODE_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_MODE_OPTIONS[0];
   const isTimelineMode = displayMode === 'timeline';
+  useEffect(() => {
+    if (!isTimelineMode || (timelineViewMode !== 'day' && timelineViewMode !== 'week')) return;
+    const container = timelineScrollContainerRef.current;
+    if (!container) return;
+    const now = new Date();
+    const minutesFromDayStart = now.getHours() * 60 + now.getMinutes();
+    const dayRatio = minutesFromDayStart / (24 * 60);
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetScrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollHeight * dayRatio - container.clientHeight / 2));
+    requestAnimationFrame(() => {
+      container.scrollTop = targetScrollTop;
+    });
+  }, [isTimelineMode, timelineViewMode, timelineAnchorDate]);
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
@@ -2195,7 +2209,7 @@ export default function App() {
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
         ) : displayMode === 'list' ? (
-          <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {activeListTasks.length === 0 ? (
                 <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
@@ -3049,6 +3063,15 @@ export default function App() {
                   <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <select
+                    value={aiMode}
+                    onChange={(event) => setAiMode(event.target.value as ChatMode)}
+                    className="rounded bg-slate-700/80 px-2 py-1.5 text-[11px] text-slate-100 hover:bg-slate-600 focus:outline-none"
+                    title="Режим ИИ"
+                  >
+                    <option value="fast">Быстрый</option>
+                    <option value="smart">Умный</option>
+                  </select>
                   <button
                     className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
                     onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
