@@ -3081,8 +3081,8 @@ export default function App() {
                     className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
                     title="Режим ИИ"
                   >
-                    <option value="fast" className="bg-white text-slate-900">Быстрый</option>
-                    <option value="smart" className="bg-white text-slate-900">Умный</option>
+                    <option value="fast" className="bg-slate-800 text-slate-100">Быстрый</option>
+                    <option value="smart" className="bg-slate-800 text-slate-100">Умный</option>
                   </select>
                   <button
                     className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
