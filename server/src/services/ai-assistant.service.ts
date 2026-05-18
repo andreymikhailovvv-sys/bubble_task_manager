@@ -1220,7 +1220,7 @@ export const aiAssistantService = {
           modelAttemptErrors.push({
             model,
             status: openAiResponse.status,
-            message: `${errorMessage}. ${errorText.slice(0, 500)}`
+            message: `${errorMessage}. ${sanitizeUpstreamErrorText(errorText)}`
           });
           lastError = new Error(errorMessage);
           if (model === FULL_MODEL && modelCandidates.length > 1) {
@@ -1621,7 +1621,7 @@ ${parsed.answer}`
 
     if (!openAiResponse.ok) {
       const errorText = await openAiResponse.text();
-      throw new Error(`OpenAI request failed: ${openAiResponse.status}. ${errorText.slice(0, 400)}`);
+      throw new Error(`OpenAI request failed: ${openAiResponse.status}. ${sanitizeUpstreamErrorText(errorText)}`);
     }
 
     const responseJson = await openAiResponse.json();
@@ -2321,3 +2321,14 @@ ${parsed.answer}`
     };
   }
 };
+function sanitizeUpstreamErrorText(payload: string): string {
+  const trimmed = payload.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('<!doctype html') || lower.includes('<html')) {
+    return 'upstream returned HTML error page';
+  }
+  return trimmed.replace(/\s+/g, ' ').slice(0, 500);
+}
+
+
