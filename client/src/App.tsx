@@ -323,6 +323,7 @@ export default function App() {
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
+  const [isTimelineDragHintActive, setIsTimelineDragHintActive] = useState(false);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
@@ -1680,7 +1681,7 @@ export default function App() {
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
-    const isHoverCardVisible = timelineHoverCard?.taskId === task.id;
+    const isHoverCardVisible = !isTimelineDragEnabled && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
@@ -1715,6 +1716,7 @@ export default function App() {
         }}
         onDragEndCapture={() => setDraggedTimelineTaskId(null)}
         onMouseEnter={(event) => {
+          if (isTimelineDragEnabled) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const cardWidth = 288;
           const cardHeight = 250;
@@ -1730,7 +1732,14 @@ export default function App() {
         onMouseLeave={() => {
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
         }}
-        onClick={() => setFocusedTaskId(task.id)}
+        onClick={() => {
+          if (isTimelineDragEnabled) {
+            setIsTimelineDragHintActive(true);
+            setTimeout(() => setIsTimelineDragHintActive(false), 280);
+            return;
+          }
+          setFocusedTaskId(task.id);
+        }}
       >
         <span className="flex min-w-0 items-center gap-1">
           <span className="truncate">
@@ -2486,7 +2495,10 @@ export default function App() {
                     </button>
                     <button
                       type="button"
-                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
+                        isTimelineDragHintActive
+                          ? 'border-cyan-200 bg-cyan-500/90 text-white shadow-[0_0_16px_rgba(34,211,238,0.8)]'
+                          :
                         isTimelineDragEnabled
                           ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
                           : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
@@ -3069,8 +3081,8 @@ export default function App() {
                     className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
                     title="Режим ИИ"
                   >
-                    <option value="fast">Быстрый</option>
-                    <option value="smart">Умный</option>
+                    <option value="fast" className="bg-white text-slate-900">Быстрый</option>
+                    <option value="smart" className="bg-white text-slate-900">Умный</option>
                   </select>
                   <button
                     className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
