@@ -329,6 +329,8 @@ export default function App() {
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
+  const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
+  const [isTimelineOverdueModalCollapsedForDrag, setIsTimelineOverdueModalCollapsedForDrag] = useState(false);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
@@ -1668,7 +1670,7 @@ export default function App() {
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
     const upcomingSubtasks = taskSubtasks
       .filter((subtask) => subtask.status !== 'DONE')
@@ -1680,8 +1682,10 @@ export default function App() {
       });
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
-    const canDragTask = isTimelineDragEnabled && task.status !== 'DONE' && Boolean(task.dueDate);
-    const isHoverCardVisible = !isTimelineDragEnabled && timelineHoverCard?.taskId === task.id;
+    const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
+    const disableEffects = Boolean(options?.disableEffects);
+    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate) && (Boolean(options?.forceDraggable) || isSubtaskChip || isTimelineDragEnabled);
+    const isHoverCardVisible = !isTimelineDragEnabled && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
@@ -1693,16 +1697,22 @@ export default function App() {
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
         style={{
-          borderColor: hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor,
-          backgroundColor: hasOverdueState
-            ? 'rgba(136,19,55,0.45)'
-            : hexToRgba(sphereColor, 0.34) ?? 'rgba(100,116,139,0.34)',
-          boxShadow: hasOverdueState
+          borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
+          backgroundColor: isSubtaskChip
+            ? 'rgba(71,85,105,0.5)'
+            : hasOverdueState
+              ? 'rgba(136,19,55,0.45)'
+              : hexToRgba(sphereColor, 0.34) ?? 'rgba(100,116,139,0.34)',
+          boxShadow: disableEffects
+            ? undefined
+            : hasOverdueState
             ? '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)'
             : hasReminderState
               ? '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)'
               : undefined,
-          animation: hasOverdueState
+          animation: disableEffects
+            ? undefined
+            : hasOverdueState
             ? 'subtask-overdue-glow 2.3s ease-in-out infinite'
             : hasReminderState
               ? 'subtask-reminder-glow 2.3s ease-in-out infinite'
@@ -1710,13 +1720,18 @@ export default function App() {
         }}
         onDragStartCapture={(event) => {
           if (!canDragTask) return;
+          if (options?.forceDraggable) setIsTimelineDragEnabled(true);
           setDraggedTimelineTaskId(task.id);
+          options?.onDragStart?.();
           event.dataTransfer.effectAllowed = 'move';
           event.dataTransfer.setData('text/task-id', task.id);
         }}
-        onDragEndCapture={() => setDraggedTimelineTaskId(null)}
+        onDragEndCapture={() => {
+          setDraggedTimelineTaskId(null);
+          setIsTimelineOverdueModalCollapsedForDrag(false);
+        }}
         onMouseEnter={(event) => {
-          if (isTimelineDragEnabled) return;
+          if (isTimelineDragEnabled || options?.disableHoverCard) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const cardWidth = 288;
           const cardHeight = 250;
@@ -1733,12 +1748,14 @@ export default function App() {
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
         }}
         onClick={() => {
-          if (isTimelineDragEnabled) {
+          if (options?.disableOpenOnClick) return;
+          if (isTimelineDragEnabled && !isSubtaskChip) {
             setIsTimelineDragHintActive(true);
             setTimeout(() => setIsTimelineDragHintActive(false), 280);
             return;
           }
-          setFocusedTaskId(task.id);
+          if (isSubtaskChip) setEditorState({ task });
+          else setFocusedTaskId(task.id);
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
@@ -1752,11 +1769,7 @@ export default function App() {
             </span>
           ) : null}
         </span>
-        <div className="flex items-center gap-1">
-          <span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">
-            {taskSubtasks.length}
-          </span>
-        </div>
+        {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
         {isHoverCardVisible ? createPortal((
         <div
           className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
@@ -1764,6 +1777,7 @@ export default function App() {
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
           <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 250 ? `${task.description.slice(0, 250)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-slate-300">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           <div className="mt-2 border-t border-slate-700/80 pt-2">
             <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
@@ -1821,9 +1835,19 @@ export default function App() {
   const timelineRenderTasks = isTimelineOptimizePreviewEnabled
     ? listTasks.map((task) => (previewDueDateByTaskId.has(task.id) ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null } : task))
     : listTasks;
+  const timelineVisibleSubtasks = subtasks.filter((subtask) => {
+    if (subtask.status === 'DONE' || !subtask.dueDate) return false;
+    if (!search.trim()) return true;
+    const query = search.toLowerCase();
+    const parentTitle = subtask.parentTaskId ? (taskById.get(subtask.parentTaskId)?.title ?? '') : '';
+    return [subtask.title, subtask.description ?? '', parentTitle].some((value) => value.toLowerCase().includes(query));
+  });
+  const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
+    .filter((task) => isOverdue(task))
+    .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
   const timelineViewData = (() => {
     try {
-      return buildTimelineViewData(timelineRenderTasks, timelineAnchorDate, timelineViewMode);
+    return buildTimelineViewData([...timelineRenderTasks, ...timelineVisibleSubtasks], timelineAnchorDate, timelineViewMode);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Неизвестная ошибка при рендере таймлайна';
       const stack = error instanceof Error ? error.stack : undefined;
@@ -1893,6 +1917,7 @@ export default function App() {
 
     try {
       await api.updateTask(taskId, { dueDate: nextDueDateIso });
+      setIsTimelineOverdueModalCollapsedForDrag(false);
     } catch {
       setTasks((prev) => prev.map((item) => (
         item.id === taskId
@@ -1900,6 +1925,7 @@ export default function App() {
           : item
       )));
       await load();
+      setIsTimelineOverdueModalCollapsedForDrag(false);
     }
   };
 
@@ -2487,6 +2513,15 @@ export default function App() {
                   </div>
                   <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 hover:border-rose-300/70"
+                      onClick={() => { setIsTimelineOverdueModalOpen(true); setIsTimelineOverdueModalCollapsedForDrag(false); }}
+                      title="Просроченные задачи"
+                    >
+                      Просроченные задачи
+                      <span className="rounded bg-rose-600/80 px-1.5 py-0.5 text-[10px] font-semibold text-white">{timelineOverdueTasks.length}</span>
+                    </button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'border-cyan-300/70 bg-cyan-900/40 text-cyan-100' : 'border-slate-600 bg-slate-800 text-slate-500'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'border-slate-700 bg-slate-900 text-slate-500'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'border-slate-700 bg-slate-900 text-slate-500'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
@@ -3817,6 +3852,32 @@ export default function App() {
         />
       ) : null}
     
+      {isTimelineOverdueModalOpen ? (
+        <div
+          className={`fixed inset-0 z-[120] flex items-center justify-center p-4 transition-all ${
+            isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none bg-transparent' : 'bg-slate-950/70'
+          }`}
+          onClick={() => { setIsTimelineOverdueModalOpen(false); setIsTimelineOverdueModalCollapsedForDrag(false); }}
+        >
+          <div className={`w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-4 transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`} onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-100">Просроченные задачи</h3>
+              <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Закрыть</button>
+            </div>
+            <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+              {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
+                isSubtask: Boolean(task.parentTaskId),
+                disableEffects: true,
+                disableOpenOnClick: true,
+                forceDraggable: true,
+                parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
+                onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
+              }))}
+              {timelineOverdueTasks.length === 0 ? <p className="text-sm text-slate-400">Просроченных задач нет</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
