@@ -2571,27 +2571,28 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                {isTimelineOverdueModalOpen ? (
+                  <div className="relative mt-2 flex justify-end">
+                    <section className={`w-full max-w-xs rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.7)] transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
+                        <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                        {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
+                          isSubtask: Boolean(task.parentTaskId),
+                          disableEffects: true,
+                          disableOpenOnClick: true,
+                          forceDraggable: true,
+                          parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
+                          onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
+                        }))}
+                        {timelineOverdueTasks.length === 0 ? <p className="text-sm text-slate-400">Просроченных задач нет</p> : null}
+                      </div>
+                    </section>
+                  </div>
+                ) : null}
               </section>
-
-              {isTimelineOverdueModalOpen ? (
-                <section className={`rounded-2xl border border-slate-700 bg-slate-900/95 p-3 transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
-                    <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
-                  </div>
-                  <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                    {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
-                      isSubtask: Boolean(task.parentTaskId),
-                      disableEffects: true,
-                      disableOpenOnClick: true,
-                      forceDraggable: true,
-                      parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
-                      onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
-                    }))}
-                    {timelineOverdueTasks.length === 0 ? <p className="text-sm text-slate-400">Просроченных задач нет</p> : null}
-                  </div>
-                </section>
-              ) : null}
 
               {timelineViewData.tasksInRange.length === 0 ? (
                 <div className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
