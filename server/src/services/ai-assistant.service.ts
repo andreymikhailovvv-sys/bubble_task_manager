@@ -2065,9 +2065,17 @@ ${parsed.answer}`
     const periodStart = new Date(input.periodStartIso);
     const periodEnd = new Date(input.periodEndIso);
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
-    const tasks = await prisma.task.findMany({ where: { userId: input.userId, parentTaskId: null, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } } }, orderBy: { dueDate: 'asc' } });
-    const payload = tasks.map((t) => ({ id: t.id, title: t.title, description: t.description, dueDate: t.dueDate ? t.dueDate.toISOString() : null, importance: t.importance, sphere: t.sphere?.name ?? null }));
-    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Данные: ${JSON.stringify(payload)}` }] }) });
+    const tasks = await prisma.task.findMany({ where: { userId: input.userId, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
+    const payloadLines = tasks.map((t, index) => [
+      `${index + 1}. taskId=${t.id}`,
+      `тип=${t.parentTaskId ? 'подзадача' : 'задача'}`,
+      `название=${t.title}`,
+      `срок=${t.dueDate ? t.dueDate.toISOString() : 'null'}`,
+      `важность=${t.importance}`,
+      `сфера=${t.sphere?.name ?? 'null'}`,
+      `основнаяЗадача=${t.parentTask ? `${t.parentTask.title} (${t.parentTask.id})` : 'null'}`
+    ].join(' | ')).join('\n');
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
     return { model: FULL_MODEL, summary: parsed.summary, plan: parsed.tasks };
@@ -2076,7 +2084,7 @@ ${parsed.answer}`
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
     await prisma.$transaction(async (tx) => {
       for (const item of input.plan) {
-        const task = await tx.task.findFirst({ where: { id: item.taskId, userId: input.userId, parentTaskId: null } });
+        const task = await tx.task.findFirst({ where: { id: item.taskId, userId: input.userId } });
         if (!task) continue;
         const taskDue = item.dueDate ? new Date(item.dueDate) : null;
         await tx.task.update({ where: { id: task.id }, data: { dueDate: taskDue && !Number.isNaN(taskDue.getTime()) ? taskDue : null } });
