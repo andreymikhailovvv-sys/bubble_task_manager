@@ -1682,7 +1682,7 @@ export default function App() {
       });
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
-    const isSubtaskChip = Boolean(options?.isSubtask);
+    const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
     const disableEffects = Boolean(options?.disableEffects);
     const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate) && (isSubtaskChip || isTimelineDragEnabled);
     const isHoverCardVisible = !isTimelineDragEnabled && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
@@ -3852,7 +3852,12 @@ export default function App() {
       ) : null}
     
       {isTimelineOverdueModalOpen ? (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => { setIsTimelineOverdueModalOpen(false); setIsTimelineOverdueModalCollapsedForDrag(false); }}>
+        <div
+          className={`fixed inset-0 z-[120] flex items-center justify-center p-4 transition-all ${
+            isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none bg-transparent' : 'bg-slate-950/70'
+          }`}
+          onClick={() => { setIsTimelineOverdueModalOpen(false); setIsTimelineOverdueModalCollapsedForDrag(false); }}
+        >
           <div className={`w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-4 transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`} onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-100">Просроченные задачи</h3>
