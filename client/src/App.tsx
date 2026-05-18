@@ -1670,7 +1670,7 @@ export default function App() {
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; onDragStart?: () => void }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
     const upcomingSubtasks = taskSubtasks
       .filter((subtask) => subtask.status !== 'DONE')
@@ -1684,7 +1684,7 @@ export default function App() {
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
     const disableEffects = Boolean(options?.disableEffects);
-    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate) && (isSubtaskChip || isTimelineDragEnabled);
+    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate) && (Boolean(options?.forceDraggable) || isSubtaskChip || isTimelineDragEnabled);
     const isHoverCardVisible = !isTimelineDragEnabled && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
@@ -1720,6 +1720,7 @@ export default function App() {
         }}
         onDragStartCapture={(event) => {
           if (!canDragTask) return;
+          if (options?.forceDraggable) setIsTimelineDragEnabled(true);
           setDraggedTimelineTaskId(task.id);
           options?.onDragStart?.();
           event.dataTransfer.effectAllowed = 'move';
@@ -3868,6 +3869,7 @@ export default function App() {
                 isSubtask: Boolean(task.parentTaskId),
                 disableEffects: true,
                 disableOpenOnClick: true,
+                forceDraggable: true,
                 parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
                 onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
               }))}
