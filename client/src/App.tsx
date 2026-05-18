@@ -1736,7 +1736,7 @@ export default function App() {
         </div>
         {isHoverCardVisible ? createPortal((
         <div
-          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-900/99 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)]"
+          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.92)]"
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
