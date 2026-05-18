@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
@@ -326,7 +327,7 @@ export default function App() {
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
-  const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number; openUpward: boolean } | null>(null);
+  const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
@@ -1706,11 +1707,11 @@ export default function App() {
           const margin = 12;
           const spaceBelow = window.innerHeight - rect.bottom;
           const openUpward = spaceBelow < (cardHeight + margin);
-          const top = openUpward ? rect.top - margin : rect.bottom + margin;
+          const top = openUpward ? Math.max(8, rect.top - cardHeight - margin) : Math.min(window.innerHeight - cardHeight - 8, rect.bottom + margin);
           const minLeft = 16;
           const maxLeft = window.innerWidth - cardWidth - 16;
           const left = Math.max(minLeft, Math.min(rect.left + rect.width / 2 - cardWidth / 2, maxLeft));
-          setTimelineHoverCard({ taskId: task.id, top, left, openUpward });
+          setTimelineHoverCard({ taskId: task.id, top, left });
         }}
         onMouseLeave={() => {
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
@@ -1733,14 +1734,10 @@ export default function App() {
             {taskSubtasks.length}
           </span>
         </div>
-        {isHoverCardVisible ? (
+        {isHoverCardVisible ? createPortal((
         <div
-          className="pointer-events-none fixed z-[9999] w-72 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)]"
-          style={{
-            left: `${timelineHoverCard.left}px`,
-            top: timelineHoverCard.openUpward ? 'auto' : `${timelineHoverCard.top}px`,
-            bottom: timelineHoverCard.openUpward ? `${Math.max(8, window.innerHeight - timelineHoverCard.top)}px` : 'auto'
-          }}
+          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-900/98 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.85)]"
+          style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
           <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
@@ -1759,7 +1756,7 @@ export default function App() {
             {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
           </div>
         </div>
-        ) : null}
+        ), document.body) : null}
       </motion.button>
     );
   };
