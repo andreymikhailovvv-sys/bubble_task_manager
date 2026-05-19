@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, MousePointer2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -322,8 +322,6 @@ export default function App() {
   });
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
-  const [isTimelineDragEnabled, setIsTimelineDragEnabled] = useState(false);
-  const [isTimelineDragHintActive, setIsTimelineDragHintActive] = useState(false);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
@@ -1684,8 +1682,8 @@ export default function App() {
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
     const disableEffects = Boolean(options?.disableEffects);
-    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate) && (Boolean(options?.forceDraggable) || isSubtaskChip || isTimelineDragEnabled);
-    const isHoverCardVisible = !isTimelineDragEnabled && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
+    const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
+    const isHoverCardVisible = draggedTimelineTaskId === null && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
     return (
       <motion.button
         layout
@@ -1720,7 +1718,6 @@ export default function App() {
         }}
         onDragStartCapture={(event) => {
           if (!canDragTask) return;
-          if (options?.forceDraggable) setIsTimelineDragEnabled(true);
           setDraggedTimelineTaskId(task.id);
           options?.onDragStart?.();
           event.dataTransfer.effectAllowed = 'move';
@@ -1731,7 +1728,7 @@ export default function App() {
           setIsTimelineOverdueModalCollapsedForDrag(false);
         }}
         onMouseEnter={(event) => {
-          if (isTimelineDragEnabled || options?.disableHoverCard) return;
+          if (draggedTimelineTaskId !== null || options?.disableHoverCard) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const cardWidth = 288;
           const cardHeight = 250;
@@ -1749,11 +1746,6 @@ export default function App() {
         }}
         onClick={() => {
           if (options?.disableOpenOnClick) return;
-          if (isTimelineDragEnabled && !isSubtaskChip) {
-            setIsTimelineDragHintActive(true);
-            setTimeout(() => setIsTimelineDragHintActive(false), 280);
-            return;
-          }
           if (isSubtaskChip) setEditorState({ task });
           else setFocusedTaskId(task.id);
         }}
@@ -1868,7 +1860,7 @@ export default function App() {
       } satisfies TimelineViewData;
     }
   })();
-  const isTimelineDragging = isTimelineDragEnabled && draggedTimelineTaskId !== null;
+  const isTimelineDragging = draggedTimelineTaskId !== null;
   const getTimelineRange = () => {
     const dayStart = new Date(timelineAnchorDate); dayStart.setHours(0,0,0,0);
     const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate()+1);
@@ -2244,7 +2236,7 @@ export default function App() {
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
         ) : displayMode === 'list' ? (
-          <div ref={timelineScrollContainerRef} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {activeListTasks.length === 0 ? (
                 <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
@@ -2471,7 +2463,7 @@ export default function App() {
             </ul>
           </div>
         ) : (
-          <div className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <div className="space-y-4 pr-1">
               <section className="sticky top-0 z-20 rounded-2xl border border-slate-700/70 bg-slate-900/90 p-3 backdrop-blur">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2531,25 +2523,6 @@ export default function App() {
                     <button type="button" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
                       {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
                     </button>
-                    <button
-                      type="button"
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs transition ${
-                        isTimelineDragHintActive
-                          ? 'border-cyan-200 bg-cyan-500/90 text-white shadow-[0_0_16px_rgba(34,211,238,0.8)]'
-                          :
-                        isTimelineDragEnabled
-                          ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50 shadow-[0_0_10px_rgba(34,211,238,0.5)]'
-                          : 'border-slate-600 bg-slate-800 text-slate-300 hover:border-cyan-300/70'
-                      }`}
-                      onClick={() => {
-                        setIsTimelineDragEnabled((prev) => !prev);
-                        setDraggedTimelineTaskId(null);
-                      }}
-                      title="Перетаскивание задач"
-                      aria-label="Переключить перетаскивание задач в таймлайне"
-                    >
-                      <MousePointer2 size={14} />
-                    </button>
                                         <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
                       {([
                         { key: 'day', label: 'День' },
@@ -2572,8 +2545,8 @@ export default function App() {
                   </div>
                 </div>
                 {isTimelineOverdueModalOpen ? (
-                  <div className="relative mt-2 flex justify-end">
-                    <section className={`w-full max-w-xs rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.7)] transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
+                  <div className="relative mt-2">
+                    <section className={`w-full rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.7)] transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
                       <div className="mb-2 flex items-center justify-between">
                         <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
                         <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
@@ -2582,7 +2555,6 @@ export default function App() {
                         {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
                           isSubtask: Boolean(task.parentTaskId),
                           disableEffects: true,
-                          disableOpenOnClick: true,
                           forceDraggable: true,
                           parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
                           onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
@@ -2624,12 +2596,12 @@ export default function App() {
                             : 'border-transparent bg-slate-900/20'
                         } ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
-                          if (!isTimelineDragEnabled || !cell.date) return;
+                          if (!cell.date) return;
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
                         }}
                         onDrop={async (event) => {
-                          if (!isTimelineDragEnabled || !cell.date) return;
+                          if (!cell.date) return;
                           event.preventDefault();
                           const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                           setDraggedTimelineTaskId(taskId || null);
@@ -2718,12 +2690,10 @@ export default function App() {
                                 isToday ? 'border-l border-r border-cyan-400/70' : ''
                               } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
                               onDragOver={(event) => {
-                                if (!isTimelineDragEnabled) return;
                                 event.preventDefault();
                                 event.dataTransfer.dropEffect = 'move';
                               }}
                               onDrop={async (event) => {
-                                if (!isTimelineDragEnabled) return;
                                 event.preventDefault();
                                 const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                                 setDraggedTimelineTaskId(taskId || null);
@@ -2762,12 +2732,10 @@ export default function App() {
                       <div
                         className={`relative min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
                         onDragOver={(event) => {
-                          if (!isTimelineDragEnabled) return;
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
                         }}
                         onDrop={async (event) => {
-                          if (!isTimelineDragEnabled) return;
                           event.preventDefault();
                           const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
                           setDraggedTimelineTaskId(taskId || null);
