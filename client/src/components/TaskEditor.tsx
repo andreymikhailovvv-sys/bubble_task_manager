@@ -13,6 +13,8 @@ type Props = {
   onDelete?: () => Promise<void>;
   onCancel: () => void;
   onComplete?: () => Promise<void>;
+  parentTaskTitle?: string | null;
+  onOpenParentTask?: () => void;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -53,7 +55,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete }: Props) {
+export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('30');
@@ -268,6 +270,16 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           <>
         <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <textarea className="min-h-20 w-full rounded bg-slate-800 p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+        {isSubtask && parentTaskTitle && onOpenParentTask ? (
+          <button
+            type="button"
+            className="inline-flex rounded-full border border-cyan-300/70 bg-cyan-900/35 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-800/45"
+            onClick={onOpenParentTask}
+            title={`Открыть основную задачу: ${parentTaskTitle}`}
+          >
+            Основная задача: {parentTaskTitle}
+          </button>
+        ) : null}
         {!isSubtask ? (
           <>
             <select className="w-full rounded bg-slate-800 p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>

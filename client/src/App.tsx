@@ -3177,6 +3177,11 @@ export default function App() {
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
           onGenerateWithAi={createTaskFromAi}
+          parentTaskTitle={editorState.task?.parentTaskId ? (taskById.get(editorState.task.parentTaskId)?.title ?? null) : null}
+          onOpenParentTask={editorState.task?.parentTaskId ? () => {
+            setEditorState(null);
+            setFocusedTaskId(editorState.task!.parentTaskId!);
+          } : undefined}
           onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
           onDelete={editorState.task?.id ? async () => {
             await api.deleteTask(editorState.task!.id);
