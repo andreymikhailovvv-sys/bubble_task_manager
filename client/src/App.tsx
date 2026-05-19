@@ -181,10 +181,6 @@ function hexToRgba(hexColor: string, alpha: number) {
 }
 
 
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength)}…`;
-}
 type TimelineViewData = {
   title: string;
   tasksWithoutDate: Task[];
@@ -3041,11 +3037,6 @@ export default function App() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        {subtask.parentTaskId ? (
-                          <button type="button" className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20" onClick={() => { setIsUpcomingSubtasksModalOpen(false); setFocusedTaskId(subtask.parentTaskId!); }}>
-                            {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
-                          </button>
-                        ) : null}
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
@@ -3884,19 +3875,6 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {subtask.parentTaskId ? (
-                      <button
-                        type="button"
-                        className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setIsUpcomingSubtasksModalOpen(false);
-                          setFocusedTaskId(subtask.parentTaskId!);
-                        }}
-                      >
-                        {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
-                      </button>
-                    ) : null}
                     <InlineDateTimePickerIcon
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"
