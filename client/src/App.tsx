@@ -180,6 +180,11 @@ function hexToRgba(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength)}…`;
+}
 type TimelineViewData = {
   title: string;
   tasksWithoutDate: Task[];
@@ -194,6 +199,11 @@ function buildTimelineViewData(
   timelineAnchorDate: Date,
   timelineViewMode: 'day' | 'week' | 'month'
 ): TimelineViewData {
+  const sortByDueDateAsc = (a: { task: Task; dueDate: Date }, b: { task: Task; dueDate: Date }) => {
+    const diff = a.dueDate.getTime() - b.dueDate.getTime();
+    if (diff !== 0) return diff;
+    return a.task.title.localeCompare(b.task.title, 'ru');
+  };
   const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
   const addDays = (value: Date, days: number) => {
     const next = new Date(value);
@@ -230,7 +240,9 @@ function buildTimelineViewData(
     })
     .filter((entry): entry is { task: Task; dueDate: Date } => entry !== null);
 
-  const tasksInRange = datedTasks.filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd);
+  const tasksInRange = datedTasks
+    .filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd)
+    .sort(sortByDueDateAsc);
   const dayGroups = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(weekStart, index);
     const start = startOfDay(date);
@@ -238,7 +250,10 @@ function buildTimelineViewData(
     return {
       key: start.toISOString(),
       date,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     };
   });
   const hourGroups = Array.from({ length: 24 }, (_, hour) => {
@@ -248,7 +263,10 @@ function buildTimelineViewData(
     end.setHours(hour + 1, 0, 0, 0);
     return {
       hour,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     };
   });
 
@@ -266,7 +284,10 @@ function buildTimelineViewData(
     monthCells.push({
       key: date.toISOString(),
       date,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     });
   }
 
@@ -1725,6 +1746,9 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
+    const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
+    const parentSphereColor = parentSphere?.color ?? '#64748b';
     const upcomingSubtasks = taskSubtasks
       .filter((subtask) => subtask.status !== 'DONE')
       .sort((a, b) => {
@@ -1806,6 +1830,7 @@ export default function App() {
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
+          {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className="truncate">
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
@@ -1817,6 +1842,20 @@ export default function App() {
           ) : null}
         </span>
         {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
+        {isSubtaskChip && parentTask ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] text-slate-100/90 hover:brightness-110"
+            style={{ borderColor: parentSphereColor, backgroundColor: hexToRgba(parentSphereColor, 0.3) ?? 'rgba(100,116,139,0.35)' }}
+            title={`Открыть основную задачу: ${parentTask.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              setFocusedTaskId(parentTask.id);
+            }}
+          >
+            {truncateText(parentTask.title, 15)}
+          </button>
+        ) : null}
         {isHoverCardVisible ? createPortal((
         <div
           className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
