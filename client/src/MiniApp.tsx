@@ -243,13 +243,7 @@ export default function MiniApp() {
     const endOfToday = new Date(startOfToday);
     endOfToday.setDate(endOfToday.getDate() + 1);
 
-    return tasks.filter((task) => {
-      if (task.parentTaskId) return false;
-      if (task.status === 'DONE') return false;
-      if (sphereFilter !== 'all') {
-        const taskSphereValue = task.sphereId ?? 'without-sphere';
-        if (taskSphereValue !== sphereFilter) return false;
-      }
+    const matchesTimeFilter = (task: Task) => {
       if (timeFilter === 'all') return true;
       if (!task.dueDate) return false;
 
@@ -273,8 +267,62 @@ export default function MiniApp() {
       const monthEnd = new Date(now);
       monthEnd.setDate(monthEnd.getDate() + 30);
       return due >= now && due <= monthEnd;
-    }).filter((task) => {
-      const query = taskSearch.trim().toLowerCase();
+    };
+
+    const query = taskSearch.trim().toLowerCase();
+    const matchesCommonFilters = (task: Task) => {
+      if (task.status === 'DONE') return false;
+      if (sphereFilter !== 'all') {
+        const taskSphereValue = task.sphereId ?? 'without-sphere';
+        if (taskSphereValue !== sphereFilter) return false;
+      }
+      if (!matchesTimeFilter(task)) return false;
+      if (!query) return true;
+      const text = [task.title, task.description ?? ''].join(' ').toLowerCase();
+      return text.includes(query);
+    };
+
+    return tasks.filter((task) => matchesCommonFilters(task) && !task.parentTaskId);
+  }, [sphereFilter, taskSearch, tasks, timeFilter]);
+
+  const timelineFilteredTasks = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setDate(endOfToday.getDate() + 1);
+
+    const matchesTimeFilter = (task: Task) => {
+      if (timeFilter === 'all') return true;
+      if (!task.dueDate) return false;
+
+      const due = new Date(task.dueDate);
+      if (Number.isNaN(due.getTime())) return false;
+
+      if (timeFilter === 'today') return due < endOfToday;
+      if (timeFilter === 'tomorrow') {
+        const tomorrowStart = new Date(endOfToday);
+        const tomorrowEnd = new Date(tomorrowStart);
+        tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
+        return due >= tomorrowStart && due < tomorrowEnd;
+      }
+      if (timeFilter === 'week') {
+        const weekEnd = new Date(now);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        return due >= now && due <= weekEnd;
+      }
+      const monthEnd = new Date(now);
+      monthEnd.setDate(monthEnd.getDate() + 30);
+      return due >= now && due <= monthEnd;
+    };
+
+    const query = taskSearch.trim().toLowerCase();
+    return tasks.filter((task) => {
+      if (task.status === 'DONE') return false;
+      if (sphereFilter !== 'all') {
+        const taskSphereValue = task.sphereId ?? 'without-sphere';
+        if (taskSphereValue !== sphereFilter) return false;
+      }
+      if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
       const text = [task.title, task.description ?? ''].join(' ').toLowerCase();
       return text.includes(query);
@@ -311,7 +359,7 @@ export default function MiniApp() {
   }, [filteredTasks, spheres]);
 
   const timelineGroups = useMemo(() => {
-    const tasksWithDate = filteredTasks
+    const tasksWithDate = timelineFilteredTasks
       .filter((task) => Boolean(task.dueDate))
       .sort(compareByDueDate);
     const grouped = new Map<string, Task[]>();
@@ -323,7 +371,7 @@ export default function MiniApp() {
       grouped.set(key, current);
     }
 
-    const withoutDate = filteredTasks.filter((task) => !task.dueDate);
+    const withoutDate = timelineFilteredTasks.filter((task) => !task.dueDate);
     return {
       dated: Array.from(grouped.entries()).map(([key, value]) => ({
         key,
@@ -336,7 +384,7 @@ export default function MiniApp() {
       })),
       withoutDate
     };
-  }, [filteredTasks]);
+  }, [timelineFilteredTasks]);
 
   const timelineToday = useMemo(() => {
     const now = timelineNow;
@@ -344,7 +392,7 @@ export default function MiniApp() {
     const endOfDay = new Date(startOfDay);
     endOfDay.setDate(endOfDay.getDate() + 1);
 
-    const todayTasks = filteredTasks
+    const todayTasks = timelineFilteredTasks
       .filter((task) => {
         if (!task.dueDate) return false;
         const dueDate = new Date(task.dueDate);
@@ -353,9 +401,7 @@ export default function MiniApp() {
       })
       .sort(compareByDueDate);
 
-    const timelineSubtasks = todayTasks.flatMap((task) => (subtasksByParent[task.id] ?? []))
-      .filter((subtask) => subtask.status !== 'DONE');
-    const timelineEntries = [...todayTasks, ...timelineSubtasks]
+    const timelineEntries = todayTasks
       .filter((task) => Boolean(task.dueDate))
       .sort(compareByDueDate);
 
@@ -390,7 +436,7 @@ export default function MiniApp() {
       hourTops,
       totalHeight
     };
-  }, [filteredTasks, subtasksByParent, timeFilter, timelineNow]);
+  }, [timeFilter, timelineFilteredTasks, timelineNow]);
 
   const timelineTaskPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
