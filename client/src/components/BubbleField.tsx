@@ -188,7 +188,6 @@ export function BubbleField({
   const [postponeResultByTaskId, setPostponeResultByTaskId] = useState<Record<string, string>>({});
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
   const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
-  const [isHintVisible, setIsHintVisible] = useState(false);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -210,17 +209,6 @@ export function BubbleField({
     if (!Number.isFinite(parsed) || parsed <= 0) return 30;
     return Math.min(parsed, 1440);
   })();
-  const isDetailMode = zoom >= 1.25 || hoveredTaskId !== null;
-  const isOverviewMode = !isDetailMode;
-  const shouldShortenLabels = zoom < 0.92;
-
-  const getCompactTitle = (title: string) => {
-    const normalized = title.trim();
-    if (!normalized) return '—';
-    const maxLength = 16;
-    if (normalized.length <= maxLength) return normalized;
-    return `${normalized.slice(0, maxLength - 1)}…`;
-  };
 
   const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
@@ -275,22 +263,6 @@ export function BubbleField({
       clearTimeout(nativeCalendarCloseTimer.current);
     }
   }, []);
-
-  useEffect(() => {
-    const hintDismissed = window.localStorage.getItem('bubble-field-hint-dismissed');
-    if (!hintDismissed) {
-      setIsHintVisible(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isHintVisible) return;
-    const timer = setTimeout(() => {
-      setIsHintVisible(false);
-      window.localStorage.setItem('bubble-field-hint-dismissed', '1');
-    }, 4000);
-    return () => clearTimeout(timer);
-  }, [isHintVisible]);
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
@@ -429,9 +401,7 @@ export function BubbleField({
         ) : null}
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
           <div className="flex h-full items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: Math.max(9, bubble.radius / 4.8), fontWeight: 600, lineHeight: '1.2', maxHeight: '100%' }}>
-            <span style={{ display: '-webkit-box', WebkitLineClamp: shouldShortenLabels ? 2 : 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {shouldShortenLabels ? getCompactTitle(bubble.task.title) : bubble.task.title}
-            </span>
+            <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
 
@@ -563,7 +533,7 @@ export function BubbleField({
             );
           })}
 
-          {isDetailMode && hoveredBubble ? (
+          {hoveredBubble ? (
             <>
               <foreignObject
                 x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
@@ -793,16 +763,7 @@ export function BubbleField({
           ) : null}
         </g>
       </svg>
-      <div className="pointer-events-none absolute left-4 top-4 z-30">
-        <span className="rounded-full border border-cyan-300/35 bg-slate-950/80 px-3 py-1 text-[11px] font-semibold text-cyan-100">
-          {isOverviewMode ? 'Обзор' : 'Детали'}
-        </span>
-      </div>
-      {isHintVisible ? (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full border border-cyan-200/35 bg-slate-950/92 px-4 py-2 text-xs font-medium text-cyan-50 shadow-lg">
-          Прокрутите/щелкните для деталей
-        </div>
-      ) : null}
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Zoom {zoom.toFixed(2)} • Pan drag</div>
     </div>
   );
 }
