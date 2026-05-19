@@ -180,6 +180,12 @@ function hexToRgba(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function truncateText(text: string, maxLength: number) {
+  if (maxLength <= 0) return '';
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 
 type TimelineViewData = {
   title: string;
