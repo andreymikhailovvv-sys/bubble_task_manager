@@ -180,6 +180,7 @@ function hexToRgba(hexColor: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+
 type TimelineViewData = {
   title: string;
   tasksWithoutDate: Task[];
@@ -194,6 +195,11 @@ function buildTimelineViewData(
   timelineAnchorDate: Date,
   timelineViewMode: 'day' | 'week' | 'month'
 ): TimelineViewData {
+  const sortByDueDateAsc = (a: { task: Task; dueDate: Date }, b: { task: Task; dueDate: Date }) => {
+    const diff = a.dueDate.getTime() - b.dueDate.getTime();
+    if (diff !== 0) return diff;
+    return a.task.title.localeCompare(b.task.title, 'ru');
+  };
   const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
   const addDays = (value: Date, days: number) => {
     const next = new Date(value);
@@ -230,7 +236,9 @@ function buildTimelineViewData(
     })
     .filter((entry): entry is { task: Task; dueDate: Date } => entry !== null);
 
-  const tasksInRange = datedTasks.filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd);
+  const tasksInRange = datedTasks
+    .filter(({ dueDate }) => dueDate >= rangeStart && dueDate < rangeEnd)
+    .sort(sortByDueDateAsc);
   const dayGroups = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(weekStart, index);
     const start = startOfDay(date);
@@ -238,7 +246,10 @@ function buildTimelineViewData(
     return {
       key: start.toISOString(),
       date,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     };
   });
   const hourGroups = Array.from({ length: 24 }, (_, hour) => {
@@ -248,7 +259,10 @@ function buildTimelineViewData(
     end.setHours(hour + 1, 0, 0, 0);
     return {
       hour,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     };
   });
 
@@ -266,7 +280,10 @@ function buildTimelineViewData(
     monthCells.push({
       key: date.toISOString(),
       date,
-      tasks: tasksInRange.filter(({ dueDate }) => dueDate >= start && dueDate < end).map(({ task }) => task)
+      tasks: tasksInRange
+        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+        .sort(sortByDueDateAsc)
+        .map(({ task }) => task)
     });
   }
 
@@ -1725,6 +1742,9 @@ export default function App() {
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
+    const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
+    const parentSphereColor = parentSphere?.color ?? '#64748b';
     const upcomingSubtasks = taskSubtasks
       .filter((subtask) => subtask.status !== 'DONE')
       .sort((a, b) => {
@@ -1806,6 +1826,7 @@ export default function App() {
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
+          {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className="truncate">
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
@@ -3002,11 +3023,6 @@ export default function App() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        {subtask.parentTaskId ? (
-                          <button type="button" className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20" onClick={() => { setIsUpcomingSubtasksModalOpen(false); setFocusedTaskId(subtask.parentTaskId!); }}>
-                            {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
-                          </button>
-                        ) : null}
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
@@ -3138,6 +3154,11 @@ export default function App() {
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
           onGenerateWithAi={createTaskFromAi}
+          parentTaskTitle={editorState.task?.parentTaskId ? (taskById.get(editorState.task.parentTaskId)?.title ?? null) : null}
+          onOpenParentTask={editorState.task?.parentTaskId ? () => {
+            setEditorState(null);
+            setFocusedTaskId(editorState.task!.parentTaskId!);
+          } : undefined}
           onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
           onDelete={editorState.task?.id ? async () => {
             await api.deleteTask(editorState.task!.id);
@@ -3840,19 +3861,6 @@ export default function App() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {subtask.parentTaskId ? (
-                      <button
-                        type="button"
-                        className="rounded border border-cyan-500/50 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/20"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setIsUpcomingSubtasksModalOpen(false);
-                          setFocusedTaskId(subtask.parentTaskId!);
-                        }}
-                      >
-                        {(taskById.get(subtask.parentTaskId)?.title ?? 'Открыть основную задачу')}
-                      </button>
-                    ) : null}
                     <InlineDateTimePickerIcon
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"
