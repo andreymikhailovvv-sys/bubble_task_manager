@@ -31,8 +31,9 @@ type DisplayMode = 'list' | 'timeline';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_HOUR_HEIGHT = 88;
-const TIMELINE_HOUR_EXPANDED_STEP = 20;
-const TIMELINE_HOUR_EXPANDED_MAX = 230;
+const TIMELINE_CARD_HEIGHT = 52;
+const TIMELINE_CARD_GAP = 8;
+const TIMELINE_HOUR_EXTRA_PADDING = 10;
 
 type TaskDraft = {
   title: string;
@@ -365,9 +366,13 @@ export default function MiniApp() {
       if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
     }
 
-    const hourHeights = hourTaskCount.map((count) => (
-      count <= 1 ? TIMELINE_HOUR_HEIGHT : Math.min(TIMELINE_HOUR_HEIGHT + ((count - 1) * TIMELINE_HOUR_EXPANDED_STEP), TIMELINE_HOUR_EXPANDED_MAX)
-    ));
+    const hourHeights = hourTaskCount.map((count) => {
+      if (count <= 1) return TIMELINE_HOUR_HEIGHT;
+      return Math.max(
+        TIMELINE_HOUR_HEIGHT,
+        (count * TIMELINE_CARD_HEIGHT) + ((count - 1) * TIMELINE_CARD_GAP) + TIMELINE_HOUR_EXTRA_PADDING
+      );
+    });
     const hourTops: number[] = [];
     let totalHeight = 0;
     for (let hour = 0; hour < HOURS_IN_DAY; hour += 1) {
@@ -388,32 +393,23 @@ export default function MiniApp() {
   }, [filteredTasks, subtasksByParent, timeFilter, timelineNow]);
 
   const timelineTaskPlacements = useMemo(() => {
-    const TASK_HEIGHT = 42;
-    const placements = new Map<string, { depth: number; overlapCount: number }>();
-    const tasksWithTop = timelineToday.timelineEntries.map((task) => {
+    const placements = new Map<string, { top: number }>();
+    const tasksByHour = new Map<number, Task[]>();
+
+    for (const task of timelineToday.timelineEntries) {
       const due = new Date(task.dueDate as string);
       const hour = due.getHours();
-      const top = timelineToday.hourTops[hour] + ((due.getMinutes() / 60) * timelineToday.hourHeights[hour]);
-      return { task, top };
-    });
+      const bucket = tasksByHour.get(hour) ?? [];
+      bucket.push(task);
+      tasksByHour.set(hour, bucket);
+    }
 
-    let groupStart = 0;
-    while (groupStart < tasksWithTop.length) {
-      let groupEnd = groupStart;
-      let maxBottom = tasksWithTop[groupStart].top + TASK_HEIGHT;
-
-      while (groupEnd + 1 < tasksWithTop.length && tasksWithTop[groupEnd + 1].top < maxBottom) {
-        groupEnd += 1;
-        const nextBottom = tasksWithTop[groupEnd].top + TASK_HEIGHT;
-        if (nextBottom > maxBottom) maxBottom = nextBottom;
+    for (const [hour, tasks] of tasksByHour.entries()) {
+      const sorted = tasks.slice().sort(compareByDueDate);
+      for (let index = 0; index < sorted.length; index += 1) {
+        const top = timelineToday.hourTops[hour] + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4;
+        placements.set(sorted[index].id, { top });
       }
-
-      const overlapCount = groupEnd - groupStart + 1;
-      for (let index = groupStart; index <= groupEnd; index += 1) {
-        placements.set(tasksWithTop[index].task.id, { depth: index - groupStart, overlapCount });
-      }
-
-      groupStart = groupEnd + 1;
     }
 
     return placements;
@@ -780,23 +776,21 @@ export default function MiniApp() {
                     {timelineToday.timelineEntries.map((task) => {
                       const dueDate = new Date(task.dueDate as string);
                       const taskHour = dueDate.getHours();
-                      const top = timelineToday.hourTops[taskHour] + ((dueDate.getMinutes() / 60) * timelineToday.hourHeights[taskHour]);
                       const hasOverdueState = isOverdue(task);
                       const isSubtask = Boolean(task.parentTaskId);
                       const sphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
-                      const placement = timelineTaskPlacements.get(task.id) ?? { depth: 0, overlapCount: 1 };
-                      const widthShrinkPercent = Math.min(placement.depth * 12, 45);
+                      const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.hourTops[taskHour] + 4 };
                       return (
                         <button
                           type="button"
                           key={task.id}
                           className="absolute rounded-md border px-2 py-1 text-left"
                           style={{
-                            top: `${top + 4}px`,
-                            minHeight: `${42 + ((placement.overlapCount - 1) * 10)}px`,
+                            top: `${placement.top}px`,
+                            minHeight: `${TIMELINE_CARD_HEIGHT}px`,
                             left: 'calc(4rem + 2px)',
-                            width: `calc(100% - 4rem - 8px - ${widthShrinkPercent}%)`,
-                            zIndex: 10 + placement.depth,
+                            width: 'calc(100% - 4rem - 8px)',
+                            zIndex: 10,
                             borderColor: isSubtask
                               ? 'rgba(100,116,139,0.9)'
                               : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
