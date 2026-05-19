@@ -1209,6 +1209,61 @@ export default function App() {
       container.scrollTop = targetScrollTop;
     });
   }, [isTimelineMode, timelineViewMode, timelineAnchorDate]);
+
+  useEffect(() => {
+    if (!isTimelineMode || draggedTimelineTaskId === null) return;
+    const container = timelineScrollContainerRef.current;
+    if (!container) return;
+
+    const EDGE_ZONE_PX = 56;
+    const MAX_SCROLL_STEP = 22;
+    let lastClientY: number | null = null;
+    let rafId: number | null = null;
+
+    const tick = () => {
+      if (lastClientY === null) {
+        rafId = window.requestAnimationFrame(tick);
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      if (lastClientY < rect.top || lastClientY > rect.bottom) {
+        rafId = window.requestAnimationFrame(tick);
+        return;
+      }
+
+      let delta = 0;
+      const topDistance = lastClientY - rect.top;
+      const bottomDistance = rect.bottom - lastClientY;
+
+      if (topDistance < EDGE_ZONE_PX) {
+        const ratio = Math.max(0, (EDGE_ZONE_PX - topDistance) / EDGE_ZONE_PX);
+        delta = -Math.ceil(ratio * MAX_SCROLL_STEP);
+      } else if (bottomDistance < EDGE_ZONE_PX) {
+        const ratio = Math.max(0, (EDGE_ZONE_PX - bottomDistance) / EDGE_ZONE_PX);
+        delta = Math.ceil(ratio * MAX_SCROLL_STEP);
+      }
+
+      if (delta !== 0) {
+        const maxScrollTop = container.scrollHeight - container.clientHeight;
+        container.scrollTop = Math.max(0, Math.min(maxScrollTop, container.scrollTop + delta));
+      }
+
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    const handleDragOver = (event: DragEvent) => {
+      lastClientY = event.clientY;
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    rafId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
+  }, [draggedTimelineTaskId, isTimelineMode]);
+
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
@@ -2463,7 +2518,7 @@ export default function App() {
             </ul>
           </div>
         ) : (
-          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
             <div className="space-y-4 pr-1">
               <section className="sticky top-0 z-20 rounded-2xl border border-slate-700/70 bg-slate-900/90 p-3 backdrop-blur">
                 <div className="flex flex-wrap items-center justify-between gap-3">
