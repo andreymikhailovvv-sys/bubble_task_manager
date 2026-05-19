@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -163,7 +163,7 @@ function renderAiMessageContentWithTaskRefs(
             <button
               key={`chunk-task-${lineIndex}-${chunkIndex}-${chunk.reference.taskId}`}
               type="button"
-              className="ml-1 inline-flex items-center rounded bg-cyan-600/90 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-cyan-500"
+              className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded bg-cyan-600/90 text-white hover:bg-cyan-500"
               onClick={() => {
                 options.onOpenTask(targetTaskId);
                 if (options.closeGeneralAiFullscreenOnOpen && options.setGeneralAiFullscreen) {
@@ -172,7 +172,7 @@ function renderAiMessageContentWithTaskRefs(
               }}
               title={`Открыть задачу: ${buttonLabel}`}
             >
-              Посмотреть задачу
+              <ArrowUpRight size={12} />
             </button>
           );
         })}
