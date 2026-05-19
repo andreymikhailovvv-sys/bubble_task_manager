@@ -57,6 +57,12 @@ const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:backgr
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
+const THEME_STORAGE_KEY = 'btm:theme';
+const THEME_OPTIONS = [
+  { value: 'dark', label: 'Темная' },
+  { value: 'light', label: 'Светлая' }
+] as const;
+type ThemeMode = (typeof THEME_OPTIONS)[number]['value'];
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const TIMEZONE_OPTIONS = [
   'Europe/Moscow',
@@ -334,6 +340,10 @@ export default function App() {
 
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return saved === 'light' ? 'light' : 'dark';
+  });
   const [userTimeZone, setUserTimeZone] = useState<string>(() => {
     const saved = localStorage.getItem(USER_TIMEZONE_STORAGE_KEY);
     if (saved?.trim()) return saved.trim();
@@ -421,6 +431,11 @@ export default function App() {
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const [overdueTick, setOverdueTick] = useState(0);
+
+  useEffect(() => {
+    document.body.dataset.theme = themeMode;
+    localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   const formatDeadlineTooltip = (task: Task) => {
     const dueDate = task.dueDate ? new Date(task.dueDate) : null;
@@ -2020,7 +2035,7 @@ export default function App() {
 
   return (
     <main
-      className="flex h-screen flex-col overflow-y-auto p-4 text-slate-100 lg:p-6"
+      className={`app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6 ${themeMode === 'light' ? 'theme-light text-slate-800' : 'theme-dark text-slate-100'}`}
       style={{
         backgroundImage: backgroundImage
           ? `linear-gradient(rgba(2,6,23,${backgroundOverlayOpacity}), rgba(2,6,23,${backgroundOverlayOpacity})), url(${backgroundImage})`
@@ -2118,6 +2133,16 @@ export default function App() {
               >
                 Сбросить на Москву
               </button>
+              <div className="mb-2 mt-3 text-xs text-slate-300">Тема интерфейса</div>
+              <select
+                className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+                value={themeMode}
+                onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
+              >
+                {THEME_OPTIONS.map((theme) => (
+                  <option key={theme.value} value={theme.value}>{theme.label}</option>
+                ))}
+              </select>
             </div>
           ) : null}
         </div>
