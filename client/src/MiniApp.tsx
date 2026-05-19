@@ -31,6 +31,8 @@ type DisplayMode = 'list' | 'timeline';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_HOUR_HEIGHT = 88;
+const TIMELINE_HOUR_EXPANDED_STEP = 20;
+const TIMELINE_HOUR_EXPANDED_MAX = 230;
 
 type TaskDraft = {
   title: string;
@@ -350,22 +352,48 @@ export default function MiniApp() {
       })
       .sort(compareByDueDate);
 
-    const nowOffsetMinutes = (now.getHours() * 60) + now.getMinutes();
-    const currentTimeTop = (nowOffsetMinutes / 60) * TIMELINE_HOUR_HEIGHT;
+    const timelineSubtasks = todayTasks.flatMap((task) => (subtasksByParent[task.id] ?? []))
+      .filter((subtask) => subtask.status !== 'DONE');
+    const timelineEntries = [...todayTasks, ...timelineSubtasks]
+      .filter((task) => Boolean(task.dueDate))
+      .sort(compareByDueDate);
+
+    const hourTaskCount = Array.from({ length: HOURS_IN_DAY }, () => 0);
+    for (const task of timelineEntries) {
+      const due = new Date(task.dueDate as string);
+      const hour = due.getHours();
+      if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
+    }
+
+    const hourHeights = hourTaskCount.map((count) => (
+      count <= 1 ? TIMELINE_HOUR_HEIGHT : Math.min(TIMELINE_HOUR_HEIGHT + ((count - 1) * TIMELINE_HOUR_EXPANDED_STEP), TIMELINE_HOUR_EXPANDED_MAX)
+    ));
+    const hourTops: number[] = [];
+    let totalHeight = 0;
+    for (let hour = 0; hour < HOURS_IN_DAY; hour += 1) {
+      hourTops.push(totalHeight);
+      totalHeight += hourHeights[hour];
+    }
+
+    const currentHour = now.getHours();
+    const currentTimeTop = hourTops[currentHour] + ((now.getMinutes() / 60) * hourHeights[currentHour]);
     return {
-      todayTasks,
+      timelineEntries,
       currentTimeTop,
-      isTodayVisible: timeFilter === 'all' || timeFilter === 'today'
+      isTodayVisible: timeFilter === 'all' || timeFilter === 'today',
+      hourHeights,
+      hourTops,
+      totalHeight
     };
-  }, [filteredTasks, timeFilter, timelineNow]);
+  }, [filteredTasks, subtasksByParent, timeFilter, timelineNow]);
 
   const timelineTaskPlacements = useMemo(() => {
     const TASK_HEIGHT = 42;
     const placements = new Map<string, { depth: number; overlapCount: number }>();
-    const tasksWithTop = timelineToday.todayTasks.map((task) => {
+    const tasksWithTop = timelineToday.timelineEntries.map((task) => {
       const due = new Date(task.dueDate as string);
-      const minuteOffset = (due.getHours() * 60) + due.getMinutes();
-      const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
+      const hour = due.getHours();
+      const top = timelineToday.hourTops[hour] + ((due.getMinutes() / 60) * timelineToday.hourHeights[hour]);
       return { task, top };
     });
 
@@ -389,7 +417,7 @@ export default function MiniApp() {
     }
 
     return placements;
-  }, [timelineToday.todayTasks]);
+  }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
 
   useEffect(() => {
     if (displayMode !== 'timeline') return;
@@ -737,9 +765,9 @@ export default function MiniApp() {
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
-                  <div className="relative" style={{ height: `${HOURS_IN_DAY * TIMELINE_HOUR_HEIGHT}px` }}>
+                  <div className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
-                      <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${hourIndex * TIMELINE_HOUR_HEIGHT}px` }}>
+                      <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
                         <span className="absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
                       </div>
                     ))}
@@ -749,30 +777,42 @@ export default function MiniApp() {
                         <span className="h-[2px] w-full bg-rose-400/90" />
                       </div>
                     ) : null}
-                    {timelineToday.todayTasks.map((task) => {
+                    {timelineToday.timelineEntries.map((task) => {
                       const dueDate = new Date(task.dueDate as string);
-                      const minuteOffset = (dueDate.getHours() * 60) + dueDate.getMinutes();
-                      const top = (minuteOffset / 60) * TIMELINE_HOUR_HEIGHT;
+                      const taskHour = dueDate.getHours();
+                      const top = timelineToday.hourTops[taskHour] + ((dueDate.getMinutes() / 60) * timelineToday.hourHeights[taskHour]);
                       const hasOverdueState = isOverdue(task);
+                      const isSubtask = Boolean(task.parentTaskId);
+                      const sphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
                       const placement = timelineTaskPlacements.get(task.id) ?? { depth: 0, overlapCount: 1 };
                       const widthShrinkPercent = Math.min(placement.depth * 12, 45);
                       return (
                         <button
                           type="button"
                           key={task.id}
-                          className="absolute rounded-md border border-sky-500/35 bg-sky-500/15 px-2 py-1 text-left"
+                          className="absolute rounded-md border px-2 py-1 text-left"
                           style={{
                             top: `${top + 4}px`,
                             minHeight: `${42 + ((placement.overlapCount - 1) * 10)}px`,
                             left: 'calc(4rem + 2px)',
                             width: `calc(100% - 4rem - 8px - ${widthShrinkPercent}%)`,
                             zIndex: 10 + placement.depth,
+                            borderColor: isSubtask
+                              ? 'rgba(100,116,139,0.9)'
+                              : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
+                            background: isSubtask
+                              ? 'rgba(71,85,105,0.82)'
+                              : (hexToRgba(sphereColor ?? '', 0.25) ?? 'rgba(14,165,233,0.18)'),
+                            borderLeftWidth: isSubtask ? '4px' : '1px',
+                            borderLeftColor: isSubtask
+                              ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
+                              : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
                             boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
                           }}
                           onClick={() => openTaskModal(task)}
                         >
                           <p className="truncate text-sm font-medium">{task.title}</p>
-                          <p className="text-xs text-slate-300">{formatDueDate(task.dueDate)}</p>
+                          <p className="text-xs text-slate-300">{isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
                         </button>
                       );
                     })}
