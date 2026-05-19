@@ -1850,22 +1850,37 @@ export default function App() {
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 250 ? `${task.description.slice(0, 250)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-slate-300">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
-          <div className="mt-2 border-t border-slate-700/80 pt-2">
-            <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
-            {previewSubtasks.length > 0 ? (
-              <ul className="mt-1 space-y-1">
-                {previewSubtasks.map((subtask) => (
-                  <li key={subtask.id} className="truncate text-slate-200">
-                    • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="mt-1 text-slate-400">Нет активных подзадач</p>}
-            {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
-          </div>
+          {isSubtaskChip ? (
+            <div className="mt-2 border-t border-slate-700/80 pt-2">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Основная задача</p>
+              <span
+                className="mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold text-slate-100"
+                style={{
+                  borderColor: parentSphereColor,
+                  backgroundColor: hexToRgba(parentSphereColor, 0.36) ?? 'rgba(100,116,139,0.34)'
+                }}
+              >
+                <span className="truncate">{options?.parentTaskTitle ?? parentTask?.title ?? 'Без названия'}</span>
+              </span>
+            </div>
+          ) : (
+            <div className="mt-2 border-t border-slate-700/80 pt-2">
+              <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
+              {previewSubtasks.length > 0 ? (
+                <ul className="mt-1 space-y-1">
+                  {previewSubtasks.map((subtask) => (
+                    <li key={subtask.id} className="truncate text-slate-200">
+                      • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="mt-1 text-slate-400">Нет активных подзадач</p>}
+              {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
+            </div>
+          )}
         </div>
         ), document.body) : null}
       </motion.button>
