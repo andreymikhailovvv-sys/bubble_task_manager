@@ -25,6 +25,15 @@ body {
   background-size: 280px 280px, 360px 360px, 320px 320px, 420px 420px, auto;
 }
 
+body[data-theme='light'] {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(15, 23, 42, 0.06) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 70% 30%, rgba(59, 130, 246, 0.08) 0 1px, transparent 1.4px),
+    radial-gradient(circle at 45% 65%, rgba(14, 116, 144, 0.07) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 80% 78%, rgba(37, 99, 235, 0.08) 0 1px, transparent 1.6px),
+    radial-gradient(circle at top, #f8fafc 0%, #e2e8f0 56%, #e2e8f0 100%);
+}
+
 @keyframes subtask-reminder-glow {
   0%,
   100% {
@@ -100,4 +109,42 @@ body {
 .miniapp-scrollless *::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+.theme-light header {
+  border-color: rgba(148, 163, 184, 0.8) !important;
+  background: rgba(248, 250, 252, 0.9) !important;
+}
+
+.theme-light button,
+.theme-light input,
+.theme-light select,
+.theme-light textarea {
+  color: #0f172a;
+}
+
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-900\/95,
+.theme-light .bg-slate-900\/85,
+.theme-light .bg-slate-900\/70,
+.theme-light .bg-slate-800,
+.theme-light .bg-slate-800\/90,
+.theme-light .bg-slate-800\/80 {
+  background-color: rgba(241, 245, 249, 0.92) !important;
+}
+
+.theme-light .border-slate-700,
+.theme-light .border-slate-700\/70,
+.theme-light .border-slate-700\/60,
+.theme-light .border-slate-600 {
+  border-color: rgba(148, 163, 184, 0.85) !important;
+}
+
+.theme-light .text-slate-50,
+.theme-light .text-slate-100,
+.theme-light .text-slate-200,
+.theme-light .text-slate-300,
+.theme-light .text-slate-400,
+.theme-light .text-cyan-100 {
+  color: #1e293b !important;
 }
