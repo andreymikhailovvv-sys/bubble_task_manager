@@ -1844,20 +1844,6 @@ export default function App() {
           ) : null}
         </span>
         {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
-        {isSubtaskChip && parentTask ? (
-          <button
-            type="button"
-            className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] text-slate-100/90 hover:brightness-110"
-            style={{ borderColor: parentSphereColor, backgroundColor: hexToRgba(parentSphereColor, 0.3) ?? 'rgba(100,116,139,0.35)' }}
-            title={`Открыть основную задачу: ${parentTask.title}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              setFocusedTaskId(parentTask.id);
-            }}
-          >
-            {truncateText(parentTask.title, 15)}
-          </button>
-        ) : null}
         {isHoverCardVisible ? createPortal((
         <div
           className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
