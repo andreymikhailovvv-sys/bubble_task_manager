@@ -105,6 +105,30 @@ type GeneralAiUndoOperation = {
 };
 type GeneralAiMessage = ChatMessage & { id: string };
 
+
+type AiTaskReference = {
+  taskId: string;
+  label: string;
+};
+
+const TASK_REF_PATTERN = /\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
+
+function extractAiTaskReferences(content: string): { cleanContent: string; references: AiTaskReference[] } {
+  const references: AiTaskReference[] = [];
+  const cleanContent = content.replace(TASK_REF_PATTERN, (_full, rawTaskId: string, rawLabel: string) => {
+    const taskId = rawTaskId.trim();
+    const label = rawLabel.trim();
+    if (!taskId || !label) return '';
+    references.push({ taskId, label });
+    return '';
+  }).replace(/\n{3,}/g, '\n\n').trim();
+
+  const deduplicated = references.filter((reference, index, array) => (
+    array.findIndex((item) => item.taskId === reference.taskId) === index
+  ));
+
+  return { cleanContent, references: deduplicated };
+}
 function renderInlineAiMarkup(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
     if (!part) return null;
@@ -2929,7 +2953,36 @@ export default function App() {
                     className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`general-${index}`, message.content)} title="Копировать" className="text-slate-300 hover:text-white transition">{copiedAiMessageKey === `general-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div>{renderAiMessageContent(message.content)}</div>
+                    {(() => {
+                      const parsedMessage = message.role === 'assistant'
+                        ? extractAiTaskReferences(message.content)
+                        : { cleanContent: message.content, references: [] as AiTaskReference[] };
+                      return (
+                        <>
+                          <div>{renderAiMessageContent(parsedMessage.cleanContent)}</div>
+                          {message.role === 'assistant' && parsedMessage.references.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {parsedMessage.references.map((reference) => {
+                                const matchedTask = tasks.find((task) => task.id === reference.taskId);
+                                const targetTaskId = matchedTask?.parentTaskId ?? matchedTask?.id ?? reference.taskId;
+                                const buttonLabel = matchedTask?.title || reference.label;
+                                return (
+                                  <button
+                                    key={`${index}-${reference.taskId}`}
+                                    type="button"
+                                    className="rounded bg-cyan-600/90 px-2 py-1 text-[11px] font-medium text-white hover:bg-cyan-500"
+                                    onClick={() => setFocusedTaskId(targetTaskId)}
+                                    title={`Открыть задачу: ${buttonLabel}`}
+                                  >
+                                    Посмотреть задачу
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -3243,7 +3296,36 @@ export default function App() {
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div>{renderAiMessageContent(message.content)}</div>
+                    {(() => {
+                      const parsedMessage = message.role === 'assistant'
+                        ? extractAiTaskReferences(message.content)
+                        : { cleanContent: message.content, references: [] as AiTaskReference[] };
+                      return (
+                        <>
+                          <div>{renderAiMessageContent(parsedMessage.cleanContent)}</div>
+                          {message.role === 'assistant' && parsedMessage.references.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {parsedMessage.references.map((reference) => {
+                                const matchedTask = tasks.find((task) => task.id === reference.taskId);
+                                const targetTaskId = matchedTask?.parentTaskId ?? matchedTask?.id ?? reference.taskId;
+                                const buttonLabel = matchedTask?.title || reference.label;
+                                return (
+                                  <button
+                                    key={`${index}-${reference.taskId}`}
+                                    type="button"
+                                    className="rounded bg-cyan-600/90 px-2 py-1 text-[11px] font-medium text-white hover:bg-cyan-500"
+                                    onClick={() => setFocusedTaskId(targetTaskId)}
+                                    title={`Открыть задачу: ${buttonLabel}`}
+                                  >
+                                    Посмотреть задачу
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
@@ -3671,7 +3753,36 @@ export default function App() {
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div>{renderAiMessageContent(message.content)}</div>
+                  {(() => {
+                      const parsedMessage = message.role === 'assistant'
+                        ? extractAiTaskReferences(message.content)
+                        : { cleanContent: message.content, references: [] as AiTaskReference[] };
+                      return (
+                        <>
+                          <div>{renderAiMessageContent(parsedMessage.cleanContent)}</div>
+                          {message.role === 'assistant' && parsedMessage.references.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {parsedMessage.references.map((reference) => {
+                                const matchedTask = tasks.find((task) => task.id === reference.taskId);
+                                const targetTaskId = matchedTask?.parentTaskId ?? matchedTask?.id ?? reference.taskId;
+                                const buttonLabel = matchedTask?.title || reference.label;
+                                return (
+                                  <button
+                                    key={`${index}-${reference.taskId}`}
+                                    type="button"
+                                    className="rounded bg-cyan-600/90 px-2 py-1 text-[11px] font-medium text-white hover:bg-cyan-500"
+                                    onClick={() => setFocusedTaskId(targetTaskId)}
+                                    title={`Открыть задачу: ${buttonLabel}`}
+                                  >
+                                    Посмотреть задачу
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                 </div>
               ))}
               {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-violet-200">ИИ думает…</p> : null}
@@ -3788,7 +3899,36 @@ export default function App() {
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div>{renderAiMessageContent(message.content)}</div>
+                  {(() => {
+                      const parsedMessage = message.role === 'assistant'
+                        ? extractAiTaskReferences(message.content)
+                        : { cleanContent: message.content, references: [] as AiTaskReference[] };
+                      return (
+                        <>
+                          <div>{renderAiMessageContent(parsedMessage.cleanContent)}</div>
+                          {message.role === 'assistant' && parsedMessage.references.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {parsedMessage.references.map((reference) => {
+                                const matchedTask = tasks.find((task) => task.id === reference.taskId);
+                                const targetTaskId = matchedTask?.parentTaskId ?? matchedTask?.id ?? reference.taskId;
+                                const buttonLabel = matchedTask?.title || reference.label;
+                                return (
+                                  <button
+                                    key={`${index}-${reference.taskId}`}
+                                    type="button"
+                                    className="rounded bg-cyan-600/90 px-2 py-1 text-[11px] font-medium text-white hover:bg-cyan-500"
+                                    onClick={() => setFocusedTaskId(targetTaskId)}
+                                    title={`Открыть задачу: ${buttonLabel}`}
+                                  >
+                                    Посмотреть задачу
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                 </div>
               ))}
               {generalAiLoading ? <p className="text-sm text-cyan-200">ИИ обрабатывает запрос…</p> : null}
