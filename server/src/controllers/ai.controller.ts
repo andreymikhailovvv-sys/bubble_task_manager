@@ -97,6 +97,21 @@ export const aiController = {
       res.status(500).json({ error: message });
     }
   },
+  parseRecurrence: async (req: Request, res: Response) => {
+    try {
+      const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+      if (!text) {
+        res.status(400).json({ error: 'text is required' });
+        return;
+      }
+      const userTimeZone = await resolveUserTimeZone(req);
+      const result = await aiAssistantService.parseRecurrence({ text, userTimeZone });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   undoGeneralAssistantAction: async (req: Request, res: Response) => {
     try {
       const operations = Array.isArray(req.body?.operations) ? req.body.operations : [];

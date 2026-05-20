@@ -81,6 +81,11 @@ model Task {
   status              TaskStatus @default(TODO)
   dueDate             DateTime?
   notifyBeforeMinutes Int?       @default(60)
+  isRecurring         Boolean    @default(false)
+  recurrenceText      String?
+  recurrenceJson      Json?
+  recurrenceSummary   String?
+  recurrenceUntil     DateTime?
   overdueAiNotifiedAt DateTime?
   telegramNotifiedAt  DateTime?
   createdAt           DateTime   @default(now())
