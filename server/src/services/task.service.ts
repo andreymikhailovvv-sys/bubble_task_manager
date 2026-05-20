@@ -11,6 +11,11 @@ interface TaskInput {
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
   dueDate?: string | Date | null;
   notifyBeforeMinutes?: number | string | null;
+  isRecurring?: boolean;
+  recurrenceText?: string | null;
+  recurrenceJson?: Prisma.InputJsonValue | null;
+  recurrenceSummary?: string | null;
+  recurrenceUntil?: string | Date | null;
 }
 
 interface CreateTaskInput extends TaskInput {
@@ -67,6 +72,12 @@ export const taskService = {
         status: input.status ?? 'TODO',
         dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null,
         notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
+        ,
+        isRecurring: input.isRecurring ?? false,
+        recurrenceText: input.recurrenceText ?? null,
+        recurrenceJson: input.recurrenceJson ?? null,
+        recurrenceSummary: input.recurrenceSummary ?? null,
+        recurrenceUntil: input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -110,6 +121,11 @@ export const taskService = {
     if (input.notifyBeforeMinutes !== undefined) {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
+    if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);
+    if (input.recurrenceText !== undefined) patch.recurrenceText = input.recurrenceText;
+    if (input.recurrenceJson !== undefined) patch.recurrenceJson = input.recurrenceJson;
+    if (input.recurrenceSummary !== undefined) patch.recurrenceSummary = input.recurrenceSummary;
+    if (input.recurrenceUntil !== undefined) patch.recurrenceUntil = toDueDate(input.recurrenceUntil);
 
     if (input.status !== undefined || input.dueDate !== undefined || input.notifyBeforeMinutes !== undefined) {
       patch.telegramNotifiedAt = null;
