@@ -703,6 +703,18 @@ export default function MiniApp() {
               </button>
             </div>
           </div>
+          <div className="mt-2">
+            <select
+              value={timeFilter}
+              onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+              className="h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
+            >
+              <option value="all">За все время</option>
+              <option value="today">Сегодня</option>
+              <option value="tomorrow">Завтра</option>
+              <option value="week">Неделя</option>
+            </select>
+          </div>
         </section>
 
         {error ? (
