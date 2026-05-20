@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 interface TaskInput {
@@ -13,10 +13,16 @@ interface TaskInput {
   notifyBeforeMinutes?: number | string | null;
   isRecurring?: boolean;
   recurrenceText?: string | null;
-  recurrenceJson?: Prisma.InputJsonValue | null;
+  recurrenceJson?: PrismaTypes.InputJsonValue | null;
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | Date | null;
 }
+
+const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined): PrismaTypes.InputJsonValue | PrismaTypes.NullableJsonNullValueInput | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return Prisma.JsonNull;
+  return value;
+};
 
 interface CreateTaskInput extends TaskInput {
   title: string;
@@ -75,7 +81,7 @@ export const taskService = {
         ,
         isRecurring: input.isRecurring ?? false,
         recurrenceText: input.recurrenceText ?? null,
-        recurrenceJson: input.recurrenceJson ?? null,
+        recurrenceJson: toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: input.recurrenceSummary ?? null,
         recurrenceUntil: input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null
       }
@@ -123,7 +129,7 @@ export const taskService = {
     }
     if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);
     if (input.recurrenceText !== undefined) patch.recurrenceText = input.recurrenceText;
-    if (input.recurrenceJson !== undefined) patch.recurrenceJson = input.recurrenceJson;
+    if (input.recurrenceJson !== undefined) patch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
     if (input.recurrenceSummary !== undefined) patch.recurrenceSummary = input.recurrenceSummary;
     if (input.recurrenceUntil !== undefined) patch.recurrenceUntil = toDueDate(input.recurrenceUntil);
 
