@@ -158,7 +158,7 @@ export default function MiniApp() {
   const [loading, setLoading] = useState(true);
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
