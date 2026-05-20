@@ -731,6 +731,7 @@ export default function MiniApp() {
                 onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
                 className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
               >
+                <option value="all">За все время</option>
                 <option value="today">Сегодня</option>
                 <option value="tomorrow">Завтра</option>
                 <option value="week">Неделя</option>
