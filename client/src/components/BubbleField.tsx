@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Gauge, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -404,6 +404,16 @@ export function BubbleField({
             <span style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
+        {bubble.task.isRecurring ? (
+          <g pointerEvents="none">
+            <circle cx={0} cy={-bubble.radius * 0.72} r={10} fill="rgba(15,23,42,0.75)" />
+            <foreignObject x={-6} y={-bubble.radius * 0.72 - 6} width={12} height={12}>
+              <div className="flex h-full w-full items-center justify-center">
+                <Repeat size={12} color="#bae6fd" />
+              </div>
+            </foreignObject>
+          </g>
+        ) : null}
 
         {hasAiMessage ? (
           <motion.g
