@@ -59,11 +59,67 @@ const toNotifyBeforeMinutes = (value: number | string | null): number | null => 
   return Math.round(numericValue);
 };
 
+type RecurrenceSchedule = { rrule?: string; timezone?: string; until?: string | null };
+const parseRRuleParts = (rrule: string): Record<string, string> => Object.fromEntries(
+  rrule
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [key, value] = part.split('=');
+      return [key?.toUpperCase() ?? '', value ?? ''];
+    })
+);
+
+const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Date): Date | null => {
+  if (!schedule.rrule) return null;
+  const parts = parseRRuleParts(schedule.rrule);
+  const freq = parts.FREQ?.toUpperCase();
+  const hour = Number(parts.BYHOUR ?? baseline.getUTCHours());
+  const minute = Number(parts.BYMINUTE ?? baseline.getUTCMinutes());
+  const step = Math.max(1, Number(parts.INTERVAL ?? 1));
+  const until = schedule.until ? new Date(schedule.until) : null;
+  const next = new Date(baseline);
+
+  const applyTime = (date: Date) => {
+    date.setUTCHours(Number.isFinite(hour) ? hour : 9, Number.isFinite(minute) ? minute : 0, 0, 0);
+  };
+  applyTime(next);
+
+  if (freq === 'MONTHLY' && parts.BYMONTHDAY) {
+    const monthDays = parts.BYMONTHDAY.split(',').map((v) => Number(v)).filter((n) => Number.isFinite(n) && n >= 1 && n <= 31).sort((a, b) => a - b);
+    if (monthDays.length === 0) return null;
+    for (let i = 0; i < 24; i += 1) {
+      const probe = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + i, 1, next.getUTCHours(), next.getUTCMinutes(), 0, 0));
+      for (const day of monthDays) {
+        const candidate = new Date(Date.UTC(probe.getUTCFullYear(), probe.getUTCMonth(), day, next.getUTCHours(), next.getUTCMinutes(), 0, 0));
+        if (candidate.getUTCMonth() !== probe.getUTCMonth()) continue;
+        if (candidate > baseline) return until && candidate > until ? null : candidate;
+      }
+    }
+    return null;
+  }
+
+  if (freq === 'DAILY') {
+    while (next <= baseline) next.setUTCDate(next.getUTCDate() + step);
+    return until && next > until ? null : next;
+  }
+  return null;
+};
+
 export const taskService = {
   list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
   create: async (userId: string, input: CreateTaskInput) => {
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
+    const recurrenceSchedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
+      ? input.recurrenceJson as unknown as RecurrenceSchedule
+      : null);
+    const resolvedDueDate = input.dueDate !== undefined
+      ? toDueDate(input.dueDate)
+      : input.isRecurring && recurrenceSchedule
+        ? computeNextRecurringDueDate(recurrenceSchedule, new Date())
+        : null;
 
     const created = await prisma.task.create({
       data: {
@@ -76,7 +132,7 @@ export const taskService = {
         urgency,
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
-        dueDate: input.dueDate !== undefined ? toDueDate(input.dueDate) : null,
+        dueDate: resolvedDueDate,
         notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
         ,
         isRecurring: input.isRecurring ?? false,
@@ -140,12 +196,28 @@ export const taskService = {
     const currentTask = await prisma.task.findFirstOrThrow({
       where: { id, userId }
     });
+    if ((input.isRecurring === true || input.recurrenceJson !== undefined) && input.dueDate === undefined) {
+      const schedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
+        ? input.recurrenceJson as unknown as RecurrenceSchedule
+        : currentTask.recurrenceJson as unknown as RecurrenceSchedule | null);
+      patch.dueDate = computeNextRecurringDueDate(schedule ?? {}, new Date());
+    }
 
     return prisma.$transaction(async (tx) => {
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
-      if (input.status === 'DONE' && !currentTask.parentTaskId) {
+      if (input.status === 'DONE' && currentTask.isRecurring) {
+        const schedule = currentTask.recurrenceJson as unknown as RecurrenceSchedule | null;
+        const baseline = currentTask.dueDate ?? new Date();
+        const nextDue = computeNextRecurringDueDate(schedule ?? {}, baseline);
+        if (nextDue) {
+          await tx.task.update({
+            where: { id },
+            data: { status: 'TODO', dueDate: nextDue, telegramNotifiedAt: null }
+          });
+        }
+      } else if (input.status === 'DONE' && !currentTask.parentTaskId) {
         await tx.task.updateMany({
           where: { parentTaskId: id, userId, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
