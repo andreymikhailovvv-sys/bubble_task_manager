@@ -156,6 +156,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
+  parseRecurrence: (payload: { text: string }) =>
+    request<{ summary: string; schedule: { rrule: string; timezone: string; until: string | null }; model: string }>('/api/ai/parse-recurrence', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
+    }),
   undoGeneralAssistantAction: (payload: {
     operations: Array<{
       taskId: string;
