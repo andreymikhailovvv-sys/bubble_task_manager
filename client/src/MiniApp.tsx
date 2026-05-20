@@ -686,23 +686,17 @@ export default function MiniApp() {
   return (
     <main className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto max-w-2xl space-y-4">
-        <header className="space-y-2">
-          <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
-          <p className="text-sm text-slate-300">Список задач с секторами, фильтром по времени и редактированием карточек.</p>
-        </header>
-
-        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-          <label className="mb-1 block text-xs text-slate-300">Поиск по задачам</label>
-          <div className="flex items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
+        <section className="sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur">
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
             <Search size={14} className="text-slate-400" />
             <input
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
-              placeholder="Введите ключевое слово"
+              placeholder="Поиск по задачам"
               className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
-          </div>
-          <div className="mt-3 flex items-center gap-2">
+            </div>
             <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
               <button
                 type="button"
@@ -718,36 +712,7 @@ export default function MiniApp() {
                 )}
               </button>
             </div>
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
-              <select
-                value={timeFilter}
-                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                className="h-9 min-w-32 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
-              >
-                {(Object.keys(timeFilterLabel) as TimeFilter[]).map((value) => (
-                  <option key={value} value={value}>
-                    Срок: {timeFilterLabel[value]}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={sphereFilter}
-                onChange={(event) => setSphereFilter(event.target.value)}
-                className="h-9 min-w-36 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
-              >
-                <option value="all">Сектор: Все</option>
-                <option value="without-sphere">Сектор: Без сектора</option>
-                {spheres.map((sphere) => (
-                  <option key={sphere.id} value={sphere.id}>
-                    Сектор: {sphere.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
-          <p className="mt-2 text-xs text-slate-400">
-            Активно: {timeFilterLabel[timeFilter]} · {selectedSphereName}
-          </p>
         </section>
 
         {error ? (
