@@ -195,6 +195,28 @@ function parseTimelineOptimizationPlan(raw: string): TimelineOptimizationPlan {
   return { summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : '', tasks: parsed.tasks };
 }
 
+
+function buildFallbackSpacingPlan(tasks: Array<{ id: string; dueDate: Date | null }>, periodEnd: Date): Array<{ taskId: string; dueDate: string | null }> {
+  const scheduled = tasks
+    .filter((task): task is { id: string; dueDate: Date } => Boolean(task.dueDate && !Number.isNaN(task.dueDate.getTime())))
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  const minGapMs = 15 * 60 * 1000;
+  let lastTime: number | null = null;
+  const updates: Array<{ taskId: string; dueDate: string | null }> = [];
+  for (const task of scheduled) {
+    const originalTime = task.dueDate.getTime();
+    let nextTime = originalTime;
+    if (lastTime !== null && nextTime - lastTime < minGapMs) {
+      nextTime = lastTime + minGapMs;
+    }
+    if (nextTime >= periodEnd.getTime()) break;
+    if (nextTime !== originalTime) {
+      updates.push({ taskId: task.id, dueDate: new Date(nextTime).toISOString() });
+    }
+    lastTime = nextTime;
+  }
+  return updates;
+}
 type GeneratedSubtask = {
   title: string;
   description: string;
@@ -2110,10 +2132,29 @@ ${parsed.answer}`
       `сфера=${t.sphere?.name ?? 'null'}`,
       `основнаяЗадача=${t.parentTask ? `${t.parentTask.title} (${t.parentTask.id})` : 'null'}`
     ].join(' | ')).join('\n');
-    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
-    return { model: FULL_MODEL, summary: parsed.summary, plan: parsed.tasks };
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const normalizedPlan = parsed.tasks
+      .map((item) => {
+        const task = taskById.get(item.taskId);
+        if (!task) return null;
+        const nextDue = item.dueDate ? new Date(item.dueDate) : null;
+        if (nextDue && Number.isNaN(nextDue.getTime())) return null;
+        const prevIso = task.dueDate ? task.dueDate.toISOString() : null;
+        const nextIso = nextDue ? nextDue.toISOString() : null;
+        if (prevIso === nextIso) return null;
+        return { taskId: task.id, dueDate: nextIso };
+      })
+      .filter((item): item is { taskId: string; dueDate: string | null } => Boolean(item));
+
+    const shouldUseFallbackSpacing = normalizedPlan.length === 0 && (input.userNote ?? '').trim().length === 0;
+    const fallbackPlan = shouldUseFallbackSpacing ? buildFallbackSpacingPlan(tasks.map((task) => ({ id: task.id, dueDate: task.dueDate })), periodEnd) : [];
+    const finalPlan = normalizedPlan.length > 0 ? normalizedPlan : fallbackPlan;
+    const summary = parsed.summary || (finalPlan.length > 0 ? 'Найдено и подготовлено оптимальное перераспределение задач.' : 'Изменения не требуются.');
+
+    return { model: FULL_MODEL, summary, plan: finalPlan };
   },
 
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
