@@ -158,11 +158,13 @@ export default function MiniApp() {
   const [loading, setLoading] = useState(true);
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
   const [timelineNow, setTimelineNow] = useState(() => new Date());
+  const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [expandedSubtaskIds, setExpandedSubtaskIds] = useState<string[]>([]);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -174,6 +176,7 @@ export default function MiniApp() {
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -358,37 +361,10 @@ export default function MiniApp() {
     }));
   }, [filteredTasks, spheres]);
 
-  const timelineGroups = useMemo(() => {
-    const tasksWithDate = timelineFilteredTasks
-      .filter((task) => Boolean(task.dueDate))
-      .sort(compareByDueDate);
-    const grouped = new Map<string, Task[]>();
-
-    for (const task of tasksWithDate) {
-      const key = new Date(task.dueDate as string).toDateString();
-      const current = grouped.get(key) ?? [];
-      current.push(task);
-      grouped.set(key, current);
-    }
-
-    const withoutDate = timelineFilteredTasks.filter((task) => !task.dueDate);
-    return {
-      dated: Array.from(grouped.entries()).map(([key, value]) => ({
-        key,
-        label: new Date(key).toLocaleDateString('ru-RU', {
-          weekday: 'short',
-          day: '2-digit',
-          month: 'long'
-        }),
-        tasks: value
-      })),
-      withoutDate
-    };
-  }, [timelineFilteredTasks]);
-
   const timelineToday = useMemo(() => {
     const now = timelineNow;
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const anchor = timelineAnchorDate;
+    const startOfDay = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
     const endOfDay = new Date(startOfDay);
     endOfDay.setDate(endOfDay.getDate() + 1);
 
@@ -428,15 +404,19 @@ export default function MiniApp() {
 
     const currentHour = now.getHours();
     const currentTimeTop = hourTops[currentHour] + ((now.getMinutes() / 60) * hourHeights[currentHour]);
+    const isCurrentDay = now.getFullYear() === anchor.getFullYear()
+      && now.getMonth() === anchor.getMonth()
+      && now.getDate() === anchor.getDate();
     return {
       timelineEntries,
       currentTimeTop,
-      isTodayVisible: timeFilter === 'all' || timeFilter === 'today',
+      isTodayVisible: isCurrentDay,
       hourHeights,
       hourTops,
-      totalHeight
+      totalHeight,
+      anchorLabel: anchor.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })
     };
-  }, [timeFilter, timelineFilteredTasks, timelineNow]);
+  }, [timelineAnchorDate, timelineFilteredTasks, timelineNow]);
 
   const timelineTaskPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
@@ -684,25 +664,29 @@ export default function MiniApp() {
   }
 
   return (
-    <main className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100">
+    <main
+      onScroll={(event) => {
+        const nextTop = event.currentTarget.scrollTop;
+        const prevTop = lastMainScrollTopRef.current;
+        if (nextTop <= 8) setIsHeaderVisible(true);
+        else if (nextTop > prevTop + 6) setIsHeaderVisible(false);
+        else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
+        lastMainScrollTopRef.current = nextTop;
+      }}
+      className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100"
+    >
       <div className="mx-auto max-w-2xl space-y-4">
-        <header className="space-y-2">
-          <h1 className="text-2xl font-bold">Мини-приложение задач</h1>
-          <p className="text-sm text-slate-300">Список задач с секторами, фильтром по времени и редактированием карточек.</p>
-        </header>
-
-        <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-          <label className="mb-1 block text-xs text-slate-300">Поиск по задачам</label>
-          <div className="flex items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
+        <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
             <Search size={14} className="text-slate-400" />
             <input
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
-              placeholder="Введите ключевое слово"
+              placeholder="Поиск по задачам"
               className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
-          </div>
-          <div className="mt-3 flex items-center gap-2">
+            </div>
             <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
               <button
                 type="button"
@@ -718,36 +702,7 @@ export default function MiniApp() {
                 )}
               </button>
             </div>
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1">
-              <select
-                value={timeFilter}
-                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                className="h-9 min-w-32 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
-              >
-                {(Object.keys(timeFilterLabel) as TimeFilter[]).map((value) => (
-                  <option key={value} value={value}>
-                    Срок: {timeFilterLabel[value]}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={sphereFilter}
-                onChange={(event) => setSphereFilter(event.target.value)}
-                className="h-9 min-w-36 rounded-full border border-slate-600 bg-slate-800 px-3 text-xs text-slate-100"
-              >
-                <option value="all">Сектор: Все</option>
-                <option value="without-sphere">Сектор: Без сектора</option>
-                {spheres.map((sphere) => (
-                  <option key={sphere.id} value={sphere.id}>
-                    Сектор: {sphere.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
-          <p className="mt-2 text-xs text-slate-400">
-            Активно: {timeFilterLabel[timeFilter]} · {selectedSphereName}
-          </p>
         </section>
 
         {error ? (
@@ -769,7 +724,19 @@ export default function MiniApp() {
                 : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.14) ?? 'rgba(15,23,42,0.82)')
             }}
           >
-            <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
+              <select
+                value={timeFilter}
+                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
+              >
+                <option value="all">За все время</option>
+                <option value="today">Сегодня</option>
+                <option value="tomorrow">Завтра</option>
+                <option value="week">Неделя</option>
+              </select>
+            </div>
 
             {group.tasks.map((task) => {
               const hasOverdueState = isOverdue(task);
@@ -803,7 +770,14 @@ export default function MiniApp() {
           </section>
         )) : (
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <h2 className="mb-3 text-lg font-semibold">Таймлайн задач</h2>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Таймлайн задач</h2>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
+                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
+                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
+              </div>
+            </div>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
@@ -859,21 +833,6 @@ export default function MiniApp() {
                   </div>
                 </div>
               </div>
-              {timelineGroups.withoutDate.length > 0 ? (
-                <div className="space-y-2 rounded-md border border-dashed border-slate-700 p-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Без дедлайна</p>
-                  {timelineGroups.withoutDate.map((task) => (
-                    <button
-                      type="button"
-                      key={task.id}
-                      className="w-full rounded-md border border-slate-700 bg-slate-800/65 px-3 py-2 text-left text-sm"
-                      onClick={() => openTaskModal(task)}
-                    >
-                      {task.title}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </section>
         )}
