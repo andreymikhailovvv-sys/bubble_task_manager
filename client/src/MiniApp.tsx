@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { ChatMessage, Sphere, Task } from './lib/types';
 
@@ -172,6 +172,13 @@ export default function MiniApp() {
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [createTaskDraft, setCreateTaskDraft] = useState<TaskDraft>({
+    title: '',
+    description: '',
+    dueDate: ''
+  });
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -599,6 +606,31 @@ export default function MiniApp() {
     }
   };
 
+  const openCreateTaskModal = () => {
+    setCreateTaskDraft({ title: '', description: '', dueDate: '' });
+    setIsCreateTaskModalOpen(true);
+  };
+
+  const createTask = async () => {
+    setIsCreatingTask(true);
+    setError(null);
+    try {
+      await api.createTask({
+        title: createTaskDraft.title.trim() || 'Новая задача',
+        description: createTaskDraft.description.trim() || null,
+        dueDate: fromInputDateTime(createTaskDraft.dueDate),
+        sphereId: sphereFilter === 'all' || sphereFilter === 'without-sphere' ? null : sphereFilter
+      });
+      await loadData();
+      setIsCreateTaskModalOpen(false);
+      setCreateTaskDraft({ title: '', description: '', dueDate: '' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось создать задачу');
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
   const openedTask = openedTaskId
     ? tasks.find((task) => task.id === openedTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
     : null;
@@ -688,6 +720,15 @@ export default function MiniApp() {
             />
             </div>
             <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
+              <button
+                type="button"
+                onClick={openCreateTaskModal}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                aria-label="Создать задачу"
+                title="Создать задачу"
+              >
+                <Plus size={16} className="text-emerald-400" />
+              </button>
               <button
                 type="button"
                 onClick={toggleDisplayMode}
@@ -1103,6 +1144,54 @@ export default function MiniApp() {
                 title="Отправить"
               >
                 <SendHorizontal size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCreateTaskModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold">Новая задача</h2>
+              <button type="button" onClick={() => setIsCreateTaskModalOpen(false)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Название задачи</label>
+                <input
+                  value={createTaskDraft.title}
+                  onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Описание</label>
+                <textarea
+                  value={createTaskDraft.description}
+                  onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, description: event.target.value }))}
+                  className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Срок</label>
+                <input
+                  type="datetime-local"
+                  value={createTaskDraft.dueDate}
+                  onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: event.target.value }))}
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void createTask()}
+                disabled={isCreatingTask}
+                className="inline-flex w-full items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+              >
+                {isCreatingTask ? 'Создаём…' : 'Создать задачу'}
               </button>
             </div>
           </div>
