@@ -100,6 +100,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       sphereId: task.sphereId ?? null,
       dueDate: task.dueDate ?? null,
       notifyBeforeMinutes: task.notifyBeforeMinutes ?? null,
+      isRecurring: task.isRecurring ?? false,
+      recurrenceText: task.recurrenceText ?? null,
+      recurrenceJson: task.recurrenceJson ?? null,
+      recurrenceSummary: task.recurrenceSummary ?? null,
+      recurrenceUntil: task.recurrenceUntil ?? null,
       importance: task.importance ?? 3,
       urgency: task.urgency ?? 3,
       status: task.status ?? 'TODO'
@@ -120,6 +125,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       sphereId: normalized.sphereId ?? null,
       dueDate: normalized.dueDate ?? null,
       notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      isRecurring: normalized.isRecurring ?? false,
+      recurrenceText: normalized.recurrenceText ?? null,
+      recurrenceJson: normalized.recurrenceJson ?? null,
+      recurrenceSummary: normalized.recurrenceSummary ?? null,
+      recurrenceUntil: normalized.recurrenceUntil ?? null,
       importance: normalized.importance,
       urgency: normalized.urgency,
       status: normalized.status
@@ -329,6 +339,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           <input type="checkbox" checked={isRecurring} onChange={(e) => {
             const enabled = e.target.checked;
             setIsRecurring(enabled);
+            if (enabled) {
+              setForm((p) => ({ ...p, isRecurring: true, recurrenceText: recurrenceText.trim() || p.recurrenceText || null }));
+            }
             if (!enabled) {
               setRecurrenceSummary(null);
               setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));

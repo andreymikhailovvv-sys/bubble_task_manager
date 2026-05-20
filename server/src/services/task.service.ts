@@ -205,14 +205,15 @@ export const taskService = {
 
     return prisma.$transaction(async (tx) => {
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      let finalTask = updatedTask;
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
-      if (input.status === 'DONE' && currentTask.isRecurring) {
-        const schedule = currentTask.recurrenceJson as unknown as RecurrenceSchedule | null;
-        const baseline = currentTask.dueDate ?? new Date();
+      if (input.status === 'DONE' && updatedTask.isRecurring) {
+        const schedule = updatedTask.recurrenceJson as unknown as RecurrenceSchedule | null;
+        const baseline = updatedTask.dueDate ?? new Date();
         const nextDue = computeNextRecurringDueDate(schedule ?? {}, baseline);
         if (nextDue) {
-          await tx.task.update({
+          finalTask = await tx.task.update({
             where: { id },
             data: { status: 'TODO', dueDate: nextDue, telegramNotifiedAt: null }
           });
@@ -224,7 +225,7 @@ export const taskService = {
         });
       }
 
-      return updatedTask;
+      return finalTask;
     });
   },
   remove: async (id: string, userId: string) => {

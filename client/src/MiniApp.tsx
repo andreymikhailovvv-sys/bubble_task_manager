@@ -158,7 +158,7 @@ export default function MiniApp() {
   const [loading, setLoading] = useState(true);
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
@@ -736,7 +736,19 @@ export default function MiniApp() {
                 : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.14) ?? 'rgba(15,23,42,0.82)')
             }}
           >
-            <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
+              <select
+                value={timeFilter}
+                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
+              >
+                <option value="all">За все время</option>
+                <option value="today">Сегодня</option>
+                <option value="tomorrow">Завтра</option>
+                <option value="week">Неделя</option>
+              </select>
+            </div>
 
             {group.tasks.map((task) => {
               const hasOverdueState = isOverdue(task);
