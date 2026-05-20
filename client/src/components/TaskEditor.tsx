@@ -335,30 +335,35 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             </div>
           </>
         ) : null}
-        <label className="mt-1 flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isRecurring} onChange={(e) => {
-            const enabled = e.target.checked;
-            setIsRecurring(enabled);
-            if (enabled) {
-              setForm((p) => ({ ...p, isRecurring: true, recurrenceText: recurrenceText.trim() || p.recurrenceText || null }));
-            }
-            if (!enabled) {
-              setRecurrenceSummary(null);
-              setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));
-            }
-          }} />
-          повторять
-        </label>
-        {isRecurring ? (
-          <div className="rounded bg-slate-800/70 p-2 text-xs">
-            <p className="mb-1 text-slate-300">Опишите как должна повторяться задача</p>
-            <textarea className="min-h-16 w-full rounded bg-slate-900 p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
-            <div className="mt-2 flex items-center gap-2">
-              <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
-              <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
-            </div>
-          </div>
-        ) : (
+        {!isSubtask ? (
+          <>
+            <label className="mt-1 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={isRecurring} onChange={(e) => {
+                const enabled = e.target.checked;
+                setIsRecurring(enabled);
+                if (enabled) {
+                  setForm((p) => ({ ...p, isRecurring: true, recurrenceText: recurrenceText.trim() || p.recurrenceText || null }));
+                }
+                if (!enabled) {
+                  setRecurrenceSummary(null);
+                  setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));
+                }
+              }} />
+              повторять
+            </label>
+            {isRecurring ? (
+              <div className="rounded bg-slate-800/70 p-2 text-xs">
+                <p className="mb-1 text-slate-300">Опишите как должна повторяться задача</p>
+                <textarea className="min-h-16 w-full rounded bg-slate-900 p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
+                <div className="mt-2 flex items-center gap-2">
+                  <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
+                  <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {!isRecurring ? (
         <label className="block text-xs">Срок (дата и время)
           <DateTimePickerWithApply
             className="mt-1"
@@ -366,7 +371,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))}
           />
         </label>
-        )}
+        ) : null}
         {!isRecurring ? <label className="block text-xs">Уведомлять за
           <select
             className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"

@@ -110,9 +110,10 @@ const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Dat
 export const taskService = {
   list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
   create: async (userId: string, input: CreateTaskInput) => {
+    const isSubtask = Boolean(input.parentTaskId);
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
-    const recurrenceSchedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
+    const recurrenceSchedule = (!isSubtask && input.recurrenceJson && typeof input.recurrenceJson === 'object'
       ? input.recurrenceJson as unknown as RecurrenceSchedule
       : null);
     const resolvedDueDate = input.dueDate !== undefined
@@ -135,11 +136,11 @@ export const taskService = {
         dueDate: resolvedDueDate,
         notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
         ,
-        isRecurring: input.isRecurring ?? false,
-        recurrenceText: input.recurrenceText ?? null,
-        recurrenceJson: toRecurrenceJson(input.recurrenceJson),
-        recurrenceSummary: input.recurrenceSummary ?? null,
-        recurrenceUntil: input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null
+        isRecurring: isSubtask ? false : (input.isRecurring ?? false),
+        recurrenceText: isSubtask ? null : (input.recurrenceText ?? null),
+        recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
+        recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
+        recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null)
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -183,12 +184,6 @@ export const taskService = {
     if (input.notifyBeforeMinutes !== undefined) {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
-    if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);
-    if (input.recurrenceText !== undefined) patch.recurrenceText = input.recurrenceText;
-    if (input.recurrenceJson !== undefined) patch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
-    if (input.recurrenceSummary !== undefined) patch.recurrenceSummary = input.recurrenceSummary;
-    if (input.recurrenceUntil !== undefined) patch.recurrenceUntil = toDueDate(input.recurrenceUntil);
-
     if (input.status !== undefined || input.dueDate !== undefined || input.notifyBeforeMinutes !== undefined) {
       patch.telegramNotifiedAt = null;
     }
@@ -196,7 +191,28 @@ export const taskService = {
     const currentTask = await prisma.task.findFirstOrThrow({
       where: { id, userId }
     });
-    if ((input.isRecurring === true || input.recurrenceJson !== undefined) && input.dueDate === undefined) {
+    const isSubtask = Boolean(currentTask.parentTaskId);
+    if (!isSubtask) {
+      if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);
+      if (input.recurrenceText !== undefined) patch.recurrenceText = input.recurrenceText;
+      if (input.recurrenceJson !== undefined) patch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
+      if (input.recurrenceSummary !== undefined) patch.recurrenceSummary = input.recurrenceSummary;
+      if (input.recurrenceUntil !== undefined) patch.recurrenceUntil = toDueDate(input.recurrenceUntil);
+    } else if (
+      input.isRecurring !== undefined
+      || input.recurrenceText !== undefined
+      || input.recurrenceJson !== undefined
+      || input.recurrenceSummary !== undefined
+      || input.recurrenceUntil !== undefined
+    ) {
+      patch.isRecurring = false;
+      patch.recurrenceText = null;
+      patch.recurrenceJson = Prisma.JsonNull;
+      patch.recurrenceSummary = null;
+      patch.recurrenceUntil = null;
+    }
+
+    if (!isSubtask && (input.isRecurring === true || input.recurrenceJson !== undefined) && input.dueDate === undefined) {
       const schedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
         ? input.recurrenceJson as unknown as RecurrenceSchedule
         : currentTask.recurrenceJson as unknown as RecurrenceSchedule | null);
@@ -208,7 +224,7 @@ export const taskService = {
       let finalTask = updatedTask;
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
-      if (input.status === 'DONE' && updatedTask.isRecurring) {
+      if (input.status === 'DONE' && updatedTask.isRecurring && !updatedTask.parentTaskId) {
         const schedule = updatedTask.recurrenceJson as unknown as RecurrenceSchedule | null;
         const baseline = updatedTask.dueDate ?? new Date();
         const nextDue = computeNextRecurringDueDate(schedule ?? {}, baseline);
