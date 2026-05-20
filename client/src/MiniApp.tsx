@@ -368,6 +368,8 @@ export default function MiniApp() {
     }));
   }, [filteredTasks, spheres]);
 
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
   const timelineToday = useMemo(() => {
     const now = timelineNow;
     const anchor = timelineAnchorDate;
@@ -839,7 +841,9 @@ export default function MiniApp() {
                       const taskHour = dueDate.getHours();
                       const hasOverdueState = isOverdue(task);
                       const isSubtask = Boolean(task.parentTaskId);
-                      const sphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
+                      const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
+                      const taskForSectorColor = parentTask ?? task;
+                      const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
                       const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.hourTops[taskHour] + 4 };
                       return (
                         <button
@@ -864,7 +868,7 @@ export default function MiniApp() {
                               : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
                             boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
                           }}
-                          onClick={() => openTaskModal(task)}
+                          onClick={() => openTaskModal(parentTask ?? task)}
                         >
                           <p className="truncate text-sm font-medium">{task.title}</p>
                           <p className="text-xs text-slate-300">{isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
