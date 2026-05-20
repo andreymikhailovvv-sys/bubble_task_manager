@@ -313,6 +313,7 @@ apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTa
 apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);
 apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, aiController.generateOverdueTaskNudge);
 apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromPrompt);
+apiRouter.post('/ai/parse-recurrence', requireAuth, aiController.parseRecurrence);
 apiRouter.post('/timeline/ai-optimize', requireAuth, aiController.optimizeTimelineSchedule);
 apiRouter.post('/timeline/ai-optimize/apply', requireAuth, aiController.applyTimelineOptimization);
 
