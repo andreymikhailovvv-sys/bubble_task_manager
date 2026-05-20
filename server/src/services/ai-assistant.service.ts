@@ -81,6 +81,7 @@ type ChatAttachment = {
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-mini';
+const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-4.1-mini';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
@@ -740,6 +741,37 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
+  async parseRecurrence(input: { text: string; userTimeZone?: string }) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+    const model = RECURRENCE_MODEL;
+    const now = new Date();
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        input: [
+          { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
+          { role: 'user', content: `Сейчас UTC: ${now.toISOString()}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
+        ]
+      })
+    });
+    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+    const raw = extractOutputText(await response.json());
+    if (!raw) throw new Error('Empty AI response');
+    const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
+    return {
+      summary: parsed.summary ?? 'Повторение настроено.',
+      schedule: {
+        rrule: parsed.schedule?.rrule ?? '',
+        timezone: parsed.schedule?.timezone ?? userTimeZone,
+        until: parsed.schedule?.until ?? null
+      },
+      model
+    };
+  },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
     const userTimeZone = user?.timeZone || MOSCOW_TIMEZONE;
@@ -2333,5 +2365,3 @@ function sanitizeUpstreamErrorText(payload: string): string {
   }
   return trimmed.replace(/\s+/g, ' ').slice(0, 500);
 }
-
-
