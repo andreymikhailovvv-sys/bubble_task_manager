@@ -1991,7 +1991,10 @@ export default function App() {
   const timelineRenderTasks = isTimelineOptimizePreviewEnabled
     ? listTasks.map((task) => (previewDueDateByTaskId.has(task.id) ? { ...task, dueDate: previewDueDateByTaskId.get(task.id) ?? null } : task))
     : listTasks;
-  const timelineVisibleSubtasks = subtasks.filter((subtask) => {
+  const timelineSubtasksForPreview = isTimelineOptimizePreviewEnabled
+    ? subtasks.map((subtask) => (previewDueDateByTaskId.has(subtask.id) ? { ...subtask, dueDate: previewDueDateByTaskId.get(subtask.id) ?? null } : subtask))
+    : subtasks;
+  const timelineVisibleSubtasks = timelineSubtasksForPreview.filter((subtask) => {
     if (subtask.status === 'DONE' || !subtask.dueDate) return false;
     if (!search.trim()) return true;
     const query = search.toLowerCase();
@@ -2921,30 +2924,6 @@ export default function App() {
                     </div>
                   ));
                   })()}
-                </section>
-              ) : null}
-
-              {timelineViewData.tasksWithoutDate.length > 0 ? (
-                <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-slate-200">Без даты</h3>
-                    <span className="rounded-full border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300">{timelineViewData.tasksWithoutDate.length}</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {timelineViewData.tasksWithoutDate.map((task) => (
-                      <li
-                        key={task.id}
-                        className="cursor-pointer rounded-lg border border-slate-700/70 bg-slate-900/75 px-3 py-2 transition hover:border-cyan-300/70 hover:bg-slate-800/70"
-                        onClick={() => setFocusedTaskId(task.id)}
-                      >
-                        <p className={`text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
-                          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={13} className="ml-1 inline-block text-violet-300" /></span> : null}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">Срок: Без дедлайна</p>
-                      </li>
-                    ))}
-                  </ul>
                 </section>
               ) : null}
             </div>
