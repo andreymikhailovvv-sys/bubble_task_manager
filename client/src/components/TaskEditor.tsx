@@ -1,7 +1,8 @@
-import { Paperclip, Plus, X } from 'lucide-react';
+import { Loader2, Paperclip, Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
+import { api } from '../lib/api';
 
 type Props = {
   task?: Task;
@@ -65,12 +66,16 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [isGeneratingByAi, setIsGeneratingByAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceText, setRecurrenceText] = useState('');
+  const [recurrenceLoading, setRecurrenceLoading] = useState(false);
+  const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const nextForm = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 30 };
+    const nextForm: Partial<Task> = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 30 };
     setForm(nextForm);
     if (nextForm.notifyBeforeMinutes === null) {
       setNotifyPreset('null');
@@ -86,6 +91,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     setAiPendingFiles([]);
     setIsGeneratingByAi(false);
     setAiError(null);
+    setIsRecurring(Boolean(nextForm.isRecurring));
+    setRecurrenceText(nextForm.recurrenceText ?? '');
+    setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     autosaveSignatureRef.current = task ? JSON.stringify({
       title: task.title ?? '',
       description: task.description ?? '',
@@ -191,6 +199,19 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       setAiError(error instanceof Error ? error.message : 'Не удалось сформировать задачу через ИИ');
     } finally {
       setIsGeneratingByAi(false);
+    }
+  };
+  const applyRecurrence = async () => {
+    if (!isRecurring) return;
+    const text = recurrenceText.trim();
+    if (!text) return;
+    setRecurrenceLoading(true);
+    try {
+      const parsed = await api.parseRecurrence({ text });
+      setRecurrenceSummary(parsed.summary);
+      setForm((p) => ({ ...p, isRecurring: true, recurrenceText: text, recurrenceJson: parsed.schedule, recurrenceSummary: parsed.summary, recurrenceUntil: parsed.schedule.until }));
+    } finally {
+      setRecurrenceLoading(false);
     }
   };
 
@@ -304,6 +325,27 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             </div>
           </>
         ) : null}
+        <label className="mt-1 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isRecurring} onChange={(e) => {
+            const enabled = e.target.checked;
+            setIsRecurring(enabled);
+            if (!enabled) {
+              setRecurrenceSummary(null);
+              setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));
+            }
+          }} />
+          повторять
+        </label>
+        {isRecurring ? (
+          <div className="rounded bg-slate-800/70 p-2 text-xs">
+            <p className="mb-1 text-slate-300">Опишите как должна повторяться задача</p>
+            <textarea className="min-h-16 w-full rounded bg-slate-900 p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
+            <div className="mt-2 flex items-center gap-2">
+              <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
+              <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
+            </div>
+          </div>
+        ) : (
         <label className="block text-xs">Срок (дата и время)
           <DateTimePickerWithApply
             className="mt-1"
@@ -311,7 +353,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))}
           />
         </label>
-        <label className="block text-xs">Уведомлять за
+        )}
+        {!isRecurring ? <label className="block text-xs">Уведомлять за
           <select
             className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
             value={notifyPreset}
@@ -329,7 +372,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
               <option key={preset.value} value={preset.value}>{preset.label}</option>
             ))}
           </select>
-        </label>
+        </label> : null}
 
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
