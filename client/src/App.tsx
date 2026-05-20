@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -1908,6 +1908,7 @@ export default function App() {
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
             </span>
           ) : null}
+          {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="shrink-0 text-cyan-100/90" /></span> : null}
         </span>
         {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
         {isHoverCardVisible ? createPortal((
@@ -2461,6 +2462,7 @@ export default function App() {
                             <span className="inline-block">
                               <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                             </span>
+                            {task.isRecurring ? <span title="Повторяющаяся задача" className="ml-1 inline-block"><Repeat size={13} className="inline text-cyan-200" /></span> : null}
                             {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление" className="absolute ml-1"><Sparkles size={14} className="text-violet-300" /></span> : null}
                           </h3>
                           <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
@@ -3450,6 +3452,24 @@ export default function App() {
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
                   </select>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(focusedDraft.isRecurring)}
+                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), isRecurring: e.target.checked }))}
+                    />
+                    повторять
+                  </label>
+                  {focusedDraft.isRecurring ? (
+                    <label className="block text-xs">Описание повторения
+                      <textarea
+                        className="mt-1 min-h-16 w-full rounded bg-slate-800 p-2 text-sm"
+                        placeholder="Например: каждого 19 числа месяца в 12:00"
+                        value={focusedDraft.recurrenceText ?? ''}
+                        onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
+                      />
+                    </label>
+                  ) : null}
                   <label className="block text-xs">Срок (дата и время)
                     <DateTimePickerWithApply
                       className="mt-1"

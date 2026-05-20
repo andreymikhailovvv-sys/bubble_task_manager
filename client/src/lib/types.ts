@@ -12,6 +12,11 @@ export type Task = {
   sphereId?: string | null;
   parentTaskId?: string | null;
   notifyBeforeMinutes?: number | null;
+  isRecurring?: boolean;
+  recurrenceText?: string | null;
+  recurrenceJson?: Record<string, unknown> | null;
+  recurrenceSummary?: string | null;
+  recurrenceUntil?: string | null;
   importance: number;
   urgency: number;
   priorityScore: number;
