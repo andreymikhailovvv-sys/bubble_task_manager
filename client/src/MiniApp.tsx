@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Coins, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import type { ChatMessage, ChatMode, Sphere, Task } from './lib/types';
 
@@ -1001,14 +1001,16 @@ export default function MiniApp() {
                     className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
                   >
-                    Быстрая
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
                   </button>
                   <button
                     type="button"
                     className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
                   >
-                    Умная
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
                   </button>
                 </div>
                 <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
@@ -1170,14 +1172,34 @@ export default function MiniApp() {
                   </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsAiDialogOpen(false)}
-                className="rounded-md border border-slate-600 p-1 text-slate-300"
-                aria-label="Закрыть диалог с ИИ"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDialogOpen(false)}
+                  className="rounded-md border border-slate-600 p-1 text-slate-300"
+                  aria-label="Закрыть диалог с ИИ"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
             <div ref={fullscreenAiDialogContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-950/70 p-3 text-sm">
               {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}

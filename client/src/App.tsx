@@ -3430,15 +3430,24 @@ export default function App() {
                   <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <select
-                    value={focusedAiMode}
-                    onChange={(event) => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: event.target.value as ChatMode }))}
-                    className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
-                    title="Режим ИИ"
-                  >
-                    <option value="fast" className="bg-slate-800 text-slate-100">Быстрый</option>
-                    <option value="smart" className="bg-slate-800 text-slate-100">Умный</option>
-                  </select>
+                  <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-[11px]">
+                    <button
+                      className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                      onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
+                      type="button"
+                    >
+                      <span className="block text-left">Быстрая</span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                    </button>
+                    <button
+                      className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                      onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
+                      type="button"
+                    >
+                      <span className="block text-left">Умная</span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                    </button>
+                  </div>
                   <button
                     className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
                     onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
@@ -3913,14 +3922,16 @@ export default function App() {
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                     title="Быстрый режим (gpt-5.4-mini)"
                   >
-                    Быстрый
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
                   </button>
                   <button
                     className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                     title="Умный режим (gpt-5.4)"
                   >
-                    Умный
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
                   </button>
                 </div>
                 <button
