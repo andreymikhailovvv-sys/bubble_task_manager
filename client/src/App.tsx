@@ -425,6 +425,7 @@ export default function App() {
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
+  const [timelinePostponeHighlightedTaskId, setTimelinePostponeHighlightedTaskId] = useState<string | null>(null);
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
   const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
@@ -1917,9 +1918,23 @@ export default function App() {
     const appendSystemGeneralAiMessage = (text: string) => {
       setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
     };
+    const focusMovedTaskOnTimeline = (taskId: string) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const taskElement = document.querySelector<HTMLElement>(`[data-timeline-task-id="${taskId}"]`);
+          if (!taskElement) return;
+          taskElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          setTimelinePostponeHighlightedTaskId(taskId);
+          window.setTimeout(() => {
+            setTimelinePostponeHighlightedTaskId((prev) => (prev === taskId ? null : prev));
+          }, 1000);
+        });
+      });
+    };
     const updateDueDate = async (date: Date) => {
       await api.updateTask(task.id, { dueDate: date.toISOString() });
       await load();
+      focusMovedTaskOnTimeline(task.id);
       return date.toISOString();
     };
     if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
@@ -2012,6 +2027,7 @@ export default function App() {
         className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
+        data-timeline-task-id={task.id}
         style={{
           borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isSubtaskChip
@@ -2069,12 +2085,16 @@ export default function App() {
         }}
         onContextMenu={(event) => {
           event.preventDefault();
+          event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
           setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
           setTimelinePostponeSubmenuOpen(false);
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
+          {timelinePostponeHighlightedTaskId === task.id ? (
+            <Check size={13} className="shrink-0 text-emerald-300" />
+          ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="shrink-0 animate-spin text-cyan-100" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className="truncate">
@@ -3090,6 +3110,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3263,6 +3287,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3512,6 +3540,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3702,6 +3734,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -4029,6 +4065,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -4346,6 +4386,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
