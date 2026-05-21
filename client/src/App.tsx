@@ -420,6 +420,8 @@ export default function App() {
   const [isTimelineOverdueModalCollapsedForDrag, setIsTimelineOverdueModalCollapsedForDrag] = useState(false);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
+
+  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null } | null>(null);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -488,6 +490,17 @@ export default function App() {
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const [overdueTick, setOverdueTick] = useState(0);
 
+  useEffect(() => {
+    if (!timelineCreateMenu) return;
+    const onClose = () => setTimelineCreateMenu(null);
+    window.addEventListener('click', onClose);
+    window.addEventListener('scroll', onClose, true);
+    return () => {
+      window.removeEventListener('click', onClose);
+      window.removeEventListener('scroll', onClose, true);
+    };
+  }, [timelineCreateMenu]);
+
   const formatDeadlineTooltip = (task: Task) => {
     const dueDate = task.dueDate ? new Date(task.dueDate) : null;
     const dueDateText = dueDate && !Number.isNaN(dueDate.getTime())
@@ -518,6 +531,38 @@ export default function App() {
     setSpheres(sphereData);
     setTasks(taskData);
   }
+
+
+  const openCreateTaskFromTimeline = (date: Date, hour?: number | null) => {
+    const dueDate = new Date(date);
+    if (typeof hour === 'number') {
+      dueDate.setHours(hour, 0, 0, 0);
+    } else {
+      dueDate.setHours(0, 0, 0, 0);
+    }
+    setEditorState({
+      task: {
+        id: '',
+        title: '',
+        description: '',
+        status: 'TODO',
+        importance: 3,
+        urgency: 3,
+        sphereId: spheres[0]?.id ?? null,
+        dueDate: dueDate.toISOString(),
+        parentTaskId: null,
+        createdAt: new Date().toISOString(),
+        notifyBeforeMinutes: 30,
+        isRecurring: false,
+        recurrenceText: null,
+        recurrenceJson: null,
+        recurrenceSummary: null,
+        recurrenceUntil: null
+        ,
+        priorityScore: 0
+      }
+    });
+  };
 
   const clearUserState = () => {
     setCurrentUser(null);
@@ -2786,11 +2831,23 @@ export default function App() {
                               ? 'border-rose-800/60 bg-rose-950/18'
                               : 'border-slate-700/70 bg-slate-900/75')
                             : 'border-transparent bg-slate-900/20'
-                        } ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
                           if (!cell.date) return;
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
+                        }}
+                        onContextMenu={(event) => {
+                          if (!cell.date) return;
+                          event.preventDefault();
+                          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: new Date(cell.date), hour: null });
+                        }}
+                        onClick={(event) => {
+                          if (!cell.date) return;
+                          const target = event.target as HTMLElement;
+                          if (target.closest('button, a, input, textarea')) return;
+                          setTimelineAnchorDate(new Date(cell.date));
+                          setTimelineViewMode('day');
                         }}
                         onDrop={async (event) => {
                           if (!cell.date) return;
@@ -2885,6 +2942,10 @@ export default function App() {
                                 event.preventDefault();
                                 event.dataTransfer.dropEffect = 'move';
                               }}
+                              onContextMenu={(event) => {
+                                event.preventDefault();
+                                setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: new Date(day.date), hour });
+                              }}
                               onDrop={async (event) => {
                                 event.preventDefault();
                                 const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
@@ -2927,6 +2988,12 @@ export default function App() {
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
                         }}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          const dayDate = new Date(timelineAnchorDate);
+                          dayDate.setHours(0, 0, 0, 0);
+                          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: dayDate, hour: hourGroup.hour });
+                        }}
                         onDrop={async (event) => {
                           event.preventDefault();
                           const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
@@ -2953,6 +3020,28 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <aside
           className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"
           data-no-field-zoom="true"
@@ -3070,7 +3159,29 @@ export default function App() {
           </section>
           {isUpcomingSubtasksModalOpen ? (
             <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-[1px]" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
-              <aside
+      
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <aside
                 role="dialog"
                 aria-modal="true"
                 aria-label="Окно ближайших подзадач"
@@ -3263,7 +3374,29 @@ export default function App() {
       {focusedTask && focusedDraft ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
           <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
-            <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+    
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
@@ -3388,7 +3521,29 @@ export default function App() {
                 </div>
               </div>
             </aside>
-            <aside className="h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
+    
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <aside className="h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
             <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="flex min-h-0 flex-col">
                 <div className="space-y-3 overflow-y-auto pr-1">
@@ -3659,7 +3814,29 @@ export default function App() {
                 }
               }}
             >
-              <aside className="w-full max-w-lg space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(event) => event.stopPropagation()}>
+      
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <aside className="w-full max-w-lg space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(event) => event.stopPropagation()}>
                 <h4 className="text-base font-semibold text-slate-100">Пояснение для генерации подзадач</h4>
                 <p className="text-xs text-slate-300">
                   При желании добавьте пояснение, чтобы ИИ лучше понял контекст. Например: желаемый формат, ограничения, приоритеты.
@@ -3918,7 +4095,29 @@ export default function App() {
       ) : null}
       {isUpcomingSubtasksModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
-          <aside
+  
+        {timelineCreateMenu ? (
+          <div
+            className="fixed z-[130]"
+            style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <button
+                type="button"
+                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                Добавить задачу
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <aside
             role="dialog"
             aria-modal="true"
             aria-label="Окно ближайших подзадач"
