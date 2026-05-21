@@ -78,10 +78,12 @@ type ChatAttachment = {
   size: number;
 };
 
-const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini';
-const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
-const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-mini';
-const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-4.1-mini';
+const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-nano';
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5-mini';
+const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-nano';
+const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
+const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-5.4-nano';
+const OTHER_AI_MODEL = process.env.OPENAI_MODEL_OTHER?.trim() || 'gpt-5-nano';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
@@ -113,6 +115,37 @@ function supportsReasoningEffort(model: string) {
   return model.startsWith('gpt-5');
 }
 
+const resolveModelCredits = (model: string): number => {
+  const normalized = model.trim().toLowerCase();
+  if (normalized.includes('gpt-5-mini')) return 4;
+  if (normalized.includes('gpt-5.4-nano')) return 2;
+  if (normalized.includes('gpt-5-nano')) return 1;
+  return 1;
+};
+
+const currentCreditsPeriod = () => {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+async function chargeAiCredits(userId: string, model: string) {
+  const cost = resolveModelCredits(model);
+  const period = currentCreditsPeriod();
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  if (!user) throw new Error('User not found');
+  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
+  if (credits < cost) {
+    throw new Error('Недостаточно AI кредитов');
+  }
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      aiCredits: credits - cost,
+      aiCreditsPeriod: period
+    }
+  });
+}
+
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
     .filter((message) => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
@@ -136,6 +169,11 @@ function trimHistoryForAttachments(history: ChatMessage[], hasAttachments: boole
   return history.slice(-6);
 }
 
+function formatDueDateForUser(date: Date | null, userTimeZone: string) {
+  if (!date) return 'не указан';
+  return `${date.toISOString()} (локально: ${date.toLocaleString('ru-RU', { timeZone: userTimeZone })})`;
+}
+
 function formatTaskContext(task: {
   id: string;
   title: string;
@@ -145,13 +183,14 @@ function formatTaskContext(task: {
   urgency: number;
   priorityScore: number;
   status: string;
+  sphere?: { id: string; name: string } | null;
   subtasks: Array<{ id: string; title: string; description: string | null; dueDate: Date | null; status: string }>;
   attachments?: Array<{ name: string; mimeType: string; size: number }>;
-}) {
-  const dueDateText = task.dueDate ? task.dueDate.toISOString() : 'не указан';
+}, userTimeZone: string) {
+  const dueDateText = formatDueDateForUser(task.dueDate, userTimeZone);
   const subtasksText = task.subtasks.length
     ? task.subtasks
-      .map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | статус: ${subtask.status} | срок: ${subtask.dueDate ? subtask.dueDate.toISOString() : 'не указан'} | описание: ${subtask.description ?? 'нет'}`)
+      .map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | статус: ${subtask.status} | сектор: ${task.sphere?.name ?? 'без сектора'} | срок: ${formatDueDateForUser(subtask.dueDate, userTimeZone)} | описание: ${subtask.description ?? 'нет'}`)
       .join('\n')
     : 'Подзадач нет';
   const attachmentsText = task.attachments && task.attachments.length > 0
@@ -166,6 +205,7 @@ function formatTaskContext(task: {
     `Описание: ${task.description ?? 'нет'}`,
     `Дедлайн: ${dueDateText}`,
     `Статус: ${task.status}`,
+    `Сектор: ${task.sphere?.name ?? 'без сектора'}`,
     `Важность: ${task.importance}`,
     `Срочность: ${task.urgency}`,
     `Приоритет: ${task.priorityScore}`,
@@ -639,20 +679,19 @@ function formatGeneralTasksContext(tasks: Array<{
   status: string;
   sphere?: { id: string; name: string } | null;
   subtasks: Array<{ id: string; title: string; description: string | null; dueDate: Date | null; status: string }>;
-}>): string {
+}>, userTimeZone: string): string {
   if (tasks.length === 0) return 'Задач нет.';
   return tasks
     .map((task, index) => {
       const subtasksText = task.subtasks.length
         ? task.subtasks.map((subtask) => (
-          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; дедлайн=${subtask.dueDate ? subtask.dueDate.toISOString() : 'нет'}; описание=${subtask.description ?? 'нет'}`
+          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; сектор=${task.sphere?.name ?? 'без сектора'}; дедлайн=${formatDueDateForUser(subtask.dueDate, userTimeZone)}`
         )).join('\n')
         : '    - нет подзадач';
       return [
         `${index + 1}. [${task.id}] ${task.title}`,
-        `   статус=${task.status}; дедлайн=${task.dueDate ? task.dueDate.toISOString() : 'нет'}`,
+        `   статус=${task.status}; дедлайн=${formatDueDateForUser(task.dueDate, userTimeZone)}`,
         `   сектор=${task.sphere?.name ?? 'без сектора'}`,
-        `   описание=${task.description ?? 'нет'}`,
         '   подзадачи:',
         subtasksText
       ].join('\n');
@@ -763,10 +802,11 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
-  async parseRecurrence(input: { text: string; userTimeZone?: string }) {
+  async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
-    const model = RECURRENCE_MODEL;
+    const model = OTHER_AI_MODEL || RECURRENCE_MODEL;
+    await chargeAiCredits(input.userId, model);
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const response = await fetch('https://api.openai.com/v1/responses', {
@@ -1134,6 +1174,11 @@ export const aiAssistantService = {
           }
         },
         subtasks: {
+          where: {
+            status: {
+              not: 'DONE'
+            }
+          },
           select: {
             id: true,
             title: true,
@@ -1183,7 +1228,7 @@ export const aiAssistantService = {
       'Текст пользователю пиши только в answer.'
     ].join(' ');
 
-    const taskContext = formatTaskContext(task);
+    const taskContext = formatTaskContext(task, userTimeZone);
     const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
     const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
@@ -1233,6 +1278,7 @@ export const aiAssistantService = {
           userId: input.userId
         });
 
+        await chargeAiCredits(input.userId, model);
         const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -1604,9 +1650,19 @@ ${parsed.answer}`
     }
 
     const tasks = await prisma.task.findMany({
-      where: { userId: input.userId },
+      where: {
+        userId: input.userId,
+        status: {
+          not: 'DONE'
+        }
+      },
       include: {
         subtasks: {
+          where: {
+            status: {
+              not: 'DONE'
+            }
+          },
           select: {
             id: true,
             title: true,
@@ -1622,10 +1678,10 @@ ${parsed.answer}`
         { createdAt: 'asc' }
       ]
     });
-    const taskContext = formatGeneralTasksContext(tasks);
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const taskContext = formatGeneralTasksContext(tasks, userTimeZone);
     const history = normalizeGeneralHistory(input.history);
     const now = new Date();
-    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const localNow = now.toLocaleString('ru-RU', { timeZone: userTimeZone });
     const systemPrompt = [
       'Ты справочный ИИ-помощник Bubble Task Manager.',
@@ -1634,6 +1690,7 @@ ${parsed.answer}`
       'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
       'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
       'Если упоминаешь конкретную задачу/подзадачу из контекста, добавляй сразу после её названия скрытую метку формата [[task_ref:ID|Короткое название]]. Пример: «Проверь отчёт [[task_ref:abc123|Проверь отчёт]]».',
+      'Если в ответе есть хотя бы одно упоминание конкретной задачи/подзадачи, метка [[task_ref:...]] обязательна для каждого такого упоминания.',
       'В самой фразе для пользователя оставляй только естественный текст, без объяснений формата; метка нужна интерфейсу, чтобы отрисовать кнопку «Посмотреть задачу».',
       'Для подзадачи в task_ref указывай id именно подзадачи, для задачи — id задачи.',
       'Всегда учитывай текущие дату и время из контекста.',
@@ -1663,6 +1720,7 @@ ${parsed.answer}`
       { role: 'user', content: question }
     ];
 
+    await chargeAiCredits(input.userId, GENERAL_CHAT_MODEL);
     const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -1670,7 +1728,7 @@ ${parsed.answer}`
         Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: FAST_MODEL,
+        model: GENERAL_CHAT_MODEL,
         input: messages,
         ...(supportsReasoningEffort(FAST_MODEL) ? { reasoning: { effort: 'low' } } : {})
       })
@@ -2001,7 +2059,7 @@ ${parsed.answer}`
 
     return {
       answer,
-      model: FAST_MODEL,
+      model: GENERAL_CHAT_MODEL,
       actionReports,
       undoOperations
     };
@@ -2122,7 +2180,7 @@ ${parsed.answer}`
     const periodStart = new Date(input.periodStartIso);
     const periodEnd = new Date(input.periodEndIso);
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
-    const tasks = await prisma.task.findMany({ where: { userId: input.userId, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
+    const tasks = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
     const payloadLines = tasks.map((t, index) => [
       `${index + 1}. taskId=${t.id}`,
       `тип=${t.parentTaskId ? 'подзадача' : 'задача'}`,
@@ -2132,7 +2190,8 @@ ${parsed.answer}`
       `сфера=${t.sphere?.name ?? 'null'}`,
       `основнаяЗадача=${t.parentTask ? `${t.parentTask.title} (${t.parentTask.id})` : 'null'}`
     ].join(' | ')).join('\n');
-    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: FULL_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
+    await chargeAiCredits(input.userId, OTHER_AI_MODEL);
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: OTHER_AI_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
     const taskById = new Map(tasks.map((task) => [task.id, task]));
@@ -2154,7 +2213,7 @@ ${parsed.answer}`
     const finalPlan = normalizedPlan.length > 0 ? normalizedPlan : fallbackPlan;
     const summary = parsed.summary || (finalPlan.length > 0 ? 'Найдено и подготовлено оптимальное перераспределение задач.' : 'Изменения не требуются.');
 
-    return { model: FULL_MODEL, summary, plan: finalPlan };
+    return { model: OTHER_AI_MODEL, summary, plan: finalPlan };
   },
 
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
@@ -2205,13 +2264,14 @@ ${parsed.answer}`
       throw new Error('У задачи уже есть подзадачи');
     }
 
-    const taskContext = formatTaskContext(task);
+    const taskContext = formatTaskContext(task, input.userTimeZone || MOSCOW_TIMEZONE);
     const requestId = randomUUID();
     const taskAttachmentsMessage = buildAttachmentsPromptMessage(task.attachments);
     const modelForSubtasks = taskAttachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
 
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    await chargeAiCredits(input.userId, modelForSubtasks);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -2319,6 +2379,7 @@ ${parsed.answer}`
     const spheresPromptLine = userSpheres.length > 0
       ? userSpheres.map((sphere, index) => `${index + 1}. ${sphere.name}`).join('; ')
       : 'список пуст';
+    await chargeAiCredits(input.userId, modelForPrompt);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {

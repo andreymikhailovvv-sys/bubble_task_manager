@@ -73,6 +73,8 @@ export type CurrentUser = {
   avatarUrl?: string | null;
   googleSub?: string | null;
   deviceId?: string | null;
+  aiCredits?: number;
+  aiCreditsPeriod?: string;
 };
 
 export const api = {
