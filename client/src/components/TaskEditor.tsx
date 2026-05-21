@@ -1,4 +1,4 @@
-import { Loader2, Paperclip, Plus, X } from 'lucide-react';
+import { Loader2, Paperclip, Plus, Ticket, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
@@ -245,7 +245,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         {createMode === 'ai' && canShowAiCreateMode ? (
           <>
             <p className="text-xs text-slate-300">
-              Опишите задачу в свободной форме — ИИ сам заполнит название, описание, сроки, степень важности, а также сразу даст подсказки по выполнению
+              Опишите задачу в свободной форме — ИИ сам заполнит название, описание, сроки, степень важности, а также сразу даст подсказки по выполнению <span className="inline-flex items-center gap-1 text-rose-300">(стоимость 2 <Ticket size={11} />)</span>
             </p>
             <textarea
               className="min-h-28 w-full rounded bg-slate-800 p-2 text-sm"
