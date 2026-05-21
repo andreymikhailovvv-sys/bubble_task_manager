@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Coins, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
-import type { ChatMessage, Sphere, Task } from './lib/types';
+import type { ChatMessage, ChatMode, Sphere, Task } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -185,6 +185,7 @@ export default function MiniApp() {
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
+  const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const requestedTaskId = useMemo(() => {
@@ -645,6 +646,22 @@ export default function MiniApp() {
     : null;
   const openedTaskSubtasks = openedTask ? (subtasksByParent[openedTask.id] ?? []) : [];
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
+  const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
+
+  useEffect(() => {
+    const raw = localStorage.getItem('btm:task-ai-mode-map');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, ChatMode>;
+      setAiModeByTask(parsed);
+    } catch {
+      // ignore invalid storage format
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('btm:task-ai-mode-map', JSON.stringify(aiModeByTask));
+  }, [aiModeByTask]);
 
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
@@ -659,6 +676,19 @@ export default function MiniApp() {
     void loadTaskChatHistory();
   }, [isAiDialogOpen, openedTaskId]);
 
+  useEffect(() => {
+    if (!openedTaskId || !isAiDialogOpen) return;
+    const intervalId = window.setInterval(async () => {
+      try {
+        const result = await api.getTaskAssistantHistory(openedTaskId);
+        setAiDialogByTask((prev) => ({ ...prev, [openedTaskId]: result.messages }));
+      } catch {
+        // silent sync retries
+      }
+    }, 2500);
+    return () => window.clearInterval(intervalId);
+  }, [isAiDialogOpen, openedTaskId]);
+
   const sendAiMessage = async () => {
     if (!openedTask) return;
     const question = aiDraft.trim();
@@ -670,7 +700,7 @@ export default function MiniApp() {
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     setAiDraft('');
     try {
-      const result = await api.askTaskAssistant(openedTask.id, { question, mode: 'fast' });
+      const result = await api.askTaskAssistant(openedTask.id, { question, userMessage: question, mode: openedTaskAiMode });
       setAiDialogByTask((prev) => ({
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
@@ -965,6 +995,24 @@ export default function MiniApp() {
             {isAiDialogOpen ? (
               <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
                 <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
                 <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
                   {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
                   {openedTaskAiDialog.map((message, index) => (
@@ -1108,14 +1156,34 @@ export default function MiniApp() {
                 <h3 className="text-base font-semibold text-violet-100">Диалог с ИИ</h3>
                 <p className="text-xs text-slate-300">{openedTask.title}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsAiDialogOpen(false)}
-                className="rounded-md border border-slate-600 p-1 text-slate-300"
-                aria-label="Закрыть диалог с ИИ"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDialogOpen(false)}
+                  className="rounded-md border border-slate-600 p-1 text-slate-300"
+                  aria-label="Закрыть диалог с ИИ"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
             <div ref={fullscreenAiDialogContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-950/70 p-3 text-sm">
               {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
