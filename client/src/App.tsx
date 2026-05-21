@@ -4473,6 +4473,38 @@ export default function App() {
         />
       ) : null}
     
+      {timelineTaskContextMenu ? createPortal(
+        <div className="fixed z-[2147483647] w-52 rounded-md border border-slate-600 bg-slate-900 p-1.5 text-xs shadow-2xl" style={{ left: timelineTaskContextMenu.x, top: timelineTaskContextMenu.y }}>
+          <button type="button" className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onMouseEnter={() => setTimelinePostponeSubmenuOpen(true)}>
+            <span>Отложить</span>
+            <ChevronRight size={13} className="text-slate-300" />
+          </button>
+          {timelinePostponeSubmenuOpen ? (
+            <div className="absolute left-full top-1 ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl">
+              {[
+                { value: '15m', label: 'На 15 мин' },
+                { value: '30m', label: 'На 30 мин' },
+                { value: '1h', label: 'На час' },
+                { value: '3h', label: 'На 3 часа' },
+                { value: 'tomorrow', label: 'На завтра' },
+                { value: 'smart', label: `✦ Ближайшее окно (${SMART_POSTPONE_CREDITS_COST} кредит)` }
+              ].map((option) => (
+                <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                  const task = taskById.get(timelineTaskContextMenu.taskId);
+                  if (!task) return;
+                  setTimelinePostponeLoadingTaskId(task.id);
+                  setTimelineTaskContextMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                }}>
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>,
+        document.body
+      ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
