@@ -1263,7 +1263,9 @@ export const aiAssistantService = {
 
     const requestId = randomUUID();
     const reasoningEffort = resolveReasoningEffort(input.mode);
-    const modelCandidates = resolveModelCandidates(input.mode, hasAttachments);
+    const modelCandidates = isSmartPostponeRequest
+      ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments)].filter(Boolean)))
+      : resolveModelCandidates(input.mode, hasAttachments);
 
     console.info('[AI] Starting OpenAI request', {
       requestId,
