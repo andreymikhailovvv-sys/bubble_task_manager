@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import MiniApp from './MiniApp';
+import AdminPage from './AdminPage';
 import { api } from './lib/api';
 import './styles.css';
 
@@ -65,11 +66,12 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
+const isAdminRoute = window.location.pathname === '/admin556215';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {isMiniAppRoute ? <MiniApp /> : <App />}
+      {isAdminRoute ? <AdminPage /> : isMiniAppRoute ? <MiniApp /> : <App />}
     </AppErrorBoundary>
   </React.StrictMode>
 );
