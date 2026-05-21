@@ -93,6 +93,7 @@ const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
+const SMART_POSTPONE_CREDITS_COST = 1;
 const DISPLAY_MODE_OPTIONS = [
   { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
   { value: 'list', label: 'Список', icon: List, iconClassName: 'text-violet-300' },
@@ -421,7 +422,13 @@ export default function App() {
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
-  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null } | null>(null);
+  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
+  const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
+  const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
+  // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
+  // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
+  const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
+  const setTimelineTaskContextMenu = (_value: { x: number; y: number; taskId?: string | null } | null) => undefined;
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -498,6 +505,19 @@ export default function App() {
     return () => {
       window.removeEventListener('click', onClose);
       window.removeEventListener('scroll', onClose, true);
+    };
+  }, [timelineCreateMenu]);
+  useEffect(() => {
+    if (!timelineCreateMenu) return;
+    const close = () => {
+      setTimelineCreateMenu(null);
+      setTimelinePostponeSubmenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
     };
   }, [timelineCreateMenu]);
 
@@ -1885,6 +1905,66 @@ export default function App() {
     const subtaskDue = nearestSubtaskDue ? new Date(nearestSubtaskDue).getTime() : Number.POSITIVE_INFINITY;
     return Math.min(taskDue, subtaskDue);
   };
+  const quickPostponeTask = async (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => {
+    const now = new Date();
+    const userTz = userTimeZone || DEFAULT_TIMEZONE;
+    const formatLocal = (iso: string | null) => {
+      if (!iso) return 'без дедлайна';
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return 'без дедлайна';
+      return date.toLocaleString('ru-RU', { timeZone: userTz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+    const appendSystemGeneralAiMessage = (text: string) => {
+      setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
+    };
+    const updateDueDate = async (date: Date) => {
+      await api.updateTask(task.id, { dueDate: date.toISOString() });
+      await load();
+      return date.toISOString();
+    };
+    if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
+      const minutesByOption = { '15m': 15, '30m': 30, '1h': 60, '3h': 180 } as const;
+      const next = new Date(now);
+      next.setMinutes(next.getMinutes() + minutesByOption[option]);
+      return await updateDueDate(next);
+    }
+    if (option === 'tomorrow') {
+      const next = new Date(now);
+      next.setDate(next.getDate() + 1);
+      return await updateDueDate(next);
+    }
+    const nearbyTasks = tasks.filter((item) => item.id !== task.id && item.status !== 'DONE' && item.dueDate)
+      .map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate }))
+      .sort((a, b) => new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime()).slice(0, 20);
+    const taskSubtasks = subtaskMap[task.id] ?? [];
+    const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
+    const prompt = [
+      'SMART_POSTPONE_REQUEST',
+      'Верни только JSON: {"dueDate":"ISO-8601"}.',
+      'Выбирай только будущее время: dueDate должен быть строго позже now минимум на 5 минут.',
+      'Никогда не возвращай текущее или прошедшее время.',
+      'Постарайся выбрать окно с зазором примерно 30 минут от ближайших соседних задач в будущем. Если это невозможно — выбери самое близкое доступное будущее время.',
+      `now=${now.toISOString()}`,
+      `task=${JSON.stringify({ title: task.title, dueDate: task.dueDate ?? null, importance: task.importance })}`,
+      `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
+      `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
+    ].join('\n');
+    const result = await askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
+    const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };
+    if (!parsed.dueDate) return null;
+    const aiDate = new Date(parsed.dueDate);
+    if (Number.isNaN(aiDate.getTime())) return null;
+    if (aiDate.getTime() <= now.getTime() + (5 * 60 * 1000)) return null;
+    const nextDueDateIso = await updateDueDate(aiDate);
+    if (overdueSubtasks.length > 0) {
+      await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
+      await load();
+    }
+    appendSystemGeneralAiMessage(`Задача «${task.title}» перенесена на ${formatLocal(nextDueDateIso)} (${userTz}).\nНовый дедлайн: ${formatLocal(nextDueDateIso)}.${overdueSubtasks.length > 0 ? `\nПодзадач перенесено: ${overdueSubtasks.length}.` : ''}`);
+    return nextDueDateIso;
+  };
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
@@ -1987,8 +2067,15 @@ export default function App() {
           if (isSubtaskChip) setEditorState({ task });
           else setFocusedTaskId(task.id);
         }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
+          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
+          setTimelinePostponeSubmenuOpen(false);
+        }}
       >
         <span className="flex min-w-0 items-center gap-1">
+          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="shrink-0 animate-spin text-cyan-100" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className="truncate">
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
@@ -2426,75 +2513,7 @@ export default function App() {
               await api.updateTask(task.id, { importance: nextImportance });
               await load();
             }}
-            onQuickPostponeTask={async (task, option) => {
-              const now = new Date();
-              const userTz = userTimeZone || DEFAULT_TIMEZONE;
-              const formatLocal = (iso: string | null) => {
-                if (!iso) return 'без дедлайна';
-                const date = new Date(iso);
-                if (Number.isNaN(date.getTime())) return 'без дедлайна';
-                return date.toLocaleString('ru-RU', { timeZone: userTz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-              };
-              const appendSystemGeneralAiMessage = (text: string) => {
-                setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
-              };
-              const updateDueDate = async (date: Date) => {
-                await api.updateTask(task.id, { dueDate: date.toISOString() });
-                await load();
-                return date.toISOString();
-              };
-
-              if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
-                const minutesByOption = { '15m': 15, '30m': 30, '1h': 60, '3h': 180 } as const;
-                const next = new Date(now);
-                next.setMinutes(next.getMinutes() + minutesByOption[option]);
-                return await updateDueDate(next);
-              }
-
-              if (option === 'tomorrow') {
-                const next = new Date(now);
-                next.setDate(next.getDate() + 1);
-                return await updateDueDate(next);
-              }
-
-              const nearbyTasks = tasks
-                .filter((item) => item.id !== task.id && item.status !== 'DONE' && item.dueDate)
-                .map((item) => ({ id: item.id, title: item.title, dueDate: item.dueDate }))
-                .sort((a, b) => new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime())
-                .slice(0, 20);
-              const taskSubtasks = subtaskMap[task.id] ?? [];
-              const overdueSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'DONE' && subtask.dueDate && new Date(subtask.dueDate).getTime() < now.getTime());
-
-              const prompt = [
-                'SMART_POSTPONE_REQUEST',
-                'Верни только JSON: {"dueDate":"ISO-8601"}.',
-                'Выбирай только будущее время: dueDate должен быть строго позже now минимум на 5 минут.',
-                'Никогда не возвращай текущее или прошедшее время.',
-                'Постарайся выбрать окно с зазором примерно 30 минут от ближайших соседних задач в будущем. Если это невозможно — выбери самое близкое доступное будущее время.',
-                `now=${now.toISOString()}`,
-                `task=${JSON.stringify({ title: task.title, dueDate: task.dueDate ?? null, importance: task.importance })}`,
-                `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
-                `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
-              ].join('\n');
-
-              const result = await askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
-              const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
-              if (!jsonMatch) return null;
-              const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };
-              if (!parsed.dueDate) return null;
-              const aiDate = new Date(parsed.dueDate);
-              if (Number.isNaN(aiDate.getTime())) return null;
-              if (aiDate.getTime() <= now.getTime() + (5 * 60 * 1000)) return null;
-              const nextDueDateIso = await updateDueDate(aiDate);
-              if (overdueSubtasks.length > 0) {
-                await Promise.all(overdueSubtasks.map((subtask) => api.updateTask(subtask.id, { dueDate: aiDate.toISOString() })));
-                await load();
-              }
-              appendSystemGeneralAiMessage(
-                `Задача «${task.title}» перенесена на ${formatLocal(nextDueDateIso)} (${userTz}).\nНовый дедлайн: ${formatLocal(nextDueDateIso)}.${overdueSubtasks.length > 0 ? `\nПодзадач перенесено: ${overdueSubtasks.length}.` : ''}`
-              );
-              return nextDueDateIso;
-            }}
+            onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
@@ -3052,9 +3071,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3065,6 +3085,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3191,9 +3244,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3204,6 +3258,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3406,9 +3493,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3419,6 +3507,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3562,9 +3683,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3575,6 +3697,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3855,9 +4010,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3868,6 +4024,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -4138,9 +4327,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -4151,6 +4341,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
