@@ -425,6 +425,7 @@ export default function App() {
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
+  const [timelinePostponeHighlightedTaskId, setTimelinePostponeHighlightedTaskId] = useState<string | null>(null);
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
   const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
@@ -1917,9 +1918,23 @@ export default function App() {
     const appendSystemGeneralAiMessage = (text: string) => {
       setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
     };
+    const focusMovedTaskOnTimeline = (taskId: string) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const taskElement = document.querySelector<HTMLElement>(`[data-timeline-task-id="${taskId}"]`);
+          if (!taskElement) return;
+          taskElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+          setTimelinePostponeHighlightedTaskId(taskId);
+          window.setTimeout(() => {
+            setTimelinePostponeHighlightedTaskId((prev) => (prev === taskId ? null : prev));
+          }, 2100);
+        });
+      });
+    };
     const updateDueDate = async (date: Date) => {
       await api.updateTask(task.id, { dueDate: date.toISOString() });
       await load();
+      focusMovedTaskOnTimeline(task.id);
       return date.toISOString();
     };
     if (option === '15m' || option === '30m' || option === '1h' || option === '3h') {
@@ -2011,7 +2026,8 @@ export default function App() {
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
         className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
-        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
+        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${timelinePostponeHighlightedTaskId === task.id ? 'animate-[task-postpone-success-flash_0.7s_ease-in-out_3]' : ''}`}
+        data-timeline-task-id={task.id}
         style={{
           borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isSubtaskChip
