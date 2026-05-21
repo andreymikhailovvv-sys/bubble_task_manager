@@ -37,6 +37,8 @@ model User {
   timeZone     String?
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
+  aiCredits    Int      @default(100)
+  aiCreditsPeriod String @default("")
   spheres      Sphere[]
   tasks        Task[]
   aiMessages   TaskAiMessage[]

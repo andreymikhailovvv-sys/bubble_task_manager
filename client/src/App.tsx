@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -1237,6 +1237,7 @@ export default function App() {
         { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}` }
       ]);
       setLastGeneralAiUndoOperations(result.undoOperations);
+      await refreshAiCredits();
       await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ общего ИИ-чата';
@@ -1470,6 +1471,7 @@ export default function App() {
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
     const generated = await api.generateTaskFromAi(payload);
+    await refreshAiCredits();
     const importance = generated.task.importance ?? 3;
     const urgency = generated.task.urgency ?? 3;
     const createdTask = await api.createTask({
@@ -1655,6 +1657,7 @@ export default function App() {
     setAiSubtasksLoadingTaskId(focusedTask.id);
     try {
       await api.generateTaskSubtasks(focusedTask.id, { note: aiSubtasksPrompt.trim() || undefined });
+      await refreshAiCredits();
       await load();
       setIsAiSubtasksPromptOpen(false);
       setAiSubtasksPrompt('');
@@ -1698,7 +1701,23 @@ export default function App() {
   };
 
   const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
-    return api.askTaskAssistant(taskId, payload);
+    const result = await api.askTaskAssistant(taskId, payload);
+    try {
+      const me = await api.getMe();
+      setCurrentUser(me.user);
+    } catch {
+      // ignore credits refresh errors
+    }
+    return result;
+  };
+
+  const refreshAiCredits = async () => {
+    try {
+      const me = await api.getMe();
+      setCurrentUser(me.user);
+    } catch {
+      // ignore credits refresh errors
+    }
   };
 
   const closeAuthModal = () => {
@@ -2046,6 +2065,7 @@ export default function App() {
     try {
       const range = getTimelineRange();
       const result = await api.optimizeTimeline({ scope: timelineViewMode, periodStartIso: range.start.toISOString(), periodEndIso: range.end.toISOString(), userNote: timelineOptimizeNote.trim() || undefined });
+      await refreshAiCredits();
       setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: result.plan, summary: result.summary || 'Оптимизация готова.' } }));
       setTimelineOptimizePreviewEnabledByMode((prev) => ({ ...prev, [timelineViewMode]: true }));
     } finally { setTimelineOptimizeLoading(false); }
@@ -2257,6 +2277,10 @@ export default function App() {
           </select>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
+            <Coins size={15} />
+            <span>{currentUser?.aiCredits ?? 100}</span>
+          </div>
           <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
@@ -2381,7 +2405,7 @@ export default function App() {
                 `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
               ].join('\n');
 
-              const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
+              const result = await askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
               const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
               if (!jsonMatch) return null;
               const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };

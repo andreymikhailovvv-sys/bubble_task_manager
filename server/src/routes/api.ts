@@ -23,6 +23,8 @@ const toAuthUser = (user: {
   avatarUrl?: string | null;
   googleSub?: string | null;
   deviceId?: string | null;
+  aiCredits?: number;
+  aiCreditsPeriod?: string;
 }) => ({
   id: user.id,
   email: user.email,
@@ -30,7 +32,9 @@ const toAuthUser = (user: {
   name: user.name,
   avatarUrl: user.avatarUrl,
   googleSub: user.googleSub,
-  deviceId: user.deviceId
+  deviceId: user.deviceId,
+  aiCredits: user.aiCredits ?? 100,
+  aiCreditsPeriod: user.aiCreditsPeriod ?? ''
 });
 
 const setAuthCookies = (
@@ -246,8 +250,16 @@ apiRouter.post('/auth/logout', (_req, res) => {
 });
 
 apiRouter.get('/auth/me', async (req, res) => {
+  if (req.user?.id) {
+    const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (freshUser) {
+      res.json({ user: toAuthUser(freshUser) });
+      return;
+    }
+  }
+
   if (req.user) {
-    res.json({ user: req.user });
+    res.json({ user: toAuthUser(req.user) });
     return;
   }
 
