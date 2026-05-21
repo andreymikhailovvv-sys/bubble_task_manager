@@ -1237,6 +1237,7 @@ export default function App() {
         { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}` }
       ]);
       setLastGeneralAiUndoOperations(result.undoOperations);
+      await refreshAiCredits();
       await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ общего ИИ-чата';
@@ -1470,6 +1471,7 @@ export default function App() {
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
     const generated = await api.generateTaskFromAi(payload);
+    await refreshAiCredits();
     const importance = generated.task.importance ?? 3;
     const urgency = generated.task.urgency ?? 3;
     const createdTask = await api.createTask({
@@ -1655,6 +1657,7 @@ export default function App() {
     setAiSubtasksLoadingTaskId(focusedTask.id);
     try {
       await api.generateTaskSubtasks(focusedTask.id, { note: aiSubtasksPrompt.trim() || undefined });
+      await refreshAiCredits();
       await load();
       setIsAiSubtasksPromptOpen(false);
       setAiSubtasksPrompt('');
@@ -1698,7 +1701,23 @@ export default function App() {
   };
 
   const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
-    return api.askTaskAssistant(taskId, payload);
+    const result = await api.askTaskAssistant(taskId, payload);
+    try {
+      const me = await api.getMe();
+      setCurrentUser(me.user);
+    } catch {
+      // ignore credits refresh errors
+    }
+    return result;
+  };
+
+  const refreshAiCredits = async () => {
+    try {
+      const me = await api.getMe();
+      setCurrentUser(me.user);
+    } catch {
+      // ignore credits refresh errors
+    }
   };
 
   const closeAuthModal = () => {
@@ -2046,6 +2065,7 @@ export default function App() {
     try {
       const range = getTimelineRange();
       const result = await api.optimizeTimeline({ scope: timelineViewMode, periodStartIso: range.start.toISOString(), periodEndIso: range.end.toISOString(), userNote: timelineOptimizeNote.trim() || undefined });
+      await refreshAiCredits();
       setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: result.plan, summary: result.summary || 'Оптимизация готова.' } }));
       setTimelineOptimizePreviewEnabledByMode((prev) => ({ ...prev, [timelineViewMode]: true }));
     } finally { setTimelineOptimizeLoading(false); }
@@ -2257,7 +2277,7 @@ export default function App() {
           </select>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-slate-200">
+          <div className="flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </div>
@@ -2385,7 +2405,7 @@ export default function App() {
                 `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
               ].join('\n');
 
-              const result = await api.askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
+              const result = await askTaskAssistant(task.id, { question: prompt, mode: 'fast' });
               const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
               if (!jsonMatch) return null;
               const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };

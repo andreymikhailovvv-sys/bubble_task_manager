@@ -1168,6 +1168,11 @@ export const aiAssistantService = {
           }
         },
         subtasks: {
+          where: {
+            status: {
+              not: 'DONE'
+            }
+          },
           select: {
             id: true,
             title: true,
@@ -1639,9 +1644,19 @@ ${parsed.answer}`
     }
 
     const tasks = await prisma.task.findMany({
-      where: { userId: input.userId },
+      where: {
+        userId: input.userId,
+        status: {
+          not: 'DONE'
+        }
+      },
       include: {
         subtasks: {
+          where: {
+            status: {
+              not: 'DONE'
+            }
+          },
           select: {
             id: true,
             title: true,
@@ -2158,7 +2173,7 @@ ${parsed.answer}`
     const periodStart = new Date(input.periodStartIso);
     const periodEnd = new Date(input.periodEndIso);
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
-    const tasks = await prisma.task.findMany({ where: { userId: input.userId, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
+    const tasks = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
     const payloadLines = tasks.map((t, index) => [
       `${index + 1}. taskId=${t.id}`,
       `тип=${t.parentTaskId ? 'подзадача' : 'задача'}`,
