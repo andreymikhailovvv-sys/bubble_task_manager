@@ -804,7 +804,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser?.id, focusedTaskId]);
+  }, [currentUser?.id, focusedTaskId, aiLoadingTaskId]);
 
   useEffect(() => {
     if (!currentUser || !focusedTaskId) return;

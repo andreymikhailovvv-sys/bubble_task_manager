@@ -682,7 +682,7 @@ export default function MiniApp() {
       }
     };
     void loadTaskChatHistory();
-  }, [isAiDialogOpen, openedTaskId]);
+  }, [isAiDialogOpen, openedTaskId, aiLoadingTaskId]);
 
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
