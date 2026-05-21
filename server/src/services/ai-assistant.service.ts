@@ -169,6 +169,11 @@ function trimHistoryForAttachments(history: ChatMessage[], hasAttachments: boole
   return history.slice(-6);
 }
 
+function formatDueDateForUser(date: Date | null, userTimeZone: string) {
+  if (!date) return 'не указан';
+  return `${date.toISOString()} (локально: ${date.toLocaleString('ru-RU', { timeZone: userTimeZone })})`;
+}
+
 function formatTaskContext(task: {
   id: string;
   title: string;
@@ -178,13 +183,14 @@ function formatTaskContext(task: {
   urgency: number;
   priorityScore: number;
   status: string;
+  sphere?: { id: string; name: string } | null;
   subtasks: Array<{ id: string; title: string; description: string | null; dueDate: Date | null; status: string }>;
   attachments?: Array<{ name: string; mimeType: string; size: number }>;
-}) {
-  const dueDateText = task.dueDate ? task.dueDate.toISOString() : 'не указан';
+}, userTimeZone: string) {
+  const dueDateText = formatDueDateForUser(task.dueDate, userTimeZone);
   const subtasksText = task.subtasks.length
     ? task.subtasks
-      .map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | статус: ${subtask.status} | срок: ${subtask.dueDate ? subtask.dueDate.toISOString() : 'не указан'} | описание: ${subtask.description ?? 'нет'}`)
+      .map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | статус: ${subtask.status} | сектор: ${task.sphere?.name ?? 'без сектора'} | срок: ${formatDueDateForUser(subtask.dueDate, userTimeZone)} | описание: ${subtask.description ?? 'нет'}`)
       .join('\n')
     : 'Подзадач нет';
   const attachmentsText = task.attachments && task.attachments.length > 0
@@ -199,6 +205,7 @@ function formatTaskContext(task: {
     `Описание: ${task.description ?? 'нет'}`,
     `Дедлайн: ${dueDateText}`,
     `Статус: ${task.status}`,
+    `Сектор: ${task.sphere?.name ?? 'без сектора'}`,
     `Важность: ${task.importance}`,
     `Срочность: ${task.urgency}`,
     `Приоритет: ${task.priorityScore}`,
@@ -672,20 +679,19 @@ function formatGeneralTasksContext(tasks: Array<{
   status: string;
   sphere?: { id: string; name: string } | null;
   subtasks: Array<{ id: string; title: string; description: string | null; dueDate: Date | null; status: string }>;
-}>): string {
+}>, userTimeZone: string): string {
   if (tasks.length === 0) return 'Задач нет.';
   return tasks
     .map((task, index) => {
       const subtasksText = task.subtasks.length
         ? task.subtasks.map((subtask) => (
-          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; дедлайн=${subtask.dueDate ? subtask.dueDate.toISOString() : 'нет'}; описание=${subtask.description ?? 'нет'}`
+          `    - [${subtask.id}] ${subtask.title}; статус=${subtask.status}; сектор=${task.sphere?.name ?? 'без сектора'}; дедлайн=${formatDueDateForUser(subtask.dueDate, userTimeZone)}`
         )).join('\n')
         : '    - нет подзадач';
       return [
         `${index + 1}. [${task.id}] ${task.title}`,
-        `   статус=${task.status}; дедлайн=${task.dueDate ? task.dueDate.toISOString() : 'нет'}`,
+        `   статус=${task.status}; дедлайн=${formatDueDateForUser(task.dueDate, userTimeZone)}`,
         `   сектор=${task.sphere?.name ?? 'без сектора'}`,
-        `   описание=${task.description ?? 'нет'}`,
         '   подзадачи:',
         subtasksText
       ].join('\n');
@@ -1222,7 +1228,7 @@ export const aiAssistantService = {
       'Текст пользователю пиши только в answer.'
     ].join(' ');
 
-    const taskContext = formatTaskContext(task);
+    const taskContext = formatTaskContext(task, userTimeZone);
     const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
     const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
@@ -1672,10 +1678,10 @@ ${parsed.answer}`
         { createdAt: 'asc' }
       ]
     });
-    const taskContext = formatGeneralTasksContext(tasks);
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const taskContext = formatGeneralTasksContext(tasks, userTimeZone);
     const history = normalizeGeneralHistory(input.history);
     const now = new Date();
-    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const localNow = now.toLocaleString('ru-RU', { timeZone: userTimeZone });
     const systemPrompt = [
       'Ты справочный ИИ-помощник Bubble Task Manager.',
@@ -1684,6 +1690,7 @@ ${parsed.answer}`
       'Разрешено: подсчёты, поиск по задачам, дедлайны, статусы, краткие сводки.',
       'Никогда не показывай в ответе технические идентификаторы задач (taskId, внутренние id и т.п.), только названия задач.',
       'Если упоминаешь конкретную задачу/подзадачу из контекста, добавляй сразу после её названия скрытую метку формата [[task_ref:ID|Короткое название]]. Пример: «Проверь отчёт [[task_ref:abc123|Проверь отчёт]]».',
+      'Если в ответе есть хотя бы одно упоминание конкретной задачи/подзадачи, метка [[task_ref:...]] обязательна для каждого такого упоминания.',
       'В самой фразе для пользователя оставляй только естественный текст, без объяснений формата; метка нужна интерфейсу, чтобы отрисовать кнопку «Посмотреть задачу».',
       'Для подзадачи в task_ref указывай id именно подзадачи, для задачи — id задачи.',
       'Всегда учитывай текущие дату и время из контекста.',
@@ -2257,7 +2264,7 @@ ${parsed.answer}`
       throw new Error('У задачи уже есть подзадачи');
     }
 
-    const taskContext = formatTaskContext(task);
+    const taskContext = formatTaskContext(task, input.userTimeZone || MOSCOW_TIMEZONE);
     const requestId = randomUUID();
     const taskAttachmentsMessage = buildAttachmentsPromptMessage(task.attachments);
     const modelForSubtasks = taskAttachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
