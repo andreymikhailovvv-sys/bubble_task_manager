@@ -668,20 +668,38 @@ export default function MiniApp() {
     const loadTaskChatHistory = async () => {
       try {
         const result = await api.getTaskAssistantHistory(openedTaskId);
-        setAiDialogByTask((prev) => ({ ...prev, [openedTaskId]: result.messages }));
+        setAiDialogByTask((prev) => {
+          const localMessages = prev[openedTaskId] ?? [];
+          const serverMessages = result.messages;
+          const hasPendingOptimisticMessages = aiLoadingTaskId === openedTaskId
+            && localMessages.length > serverMessages.length
+            && localMessages.slice(0, serverMessages.length).every((message, index) => (
+              message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
+            ));
+          return { ...prev, [openedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Не удалось загрузить чат ИИ');
       }
     };
     void loadTaskChatHistory();
-  }, [isAiDialogOpen, openedTaskId]);
+  }, [isAiDialogOpen, openedTaskId, aiLoadingTaskId]);
 
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const intervalId = window.setInterval(async () => {
       try {
         const result = await api.getTaskAssistantHistory(openedTaskId);
-        setAiDialogByTask((prev) => ({ ...prev, [openedTaskId]: result.messages }));
+        setAiDialogByTask((prev) => {
+          const localMessages = prev[openedTaskId] ?? [];
+          const serverMessages = result.messages;
+          const hasPendingOptimisticMessages = aiLoadingTaskId === openedTaskId
+            && localMessages.length > serverMessages.length
+            && localMessages.slice(0, serverMessages.length).every((message, index) => (
+              message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
+            ));
+          return { ...prev, [openedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+        });
       } catch {
         // silent sync retries
       }

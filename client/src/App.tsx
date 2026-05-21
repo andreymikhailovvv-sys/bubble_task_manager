@@ -786,7 +786,16 @@ export default function App() {
         const result = await api.getTaskAssistantHistory(focusedTaskId);
         if (isCancelled) return;
         loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
-        setAiDialogByTask((prev) => ({ ...prev, [focusedTaskId]: result.messages }));
+        setAiDialogByTask((prev) => {
+          const localMessages = prev[focusedTaskId] ?? [];
+          const serverMessages = result.messages;
+          const hasPendingOptimisticMessages = aiLoadingTaskId === focusedTaskId
+            && localMessages.length > serverMessages.length
+            && localMessages.slice(0, serverMessages.length).every((message, index) => (
+              message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
+            ));
+          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+        });
       } catch {
         if (isCancelled) return;
         loadedAiHistoryTaskIdsRef.current.add(focusedTaskId);
@@ -796,14 +805,23 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser?.id, focusedTaskId]);
+  }, [currentUser?.id, focusedTaskId, aiLoadingTaskId]);
 
   useEffect(() => {
     if (!currentUser || !focusedTaskId) return;
     const intervalId = window.setInterval(async () => {
       try {
         const result = await api.getTaskAssistantHistory(focusedTaskId);
-        setAiDialogByTask((prev) => ({ ...prev, [focusedTaskId]: result.messages }));
+        setAiDialogByTask((prev) => {
+          const localMessages = prev[focusedTaskId] ?? [];
+          const serverMessages = result.messages;
+          const hasPendingOptimisticMessages = aiLoadingTaskId === focusedTaskId
+            && localMessages.length > serverMessages.length
+            && localMessages.slice(0, serverMessages.length).every((message, index) => (
+              message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
+            ));
+          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+        });
       } catch {
         // silent sync retries
       }
