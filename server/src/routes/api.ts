@@ -12,6 +12,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../db/prisma.js';
 
 export const apiRouter = Router();
+const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
 
@@ -247,6 +248,74 @@ apiRouter.get('/auth/google/callback', (req, res, next) => {
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
+});
+
+const requireAdminPassword = (req: any, res: any): boolean => {
+  const configuredPassword = process.env[ADMIN_PANEL_PASSWORD_ENV]?.trim();
+  if (!configuredPassword) {
+    res.status(503).json({ error: `Переменная окружения ${ADMIN_PANEL_PASSWORD_ENV} не задана` });
+    return false;
+  }
+  const providedPassword = String(req.body?.password ?? '');
+  if (!providedPassword) {
+    res.status(400).json({ error: 'Введите пароль администратора' });
+    return false;
+  }
+  if (providedPassword !== configuredPassword) {
+    res.status(401).json({ error: 'Неверный пароль администратора' });
+    return false;
+  }
+  return true;
+};
+
+apiRouter.post('/admin/users', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      username: true,
+      aiCredits: true,
+      aiCreditsPeriod: true,
+      createdAt: true
+    }
+  });
+
+  res.json({ users });
+});
+
+apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+
+  const userId = String(req.params.userId ?? '').trim();
+  const creditsToAdd = Number(req.body?.creditsToAdd);
+  if (!userId) {
+    res.status(400).json({ error: 'Не указан пользователь' });
+    return;
+  }
+  if (!Number.isFinite(creditsToAdd) || !Number.isInteger(creditsToAdd)) {
+    res.status(400).json({ error: 'Укажите целое количество кредитов' });
+    return;
+  }
+  if (creditsToAdd <= 0) {
+    res.status(400).json({ error: 'Количество кредитов должно быть больше нуля' });
+    return;
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: { aiCredits: { increment: creditsToAdd } },
+    select: {
+      id: true,
+      aiCredits: true,
+      aiCreditsPeriod: true
+    }
+  });
+
+  res.json({ user: updatedUser });
 });
 
 apiRouter.get('/auth/me', async (req, res) => {

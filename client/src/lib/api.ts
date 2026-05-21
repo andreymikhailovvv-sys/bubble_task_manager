@@ -76,6 +76,15 @@ export type CurrentUser = {
   aiCredits?: number;
   aiCreditsPeriod?: string;
 };
+type AdminUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  username?: string | null;
+  aiCredits: number;
+  aiCreditsPeriod: string;
+  createdAt: string;
+};
 
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
@@ -193,4 +202,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  adminGetUsers: (payload: { password: string }) =>
+    request<{ users: AdminUser[] }>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  adminAddCredits: (payload: { password: string; userId: string; creditsToAdd: number }) =>
+    request<{ user: { id: string; aiCredits: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
+      method: 'POST',
+      body: JSON.stringify({ password: payload.password, creditsToAdd: payload.creditsToAdd })
+    })
 };
