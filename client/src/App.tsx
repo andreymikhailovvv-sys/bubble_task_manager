@@ -422,9 +422,8 @@ export default function App() {
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
-  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null } | null>(null);
-  const [timelineTaskContextMenu, setTimelineTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
-  const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
+  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
+    const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
@@ -505,9 +504,9 @@ export default function App() {
     };
   }, [timelineCreateMenu]);
   useEffect(() => {
-    if (!timelineTaskContextMenu) return;
+    if (!timelineCreateMenu) return;
     const close = () => {
-      setTimelineTaskContextMenu(null);
+      setTimelineCreateMenu(null);
       setTimelinePostponeSubmenuOpen(false);
     };
     window.addEventListener('mousedown', close);
@@ -516,7 +515,7 @@ export default function App() {
       window.removeEventListener('mousedown', close);
       window.removeEventListener('scroll', close, true);
     };
-  }, [timelineTaskContextMenu]);
+  }, [timelineCreateMenu]);
 
   const formatDeadlineTooltip = (task: Task) => {
     const dueDate = task.dueDate ? new Date(task.dueDate) : null;
@@ -2067,7 +2066,7 @@ export default function App() {
         onContextMenu={(event) => {
           event.preventDefault();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
-          setTimelineTaskContextMenu({ x: event.clientX, y: event.clientY, taskId: task.id });
+          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
           setTimelinePostponeSubmenuOpen(false);
         }}
       >
@@ -3068,9 +3067,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3081,6 +3081,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3207,9 +3240,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3220,6 +3254,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3422,9 +3489,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3435,6 +3503,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3578,9 +3679,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3591,6 +3693,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -3871,9 +4006,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3884,6 +4020,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -4154,9 +4323,10 @@ export default function App() {
           <div
             className="fixed z-[130]"
             style={{ left: timelineCreateMenu.x, top: timelineCreateMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -4167,6 +4337,39 @@ export default function App() {
               >
                 Добавить задачу
               </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+              >
+                <span>Отложить</span>
+                <ChevronRight size={13} className="text-slate-300" />
+              </button>
+              {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
+                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  {[
+                    { value: '15m', label: 'На 15 мин' },
+                    { value: '30m', label: 'На 30 мин' },
+                    { value: '1h', label: 'На час' },
+                    { value: '3h', label: 'На 3 часа' },
+                    { value: 'tomorrow', label: 'На завтра' },
+                    { value: 'smart', label: '✦ Ближайшее окно' }
+                  ].map((option) => (
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                      const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                      if (!task) return;
+                      setTimelinePostponeLoadingTaskId(task.id);
+                      setTimelineCreateMenu(null);
+                      setTimelinePostponeSubmenuOpen(false);
+                      try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
+                    }}>
+                      <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
