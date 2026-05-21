@@ -180,6 +180,7 @@ export default function MiniApp() {
     dueDate: ''
   });
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
@@ -718,6 +719,7 @@ export default function MiniApp() {
       if (!container) return;
       container.scrollTop = container.scrollHeight;
     };
+    scrollToBottom(inlineAiDialogContainerRef.current);
     scrollToBottom(fullscreenAiDialogContainerRef.current);
   }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
 
@@ -990,6 +992,63 @@ export default function MiniApp() {
                 Диалог с ИИ
               </button>
             </div>
+            {isAiDialogOpen ? (
+              <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
+                <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
+                <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
+                  {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
+                  {openedTaskAiDialog.map((message, index) => (
+                    <div key={`mini-ai-${index}`} className={`max-w-[94%] rounded-xl border px-2.5 py-2 ${message.role === 'assistant' ? 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
+                      <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                      <div className="text-[13px] leading-relaxed">{renderMiniAiText(message.content)}</div>
+                    </div>
+                  ))}
+                  {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    value={aiDraft}
+                    onChange={(event) => setAiDraft(event.target.value)}
+                    placeholder="Напишите сообщение для ИИ"
+                    className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendAiMessage();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendAiMessage()}
+                    disabled={aiLoadingTaskId === openedTask.id}
+                    className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                    title="Отправить"
+                  >
+                    <SendHorizontal size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">Подзадачи</h3>
@@ -1112,34 +1171,6 @@ export default function MiniApp() {
                     Умная
                   </button>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
-                  <button
-                    type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
-                  >
-                    <span className="block text-left">Быстрая</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
-                  >
-                    <span className="block text-left">Умная</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAiDialogOpen(false)}
-                  className="rounded-md border border-slate-600 p-1 text-slate-300"
-                  aria-label="Закрыть диалог с ИИ"
-                >
-                  <X size={16} />
-                </button>
               </div>
               <div className="flex items-center gap-2">
                 <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
