@@ -2069,6 +2069,7 @@ export default function App() {
         }}
         onContextMenu={(event) => {
           event.preventDefault();
+          event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
           setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
           setTimelinePostponeSubmenuOpen(false);
