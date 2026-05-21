@@ -1096,6 +1096,78 @@ export default function MiniApp() {
               <div>
                 <h3 className="text-base font-semibold text-violet-100">Диалог с ИИ</h3>
                 <p className="text-xs text-slate-300">{openedTask.title}</p>
+                <div className="mt-2 inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    Быстрая
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    Умная
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDialogOpen(false)}
+                  className="rounded-md border border-slate-600 p-1 text-slate-300"
+                  aria-label="Закрыть диалог с ИИ"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
+                  >
+                    <span className="block text-left">Быстрая</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
+                  >
+                    <span className="block text-left">Умная</span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDialogOpen(false)}
+                  className="rounded-md border border-slate-600 p-1 text-slate-300"
+                  aria-label="Закрыть диалог с ИИ"
+                >
+                  <X size={16} />
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
