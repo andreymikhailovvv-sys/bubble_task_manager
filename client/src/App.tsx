@@ -423,8 +423,12 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
-    const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
+  const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
+  // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
+  // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
+  const timelineTaskContextMenu: null = null;
+  const setTimelineTaskContextMenu = (_value: null) => undefined;
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
