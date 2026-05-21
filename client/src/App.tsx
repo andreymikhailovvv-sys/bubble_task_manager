@@ -427,8 +427,8 @@ export default function App() {
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
-  const timelineTaskContextMenu: null = null;
-  const setTimelineTaskContextMenu = (_value: null) => undefined;
+  const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
+  const setTimelineTaskContextMenu = (_value: { x: number; y: number; taskId?: string | null } | null) => undefined;
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
