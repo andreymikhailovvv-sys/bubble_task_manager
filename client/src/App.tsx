@@ -3153,7 +3153,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -3234,7 +3234,7 @@ export default function App() {
                 onClick={() => void sendGeneralAiQuestion()}
                 disabled={generalAiLoading || !generalAiDraft.trim()}
               >
-                <SendHorizontal size={12} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Ticket size={10} /></span>
+                <SendHorizontal size={12} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Coins size={10} /></span>
               </button>
               <button
                 className="inline-flex items-center gap-1 rounded bg-slate-700 px-2.5 py-1 text-xs text-slate-100 disabled:opacity-50"
@@ -3330,7 +3330,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -3583,7 +3583,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -3606,7 +3606,7 @@ export default function App() {
                       type="button"
                     >
                       <span className="block text-left">Быстрая</span>
-                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                     </button>
                     <button
                       className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
@@ -3777,7 +3777,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -4108,7 +4108,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -4168,7 +4168,7 @@ export default function App() {
                     title="Быстрый режим (gpt-5.4-mini)"
                   >
                     <span className="block text-left">Быстрая</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                   </button>
                   <button
                     className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
@@ -4369,7 +4369,7 @@ export default function App() {
                   disabled={generalAiLoading || !generalAiDraft.trim()}
                   onClick={() => void sendGeneralAiQuestion()}
                 >
-                  <SendHorizontal size={14} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Ticket size={10} /></span>
+                  <SendHorizontal size={14} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Coins size={10} /></span>
                 </button>
               </div>
             </div>
@@ -4429,7 +4429,7 @@ export default function App() {
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Ticket size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -4538,7 +4538,7 @@ export default function App() {
       ) : null}
     
 
-      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Ticket size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
+      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
 }
