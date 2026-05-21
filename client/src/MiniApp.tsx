@@ -671,8 +671,7 @@ export default function MiniApp() {
         setAiDialogByTask((prev) => {
           const localMessages = prev[openedTaskId] ?? [];
           const serverMessages = result.messages;
-          const hasPendingOptimisticMessages = aiLoadingTaskId === openedTaskId
-            && localMessages.length > serverMessages.length
+          const hasPendingOptimisticMessages = localMessages.length > serverMessages.length
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
@@ -693,8 +692,7 @@ export default function MiniApp() {
         setAiDialogByTask((prev) => {
           const localMessages = prev[openedTaskId] ?? [];
           const serverMessages = result.messages;
-          const hasPendingOptimisticMessages = aiLoadingTaskId === openedTaskId
-            && localMessages.length > serverMessages.length
+          const hasPendingOptimisticMessages = localMessages.length > serverMessages.length
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
