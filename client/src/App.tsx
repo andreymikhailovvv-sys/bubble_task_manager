@@ -1927,7 +1927,7 @@ export default function App() {
           setTimelinePostponeHighlightedTaskId(taskId);
           window.setTimeout(() => {
             setTimelinePostponeHighlightedTaskId((prev) => (prev === taskId ? null : prev));
-          }, 2100);
+          }, 1000);
         });
       });
     };
@@ -2026,7 +2026,7 @@ export default function App() {
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
         className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
-        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${timelinePostponeHighlightedTaskId === task.id ? 'animate-[task-postpone-success-flash_0.7s_ease-in-out_3]' : ''}`}
+        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
         data-timeline-task-id={task.id}
         style={{
           borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
@@ -2092,6 +2092,9 @@ export default function App() {
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
+          {timelinePostponeHighlightedTaskId === task.id ? (
+            <Check size={13} className="shrink-0 text-emerald-300" />
+          ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="shrink-0 animate-spin text-cyan-100" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className="truncate">
