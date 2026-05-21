@@ -448,7 +448,7 @@ export default function App() {
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
-  const [aiMode, setAiMode] = useState<ChatMode>('fast');
+  const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
@@ -581,8 +581,7 @@ export default function App() {
     setAiSubtasksLoadingTaskId(null);
     setAiPendingFiles([]);
     setIsAiExpanded(false);
-      setAiMode('fast');
-      setAiDialogByTask({});
+            setAiDialogByTask({});
       setAiReadCursorByTask({});
       setGeneralAiMessages([]);
       setGeneralAiDraft('');
@@ -739,6 +738,21 @@ export default function App() {
   }, [aiReadCursorByTask, currentUser?.id]);
 
   useEffect(() => {
+    const raw = localStorage.getItem('btm:task-ai-mode-map');
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, ChatMode>;
+      setAiModeByTask(parsed);
+    } catch {
+      // ignore invalid storage
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('btm:task-ai-mode-map', JSON.stringify(aiModeByTask));
+  }, [aiModeByTask]);
+
+  useEffect(() => {
     localStorage.setItem(USER_TIMEZONE_STORAGE_KEY, userTimeZone);
   }, [userTimeZone]);
 
@@ -761,6 +775,19 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
+  }, [currentUser?.id, focusedTaskId]);
+
+  useEffect(() => {
+    if (!currentUser || !focusedTaskId) return;
+    const intervalId = window.setInterval(async () => {
+      try {
+        const result = await api.getTaskAssistantHistory(focusedTaskId);
+        setAiDialogByTask((prev) => ({ ...prev, [focusedTaskId]: result.messages }));
+      } catch {
+        // silent sync retries
+      }
+    }, 2500);
+    return () => window.clearInterval(intervalId);
   }, [currentUser?.id, focusedTaskId]);
 
   useEffect(() => {
@@ -943,6 +970,7 @@ export default function App() {
     () => (focusedTask ? aiDialogByTask[focusedTask.id] ?? [] : []),
     [aiDialogByTask, focusedTask]
   );
+  const focusedAiMode: ChatMode = focusedTask ? (aiModeByTask[focusedTask.id] ?? 'fast') : 'fast';
   const filteredFocusedAiDialog = useMemo(() => {
     if (!isFocusedAiSearchOpen) return focusedAiDialog;
     const query = focusedAiSearchQuery.trim().toLowerCase();
@@ -966,8 +994,7 @@ export default function App() {
       setAiDraft('');
       setAiError(null);
       setIsAiExpanded(false);
-      setAiMode('fast');
-      setAiPendingFiles([]);
+            setAiPendingFiles([]);
       setFocusedAiSearchQuery('');
       setIsFocusedAiSearchOpen(false);
       setHideClosedFocusedSubtasks(true);
@@ -1115,7 +1142,7 @@ export default function App() {
       const result = await askTaskAssistant(taskId, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage: userContent,
-        mode: options?.modeOverride ?? aiMode,
+        mode: options?.modeOverride ?? focusedAiMode,
         attachments: attachmentsPayload
       });
       setAiDialogByTask((prev) => ({
@@ -3404,8 +3431,8 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <select
-                    value={aiMode}
-                    onChange={(event) => setAiMode(event.target.value as ChatMode)}
+                    value={focusedAiMode}
+                    onChange={(event) => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: event.target.value as ChatMode }))}
                     className="rounded border border-violet-400/50 bg-violet-700/80 px-2 py-1.5 text-[11px] text-violet-50 hover:bg-violet-600 focus:outline-none"
                     title="Режим ИИ"
                   >
@@ -3882,15 +3909,15 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1 rounded-lg bg-slate-900/80 p-1 text-[11px]">
                   <button
-                    className={`rounded px-2 py-1 ${aiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => setAiMode('fast')}
+                    className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                     title="Быстрый режим (gpt-5.4-mini)"
                   >
                     Быстрый
                   </button>
                   <button
-                    className={`rounded px-2 py-1 ${aiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => setAiMode('smart')}
+                    className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                     title="Умный режим (gpt-5.4)"
                   >
                     Умный
@@ -4006,7 +4033,7 @@ export default function App() {
                   onClick={() => void sendFocusedAiQuestion()}
                 >
                   <SendHorizontal size={14} />
-                  Отправить ({aiMode === 'fast' ? 'Быстрый' : 'Умный'})
+                  Отправить ({focusedAiMode === 'fast' ? 'Быстрый' : 'Умный'})
                 </button>
               </div>
             </div>
