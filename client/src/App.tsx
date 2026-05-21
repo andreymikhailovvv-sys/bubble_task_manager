@@ -2831,7 +2831,7 @@ export default function App() {
                               ? 'border-rose-800/60 bg-rose-950/18'
                               : 'border-slate-700/70 bg-slate-900/75')
                             : 'border-transparent bg-slate-900/20'
-                        } ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
                           if (!cell.date) return;
                           event.preventDefault();
