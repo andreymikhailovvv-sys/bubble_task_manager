@@ -105,7 +105,7 @@ export const aiController = {
         return;
       }
       const userTimeZone = await resolveUserTimeZone(req);
-      const result = await aiAssistantService.parseRecurrence({ text, userTimeZone });
+      const result = await aiAssistantService.parseRecurrence({ userId: req.user!.id, text, userTimeZone });
       res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
