@@ -111,18 +111,18 @@ type AiTaskReference = {
   label: string;
 };
 
-const TASK_REF_PATTERN = /\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
+const TASK_REF_PATTERN = /\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
 
 function parseTaskReferencesInLine(content: string): Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: AiTaskReference }> {
   const chunks: Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: AiTaskReference }> = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = TASK_REF_PATTERN.exec(content)) !== null) {
-    const [full, rawTaskId, rawLabel] = match;
+    const [full, rawTaskIdEq, rawTaskIdLegacy, rawLabelLegacy] = match;
     const textBefore = content.slice(lastIndex, match.index);
     if (textBefore) chunks.push({ type: 'text', value: textBefore });
-    const taskId = rawTaskId.trim();
-    const label = rawLabel.trim();
+    const taskId = (rawTaskIdEq || rawTaskIdLegacy || '').trim();
+    const label = (rawLabelLegacy || '').trim() || 'Открыть задачу';
     if (taskId && label) chunks.push({ type: 'taskRef', reference: { taskId, label } });
     lastIndex = match.index + full.length;
   }
