@@ -158,7 +158,7 @@ export default function MiniApp() {
   const [loading, setLoading] = useState(true);
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
@@ -1018,7 +1018,7 @@ export default function MiniApp() {
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
                   >
                     <span className="block text-left">Быстрая</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                   </button>
                   <button
                     type="button"
@@ -1180,7 +1180,7 @@ export default function MiniApp() {
                     onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
                   >
                     <span className="block text-left">Быстрая</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>1</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                   </button>
                   <button
                     type="button"

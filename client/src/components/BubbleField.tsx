@@ -626,7 +626,7 @@ export function BubbleField({
                             <option value="1h">На час</option>
                             <option value="3h">На 3 часа</option>
                             <option value="tomorrow">На завтра</option>
-                            <option value="smart">✦ Ближайшее окно (🪙 1)</option>
+                            <option value="smart">✦ Ближайшее окно (◍ 1)</option>
                           </select>
                         </div>
                         <div className="flex items-center gap-1">
