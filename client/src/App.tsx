@@ -3090,6 +3090,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3263,6 +3267,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3512,6 +3520,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -3702,6 +3714,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -4029,6 +4045,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
@@ -4346,6 +4366,10 @@ export default function App() {
                 disabled={!timelineCreateMenu.taskId}
                 className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelinePostponeSubmenuOpen((prev) => !prev);
+                }}
               >
                 <span>Отложить</span>
                 <ChevronRight size={13} className="text-slate-300" />
