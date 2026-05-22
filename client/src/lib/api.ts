@@ -75,6 +75,7 @@ export type CurrentUser = {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  efficiencyResetAt?: string;
 };
 type AdminUser = {
   id: string;
