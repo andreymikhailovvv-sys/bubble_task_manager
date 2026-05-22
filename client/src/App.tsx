@@ -109,16 +109,16 @@ const EFFICIENCY_PENALTIES = {
   inactiveDay: 0.08
 } as const;
 
-type EfficiencyGrade = 'средняя' | 'хорошая' | 'отличная';
+type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
 
 function clampEfficiency(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
 function getEfficiencyGrade(value: number): EfficiencyGrade {
-  if (value < 0.3) return 'средняя';
-  if (value < 0.7) return 'хорошая';
-  return 'отличная';
+  if (value < 0.3) return 'средний';
+  if (value < 0.7) return 'хороший';
+  return 'отличный';
 }
 
 const DISPLAY_MODE_OPTIONS = [
@@ -1506,7 +1506,7 @@ export default function App() {
     const nowMs = now.getTime();
 
     const rootCreatedCount = rootTasks.length;
-        const doneRootCount = rootTasks.filter((task) => task.status === 'DONE').length;
+    const doneRootCount = rootTasks.filter((task) => task.status === 'DONE').length;
     const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE').length;
     const overdueRootCount = rootTasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs).length;
     const overdueSubtaskCount = subtasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs).length;
@@ -2540,26 +2540,26 @@ export default function App() {
             <option value="coefficient">По коэффициенту</option>
           </select>
         </div>
-        <div className="hidden md:flex flex-col items-center justify-center px-2">
-          <svg width="170" height="92" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="drop-shadow-[0_0_10px_rgba(15,23,42,0.45)]">
-            <path d="M 8 84 A 76 76 0 0 1 84.5 8 L 84.5 84 Z" fill="#facc15" fillOpacity="0.92" />
-            <path d="M 84.5 8 A 76 76 0 0 1 150 45.5 L 84.5 84 Z" fill="#3b82f6" fillOpacity="0.9" />
-            <path d="M 150 45.5 A 76 76 0 0 1 161 84 L 84.5 84 Z" fill="#22c55e" fillOpacity="0.92" />
-            <path d="M 8 84 A 76 76 0 0 1 161 84" stroke="#e2e8f0" strokeWidth="2" fill="none" />
-            <line x1="84.5" y1="84" x2="46.25" y2="17.8" stroke="#e2e8f0" strokeWidth="2" />
-            <line x1="84.5" y1="84" x2="122.75" y2="17.8" stroke="#e2e8f0" strokeWidth="2" />
+        <div className="hidden md:flex flex-col items-center justify-center px-1">
+          <svg width="86" height="46" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="drop-shadow-[0_0_7px_rgba(15,23,42,0.4)]">
+            <path d="M 8 84 A 76 76 0 0 1 46.5 18.2 L 84.5 84 Z" fill="#eab86f" fillOpacity="0.85" />
+            <path d="M 46.5 18.2 A 76 76 0 0 1 122.5 18.2 L 84.5 84 Z" fill="#5b8ac9" fillOpacity="0.84" />
+            <path d="M 122.5 18.2 A 76 76 0 0 1 161 84 L 84.5 84 Z" fill="#4ea88a" fillOpacity="0.85" />
+            <path d="M 8 84 A 76 76 0 0 1 161 84" stroke="#cbd5e1" strokeWidth="1.8" fill="none" />
+            <line x1="84.5" y1="84" x2="46.5" y2="18.2" stroke="#cbd5e1" strokeWidth="1.8" />
+            <line x1="84.5" y1="84" x2="122.5" y2="18.2" stroke="#cbd5e1" strokeWidth="1.8" />
             <line
               x1="84.5"
               y1="84"
               x2={84.5 - Math.cos(Math.PI * efficiencyScore) * 60}
               y2={84 - Math.sin(Math.PI * efficiencyScore) * 60}
               stroke="#f8fafc"
-              strokeWidth="3"
+              strokeWidth="2.4"
               strokeLinecap="round"
             />
-            <circle cx="84.5" cy="84" r="4" fill="#f8fafc" />
+            <circle cx="84.5" cy="84" r="3.2" fill="#f8fafc" />
           </svg>
-          <div className="-mt-1 text-center text-xs text-slate-100">
+          <div className="-mt-0.5 text-center text-[10px] leading-tight text-slate-100">
             <div>Рейтинг: {efficiencyScore.toFixed(3)}</div>
             <div className="text-slate-300">Уровень: {efficiencyGrade}</div>
           </div>
