@@ -105,6 +105,7 @@ type GeneralAiUndoOperation = {
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
 };
 type GeneralAiMessage = ChatMessage & { id: string };
+type TaskAiMessage = ChatMessage & { id: string };
 
 
 type AiTaskReference = {
@@ -457,7 +458,7 @@ export default function App() {
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
-  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, TaskAiMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
   const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
@@ -793,7 +794,7 @@ export default function App() {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : normalizeTaskAiMessages(serverMessages) };
         });
       } catch {
         if (isCancelled) return;
@@ -818,7 +819,7 @@ export default function App() {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : serverMessages };
+          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : normalizeTaskAiMessages(serverMessages) };
         });
       } catch {
         // silent sync retries
@@ -895,7 +896,7 @@ export default function App() {
               const alreadyHasMessage = previousDialog.some((message) => message.role === 'assistant' && message.content === answer);
               return alreadyHasMessage
                 ? previousDialog
-                : [...previousDialog, { role: 'assistant', content: answer }];
+                : [...previousDialog, { id: crypto.randomUUID(), role: 'assistant', content: answer }];
             })()
           }));
         } catch {
@@ -1020,6 +1021,9 @@ export default function App() {
     if (!query) return generalAiMessages;
     return generalAiMessages.filter((message) => message.content.toLowerCase().includes(query));
   }, [generalAiMessages, generalAiSearchQuery, isGeneralAiSearchOpen]);
+
+  const normalizeTaskAiMessages = (messages: ChatMessage[]): TaskAiMessage[] =>
+    messages.map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
 
   useEffect(() => {
     if (!focusedTask) {
@@ -1168,7 +1172,7 @@ export default function App() {
     const userContent = fileNames.length > 0
       ? `${baseUserContent || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
       : baseUserContent;
-    const nextDialog = [...previousDialog, { role: 'user' as const, content: userContent }];
+    const nextDialog = [...previousDialog, { id: crypto.randomUUID(), role: 'user' as const, content: userContent }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
     setAiDraft('');
     setAiPendingFiles([]);
@@ -1184,15 +1188,19 @@ export default function App() {
       });
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: result.answer }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]
       }));
       await load();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
+      const status = typeof (error as { status?: unknown })?.status === 'number' ? Number((error as { status?: number }).status) : null;
+      const message = status === 402 || status === 403
+        ? 'Недостаточно кредитов для отправки сообщения.'
+        : 'Ошибка отправки сообщения. Попробуйте ещё раз.';
+      console.error('[AI task chat] send failed', error);
       setAiError(message);
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { role: 'assistant', content: 'Не удалось получить ответ. Попробуйте ещё раз.' }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: 'Ошибка отправки сообщения. Попробуйте ещё раз.' }]
       }));
     } finally {
       setAiLoadingTaskId(null);
@@ -1616,7 +1624,7 @@ export default function App() {
 
     setAiDialogByTask((prev) => ({
       ...prev,
-      [createdTask.id]: [{ role: 'assistant', content: generated.firstAssistantMessage }]
+      [createdTask.id]: [{ id: crypto.randomUUID(), role: 'assistant', content: generated.firstAssistantMessage }]
     }));
     await api.appendTaskAssistantMessages(createdTask.id, {
       messages: [{ role: 'assistant', content: generated.firstAssistantMessage }]
@@ -3648,7 +3656,7 @@ export default function App() {
                 {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
-                    key={`focused-ai-${message.role}-${index}`}
+                    key={message.id}
                     className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
@@ -4216,7 +4224,7 @@ export default function App() {
               {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
-                  key={`expanded-ai-${message.role}-${index}`}
+                  key={`expanded-${message.id}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
