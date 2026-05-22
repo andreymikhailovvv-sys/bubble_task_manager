@@ -94,6 +94,39 @@ const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const SMART_POSTPONE_CREDITS_COST = 1;
+
+const EFFICIENCY_BONUSES = {
+  doneTask: 0.05,
+  doneSubtask: 0.02,
+  createdTask: 0.01,
+  taskAiPrompt: 0.002,
+  generalAiPrompt: 0.002
+} as const;
+
+const EFFICIENCY_PENALTIES = {
+  overdueTask: 0.05,
+  overdueSubtask: 0.03,
+  inactiveDay: 0.08
+} as const;
+
+type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
+
+function clampEfficiency(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function getEfficiencyGrade(value: number): EfficiencyGrade {
+  if (value < 0.3) return 'средний';
+  if (value < 0.7) return 'хороший';
+  return 'отличный';
+}
+
+function isSameLocalDay(date: Date, target: Date) {
+  return date.getFullYear() === target.getFullYear()
+    && date.getMonth() === target.getMonth()
+    && date.getDate() === target.getDate();
+}
+
 const DISPLAY_MODE_OPTIONS = [
   { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
   { value: 'list', label: 'Список', icon: List, iconClassName: 'text-violet-300' },
@@ -388,6 +421,7 @@ export default function App() {
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
+  const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
 
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
@@ -493,6 +527,7 @@ export default function App() {
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
+  const efficiencyDetailsRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
@@ -854,6 +889,17 @@ export default function App() {
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
   }, [isDisplayModeMenuOpen, isSettingsOpen, isSphereFilterOpen]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (isEfficiencyDetailsOpen && efficiencyDetailsRef.current && target && !efficiencyDetailsRef.current.contains(target)) {
+        setIsEfficiencyDetailsOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [isEfficiencyDetailsOpen]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1473,6 +1519,82 @@ export default function App() {
 
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
+
+  const efficiencyScore = useMemo(() => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const resetAt = currentUser?.efficiencyResetAt ? new Date(currentUser.efficiencyResetAt) : null;
+    const resetAtMs = resetAt && Number.isFinite(resetAt.getTime()) ? resetAt.getTime() : 0;
+    const afterReset = (raw?: string | null) => {
+      if (!raw) return false;
+      const parsed = new Date(raw).getTime();
+      return Number.isFinite(parsed) && parsed >= resetAtMs;
+    };
+
+    const rootCreatedCount = rootTasks.filter((task) => afterReset(task.createdAt)).length;
+    const doneRootCount = rootTasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
+    const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
+    const overdueRootCount = rootTasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && afterReset(task.dueDate)).length;
+    const overdueSubtaskCount = subtasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && afterReset(task.dueDate)).length;
+    const taskAiPrompts = tasks.reduce((acc, task) => acc + ((aiDialogByTask[task.id] ?? []).filter((message) => message.role === 'user').length), 0);
+    const generalAiPrompts = generalAiMessages.filter((message) => message.role === 'user').length;
+
+    const latestActionAtMs = tasks.reduce<number>((latest, task) => {
+      const createdAt = task.createdAt ? new Date(task.createdAt).getTime() : 0;
+      const updatedAt = task.updatedAt ? new Date(task.updatedAt).getTime() : 0;
+      const createdAtSafe = createdAt >= resetAtMs ? createdAt : 0;
+      const updatedAtSafe = updatedAt >= resetAtMs ? updatedAt : 0;
+      return Math.max(latest, createdAtSafe, updatedAtSafe);
+    }, 0);
+    const inactivePenalty = latestActionAtMs > 0 && (nowMs - latestActionAtMs) >= 24 * 60 * 60 * 1000 ? EFFICIENCY_PENALTIES.inactiveDay : 0;
+
+    const bonus = doneRootCount * EFFICIENCY_BONUSES.doneTask
+      + doneSubtaskCount * EFFICIENCY_BONUSES.doneSubtask
+      + rootCreatedCount * EFFICIENCY_BONUSES.createdTask
+      + taskAiPrompts * EFFICIENCY_BONUSES.taskAiPrompt
+      + generalAiPrompts * EFFICIENCY_BONUSES.generalAiPrompt;
+
+    const penalty = overdueRootCount * EFFICIENCY_PENALTIES.overdueTask
+      + overdueSubtaskCount * EFFICIENCY_PENALTIES.overdueSubtask
+      + inactivePenalty;
+
+    return clampEfficiency(bonus - penalty);
+  }, [aiDialogByTask, currentUser?.efficiencyResetAt, generalAiMessages, rootTasks, subtasks, tasks]);
+
+  const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
+
+  const efficiencyTodaySummary = useMemo(() => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const resetAt = currentUser?.efficiencyResetAt ? new Date(currentUser.efficiencyResetAt) : null;
+    const resetAtMs = resetAt && Number.isFinite(resetAt.getTime()) ? resetAt.getTime() : 0;
+    const isToday = (raw?: string | null) => {
+      if (!raw) return false;
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return false;
+      return parsed.getTime() >= resetAtMs && isSameLocalDay(parsed, now);
+    };
+    const createdTasksToday = rootTasks.filter((task) => isToday(task.createdAt)).length;
+    const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
+    const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
+    const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
+    const overdueTasksToday = rootTasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && isToday(task.dueDate)).length;
+    const overdueSubtasksToday = subtasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && isToday(task.dueDate)).length;
+    const taskAiPromptsToday = Object.values(aiDialogByTask).reduce((acc, dialog) => acc + dialog.filter((message) => message.role === 'user').length, 0);
+    const generalAiPromptsToday = generalAiMessages.filter((message) => message.role === 'user').length;
+    const hasActionsToday = createdTasksToday + createdSubtasksToday + closedTasksToday + closedSubtasksToday > 0;
+    return {
+      createdTasksToday,
+      createdSubtasksToday,
+      closedTasksToday,
+      closedSubtasksToday,
+      overdueTasksToday,
+      overdueSubtasksToday,
+      taskAiPromptsToday,
+      generalAiPromptsToday,
+      inactivePenaltyToday: hasActionsToday ? 0 : EFFICIENCY_PENALTIES.inactiveDay
+    };
+  }, [aiDialogByTask, currentUser?.efficiencyResetAt, generalAiMessages, rootTasks, subtasks]);
 
   const visibleTasks = useMemo(
     () =>
@@ -2479,6 +2601,44 @@ export default function App() {
             <option value="coefficient">По коэффициенту</option>
           </select>
         </div>
+        <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
+          <button
+            type="button"
+            className="rounded-full p-1.5 hover:bg-slate-800/60"
+            title={`Текущий рейтинг: ${efficiencyScore.toFixed(3)} (${efficiencyGrade})`}
+            onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}
+          >
+            <svg width="66" height="36" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="drop-shadow-[0_0_10px_rgba(56,189,248,0.16)]">
+              <defs>
+                <linearGradient id="effTrack" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#334155" /><stop offset="100%" stopColor="#475569" /></linearGradient>
+                <linearGradient id="effFillLow" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#b99c5d" /><stop offset="100%" stopColor="#dbc07a" /></linearGradient>
+                <linearGradient id="effFillMid" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#4f72a8" /><stop offset="100%" stopColor="#74a0d8" /></linearGradient>
+                <linearGradient id="effFillHigh" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#418f78" /><stop offset="100%" stopColor="#5fc39f" /></linearGradient>
+              </defs>
+              <path d="M 8 84 A 76 76 0 0 1 161 84" stroke="url(#effTrack)" strokeWidth="8" strokeLinecap="round" fill="none" />
+              <path d="M 8 84 A 76 76 0 0 1 161 84" stroke={efficiencyScore < 0.3 ? 'url(#effFillLow)' : efficiencyScore < 0.7 ? 'url(#effFillMid)' : 'url(#effFillHigh)'} strokeWidth="8" strokeLinecap="round" fill="none" pathLength={1} strokeDasharray={`${efficiencyScore} 1`} />
+              <line x1="84.5" y1="84" x2={84.5 - Math.cos(Math.PI * efficiencyScore) * 56} y2={84 - Math.sin(Math.PI * efficiencyScore) * 56} stroke="#f8fafc" strokeWidth="2.4" strokeLinecap="round" />
+              <circle cx="84.5" cy="84" r="3.2" fill="#f8fafc" />
+            </svg>
+          </button>
+          {isEfficiencyDetailsOpen ? (
+            <div className="absolute left-1/2 top-[calc(100%+6px)] z-40 w-80 -translate-x-1/2 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3 text-xs shadow-2xl backdrop-blur">
+              <p className="mb-2 font-semibold text-slate-100">Что повлияло на рейтинг сегодня:</p>
+              <ul className="space-y-1 text-slate-200">
+                <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
+                <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
+                <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
+                <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="text-emerald-300">+0.000</span>.</li>
+                <li>• Вопросов к ИИ по задачам: {efficiencyTodaySummary.taskAiPromptsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.taskAiPromptsToday * EFFICIENCY_BONUSES.taskAiPrompt).toFixed(3)}</span>.</li>
+                <li>• Вопросов к ИИ в общем чате: {efficiencyTodaySummary.generalAiPromptsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.generalAiPromptsToday * EFFICIENCY_BONUSES.generalAiPrompt).toFixed(3)}</span>.</li>
+                <li>• Просроченных задач на сегодня: {efficiencyTodaySummary.overdueTasksToday} — <span className="text-rose-300">-{(efficiencyTodaySummary.overdueTasksToday * EFFICIENCY_PENALTIES.overdueTask).toFixed(3)}</span>.</li>
+                <li>• Просроченных подзадач на сегодня: {efficiencyTodaySummary.overdueSubtasksToday} — <span className="text-rose-300">-{(efficiencyTodaySummary.overdueSubtasksToday * EFFICIENCY_PENALTIES.overdueSubtask).toFixed(3)}</span>.</li>
+                <li>• Штраф за бездействие: {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <div className="flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
             <Coins size={15} />

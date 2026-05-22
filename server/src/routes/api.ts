@@ -15,6 +15,7 @@ export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
+const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
 
 const toAuthUser = (user: {
   id: string;
@@ -26,6 +27,7 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  efficiencyResetAt?: string;
 }) => ({
   id: user.id,
   email: user.email,
@@ -35,7 +37,8 @@ const toAuthUser = (user: {
   googleSub: user.googleSub,
   deviceId: user.deviceId,
   aiCredits: user.aiCredits ?? 100,
-  aiCreditsPeriod: user.aiCreditsPeriod ?? ''
+  aiCreditsPeriod: user.aiCreditsPeriod ?? '',
+  efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO
 });
 
 const setAuthCookies = (
