@@ -57,6 +57,7 @@ const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:backgr
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
+const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const TIMEZONE_OPTIONS = [
   'Europe/Moscow',
@@ -446,6 +447,7 @@ export default function App() {
     return DEFAULT_TIMEZONE;
   });
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
@@ -533,6 +535,10 @@ export default function App() {
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const [overdueTick, setOverdueTick] = useState(0);
+
+  useEffect(() => {
+    localStorage.setItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY, isAiNotificationsDefaultEnabled ? '1' : '0');
+  }, [isAiNotificationsDefaultEnabled]);
 
   useEffect(() => {
     if (!timelineCreateMenu) return;
@@ -909,6 +915,7 @@ export default function App() {
 
     const isOverdue = (task: Task) => {
       if (task.parentTaskId) return false;
+      if (task.aiNotificationsEnabled === false) return false;
       if (task.status === 'DONE') return false;
       if (!task.dueDate) return false;
       const dueDate = new Date(task.dueDate);
@@ -1090,7 +1097,7 @@ export default function App() {
       focusedAutosaveSignatureRef.current = null;
       return;
     }
-    setFocusedDraft(focusedTask);
+    setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     if (focusedTask.notifyBeforeMinutes === null) {
       setFocusedNotifyPreset('null');
     } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 30)) {
@@ -1107,8 +1114,10 @@ export default function App() {
       importance: focusedTask.importance ?? 3,
       urgency: focusedTask.urgency ?? 3,
       status: focusedTask.status ?? 'TODO'
+      ,
+      aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled
     });
-  }, [focusedTask]);
+  }, [focusedTask, isAiNotificationsDefaultEnabled]);
 
   useEffect(() => {
     if (!focusedTask || !focusedDraft) return;
@@ -1124,6 +1133,7 @@ export default function App() {
       sphereId: normalized.sphereId ?? null,
       dueDate: normalized.dueDate ?? null,
       notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled,
       importance: normalized.importance,
       urgency: normalized.urgency,
       status: normalized.status
@@ -1143,7 +1153,7 @@ export default function App() {
         clearTimeout(focusedAutosaveTimeoutRef.current);
       }
     };
-  }, [focusedTask?.id, focusedDraft]);
+  }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
   useEffect(() => {
     if (!focusedTask) return;
@@ -2533,6 +2543,25 @@ export default function App() {
               >
                 Сбросить на Москву
               </button>
+              <div className="mt-3 border-t border-slate-700/70 pt-3">
+                <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
+                  <span>Уведомления от ИИ</span>
+                  <span
+                    className="cursor-help rounded-full border border-slate-600 px-1.5 text-[10px] text-slate-300"
+                    title="ИИ-уведомления — это автоматические подсказки, когда задача просрочена: что сделать прямо сейчас, чтобы сдвинуться с места. Они помогают не терять фокус и быстрее возвращаться к важным задачам. Каждое такое уведомление списывает 1 кредит 💳."
+                  >
+                    ?
+                  </span>
+                </div>
+                <select
+                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+                  value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
+                  onChange={(event) => setIsAiNotificationsDefaultEnabled(event.target.value === 'enabled')}
+                >
+                  <option value="enabled">Включены для всех задач</option>
+                  <option value="disabled">Выключены для всех задач</option>
+                </select>
+              </div>
             </div>
           ) : null}
         </div>
@@ -3679,6 +3708,7 @@ export default function App() {
           task={editorState.task}
           initialSphereId={editorState.initialSphereId}
           spheres={spheres}
+          defaultAiNotificationsEnabled={isAiNotificationsDefaultEnabled}
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
@@ -4021,6 +4051,7 @@ export default function App() {
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
                   </select>
+                  <div className="flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -4029,6 +4060,15 @@ export default function App() {
                     />
                     повторять
                   </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={focusedDraft.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled}
+                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), aiNotificationsEnabled: e.target.checked }))}
+                    />
+                    уведомления от ИИ
+                  </label>
+                  </div>
                   {focusedDraft.isRecurring ? (
                     <label className="block text-xs">Описание повторения
                       <textarea

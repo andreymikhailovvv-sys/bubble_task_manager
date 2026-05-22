@@ -16,6 +16,7 @@ type Props = {
   onComplete?: () => Promise<void>;
   parentTaskTitle?: string | null;
   onOpenParentTask?: () => void;
+  defaultAiNotificationsEnabled: boolean;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -56,7 +57,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask }: Props) {
+export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('30');
@@ -75,7 +76,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const autosaveSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const nextForm: Partial<Task> = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 30 };
+    const nextForm: Partial<Task> = task ?? { importance: 3, sphereId: initialSphereId ?? null, status: 'TODO', notifyBeforeMinutes: 30, aiNotificationsEnabled: defaultAiNotificationsEnabled };
     setForm(nextForm);
     if (nextForm.notifyBeforeMinutes === null) {
       setNotifyPreset('null');
@@ -108,8 +109,10 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       importance: task.importance ?? 3,
       urgency: task.urgency ?? 3,
       status: task.status ?? 'TODO'
+      ,
+      aiNotificationsEnabled: task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled
     }) : null;
-  }, [task, initialSphereId]);
+  }, [task, initialSphereId, defaultAiNotificationsEnabled]);
 
   useEffect(() => {
     if (!isEditing || !task?.id || !onAutoSave) return;
@@ -133,6 +136,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       importance: normalized.importance,
       urgency: normalized.urgency,
       status: normalized.status
+      ,
+      aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? defaultAiNotificationsEnabled
     });
     if (autosaveSignatureRef.current === nextSignature) return;
     if (autosaveTimeoutRef.current) {
@@ -148,7 +153,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [form, isEditing, onAutoSave, task?.id]);
+  }, [form, isEditing, onAutoSave, task?.id, defaultAiNotificationsEnabled]);
 
   const selectedImportance = form.importance ?? 3;
   const isSubtask = Boolean(form.parentTaskId);
@@ -350,6 +355,14 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 }
               }} />
               повторять
+            </label>
+            <label className="mt-1 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.aiNotificationsEnabled ?? defaultAiNotificationsEnabled}
+                onChange={(e) => setForm((p) => ({ ...p, aiNotificationsEnabled: e.target.checked }))}
+              />
+              уведомления от ИИ
             </label>
             {isRecurring ? (
               <div className="rounded bg-slate-800/70 p-2 text-xs">

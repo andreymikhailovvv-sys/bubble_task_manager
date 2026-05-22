@@ -17,6 +17,7 @@ export type Task = {
   recurrenceJson?: Record<string, unknown> | null;
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | null;
+  aiNotificationsEnabled?: boolean;
   importance: number;
   urgency: number;
   priorityScore: number;
