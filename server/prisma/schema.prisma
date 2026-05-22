@@ -89,6 +89,7 @@ model Task {
   recurrenceSummary   String?
   recurrenceUntil     DateTime?
   overdueAiNotifiedAt DateTime?
+  aiNotificationsEnabled Boolean @default(true)
   telegramNotifiedAt  DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt

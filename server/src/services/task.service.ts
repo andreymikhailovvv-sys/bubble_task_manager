@@ -16,6 +16,7 @@ interface TaskInput {
   recurrenceJson?: PrismaTypes.InputJsonValue | null;
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | Date | null;
+  aiNotificationsEnabled?: boolean;
 }
 
 const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined): PrismaTypes.InputJsonValue | PrismaTypes.NullableJsonNullValueInput | undefined => {
@@ -140,7 +141,8 @@ export const taskService = {
         recurrenceText: isSubtask ? null : (input.recurrenceText ?? null),
         recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
-        recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null)
+        recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
+        aiNotificationsEnabled: input.aiNotificationsEnabled ?? true
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -186,6 +188,9 @@ export const taskService = {
     }
     if (input.status !== undefined || input.dueDate !== undefined || input.notifyBeforeMinutes !== undefined) {
       patch.telegramNotifiedAt = null;
+    }
+    if (input.aiNotificationsEnabled !== undefined) {
+      patch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
     }
 
     const currentTask = await prisma.task.findFirstOrThrow({

@@ -28,6 +28,7 @@ type AskTaskAssistantInput = {
   mode?: 'fast' | 'smart';
   attachments?: ChatAttachment[];
   userTimeZone?: string;
+  skipCreditsCharge?: boolean;
 };
 
 type GenerateSubtasksInput = {
@@ -141,6 +142,21 @@ async function chargeAiCredits(userId: string, model: string) {
     where: { id: userId },
     data: {
       aiCredits: credits - cost,
+      aiCreditsPeriod: period
+    }
+  });
+}
+
+async function chargeSingleAiNotificationCredit(userId: string) {
+  const period = currentCreditsPeriod();
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  if (!user) throw new Error('User not found');
+  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
+  if (credits < 1) throw new Error('Недостаточно AI кредитов');
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      aiCredits: credits - 1,
       aiCreditsPeriod: period
     }
   });
@@ -1294,7 +1310,9 @@ export const aiAssistantService = {
           userId: input.userId
         });
 
-        await chargeAiCredits(input.userId, model);
+        if (!input.skipCreditsCharge) {
+          await chargeAiCredits(input.userId, model);
+        }
         const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -2128,6 +2146,7 @@ ${parsed.answer}`
       where: {
         id: input.taskId,
         userId: input.userId,
+        aiNotificationsEnabled: true,
         status: { not: 'DONE' },
         dueDate: { not: null, lt: now },
         overdueAiNotifiedAt: null
@@ -2142,6 +2161,7 @@ ${parsed.answer}`
         where: {
           id: input.taskId,
           userId: input.userId,
+          aiNotificationsEnabled: true,
           status: { not: 'DONE' },
           dueDate: { not: null, lt: now },
           overdueAiNotifiedAt: { not: null }
@@ -2180,11 +2200,13 @@ ${parsed.answer}`
     }
 
     try {
+      await chargeSingleAiNotificationCredit(input.userId);
       const result = await aiAssistantService.askTaskAssistant({
         userId: input.userId,
         taskId: input.taskId,
         history: [],
         mode: 'fast',
+        skipCreditsCharge: true,
         question: [
           'Задача только что стала просроченной.',
           'Проанализируй контекст и предложи пользователю максимально конкретный следующий шаг, который можно сделать прямо сейчас.',
