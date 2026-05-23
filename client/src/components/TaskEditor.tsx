@@ -17,6 +17,7 @@ type Props = {
   parentTaskTitle?: string | null;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null }>;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -57,7 +58,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled }: Props) {
+export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled, timelineTasks = [] }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('30');
@@ -382,6 +383,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             className="mt-1"
             value={form.dueDate}
             onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))}
+            timelineTasks={timelineTasks}
           />
         </label>
         ) : null}
