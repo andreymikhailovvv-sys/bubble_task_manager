@@ -17,7 +17,7 @@ type Props = {
   parentTaskTitle?: string | null;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
-  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null }>;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null }>;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;

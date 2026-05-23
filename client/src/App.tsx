@@ -2361,7 +2361,17 @@ export default function App() {
   const timelinePickerTasks = [...activeTasks, ...subtasks].map((task) => ({
     id: task.id,
     title: task.title,
-    dueDate: task.dueDate
+    dueDate: task.dueDate,
+    isSubtask: Boolean(task.parentTaskId),
+    sphereColor: (() => {
+      if (task.parentTaskId) {
+        const parentTask = taskById.get(task.parentTaskId);
+        const parentSphere = parentTask?.sphereId ? sphereById.get(parentTask.sphereId) : null;
+        return parentSphere?.color ?? '#64748b';
+      }
+      const sphere = task.sphereId ? sphereById.get(task.sphereId) : null;
+      return sphere?.color ?? '#64748b';
+    })()
   }));
   const timelineViewData = (() => {
     try {
