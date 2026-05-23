@@ -133,6 +133,7 @@ export function DateTimePickerWithApply({
   const monthStart = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), 1);
   const monthDays = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 0).getDate();
   const firstWeekDay = (monthStart.getDay() + 6) % 7;
+  const today = new Date();
   const monthCells = Array.from({ length: firstWeekDay + monthDays }, (_, index) => {
     if (index < firstWeekDay) return null;
     return new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), index - firstWeekDay + 1);
@@ -261,8 +262,14 @@ export function DateTimePickerWithApply({
                   const dayTasks = date
                     ? timelineTasks.filter((task) => task.dueDate && new Date(task.dueDate).toDateString() === date.toDateString())
                     : [];
+                  const isToday = Boolean(
+                    date
+                    && date.getFullYear() === today.getFullYear()
+                    && date.getMonth() === today.getMonth()
+                    && date.getDate() === today.getDate()
+                  );
                   return (
-                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`min-h-24 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => {
+                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`min-h-24 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${isToday ? 'ring-1 ring-amber-300/90 ring-inset' : ''} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => {
                       if (!date) return;
                       setSelectedPreviewDate(date);
                       setPreviewMode('day');
