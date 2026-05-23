@@ -2358,6 +2358,10 @@ export default function App() {
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
     .filter((task) => isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
+  const timelinePickerTasks = useMemo(
+    () => [...activeTasks, ...subtasks].map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate })),
+    [activeTasks, subtasks]
+  );
   const timelineViewData = (() => {
     try {
     return buildTimelineViewData([...timelineRenderTasks, ...timelineVisibleSubtasks], timelineAnchorDate, timelineViewMode);
@@ -3705,6 +3709,7 @@ export default function App() {
       </div>
       {editorState ? (
         <TaskEditor
+          timelineTasks={timelinePickerTasks}
           task={editorState.task}
           initialSphereId={editorState.initialSphereId}
           spheres={spheres}

@@ -1,4 +1,4 @@
-import { CalendarDays, Check, X } from 'lucide-react';
+import { CalendarDays, Check, Clock3, PanelsTopLeft, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -13,6 +13,7 @@ type Props = {
   detachedOffset?: number;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null }>;
 };
 
 function toLocalParts(value?: string | null) {
@@ -50,7 +51,8 @@ export function DateTimePickerWithApply({
   detachedPopup = false,
   detachedOffset = 10,
   onChange,
-  onOpenChange
+  onOpenChange,
+  timelineTasks = []
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
@@ -59,6 +61,9 @@ export function DateTimePickerWithApply({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popupRef = useRef<HTMLDivElement | null>(null);
   const [detachedPosition, setDetachedPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isTimelinePreviewOpen, setIsTimelinePreviewOpen] = useState(false);
+  const [previewMonthDate, setPreviewMonthDate] = useState(new Date());
+  const [selectedPreviewDate, setSelectedPreviewDate] = useState<Date | null>(null);
 
   const formattedValue = useMemo(() => formatValue(value), [value]);
 
@@ -124,6 +129,16 @@ export function DateTimePickerWithApply({
   }, [detachedOffset, detachedPopup, isOpen, popupAlign]);
 
   const popupPositionClass = popupAlign === 'right' ? 'right-0' : 'left-0';
+  const monthStart = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), 1);
+  const monthDays = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 0).getDate();
+  const firstWeekDay = (monthStart.getDay() + 6) % 7;
+  const monthCells = Array.from({ length: firstWeekDay + monthDays }, (_, index) => {
+    if (index < firstWeekDay) return null;
+    return new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), index - firstWeekDay + 1);
+  });
+  const selectedDayTasks = selectedPreviewDate
+    ? timelineTasks.filter((task) => task.dueDate && new Date(task.dueDate).toDateString() === selectedPreviewDate.toDateString())
+    : [];
 
   const popupContent = (
     <div
@@ -148,6 +163,18 @@ export function DateTimePickerWithApply({
           value={draftTime}
           onChange={(event) => setDraftTime(event.target.value)}
         />
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-2 rounded bg-pink-600/90 px-2 py-1.5 text-sm font-medium text-white hover:bg-pink-500"
+          onClick={() => {
+            setIsTimelinePreviewOpen(true);
+            setSelectedPreviewDate(draftDate ? new Date(`${draftDate}T00:00`) : new Date());
+            setPreviewMonthDate(draftDate ? new Date(`${draftDate}T00:00`) : new Date());
+          }}
+        >
+          <PanelsTopLeft size={14} />
+          Выбрать в таймлайне
+        </button>
       </div>
       <div className="mt-3 flex gap-2">
         <button
@@ -204,6 +231,42 @@ export function DateTimePickerWithApply({
       {isOpen
         ? (detachedPopup && detachedPosition ? createPortal(popupContent, document.body) : popupContent)
         : null}
+      {isTimelinePreviewOpen ? createPortal(
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-cyan-100">Предпросмотр таймлайна (месяц)</h3>
+              <button type="button" className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelinePreviewOpen(false)}>Закрыть</button>
+            </div>
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <button type="button" className="rounded bg-slate-800 px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}>←</button>
+              <p>{previewMonthDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}</p>
+              <button type="button" className="rounded bg-slate-800 px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}>→</button>
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {monthCells.map((date, index) => (
+                <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`min-h-14 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => date && setSelectedPreviewDate(date)}>
+                  {date ? <p>{date.getDate()}</p> : null}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {Array.from({ length: 24 }, (_, hour) => (
+                <button key={hour} type="button" className="rounded bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700" onClick={() => {
+                  if (!selectedPreviewDate) return;
+                  const picked = new Date(selectedPreviewDate); picked.setHours(hour, 0, 0, 0);
+                  const parts = toLocalParts(picked.toISOString());
+                  setDraftDate(parts.date); setDraftTime(parts.time);
+                  setIsTimelinePreviewOpen(false);
+                }}><span className="inline-flex items-center gap-1"><Clock3 size={12} />{`${hour.toString().padStart(2, '0')}:00`}</span></button>
+              ))}
+            </div>
+            <div className="mt-3 rounded bg-slate-800 p-2 text-xs text-slate-300">
+              <p className="mb-1 font-medium text-slate-200">Задачи на выбранный день:</p>
+              {selectedDayTasks.length > 0 ? selectedDayTasks.slice(0, 8).map((task) => <p key={task.id}>• {task.title}</p>) : <p>Нет задач на выбранную дату.</p>}
+            </div>
+          </div>
+        </div>, document.body) : null}
     </div>
   );
 }
