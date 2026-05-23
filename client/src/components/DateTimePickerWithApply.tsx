@@ -295,7 +295,9 @@ export function DateTimePickerWithApply({
                       const parts = toLocalParts(picked.toISOString());
                       setDraftDate(parts.date);
                       setDraftTime(parts.time);
+                      void onChange(picked.toISOString());
                       setIsTimelinePreviewOpen(false);
+                      setIsOpen(false);
                     }}>
                       <span className="w-14 shrink-0 text-xs text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</span>
                       <div className="min-h-6 flex-1 space-y-1">
