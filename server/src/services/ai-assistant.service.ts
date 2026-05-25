@@ -838,6 +838,16 @@ export const aiAssistantService = {
     await chargeAiCredits(input.userId, model);
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const localNowFormatted = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: userTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(now);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -845,7 +855,7 @@ export const aiAssistantService = {
         model,
         input: [
           { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
-          { role: 'user', content: `Сейчас UTC: ${now.toISOString()}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
+          { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
         ]
       })
     });
