@@ -72,6 +72,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const [recurrenceText, setRecurrenceText] = useState('');
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(null);
+  const [recurrenceNextDueLabel, setRecurrenceNextDueLabel] = useState<string | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
@@ -96,6 +97,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     setIsRecurring(Boolean(nextForm.isRecurring));
     setRecurrenceText(nextForm.recurrenceText ?? '');
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
+    setRecurrenceNextDueLabel(nextForm.dueDate ? new Date(nextForm.dueDate).toLocaleString('ru-RU') : null);
     autosaveSignatureRef.current = task ? JSON.stringify({
       title: task.title ?? '',
       description: task.description ?? '',
@@ -225,7 +227,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     try {
       const parsed = await api.parseRecurrence({ text });
       setRecurrenceSummary(parsed.summary);
-      setForm((p) => ({ ...p, isRecurring: true, recurrenceText: text, recurrenceJson: parsed.schedule, recurrenceSummary: parsed.summary, recurrenceUntil: parsed.schedule.until }));
+      setRecurrenceNextDueLabel(parsed.nextDueDate ? new Date(parsed.nextDueDate).toLocaleString('ru-RU') : null);
+      setForm((p) => ({ ...p, isRecurring: true, recurrenceText: text, recurrenceJson: parsed.schedule, recurrenceSummary: parsed.summary, recurrenceUntil: parsed.schedule.until, dueDate: parsed.nextDueDate }));
     } finally {
       setRecurrenceLoading(false);
     }
@@ -352,6 +355,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 }
                 if (!enabled) {
                   setRecurrenceSummary(null);
+                  setRecurrenceNextDueLabel(null);
                   setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));
                 }
               }} />
@@ -373,11 +377,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                   <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
                   <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
                 </div>
+                <p className="mt-1 text-[11px] text-cyan-300">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p>
               </div>
             ) : null}
           </>
         ) : null}
-        {!isRecurring ? (
         <label className="block text-xs">Срок (дата и время)
           <DateTimePickerWithApply
             className="mt-1"
@@ -386,7 +390,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             timelineTasks={timelineTasks}
           />
         </label>
-        ) : null}
         {!isRecurring ? <label className="block text-xs">Уведомлять за
           <select
             className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"

@@ -472,6 +472,8 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
+  const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
+  const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
   const [listHoveredTaskId, setListHoveredTaskId] = useState<string | null>(null);
   const [expandedListTaskIds, setExpandedListTaskIds] = useState<string[]>([]);
   const [addingListSubtaskTaskId, setAddingListSubtaskTaskId] = useState<string | null>(null);
@@ -1097,6 +1099,7 @@ export default function App() {
       return;
     }
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
+    setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
       setFocusedNotifyPreset('null');
     } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 30)) {
@@ -1110,6 +1113,11 @@ export default function App() {
       sphereId: focusedTask.sphereId ?? null,
       dueDate: focusedTask.dueDate ?? null,
       notifyBeforeMinutes: focusedTask.notifyBeforeMinutes ?? null,
+      isRecurring: focusedTask.isRecurring ?? false,
+      recurrenceText: focusedTask.recurrenceText ?? null,
+      recurrenceJson: focusedTask.recurrenceJson ?? null,
+      recurrenceSummary: focusedTask.recurrenceSummary ?? null,
+      recurrenceUntil: focusedTask.recurrenceUntil ?? null,
       importance: focusedTask.importance ?? 3,
       urgency: focusedTask.urgency ?? 3,
       status: focusedTask.status ?? 'TODO'
@@ -1132,6 +1140,11 @@ export default function App() {
       sphereId: normalized.sphereId ?? null,
       dueDate: normalized.dueDate ?? null,
       notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      isRecurring: normalized.isRecurring ?? false,
+      recurrenceText: normalized.recurrenceText ?? null,
+      recurrenceJson: normalized.recurrenceJson ?? null,
+      recurrenceSummary: normalized.recurrenceSummary ?? null,
+      recurrenceUntil: normalized.recurrenceUntil ?? null,
       aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled,
       importance: normalized.importance,
       urgency: normalized.urgency,
@@ -1153,6 +1166,28 @@ export default function App() {
       }
     };
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
+
+  const applyFocusedRecurrence = async () => {
+    if (!focusedDraft?.isRecurring) return;
+    const text = (focusedDraft.recurrenceText ?? '').trim();
+    if (!text) return;
+    setFocusedRecurrenceLoading(true);
+    try {
+      const parsed = await api.parseRecurrence({ text });
+      setFocusedRecurrenceSummary(parsed.summary);
+      setFocusedDraft((p) => (p ? {
+        ...p,
+        isRecurring: true,
+        recurrenceText: text,
+        recurrenceJson: parsed.schedule,
+        recurrenceSummary: parsed.summary,
+        recurrenceUntil: parsed.schedule.until,
+        dueDate: parsed.nextDueDate
+      } : p));
+    } finally {
+      setFocusedRecurrenceLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!focusedTask) return;
@@ -4063,7 +4098,24 @@ export default function App() {
                     <input
                       type="checkbox"
                       checked={Boolean(focusedDraft.isRecurring)}
-                      onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), isRecurring: e.target.checked }))}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        setFocusedDraft((p) => {
+                          if (!p) return p;
+                          if (enabled) return { ...p, isRecurring: true };
+                          return {
+                            ...p,
+                            isRecurring: false,
+                            recurrenceText: null,
+                            recurrenceJson: null,
+                            recurrenceSummary: null,
+                            recurrenceUntil: null
+                          };
+                        });
+                        if (!enabled) {
+                          setFocusedRecurrenceSummary(null);
+                        }
+                      }}
                     />
                     повторять
                   </label>
@@ -4084,6 +4136,12 @@ export default function App() {
                         value={focusedDraft.recurrenceText ?? ''}
                         onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
                       />
+                      <div className="mt-2 flex items-center gap-2">
+                        <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
+                          {focusedRecurrenceLoading ? 'Отправка…' : 'Отправить'}
+                        </button>
+                        <p className="text-[11px] text-emerald-300">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
+                      </div>
                     </label>
                   ) : null}
                   <label className="block text-xs">Срок (дата и время)
