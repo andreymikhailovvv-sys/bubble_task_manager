@@ -400,5 +400,6 @@ apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromP
 apiRouter.post('/ai/parse-recurrence', requireAuth, aiController.parseRecurrence);
 apiRouter.post('/timeline/ai-optimize', requireAuth, aiController.optimizeTimelineSchedule);
 apiRouter.post('/timeline/ai-optimize/apply', requireAuth, aiController.applyTimelineOptimization);
+apiRouter.post('/timeline/overdue-postpone-ai', requireAuth, aiController.postponeOverdueWithAi);
 
 apiRouter.post('/telegram/webhook', telegramController.webhook);

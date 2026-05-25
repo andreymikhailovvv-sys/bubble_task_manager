@@ -95,6 +95,7 @@ const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const SMART_POSTPONE_CREDITS_COST = 1;
+const OVERDUE_AI_POSTPONE_CREDITS_COST = 2;
 
 const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
@@ -456,6 +457,7 @@ export default function App() {
   const [timelineHoverCard, setTimelineHoverCard] = useState<{ taskId: string; top: number; left: number } | null>(null);
   const [isTimelineOverdueModalOpen, setIsTimelineOverdueModalOpen] = useState(false);
   const [isTimelineOverdueModalCollapsedForDrag, setIsTimelineOverdueModalCollapsedForDrag] = useState(false);
+  const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
@@ -2358,6 +2360,35 @@ export default function App() {
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
     .filter((task) => isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
+
+  const postponeAllOverdueByOneDay = async () => {
+    if (timelineOverdueBulkPostponeLoading) return;
+    setTimelineOverdueBulkPostponeLoading('normal');
+    try {
+      await Promise.all(timelineOverdueTasks.map(async (task) => {
+        if (!task.dueDate) return;
+        const next = new Date(task.dueDate);
+        if (Number.isNaN(next.getTime())) return;
+        next.setDate(next.getDate() + 1);
+        await api.updateTask(task.id, { dueDate: next.toISOString() });
+      }));
+      await load();
+    } finally {
+      setTimelineOverdueBulkPostponeLoading(null);
+    }
+  };
+
+  const postponeAllOverdueByAi = async () => {
+    if (timelineOverdueBulkPostponeLoading) return;
+    setTimelineOverdueBulkPostponeLoading('ai');
+    try {
+      await api.postponeOverdueWithAi();
+      await refreshAiCredits();
+      await load();
+    } finally {
+      setTimelineOverdueBulkPostponeLoading(null);
+    }
+  };
   const timelinePickerTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')].map((task) => ({
     id: task.id,
     title: task.title,
@@ -3079,8 +3110,17 @@ export default function App() {
                 {isTimelineOverdueModalOpen ? (
                   <div className="relative mt-2">
                     <section className={`w-full rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.7)] transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
+                          <button className="rounded bg-slate-700 px-2 py-1 text-xs disabled:opacity-60" onClick={() => void postponeAllOverdueByOneDay()} disabled={timelineOverdueBulkPostponeLoading !== null}>
+                            {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
+                          </button>
+                          <button className="inline-flex items-center gap-1 rounded border border-pink-300/60 bg-pink-600/80 px-2 py-1 text-xs text-white disabled:opacity-60" onClick={() => void postponeAllOverdueByAi()} disabled={timelineOverdueBulkPostponeLoading !== null}>
+                            {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Отложить
+                            <span className="inline-flex items-center gap-1 text-pink-100"><span>{OVERDUE_AI_POSTPONE_CREDITS_COST}</span><Coins size={10} /></span>
+                          </button>
+                        </div>
                         <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
                       </div>
                       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">

@@ -191,6 +191,8 @@ export const api = {
     }),
   applyTimelineOptimization: (payload: { plan: Array<{ taskId: string; dueDate: string | null }> }) =>
     request<{ ok: true }>('/api/timeline/ai-optimize/apply', { method: 'POST', body: JSON.stringify(payload) }),
+  postponeOverdueWithAi: () =>
+    request<{ ok: true; model: string; summary: string; updatedTaskIds: string[] }>('/api/timeline/overdue-postpone-ai', { method: 'POST' }),
 
   reportClientError: (payload: {
     source: 'error-boundary' | 'window-error' | 'unhandledrejection' | 'timeline-render';

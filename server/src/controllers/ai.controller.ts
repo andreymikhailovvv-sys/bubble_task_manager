@@ -302,6 +302,16 @@ export const aiController = {
       res.status(500).json({ error: message });
     }
   },
+  postponeOverdueWithAi: async (req: Request, res: Response) => {
+    try {
+      const userTimeZone = await resolveUserTimeZone(req);
+      const result = await aiAssistantService.postponeOverdueWithAi({ userId: req.user!.id, userTimeZone });
+      res.json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown AI error';
+      res.status(500).json({ error: message });
+    }
+  },
   applyTimelineOptimization: async (req: Request, res: Response) => {
     try {
       const plan = Array.isArray(req.body?.plan) ? req.body.plan : [];

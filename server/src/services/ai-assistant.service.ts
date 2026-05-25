@@ -147,6 +147,15 @@ async function chargeAiCredits(userId: string, model: string) {
   });
 }
 
+async function chargeFixedAiCredits(userId: string, cost: number) {
+  const period = currentCreditsPeriod();
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  if (!user) throw new Error('User not found');
+  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
+  if (credits < cost) throw new Error('Недостаточно AI кредитов');
+  await prisma.user.update({ where: { id: userId }, data: { aiCredits: credits - cost, aiCreditsPeriod: period } });
+}
+
 async function chargeSingleAiNotificationCredit(userId: string) {
   const period = currentCreditsPeriod();
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
@@ -2276,6 +2285,31 @@ ${parsed.answer}`
     const summary = parsed.summary || (finalPlan.length > 0 ? 'Найдено и подготовлено оптимальное перераспределение задач.' : 'Изменения не требуются.');
 
     return { model: OTHER_AI_MODEL, summary, plan: finalPlan };
+  },
+
+
+  postponeOverdueWithAi: async (input: { userId: string; userTimeZone?: string }) => {
+    const now = new Date();
+    const weekEnd = new Date(now);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const allWeekTasks = await prisma.task.findMany({
+      where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { gte: now, lt: weekEnd } },
+      include: { sphere: { select: { name: true } }, parentTask: { select: { title: true } } },
+      orderBy: { dueDate: 'asc' }
+    });
+    const overdue = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
+    if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[] };
+    const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
+    const overdueIds = overdue.map((t) => t.id);
+    await chargeFixedAiCredits(input.userId, 2);
+    const response = await fetch('https://api.openai.com/v1/responses', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}, body: JSON.stringify({ model: OTHER_AI_MODEL, input:[{ role:'system', content:'Ты помощник планировщик. Верни только JSON.'},{ role:'user', content:`Перераспредели только просроченные задачи и подзадачи по ближайшим окнам: сначала сегодня, если окон нет — завтра. Учитывай паттерны недели пользователя (время задач по секторам). Верни JSON {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO"}]}. Переноси только taskId из списка overdueIds. now=${now.toISOString()} overdueIds=${JSON.stringify(overdueIds)} weekTasks:
+${lines}`}] }) });
+    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+    const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
+    const map = new Map(overdue.map((t)=>[t.id,t]));
+    const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
+    await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.update({ where:{id:u.taskId}, data:{dueDate:u.dueDate} }); }});
+    return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId) };
   },
 
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
