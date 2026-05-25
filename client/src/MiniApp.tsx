@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Coins, Copy, List, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Coins, Copy, List, Paperclip, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
-import type { ChatMessage, ChatMode, Sphere, Task } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -34,6 +34,29 @@ const TIMELINE_HOUR_HEIGHT = 88;
 const TIMELINE_CARD_HEIGHT = 52;
 const TIMELINE_CARD_GAP = 8;
 const TIMELINE_HOUR_EXTRA_PADDING = 10;
+const MAX_AI_ATTACHMENTS = 3;
+const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
+const SUPPORTED_AI_FILE_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif'
+]);
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif'
+};
 
 type TaskDraft = {
   title: string;
@@ -119,6 +142,14 @@ function isOverdue(task: Task) {
   return due.getTime() < Date.now();
 }
 
+function resolveAttachmentMimeType(file: File): string {
+  const fromBrowser = file.type?.trim();
+  if (fromBrowser) return fromBrowser;
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (!extension) return 'application/octet-stream';
+  return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
+}
+
 function shouldTaskGlow(task: Task) {
   if (task.status === 'DONE' || !task.dueDate) return false;
   const due = new Date(task.dueDate);
@@ -185,9 +216,12 @@ export default function MiniApp() {
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
+  const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const requestedTaskId = useMemo(() => {
     const value = new URLSearchParams(window.location.search).get('taskId');
     return value?.trim() ? value.trim() : null;
@@ -708,15 +742,47 @@ export default function MiniApp() {
   const sendAiMessage = async () => {
     if (!openedTask) return;
     const question = aiDraft.trim();
-    if (!question) return;
+    if (!question && aiPendingFiles.length === 0) return;
     setAiLoadingTaskId(openedTask.id);
     setError(null);
+    const fileNames = aiPendingFiles.map((file) => file.name);
+    let attachmentsPayload: ChatAttachmentPayload[] = [];
+    try {
+      attachmentsPayload = await Promise.all(aiPendingFiles.map(async (file) => ({
+        name: file.name,
+        mimeType: resolveAttachmentMimeType(file),
+        size: file.size,
+        contentBase64: await file.arrayBuffer().then((buffer) => {
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          const chunkSize = 0x8000;
+          for (let index = 0; index < bytes.length; index += chunkSize) {
+            const chunk = bytes.subarray(index, index + chunkSize);
+            binary += String.fromCharCode(...chunk);
+          }
+          return btoa(binary);
+        })
+      })));
+    } catch {
+      setError('Не удалось прочитать приложенные файлы');
+      setAiLoadingTaskId(null);
+      return;
+    }
     const baseDialog = aiDialogByTask[openedTask.id] ?? [];
-    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: question }];
+    const userMessage = fileNames.length > 0
+      ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
+      : question;
+    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     setAiDraft('');
+    setAiPendingFiles([]);
     try {
-      const result = await api.askTaskAssistant(openedTask.id, { question, userMessage: question, mode: openedTaskAiMode });
+      const result = await api.askTaskAssistant(openedTask.id, {
+        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        userMessage,
+        mode: openedTaskAiMode,
+        attachments: attachmentsPayload
+      });
       setAiDialogByTask((prev) => ({
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
@@ -728,6 +794,35 @@ export default function MiniApp() {
       setAiLoadingTaskId(null);
     }
   };
+
+  const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) return;
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      event.target.value = '';
+      return;
+    }
+    setAiPendingFiles((prev) => {
+      const merged = [...prev, ...normalized.filter((file) => !prev.some((item) => item.name === file.name && item.size === file.size))];
+      if (merged.length > MAX_AI_ATTACHMENTS) {
+        setError(`Можно прикрепить максимум ${MAX_AI_ATTACHMENTS} файла.`);
+        return merged.slice(0, MAX_AI_ATTACHMENTS);
+      }
+      return merged;
+    });
+    event.target.value = '';
+  };
+
+  useEffect(() => {
+    const textarea = aiTextareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = '0px';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+  }, [aiDraft, isAiDialogOpen, openedTaskId]);
 
   useEffect(() => {
     if (!isAiDialogOpen) return;
@@ -1039,12 +1134,37 @@ export default function MiniApp() {
                   ))}
                   {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
+                <input
+                  ref={aiAttachmentInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={handleAiFileSelect}
+                />
+                {aiPendingFiles.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {aiPendingFiles.map((file) => (
+                      <button key={`mini-ai-file-${file.name}-${file.size}`} type="button" className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
+                        <Paperclip size={10} />
+                        <span className="max-w-[170px] truncate">{file.name}</span>
+                        <X size={10} />
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex items-end gap-2">
+                  <button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
+                    <Paperclip size={15} />
+                  </button>
+                  <textarea
+                    ref={aiTextareaRef}
                     value={aiDraft}
                     onChange={(event) => setAiDraft(event.target.value)}
                     placeholder="Напишите сообщение для ИИ"
-                    className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                    rows={1}
+                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                    className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey) {
                         event.preventDefault();
@@ -1211,12 +1331,37 @@ export default function MiniApp() {
               ))}
               {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <input
+            <input
+              ref={aiAttachmentInputRef}
+              type="file"
+              accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+              multiple
+              className="hidden"
+              onChange={handleAiFileSelect}
+            />
+            {aiPendingFiles.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {aiPendingFiles.map((file) => (
+                  <button key={`mini-ai-file-full-${file.name}-${file.size}`} type="button" className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
+                    <Paperclip size={10} />
+                    <span className="max-w-[220px] truncate">{file.name}</span>
+                    <X size={10} />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-3 flex items-end gap-2">
+              <button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
+                <Paperclip size={15} />
+              </button>
+              <textarea
+                ref={aiTextareaRef}
                 value={aiDraft}
                 onChange={(event) => setAiDraft(event.target.value)}
                 placeholder="Напишите сообщение для ИИ"
-                className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                rows={1}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
