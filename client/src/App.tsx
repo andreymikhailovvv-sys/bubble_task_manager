@@ -4099,6 +4099,7 @@ export default function App() {
                     <DateTimePickerWithApply
                       className="mt-1"
                       value={focusedDraft.dueDate}
+                      timelineTasks={timelinePickerTasks}
                       detachedPopup
                       onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
                     />
