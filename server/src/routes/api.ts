@@ -16,6 +16,8 @@ const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
 const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
+const EFFICIENCY_INACTIVE_PENALTY_PER_6H = 0.015;
+const EFFICIENCY_AI_CREDIT_BONUS = 0.002;
 
 const toAuthUser = (user: {
   id: string;
@@ -28,6 +30,7 @@ const toAuthUser = (user: {
   aiCredits?: number;
   aiCreditsPeriod?: string;
   efficiencyResetAt?: string;
+  efficiencyScore?: number;
 }) => ({
   id: user.id,
   email: user.email,
@@ -38,9 +41,36 @@ const toAuthUser = (user: {
   deviceId: user.deviceId,
   aiCredits: user.aiCredits ?? 100,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
-  efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO
+  efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
+  efficiencyScore: Math.max(0, Math.min(1, user.efficiencyScore ?? 0))
 });
 
+
+
+const clampEfficiency = (value: number) => Math.max(0, Math.min(1, Number(value.toFixed(6))));
+
+const recalculateAndPersistEfficiency = async (userId: string) => {
+  const now = new Date();
+  const [user, tasks] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } }),
+    prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } })
+  ]);
+  if (!user) return null;
+  const afterReset = (value: Date) => Number.isFinite(value.getTime());
+  const rootTasks = tasks.filter((task) => !task.parentTaskId);
+  const subtasks = tasks.filter((task) => !!task.parentTaskId);
+  const createdRootCount = rootTasks.filter((task) => afterReset(task.createdAt)).length;
+  const doneRootCount = rootTasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
+  const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
+  const spentCredits = Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
+  const latestActionAtMs = tasks.reduce((latest, task) => Math.max(latest, task.updatedAt.getTime(), task.createdAt.getTime()), 0);
+  const inactiveSlots = latestActionAtMs > 0 ? Math.floor((now.getTime() - latestActionAtMs) / (6 * 60 * 60 * 1000)) : 0;
+  const bonus = doneRootCount * 0.05 + doneSubtaskCount * 0.02 + createdRootCount * 0.01 + spentCredits * EFFICIENCY_AI_CREDIT_BONUS;
+  const penalty = Math.max(0, inactiveSlots) * EFFICIENCY_INACTIVE_PENALTY_PER_6H;
+  const efficiencyScore = clampEfficiency(bonus - penalty);
+  await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
+  return efficiencyScore;
+};
 const setAuthCookies = (
   res: { cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void },
   user: {
@@ -323,6 +353,7 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
 
 apiRouter.get('/auth/me', async (req, res) => {
   if (req.user?.id) {
+    await recalculateAndPersistEfficiency(req.user.id);
     const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (freshUser) {
       res.json({ user: toAuthUser(freshUser) });
