@@ -2908,6 +2908,7 @@ export default function App() {
                                   <InlineDateTimePickerIcon
                                     value={subtask.dueDate}
                                     title="Изменить срок подзадачи"
+                                    timelineTasks={timelinePickerTasks}
                                     onChange={(dueDate) => {
                                       void api.updateTask(subtask.id, { dueDate }).then(load);
                                     }}
@@ -3599,6 +3600,7 @@ export default function App() {
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
+                          timelineTasks={timelinePickerTasks}
                           onChange={async (dueDate) => {
                             await api.updateTask(subtask.id, { dueDate });
                             await load();
@@ -4260,6 +4262,7 @@ export default function App() {
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
                         detachedPopup
+                        timelineTasks={timelinePickerTasks}
                         onChange={async (dueDate) => {
                           await api.updateTask(subtask.id, { dueDate });
                           await load();
@@ -4720,6 +4723,7 @@ export default function App() {
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"
                       detachedPopup
+                      timelineTasks={timelinePickerTasks}
                       onChange={async (dueDate) => {
                         await api.updateTask(subtask.id, { dueDate });
                         await load();

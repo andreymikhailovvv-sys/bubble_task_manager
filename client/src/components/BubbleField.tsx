@@ -212,6 +212,27 @@ export function BubbleField({
 
   const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
+  const timelinePickerTasks = useMemo(
+    () => [
+      ...tasks.filter((task) => task.status !== 'DONE'),
+      ...Object.values(subtaskMap).flat().filter((subtask) => subtask.status !== 'DONE')
+    ].map((task) => ({
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      isSubtask: Boolean(task.parentTaskId),
+      sphereColor: (() => {
+        if (task.parentTaskId) {
+          const parentTask = sourceTaskById.get(task.parentTaskId);
+          const parentSphere = parentTask?.sphereId ? spheres.find((sphere) => sphere.id === parentTask.sphereId) : null;
+          return parentSphere?.color ?? '#64748b';
+        }
+        const sphere = task.sphereId ? spheres.find((item) => item.id === task.sphereId) : null;
+        return sphere?.color ?? '#64748b';
+      })()
+    })),
+    [sourceTaskById, spheres, subtaskMap, tasks]
+  );
 
   const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
@@ -710,6 +731,7 @@ export function BubbleField({
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
                           detachedPopup
+                          timelineTasks={timelinePickerTasks}
                           onOpenChange={handleNativeCalendarOpenChange}
                           onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
                         />
