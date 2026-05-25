@@ -71,6 +71,15 @@ const parseRRuleParts = (rrule: string): Record<string, string> => Object.fromEn
       return [key?.toUpperCase() ?? '', value ?? ''];
     })
 );
+const WEEKDAY_TO_UTC_DAY: Record<string, number> = {
+  SU: 0,
+  MO: 1,
+  TU: 2,
+  WE: 3,
+  TH: 4,
+  FR: 5,
+  SA: 6
+};
 
 export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Date): Date | null => {
   if (!schedule.rrule) return null;
@@ -104,6 +113,25 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
   if (freq === 'DAILY') {
     while (next <= baseline) next.setUTCDate(next.getUTCDate() + step);
     return until && next > until ? null : next;
+  }
+  if (freq === 'WEEKLY') {
+    const rawDays = (parts.BYDAY ?? '').split(',').map((value) => value.trim().toUpperCase()).filter(Boolean);
+    const allowedDays = rawDays
+      .map((day) => WEEKDAY_TO_UTC_DAY[day])
+      .filter((day): day is number => Number.isInteger(day));
+    const targetDays = allowedDays.length > 0 ? [...new Set(allowedDays)].sort((a, b) => a - b) : [baseline.getUTCDay()];
+
+    for (let week = 0; week < 104; week += step) {
+      const weekStart = new Date(next);
+      weekStart.setUTCDate(next.getUTCDate() + (week * 7));
+      for (const day of targetDays) {
+        const candidate = new Date(weekStart);
+        const delta = day - weekStart.getUTCDay();
+        candidate.setUTCDate(weekStart.getUTCDate() + delta);
+        if (candidate > baseline) return until && candidate > until ? null : candidate;
+      }
+    }
+    return null;
   }
   return null;
 };

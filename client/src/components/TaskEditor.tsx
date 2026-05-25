@@ -382,7 +382,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             ) : null}
           </>
         ) : null}
-        {!isRecurring ? (
         <label className="block text-xs">Срок (дата и время)
           <DateTimePickerWithApply
             className="mt-1"
@@ -391,7 +390,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             timelineTasks={timelineTasks}
           />
         </label>
-        ) : null}
         {!isRecurring ? <label className="block text-xs">Уведомлять за
           <select
             className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
