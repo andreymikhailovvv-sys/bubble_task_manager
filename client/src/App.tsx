@@ -185,9 +185,9 @@ function renderAiMessageContentWithTaskRefs(
     setGeneralAiFullscreen?: (value: boolean) => void;
   }
 ): ReactNode {
-  return content.split('\n').map((line, lineIndex) => {
+  return content.split(/\r?\n/).map((line, lineIndex) => {
     const chunks = parseTaskReferencesInLine(line);
-    if (chunks.length === 0) return <div key={`line-empty-${lineIndex}`} className="whitespace-pre-wrap" />;
+    if (chunks.length === 0) return <div key={`line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
     return (
       <div key={`line-${lineIndex}`} className="whitespace-pre-wrap">
         {chunks.map((chunk, chunkIndex) => {
@@ -835,7 +835,7 @@ export default function App() {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : normalizeTaskAiMessages(serverMessages) };
+          return { ...prev, [focusedTaskId]: (hasPendingOptimisticMessages || aiLoadingTaskId === focusedTaskId) ? localMessages : normalizeTaskAiMessages(serverMessages) };
         });
       } catch {
         if (isCancelled) return;
@@ -860,14 +860,14 @@ export default function App() {
             && localMessages.slice(0, serverMessages.length).every((message, index) => (
               message.role === serverMessages[index]?.role && message.content === serverMessages[index]?.content
             ));
-          return { ...prev, [focusedTaskId]: hasPendingOptimisticMessages ? localMessages : normalizeTaskAiMessages(serverMessages) };
+          return { ...prev, [focusedTaskId]: (hasPendingOptimisticMessages || aiLoadingTaskId === focusedTaskId) ? localMessages : normalizeTaskAiMessages(serverMessages) };
         });
       } catch {
         // silent sync retries
       }
     }, 2500);
     return () => window.clearInterval(intervalId);
-  }, [currentUser?.id, focusedTaskId]);
+  }, [currentUser?.id, focusedTaskId, aiLoadingTaskId]);
 
   useEffect(() => {
     if (!focusedTaskId) return;
@@ -1076,7 +1076,7 @@ export default function App() {
   }, [generalAiMessages, generalAiSearchQuery, isGeneralAiSearchOpen]);
 
   const normalizeTaskAiMessages = (messages: ChatMessage[]): TaskAiMessage[] =>
-    messages.map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
+    messages.map((message, index) => ({ id: `${index}-${message.role}-${message.content}`, role: message.role, content: message.content }));
 
   useEffect(() => {
     if (!focusedTask) {
