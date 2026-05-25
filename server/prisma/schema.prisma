@@ -39,6 +39,7 @@ model User {
   telegramLinkedAt DateTime?
   aiCredits    Int      @default(100)
   aiCreditsPeriod String @default("")
+  efficiencyScore Float @default(0)
   spheres      Sphere[]
   tasks        Task[]
   aiMessages   TaskAiMessage[]

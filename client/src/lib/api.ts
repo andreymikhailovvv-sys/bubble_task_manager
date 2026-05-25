@@ -76,6 +76,7 @@ export type CurrentUser = {
   aiCredits?: number;
   aiCreditsPeriod?: string;
   efficiencyResetAt?: string;
+  efficiencyScore?: number;
 };
 type AdminUser = {
   id: string;

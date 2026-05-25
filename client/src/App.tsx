@@ -101,14 +101,11 @@ const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
   doneSubtask: 0.02,
   createdTask: 0.01,
-  taskAiPrompt: 0.002,
-  generalAiPrompt: 0.002
+  aiCreditSpent: 0.002
 } as const;
 
 const EFFICIENCY_PENALTIES = {
-  overdueTask: 0.05,
-  overdueSubtask: 0.03,
-  inactiveDay: 0.08
+  inactive6Hours: 0.015
 } as const;
 
 type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
@@ -1532,46 +1529,7 @@ export default function App() {
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
-  const efficiencyScore = useMemo(() => {
-    const now = new Date();
-    const nowMs = now.getTime();
-    const resetAt = currentUser?.efficiencyResetAt ? new Date(currentUser.efficiencyResetAt) : null;
-    const resetAtMs = resetAt && Number.isFinite(resetAt.getTime()) ? resetAt.getTime() : 0;
-    const afterReset = (raw?: string | null) => {
-      if (!raw) return false;
-      const parsed = new Date(raw).getTime();
-      return Number.isFinite(parsed) && parsed >= resetAtMs;
-    };
-
-    const rootCreatedCount = rootTasks.filter((task) => afterReset(task.createdAt)).length;
-    const doneRootCount = rootTasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
-    const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
-    const overdueRootCount = rootTasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && afterReset(task.dueDate)).length;
-    const overdueSubtaskCount = subtasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && afterReset(task.dueDate)).length;
-    const taskAiPrompts = tasks.reduce((acc, task) => acc + ((aiDialogByTask[task.id] ?? []).filter((message) => message.role === 'user').length), 0);
-    const generalAiPrompts = generalAiMessages.filter((message) => message.role === 'user').length;
-
-    const latestActionAtMs = tasks.reduce<number>((latest, task) => {
-      const createdAt = task.createdAt ? new Date(task.createdAt).getTime() : 0;
-      const updatedAt = task.updatedAt ? new Date(task.updatedAt).getTime() : 0;
-      const createdAtSafe = createdAt >= resetAtMs ? createdAt : 0;
-      const updatedAtSafe = updatedAt >= resetAtMs ? updatedAt : 0;
-      return Math.max(latest, createdAtSafe, updatedAtSafe);
-    }, 0);
-    const inactivePenalty = latestActionAtMs > 0 && (nowMs - latestActionAtMs) >= 24 * 60 * 60 * 1000 ? EFFICIENCY_PENALTIES.inactiveDay : 0;
-
-    const bonus = doneRootCount * EFFICIENCY_BONUSES.doneTask
-      + doneSubtaskCount * EFFICIENCY_BONUSES.doneSubtask
-      + rootCreatedCount * EFFICIENCY_BONUSES.createdTask
-      + taskAiPrompts * EFFICIENCY_BONUSES.taskAiPrompt
-      + generalAiPrompts * EFFICIENCY_BONUSES.generalAiPrompt;
-
-    const penalty = overdueRootCount * EFFICIENCY_PENALTIES.overdueTask
-      + overdueSubtaskCount * EFFICIENCY_PENALTIES.overdueSubtask
-      + inactivePenalty;
-
-    return clampEfficiency(bonus - penalty);
-  }, [aiDialogByTask, currentUser?.efficiencyResetAt, generalAiMessages, rootTasks, subtasks, tasks]);
+  const efficiencyScore = useMemo(() => clampEfficiency(currentUser?.efficiencyScore ?? 0), [currentUser?.efficiencyScore]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
@@ -1590,23 +1548,17 @@ export default function App() {
     const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
     const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
-    const overdueTasksToday = rootTasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && isToday(task.dueDate)).length;
-    const overdueSubtasksToday = subtasks.filter((task) => task.status !== 'DONE' && task.dueDate && new Date(task.dueDate).getTime() < nowMs && isToday(task.dueDate)).length;
-    const taskAiPromptsToday = Object.values(aiDialogByTask).reduce((acc, dialog) => acc + dialog.filter((message) => message.role === 'user').length, 0);
-    const generalAiPromptsToday = generalAiMessages.filter((message) => message.role === 'user').length;
+    const spentAiCredits = Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
     const hasActionsToday = createdTasksToday + createdSubtasksToday + closedTasksToday + closedSubtasksToday > 0;
     return {
       createdTasksToday,
       createdSubtasksToday,
       closedTasksToday,
       closedSubtasksToday,
-      overdueTasksToday,
-      overdueSubtasksToday,
-      taskAiPromptsToday,
-      generalAiPromptsToday,
-      inactivePenaltyToday: hasActionsToday ? 0 : EFFICIENCY_PENALTIES.inactiveDay
+      spentAiCredits,
+      inactivePenaltyToday: hasActionsToday ? 0 : EFFICIENCY_PENALTIES.inactive6Hours
     };
-  }, [aiDialogByTask, currentUser?.efficiencyResetAt, generalAiMessages, rootTasks, subtasks]);
+  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, rootTasks, subtasks]);
 
   const visibleTasks = useMemo(
     () =>
@@ -2704,11 +2656,8 @@ export default function App() {
                 <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
                 <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
                 <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="text-emerald-300">+0.000</span>.</li>
-                <li>• Вопросов к ИИ по задачам: {efficiencyTodaySummary.taskAiPromptsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.taskAiPromptsToday * EFFICIENCY_BONUSES.taskAiPrompt).toFixed(3)}</span>.</li>
-                <li>• Вопросов к ИИ в общем чате: {efficiencyTodaySummary.generalAiPromptsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.generalAiPromptsToday * EFFICIENCY_BONUSES.generalAiPrompt).toFixed(3)}</span>.</li>
-                <li>• Просроченных задач на сегодня: {efficiencyTodaySummary.overdueTasksToday} — <span className="text-rose-300">-{(efficiencyTodaySummary.overdueTasksToday * EFFICIENCY_PENALTIES.overdueTask).toFixed(3)}</span>.</li>
-                <li>• Просроченных подзадач на сегодня: {efficiencyTodaySummary.overdueSubtasksToday} — <span className="text-rose-300">-{(efficiencyTodaySummary.overdueSubtasksToday * EFFICIENCY_PENALTIES.overdueSubtask).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие: {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
+                <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
+                <li>• Штраф за бездействие (каждые 6 часов): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
               </ul>
             </div>
           ) : null}
