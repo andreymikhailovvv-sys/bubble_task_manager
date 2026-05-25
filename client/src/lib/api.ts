@@ -170,7 +170,7 @@ export const api = {
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   parseRecurrence: (payload: { text: string }) =>
-    request<{ summary: string; schedule: { rrule: string; timezone: string; until: string | null }; model: string }>('/api/ai/parse-recurrence', {
+    request<{ summary: string; schedule: { rrule: string; timezone: string; until: string | null }; model: string; nextDueDate: string | null }>('/api/ai/parse-recurrence', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
 import { prisma } from '../db/prisma.js';
+import { computeNextRecurringDueDate } from '../services/task.service.js';
 
 type ChatAttachment = {
   name: string;
@@ -106,7 +107,8 @@ export const aiController = {
       }
       const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.parseRecurrence({ userId: req.user!.id, text, userTimeZone });
-      res.json(result);
+      const nextDueDate = computeNextRecurringDueDate(result.schedule, new Date());
+      res.json({ ...result, nextDueDate: nextDueDate?.toISOString() ?? null });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
       res.status(500).json({ error: message });

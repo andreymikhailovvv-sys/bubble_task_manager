@@ -72,7 +72,7 @@ const parseRRuleParts = (rrule: string): Record<string, string> => Object.fromEn
     })
 );
 
-const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Date): Date | null => {
+export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Date): Date | null => {
   if (!schedule.rrule) return null;
   const parts = parseRRuleParts(schedule.rrule);
   const freq = parts.FREQ?.toUpperCase();
@@ -117,7 +117,7 @@ export const taskService = {
     const recurrenceSchedule = (!isSubtask && input.recurrenceJson && typeof input.recurrenceJson === 'object'
       ? input.recurrenceJson as unknown as RecurrenceSchedule
       : null);
-    const resolvedDueDate = input.dueDate !== undefined
+    const resolvedDueDate = (input.dueDate !== undefined && input.dueDate !== null)
       ? toDueDate(input.dueDate)
       : input.isRecurring && recurrenceSchedule
         ? computeNextRecurringDueDate(recurrenceSchedule, new Date())
@@ -217,7 +217,7 @@ export const taskService = {
       patch.recurrenceUntil = null;
     }
 
-    if (!isSubtask && (input.isRecurring === true || input.recurrenceJson !== undefined) && input.dueDate === undefined) {
+    if (!isSubtask && (input.isRecurring === true || input.recurrenceJson !== undefined) && (input.dueDate === undefined || input.dueDate === null)) {
       const schedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
         ? input.recurrenceJson as unknown as RecurrenceSchedule
         : currentTask.recurrenceJson as unknown as RecurrenceSchedule | null);
