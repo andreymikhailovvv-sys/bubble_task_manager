@@ -215,6 +215,8 @@ export default function MiniApp() {
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+  const timelineGridRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
@@ -832,12 +834,22 @@ export default function MiniApp() {
     scrollToBottom(fullscreenAiDialogContainerRef.current);
   }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
 
+  useEffect(() => {
+    if (displayMode !== 'timeline' || !timelineToday.isTodayVisible) return;
+    const main = mainScrollRef.current;
+    const timelineGrid = timelineGridRef.current;
+    if (!main || !timelineGrid) return;
+    const targetTop = timelineGrid.offsetTop + timelineToday.currentTimeTop - (main.clientHeight * 0.35);
+    main.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+  }, [displayMode, timelineToday.currentTimeTop, timelineToday.isTodayVisible]);
+
   if (loading) {
     return <main className="h-screen overflow-y-auto miniapp-scrollless bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
   }
 
   return (
     <main
+      ref={mainScrollRef}
       onScroll={(event) => {
         const nextTop = event.currentTarget.scrollTop;
         const prevTop = lastMainScrollTopRef.current;
@@ -976,7 +988,7 @@ export default function MiniApp() {
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div className="relative overflow-x-hidden">
-                  <div className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
+                  <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
                       <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
                         <span className="absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
@@ -1105,15 +1117,15 @@ export default function MiniApp() {
                   <Trash2 size={14} />
                   {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDialogOpen(true)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium"
+                >
+                  <Bot size={14} />
+                  Диалог с ИИ
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsAiDialogOpen(true)}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium"
-              >
-                <Bot size={14} />
-                Диалог с ИИ
-              </button>
             </div>
             {isAiDialogOpen ? (
               <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
@@ -1243,7 +1255,7 @@ export default function MiniApp() {
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onClick={() => setOpenedSubtaskId(null)}>
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Редактирование подзадачи</h3>
               <button type="button" onClick={() => setOpenedSubtaskId(null)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно подзадачи">
@@ -1270,13 +1282,16 @@ export default function MiniApp() {
                 className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium disabled:opacity-60">
+                  <Save size={14} />
                   {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
                 </button>
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium disabled:opacity-60">
+                  <CheckCircle2 size={14} />
                   {completingId === openedSubtask.id ? 'Завершаем…' : 'Выполнить'}
                 </button>
-                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="rounded-md bg-rose-600 px-2 py-1 text-xs font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium disabled:opacity-60">
+                  <Trash2 size={14} />
                   {deletingId === openedSubtask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
               </div>
