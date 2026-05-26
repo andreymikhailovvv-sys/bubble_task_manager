@@ -215,7 +215,6 @@ export default function MiniApp() {
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
-  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
@@ -488,14 +487,6 @@ export default function MiniApp() {
 
     return placements;
   }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
-
-  useEffect(() => {
-    if (displayMode !== 'timeline') return;
-    const container = timelineScrollRef.current;
-    if (!container) return;
-    const centeredTop = Math.max(0, timelineToday.currentTimeTop - (container.clientHeight / 2));
-    container.scrollTo({ top: centeredTop });
-  }, [displayMode, timelineToday.currentTimeTop]);
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -981,7 +972,7 @@ export default function MiniApp() {
             </div>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
-                <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                <div className="relative overflow-x-hidden">
                   <div className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
                       <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
