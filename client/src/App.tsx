@@ -535,6 +535,7 @@ export default function App() {
   const focusedAutosaveSignatureRef = useRef<string | null>(null);
   const overdueNudgeAttemptAtByTaskRef = useRef<Record<string, number>>({});
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
+  const loadRequestIdRef = useRef(0);
   const [overdueTick, setOverdueTick] = useState(0);
 
   useEffect(() => {
@@ -590,8 +591,11 @@ export default function App() {
   };
 
   async function load() {
+    const requestId = ++loadRequestIdRef.current;
     const sphereData = await api.getSpheres();
+    if (requestId !== loadRequestIdRef.current) return;
     const taskData = await api.getTasks();
+    if (requestId !== loadRequestIdRef.current) return;
     setSpheres(sphereData);
     setTasks(taskData);
   }
