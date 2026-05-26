@@ -76,6 +76,12 @@ const buildMiniAppTaskUrl = (taskId: string) => {
   return url.toString();
 };
 
+const buildMiniAppTaskAiUrl = (taskId: string) => {
+  const url = new URL(buildMiniAppTaskUrl(taskId));
+  url.searchParams.set('openAi', '1');
+  return url.toString();
+};
+
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
   const diffMs = dueDate.getTime() - Date.now();
@@ -117,8 +123,8 @@ const keyboardMain = (taskId: string) => ({
       { text: '⏳ Отложить', callback_data: `snooze:${taskId}` },
       { text: '✅ Выполнить', callback_data: `done:${taskId}` }
     ],
-    [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
-    [{ text: '🤖 Написать ИИ в Mini App', web_app: { url: buildMiniAppTaskUrl(taskId) } }]
+    [{ text: '📱 Посмотреть задачу', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
+    [{ text: '🤖 Написать ИИ', web_app: { url: buildMiniAppTaskAiUrl(taskId) } }]
   ]
 });
 
@@ -142,7 +148,7 @@ const keyboardTaskDetails = (taskId: string, page = 1, totalPages = 1) => {
         { text: '✅ Выполнить', callback_data: `done:${taskId}` },
         { text: '🗑 Удалить', callback_data: `delete:${taskId}` }
       ],
-      [{ text: '🤖 Написать ИИ в Mini App', web_app: { url: buildMiniAppTaskUrl(taskId) } }],
+      [{ text: '🤖 Написать ИИ', web_app: { url: buildMiniAppTaskAiUrl(taskId) } }],
       [{ text: '⬅️ Назад к списку', callback_data: 'backlist' }]
     ]
   };
