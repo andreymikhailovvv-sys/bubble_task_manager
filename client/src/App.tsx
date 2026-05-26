@@ -1171,42 +1171,6 @@ export default function App() {
     };
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
-  const buildManualRecurrence = (mode: 'daily' | 'weekly' | 'monthly' | 'weekdays') => {
-    const baseline = focusedDraft?.dueDate ? new Date(focusedDraft.dueDate) : new Date();
-    const hour = baseline.getUTCHours();
-    const minute = baseline.getUTCMinutes();
-    const baseParts = [`BYHOUR=${hour}`, `BYMINUTE=${minute}`];
-    if (mode === 'daily') {
-      return {
-        recurrenceText: 'Ежедневно',
-        recurrenceSummary: 'Повтор: ежедневно',
-        recurrenceJson: { rrule: `FREQ=DAILY;INTERVAL=1;${baseParts.join(';')}`, timezone: 'UTC', until: null }
-      };
-    }
-    if (mode === 'weekly') {
-      const weekdays = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-      const byDay = weekdays[baseline.getUTCDay()] ?? 'MO';
-      return {
-        recurrenceText: 'Еженедельно',
-        recurrenceSummary: 'Повтор: еженедельно',
-        recurrenceJson: { rrule: `FREQ=WEEKLY;INTERVAL=1;BYDAY=${byDay};${baseParts.join(';')}`, timezone: 'UTC', until: null }
-      };
-    }
-    if (mode === 'monthly') {
-      const monthDay = baseline.getUTCDate();
-      return {
-        recurrenceText: 'Ежемесячно',
-        recurrenceSummary: 'Повтор: ежемесячно',
-        recurrenceJson: { rrule: `FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=${monthDay};${baseParts.join(';')}`, timezone: 'UTC', until: null }
-      };
-    }
-    return {
-      recurrenceText: 'По будням',
-      recurrenceSummary: 'Повтор: по будням',
-      recurrenceJson: { rrule: `FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR;${baseParts.join(';')}`, timezone: 'UTC', until: null }
-    };
-  };
-
   const applyFocusedRecurrence = async () => {
     if (!focusedDraft?.isRecurring) return;
     const text = (focusedDraft.recurrenceText ?? '').trim();
@@ -4169,55 +4133,20 @@ export default function App() {
                   </label>
                   </div>
                   {focusedDraft.isRecurring ? (
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <label className="block text-xs">Ручной режим
-                        <select
-                          className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
-                          value={(focusedDraft.recurrenceText === 'Ежедневно' || focusedDraft.recurrenceText === 'Еженедельно' || focusedDraft.recurrenceText === 'Ежемесячно' || focusedDraft.recurrenceText === 'По будням')
-                            ? focusedDraft.recurrenceText
-                            : ''}
-                          onChange={(e) => {
-                            const mode = e.target.value;
-                            if (!mode) return;
-                            const manual = buildManualRecurrence(
-                              mode === 'Ежедневно' ? 'daily'
-                                : mode === 'Еженедельно' ? 'weekly'
-                                  : mode === 'Ежемесячно' ? 'monthly'
-                                    : 'weekdays'
-                            );
-                            setFocusedRecurrenceSummary(manual.recurrenceSummary);
-                            setFocusedDraft((p) => (p ? {
-                              ...p,
-                              isRecurring: true,
-                              recurrenceText: manual.recurrenceText,
-                              recurrenceJson: manual.recurrenceJson,
-                              recurrenceSummary: manual.recurrenceSummary,
-                              recurrenceUntil: null
-                            } : p));
-                          }}
-                        >
-                          <option value="">Выберите сценарий</option>
-                          <option value="Ежедневно">Ежедневно</option>
-                          <option value="Еженедельно">Еженедельно</option>
-                          <option value="Ежемесячно">Ежемесячно</option>
-                          <option value="По будням">По будням</option>
-                        </select>
-                      </label>
-                      <label className="block text-xs">Через ИИ
-                        <textarea
-                          className="mt-1 min-h-16 w-full rounded bg-slate-800 p-2 text-sm"
-                          placeholder="Например: каждого 19 числа месяца в 12:00"
-                          value={(focusedDraft.recurrenceText === 'Ежедневно' || focusedDraft.recurrenceText === 'Еженедельно' || focusedDraft.recurrenceText === 'Ежемесячно' || focusedDraft.recurrenceText === 'По будням') ? '' : (focusedDraft.recurrenceText ?? '')}
-                          onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
-                        />
-                        <div className="mt-2 flex items-center gap-2">
-                          <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
-                            {focusedRecurrenceLoading ? 'Отправка…' : 'Отправить'}
-                          </button>
-                          <p className="text-[11px] text-emerald-300">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
-                        </div>
-                      </label>
-                    </div>
+                    <label className="block text-xs">Описание повторения
+                      <textarea
+                        className="mt-1 min-h-16 w-full rounded bg-slate-800 p-2 text-sm"
+                        placeholder="Например: каждого 19 числа месяца в 12:00"
+                        value={focusedDraft.recurrenceText ?? ''}
+                        onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
+                      />
+                      <div className="mt-2 flex items-center gap-2">
+                        <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
+                          {focusedRecurrenceLoading ? 'Отправка…' : 'Отправить'}
+                        </button>
+                        <p className="text-[11px] text-emerald-300">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
+                      </div>
+                    </label>
                   ) : null}
                   <label className="block text-xs">Срок (дата и время)
                     <DateTimePickerWithApply
