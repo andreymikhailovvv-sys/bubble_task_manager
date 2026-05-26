@@ -225,9 +225,11 @@ export default function MiniApp() {
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const requestedTaskId = useMemo(() => {
-    const value = new URLSearchParams(window.location.search).get('taskId');
-    return value?.trim() ? value.trim() : null;
+  const launchParams = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const taskId = params.get('taskId')?.trim() || null;
+    const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
+    return { taskId, openAi };
   }, []);
 
   const loadData = async () => {
@@ -523,11 +525,12 @@ export default function MiniApp() {
   };
 
   useEffect(() => {
-    if (!requestedTaskId || loading || tasks.length === 0 || openedTaskId) return;
-    const requestedTask = tasks.find((task) => task.id === requestedTaskId && !task.parentTaskId && task.status !== 'DONE');
+    if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
+    const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
     if (!requestedTask) return;
     openTaskModal(requestedTask);
-  }, [loading, openedTaskId, requestedTaskId, tasks]);
+    if (launchParams.openAi) setIsAiDialogOpen(true);
+  }, [launchParams, loading, openedTaskId, tasks]);
 
   const closeTaskModal = () => {
     setOpenedTaskId(null);
