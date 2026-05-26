@@ -28,6 +28,7 @@ const extractInitDataFromUrl = () => {
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
+type ListSortMode = 'sector' | 'importance';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_HOUR_HEIGHT = 88;
@@ -193,6 +194,7 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+  const [listSortMode, setListSortMode] = useState<ListSortMode>('sector');
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -213,7 +215,6 @@ export default function MiniApp() {
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
-  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
@@ -388,20 +389,22 @@ export default function MiniApp() {
     return map;
   }, [tasks]);
 
-  const groupedBySphere = useMemo(() => {
-    const map = new Map<string, Task[]>();
-    for (const task of filteredTasks) {
-      const key = task.sphereId ?? 'without-sphere';
-      const current = map.get(key) ?? [];
-      current.push(task);
-      map.set(key, current);
-    }
-    return Array.from(map.entries()).map(([sphereId, sphereTasks]) => ({
-      sphereId,
-      sphereName: sphereId === 'without-sphere' ? 'Без сектора' : (spheres.find((item) => item.id === sphereId)?.name ?? 'Без сектора'),
-      tasks: sphereTasks.sort(compareByDueDate)
-    }));
-  }, [filteredTasks, spheres]);
+  const listTasks = useMemo(() => {
+    const result = [...filteredTasks];
+    result.sort((a, b) => {
+      if (listSortMode === 'importance') {
+        if (a.importance !== b.importance) return b.importance - a.importance;
+        return compareByDueDate(a, b);
+      }
+
+      const aSectorName = a.sphereId ? (spheres.find((item) => item.id === a.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
+      const bSectorName = b.sphereId ? (spheres.find((item) => item.id === b.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
+      const sectorCompare = aSectorName.localeCompare(bSectorName, 'ru-RU');
+      if (sectorCompare !== 0) return sectorCompare;
+      return compareByDueDate(a, b);
+    });
+    return result;
+  }, [filteredTasks, listSortMode, spheres]);
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
 
@@ -484,14 +487,6 @@ export default function MiniApp() {
 
     return placements;
   }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
-
-  useEffect(() => {
-    if (displayMode !== 'timeline') return;
-    const container = timelineScrollRef.current;
-    if (!container) return;
-    const centeredTop = Math.max(0, timelineToday.currentTimeTop - (container.clientHeight / 2));
-    container.scrollTo({ top: centeredTop });
-  }, [displayMode, timelineToday.currentTimeTop]);
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -893,48 +888,60 @@ export default function MiniApp() {
           <div className="rounded-xl border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>
         ) : null}
 
-        {groupedBySphere.length === 0 ? (
+        {listTasks.length === 0 ? (
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">Задачи не найдены.</div>
         ) : null}
 
-        {displayMode === 'list' ? groupedBySphere.map((group) => (
-          <section
-            key={group.sphereId}
-            className="space-y-2 rounded-xl border p-3"
-            style={{
-              borderColor: group.sphereId === 'without-sphere' ? 'rgba(71,85,105,0.8)' : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.7) ?? 'rgba(71,85,105,0.8)'),
-              background: group.sphereId === 'without-sphere'
-                ? 'rgba(15,23,42,0.82)'
-                : (hexToRgba(spheres.find((item) => item.id === group.sphereId)?.color ?? '', 0.14) ?? 'rgba(15,23,42,0.82)')
-            }}
-          >
+        {displayMode === 'list' ? (
+          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Сектор: {group.sphereName}</h2>
-              <select
-                value={timeFilter}
-                onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
-              >
-                <option value="all">За все время</option>
-                <option value="today">Сегодня</option>
-                <option value="tomorrow">Завтра</option>
-                <option value="week">Неделя</option>
-              </select>
+              <h2 className="text-lg font-semibold">Список задач</h2>
+              <div className="flex items-center gap-2">
+                <select
+                  value={listSortMode}
+                  onChange={(event) => setListSortMode(event.target.value as ListSortMode)}
+                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
+                >
+                  <option value="sector">По секторам</option>
+                  <option value="importance">По важности</option>
+                </select>
+                <select
+                  value={timeFilter}
+                  onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
+                >
+                  <option value="all">За все время</option>
+                  <option value="today">Сегодня</option>
+                  <option value="tomorrow">Завтра</option>
+                  <option value="week">Неделя</option>
+                </select>
+              </div>
             </div>
 
-            {group.tasks.map((task) => {
+            {listTasks.map((task) => {
               const hasOverdueState = isOverdue(task);
               const hasReminderState = !hasOverdueState && shouldTaskGlow(task);
+              const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
+              const importanceColors: Record<number, string> = {
+                1: 'rgba(148,163,184,0.95)',
+                2: 'rgba(56,189,248,0.95)',
+                3: 'rgba(34,197,94,0.95)',
+                4: 'rgba(251,191,36,0.95)',
+                5: 'rgba(248,113,113,0.95)'
+              };
+              const leftStripeColor = listSortMode === 'sector'
+                ? (hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)')
+                : (importanceColors[task.importance] ?? importanceColors[3]);
 
               return (
                 <article
                   key={task.id}
                   className="rounded-lg border border-slate-700 bg-slate-800/80 p-3"
                   style={hasOverdueState
-                    ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                    ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
                     : hasReminderState
-                      ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
-                      : undefined}
+                      ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                      : { borderLeftWidth: '4px', borderLeftColor: leftStripeColor }}
                 >
                   <button
                     type="button"
@@ -952,7 +959,8 @@ export default function MiniApp() {
               );
             })}
           </section>
-        )) : (
+        ) : (
+
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Таймлайн задач</h2>
@@ -964,13 +972,14 @@ export default function MiniApp() {
             </div>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
-                <div ref={timelineScrollRef} className="relative overflow-x-hidden overflow-y-auto" style={{ maxHeight: '70vh' }}>
+                <div className="relative overflow-x-hidden">
                   <div className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
                       <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
                         <span className="absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
                       </div>
                     ))}
+                    <div className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.totalHeight - 1}px` }} />
                     {timelineToday.isTodayVisible ? (
                       <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
                         <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
