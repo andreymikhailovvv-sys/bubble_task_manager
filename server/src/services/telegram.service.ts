@@ -1,4 +1,5 @@
 import { authService } from '../auth/auth.service.js';
+import crypto from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
@@ -14,6 +15,9 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
+const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
+const TELEGRAM_LINK_SECRET = process.env.TELEGRAM_LINK_SECRET?.trim() || BOT_TOKEN || null;
+const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
 
 type TelegramFile = {
   file_id: string;
@@ -116,6 +120,59 @@ const sortSubtasksByStatusAndDeadline = <T extends { status: string; dueDate: Da
     if (aTs !== bTs) return aTs - bTs;
     return 0;
   });
+
+
+const encodeBase64Url = (value: string) => Buffer.from(value, 'utf8').toString('base64url');
+const decodeBase64Url = (value: string) => Buffer.from(value, 'base64url').toString('utf8');
+
+const signTelegramLinkPayload = (payloadBase64: string) => {
+  if (!TELEGRAM_LINK_SECRET) return null;
+  return crypto.createHmac('sha256', TELEGRAM_LINK_SECRET).update(payloadBase64).digest('base64url');
+};
+
+const createTelegramLinkToken = (userId: string) => {
+  if (!TELEGRAM_LINK_SECRET || !TELEGRAM_BOT_USERNAME) return null;
+  const expiresAt = Math.floor(Date.now() / 1000) + TELEGRAM_LINK_TTL_SECONDS;
+  const nonce = crypto.randomBytes(12).toString('base64url');
+  const payloadBase64 = encodeBase64Url(JSON.stringify({ userId, expiresAt, nonce }));
+  const signature = signTelegramLinkPayload(payloadBase64);
+  if (!signature) return null;
+  const token = `${payloadBase64}.${signature}`;
+  return {
+    deepLinkUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?start=link_${encodeURIComponent(token)}`,
+    expiresInSeconds: TELEGRAM_LINK_TTL_SECONDS
+  };
+};
+
+const consumeTelegramLinkToken = async (token: string, chatId: string) => {
+  if (!TELEGRAM_LINK_SECRET) return { ok: false as const, reason: 'disabled' as const };
+  const [payloadBase64, signature] = token.split('.', 2);
+  if (!payloadBase64 || !signature) return { ok: false as const, reason: 'invalid' as const };
+  const expected = signTelegramLinkPayload(payloadBase64);
+  if (!expected || expected.length !== signature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+    return { ok: false as const, reason: 'invalid' as const };
+  }
+
+  try {
+    const parsed = JSON.parse(decodeBase64Url(payloadBase64)) as { userId?: string; expiresAt?: number };
+    if (!parsed.userId || !parsed.expiresAt || Math.floor(Date.now() / 1000) > parsed.expiresAt) {
+      return { ok: false as const, reason: 'expired' as const };
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: parsed.userId } });
+    if (!user) return { ok: false as const, reason: 'invalid' as const };
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { telegramChatId: chatId, telegramLinkedAt: new Date() }
+    });
+    await resetBotMenuState(chatId);
+    await setSession(chatId, { userId: user.id });
+    return { ok: true as const, user };
+  } catch {
+    return { ok: false as const, reason: 'invalid' as const };
+  }
+};
 
 const keyboardMain = (taskId: string) => ({
   inline_keyboard: [
@@ -717,7 +774,25 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
 
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
 
-  if (descriptionText === '/start') {
+  if (descriptionText.startsWith('/start')) {
+    const [, payloadRaw = ''] = descriptionText.split(/\s+/, 2);
+    const payload = payloadRaw.trim();
+
+    if (payload.startsWith('link_')) {
+      const token = payload.slice('link_'.length);
+      const result = await consumeTelegramLinkToken(token, chatId);
+      if (result.ok) {
+        await sendMessage(chatId, `✅ <b>Telegram подключён.</b>\nАккаунт ${escapeHtml(result.user.name ?? result.user.username ?? 'пользователя')} успешно привязан.`);
+        return;
+      }
+
+      const errorText = result.reason === 'expired'
+        ? '⌛️ Ссылка устарела. Откройте сайт и сгенерируйте новый QR-код.'
+        : '❌ Не удалось подтвердить ссылку. Сгенерируйте новый QR-код в приложении.';
+      await sendMessage(chatId, errorText);
+      return;
+    }
+
     await resetBotMenuState(chatId);
     await sendMessage(
       chatId,
@@ -1241,6 +1316,7 @@ const handleCallback = async (update: TelegramUpdate) => {
 
 export const telegramService = {
   isEnabled,
+  createTelegramLinkToken,
   isWebhookAuthorized(headers: Record<string, unknown>) {
     if (!WEBHOOK_SECRET) return true;
     const header = String(headers['x-telegram-bot-api-secret-token'] ?? '');
