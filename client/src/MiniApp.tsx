@@ -991,11 +991,13 @@ export default function MiniApp() {
                     <ChevronDown size={18} />
                     {hasSubtasks ? (
                       <span
-                        className="absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full border border-slate-500/80 bg-slate-700/70"
+                        className="absolute bottom-0.5 right-0.5 relative block h-4 w-4 rounded-full border border-slate-500/80"
                         style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
                         title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
                         aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
-                      />
+                      >
+                        <span className="absolute inset-[3px] rounded-full bg-slate-800/95" />
+                      </span>
                     ) : null}
                   </button>
                 </article>
