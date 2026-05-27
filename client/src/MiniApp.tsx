@@ -393,6 +393,18 @@ export default function MiniApp() {
     return map;
   }, [tasks]);
 
+  const subtaskProgressByParent = useMemo(() => {
+    const map = new Map<string, { total: number; completed: number }>();
+    for (const task of tasks) {
+      if (!task.parentTaskId) continue;
+      const current = map.get(task.parentTaskId) ?? { total: 0, completed: 0 };
+      current.total += 1;
+      if (task.status === 'DONE') current.completed += 1;
+      map.set(task.parentTaskId, current);
+    }
+    return map;
+  }, [tasks]);
+
   const listTasks = useMemo(() => {
     const result = [...filteredTasks];
     result.sort((a, b) => {
@@ -950,6 +962,11 @@ export default function MiniApp() {
               const leftStripeColor = listSortMode === 'sector'
                 ? (hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)')
                 : (importanceColors[task.importance] ?? importanceColors[3]);
+              const subtaskProgress = subtaskProgressByParent.get(task.id);
+              const hasSubtasks = Boolean(subtaskProgress && subtaskProgress.total > 0);
+              const progressPercent = hasSubtasks
+                ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
+                : 0;
 
               return (
                 <article
@@ -963,7 +980,7 @@ export default function MiniApp() {
                 >
                   <button
                     type="button"
-                    className="flex w-full items-start justify-between gap-2 text-left"
+                    className="relative flex w-full items-start justify-between gap-2 pr-7 text-left"
                     onClick={() => openTaskModal(task)}
                   >
                     <div>
@@ -972,6 +989,14 @@ export default function MiniApp() {
                       <p className="text-xs text-sky-200">{formatRemaining(task.dueDate)}</p>
                     </div>
                     <ChevronDown size={18} />
+                    {hasSubtasks ? (
+                      <span
+                        className="absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full border border-slate-500/80 bg-slate-700/70"
+                        style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
+                        title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
+                        aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
+                      />
+                    ) : null}
                   </button>
                 </article>
               );

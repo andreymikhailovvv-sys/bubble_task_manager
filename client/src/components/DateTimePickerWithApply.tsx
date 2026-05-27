@@ -257,7 +257,15 @@ export function DateTimePickerWithApply({
               <button type="button" className="rounded bg-slate-800 px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}>→</button>
             </div>
             {previewMode === 'month' ? (
-              <div className="grid grid-cols-7 gap-1">
+              <div>
+                <div className="mb-1 grid grid-cols-7 gap-1">
+                  {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((day) => (
+                    <div key={day} className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
                 {monthCells.map((date, index) => {
                   const dayTasks = date
                     ? timelineTasks.filter((task) => task.dueDate && new Date(task.dueDate).toDateString() === date.toDateString())
@@ -269,13 +277,13 @@ export function DateTimePickerWithApply({
                     && date.getDate() === today.getDate()
                   );
                   return (
-                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`min-h-24 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${isToday ? 'ring-1 ring-amber-300/90 ring-inset' : ''} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => {
+                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`relative min-h-24 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${isToday ? 'ring-1 ring-amber-300/90 ring-inset' : ''} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => {
                       if (!date) return;
                       setSelectedPreviewDate(date);
                       setPreviewMode('day');
                     }}>
-                      {date ? <p className="mb-1">{date.getDate()}</p> : null}
-                      <div className="space-y-1">
+                      {date ? <p className="absolute left-1 top-1">{date.getDate()}</p> : null}
+                      <div className="mt-5 space-y-1">
                         {dayTasks.slice(0, 3).map((task) => (
                           <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                             {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
@@ -286,6 +294,7 @@ export function DateTimePickerWithApply({
                     </button>
                   );
                 })}
+                </div>
               </div>
             ) : (
               <div>
