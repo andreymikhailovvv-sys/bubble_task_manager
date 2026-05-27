@@ -98,6 +98,8 @@ export const api = {
     window.location.href = '/api/auth/google';
   },
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
+  createTelegramLinkToken: () =>
+    request<{ deepLinkUrl: string; expiresInSeconds: number }>('/api/telegram/link-token', { method: 'POST' }),
   getSpheres: () => request<Sphere[]>('/api/spheres'),
   createSphere: (payload: Partial<Sphere>) => request<Sphere>('/api/spheres', { method: 'POST', body: JSON.stringify(payload) }),
   updateSphere: (id: string, payload: Partial<Sphere>) => request<Sphere>(`/api/spheres/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

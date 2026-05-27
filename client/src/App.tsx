@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Phone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -435,6 +435,13 @@ export default function App() {
 
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [telegramLinkUrl, setTelegramLinkUrl] = useState<string | null>(null);
+  const [telegramLinkExpiresIn, setTelegramLinkExpiresIn] = useState<number>(0);
+  const [telegramLinkError, setTelegramLinkError] = useState<string | null>(null);
+  const [isTelegramLinkLoading, setIsTelegramLinkLoading] = useState(false);
+
   const [userTimeZone, setUserTimeZone] = useState<string>(() => {
     const saved = localStorage.getItem(USER_TIMEZONE_STORAGE_KEY);
     if (saved?.trim()) return saved.trim();
@@ -2526,6 +2533,31 @@ export default function App() {
         ) : (
           <div className="rounded bg-slate-700 px-2 py-1 text-xs">Гостевой режим</div>
         )}
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-cyan-400/40 bg-slate-900/85 text-cyan-200 transition hover:border-cyan-300"
+          aria-label="Подключить Telegram"
+          title="Подключить Telegram"
+          onClick={async () => {
+            setIsTelegramModalOpen(true);
+            setTelegramLinkError(null);
+            setIsTelegramLinkLoading(true);
+            try {
+              const result = await api.createTelegramLinkToken();
+              setTelegramLinkUrl(result.deepLinkUrl);
+              setTelegramLinkExpiresIn(result.expiresInSeconds);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Не удалось создать ссылку';
+              setTelegramLinkError(message);
+              setTelegramLinkUrl(null);
+            } finally {
+              setIsTelegramLinkLoading(false);
+            }
+          }}
+        >
+          <Phone size={18} />
+        </button>
+
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('login')}>Войти</button>
         <button className="rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('register')}>Регистрация</button>
@@ -2767,6 +2799,31 @@ export default function App() {
                 {authModalMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isTelegramModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-900/95 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-cyan-100">Вход в Telegram-бот</h2>
+              <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTelegramModalOpen(false)}>Закрыть</button>
+            </div>
+            <p className="mb-3 text-xs text-slate-300">Отсканируйте QR-код камерой Telegram, чтобы привязать аккаунт в один клик.</p>
+            {isTelegramLinkLoading ? <div className="py-10 text-center text-sm text-slate-300">Генерируем ссылку…</div> : null}
+            {telegramLinkError ? <div className="rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{telegramLinkError}</div> : null}
+            {telegramLinkUrl && !isTelegramLinkLoading ? (
+              <>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(telegramLinkUrl)}`}
+                  alt="QR-код входа в Telegram"
+                  className="mx-auto mb-3 h-64 w-64 rounded-lg border border-slate-700 bg-white p-2"
+                />
+                <div className="mb-3 text-center text-xs text-slate-400">Код действует ~{Math.round(telegramLinkExpiresIn / 60)} мин</div>
+                <a href={telegramLinkUrl} target="_blank" rel="noreferrer" className="block rounded bg-cyan-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-cyan-600">Открыть в Telegram</a>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}

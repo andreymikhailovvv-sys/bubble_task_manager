@@ -6,6 +6,7 @@ import { taskAttachmentController } from '../controllers/task-attachment.control
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
 import { telegramController } from '../controllers/telegram.controller.js';
+import { telegramService } from '../services/telegram.service.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
 import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.service.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -368,6 +369,17 @@ apiRouter.get('/auth/me', async (req, res) => {
 
   const user = await ensureDeviceUser(req, res);
   res.json({ user: toAuthUser(user) });
+});
+
+
+apiRouter.post('/telegram/link-token', requireAuth, async (req, res) => {
+  const tokenData = telegramService.createTelegramLinkToken(req.user!.id);
+  if (!tokenData) {
+    res.status(503).json({ error: 'Telegram link login is not configured' });
+    return;
+  }
+
+  res.json(tokenData);
 });
 
 apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
