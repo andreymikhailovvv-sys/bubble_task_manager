@@ -980,18 +980,18 @@ export default function MiniApp() {
                 >
                   <button
                     type="button"
-                    className="relative flex w-full items-start justify-between gap-2 pr-7 text-left"
+                    className="relative flex w-full items-start gap-2 text-left"
                     onClick={() => openTaskModal(task)}
                   >
-                    <div>
+                    <div className="min-w-0 flex-1 pr-8">
                       <h3 className="font-medium">{task.title}</h3>
                       <p className="mt-1 text-xs text-slate-300">Дедлайн: {formatDueDate(task.dueDate)}</p>
                       <p className="text-xs text-sky-200">{formatRemaining(task.dueDate)}</p>
                     </div>
-                    <ChevronDown size={18} />
+                    <ChevronDown size={18} className="absolute right-0 top-0 shrink-0" />
                     {hasSubtasks ? (
                       <span
-                        className="absolute bottom-0.5 right-0.5 relative block h-4 w-4 rounded-full border border-slate-500/80"
+                        className="pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
                         style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
                         title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
                         aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
