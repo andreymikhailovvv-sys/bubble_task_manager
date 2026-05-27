@@ -66,8 +66,9 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
   const latestActionAtMs = tasks.reduce((latest, task) => Math.max(latest, task.updatedAt.getTime(), task.createdAt.getTime()), 0);
   const inactiveHours = latestActionAtMs > 0 ? (now.getTime() - latestActionAtMs) / (60 * 60 * 1000) : 0;
   const bonus = doneRootCount * 0.05 + doneSubtaskCount * 0.02 + createdRootCount * 0.01 + spentCredits * EFFICIENCY_AI_CREDIT_BONUS;
+  const normalizedBonus = Math.min(1, bonus);
   const penalty = Math.max(0, inactiveHours) * EFFICIENCY_INACTIVE_PENALTY_PER_HOUR;
-  const efficiencyScore = clampEfficiency(bonus - penalty);
+  const efficiencyScore = clampEfficiency(normalizedBonus - penalty);
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
   return efficiencyScore;
 };
