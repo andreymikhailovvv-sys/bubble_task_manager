@@ -105,7 +105,7 @@ const EFFICIENCY_BONUSES = {
 } as const;
 
 const EFFICIENCY_PENALTIES = {
-  inactive6Hours: 0.015
+  inactivePerHour: 0.035
 } as const;
 
 type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
@@ -462,6 +462,7 @@ export default function App() {
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
   const [timelinePostponeHighlightedTaskId, setTimelinePostponeHighlightedTaskId] = useState<string | null>(null);
+  const [timelineCompletionAnimationIds, setTimelineCompletionAnimationIds] = useState<string[]>([]);
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
   const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
@@ -510,6 +511,7 @@ export default function App() {
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
+  const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
   const [authLogin, setAuthLogin] = useState('');
@@ -1021,6 +1023,11 @@ export default function App() {
         && updatedAt.getFullYear() === now.getFullYear();
     });
   }, [completedFilter, completedTasks]);
+  const completedTasksVisible = useMemo(
+    () => completedTasksForPanel.slice(0, completedVisibleCount),
+    [completedTasksForPanel, completedVisibleCount]
+  );
+  const hasMoreCompletedTasks = completedTasksVisible.length < completedTasksForPanel.length;
   const upcomingSubtasksForPanel = useMemo(() => {
     return subtasks
       .filter((task) => task.status !== 'DONE' && Boolean(task.dueDate))
@@ -1588,16 +1595,21 @@ export default function App() {
     const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const spentAiCredits = Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
-    const hasActionsToday = createdTasksToday + createdSubtasksToday + closedTasksToday + closedSubtasksToday > 0;
+    const hoursSinceReset = Math.max(0, (nowMs - resetAtMs) / (60 * 60 * 1000));
+    const inactivePenaltyToday = hoursSinceReset * EFFICIENCY_PENALTIES.inactivePerHour;
     return {
       createdTasksToday,
       createdSubtasksToday,
       closedTasksToday,
       closedSubtasksToday,
       spentAiCredits,
-      inactivePenaltyToday: hasActionsToday ? 0 : EFFICIENCY_PENALTIES.inactive6Hours
+      inactivePenaltyToday
     };
   }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, rootTasks, subtasks]);
+
+  useEffect(() => {
+    setCompletedVisibleCount(40);
+  }, [completedFilter]);
 
   const visibleTasks = useMemo(
     () =>
@@ -1766,6 +1778,12 @@ export default function App() {
   };
 
   const completeTask = async (task: Task) => {
+    if (displayMode === 'timeline') {
+      setTimelineCompletionAnimationIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+      setTimeout(() => {
+        setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== task.id));
+      }, 900);
+    }
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 320));
     await api.updateTask(task.id, { status: 'DONE' });
@@ -2163,6 +2181,7 @@ export default function App() {
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
+    const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
     const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
     const isHoverCardVisible = draggedTimelineTaskId === null && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
@@ -2175,7 +2194,7 @@ export default function App() {
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
         className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
-        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''}`}
+        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
           borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
@@ -2241,12 +2260,12 @@ export default function App() {
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {timelinePostponeHighlightedTaskId === task.id ? (
+          {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline ? (
             <Check size={13} className="shrink-0 text-emerald-300" />
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="shrink-0 animate-spin text-cyan-100" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
-          <span className="truncate">
+          <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'text-slate-300 line-through decoration-2 decoration-emerald-300' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
           {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="shrink-0 text-violet-200" /></span> : null}
@@ -2258,6 +2277,14 @@ export default function App() {
           {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="shrink-0 text-cyan-100/90" /></span> : null}
         </span>
         {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
+        {isCompletingInTimeline ? (
+          <motion.span
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.32, ease: 'easeOut' }}
+            className="pointer-events-none absolute left-2 right-2 top-1/2 h-[2px] origin-left rounded bg-emerald-300/90"
+          />
+        ) : null}
         {isHoverCardVisible ? createPortal((
         <div
           className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
@@ -2696,7 +2723,7 @@ export default function App() {
                 <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
                 <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="text-emerald-300">+0.000</span>.</li>
                 <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие (каждые 6 часов): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
+                <li>• Штраф за бездействие (каждый час): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
               </ul>
             </div>
           ) : null}
@@ -3672,7 +3699,7 @@ export default function App() {
             </div>
             <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
               {completedTasksForPanel.length === 0 ? <li className="text-slate-400">Нет выполненных задач для выбранного фильтра</li> : null}
-              {completedTasksForPanel.map((task) => (
+              {completedTasksVisible.map((task) => (
                 <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
                   <input
                     type="checkbox"
@@ -3686,6 +3713,15 @@ export default function App() {
                 </li>
               ))}
             </ul>
+            {hasMoreCompletedTasks ? (
+              <button
+                type="button"
+                className="mt-2 w-full rounded-md border border-cyan-500/40 bg-cyan-900/30 px-3 py-1.5 text-xs text-cyan-100 transition hover:bg-cyan-800/40"
+                onClick={() => setCompletedVisibleCount((prev) => prev + 40)}
+              >
+                Показать ещё ({completedTasksForPanel.length - completedTasksVisible.length})
+              </button>
+            ) : null}
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold">Фон рабочего пространства</h3>
