@@ -80,7 +80,7 @@ type ChatAttachment = {
 };
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-nano';
-const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5-mini';
+const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-nano';
 const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
 const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-5.4-nano';
@@ -118,6 +118,7 @@ function supportsReasoningEffort(model: string) {
 
 const resolveModelCredits = (model: string): number => {
   const normalized = model.trim().toLowerCase();
+  if (normalized.includes('gpt-5.4-mini')) return 5;
   if (normalized.includes('gpt-5-mini')) return 4;
   if (normalized.includes('gpt-5.4-nano')) return 2;
   if (normalized.includes('gpt-5-nano')) return 1;
