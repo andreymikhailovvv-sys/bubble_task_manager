@@ -2165,7 +2165,7 @@ export default function App() {
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void; showDeadlinePicker?: boolean }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
     const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
@@ -2181,8 +2181,6 @@ export default function App() {
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
-    const completedSubtasksCount = taskSubtasks.filter((subtask) => subtask.status === 'DONE').length;
-    const subtaskProgressPercent = taskSubtasks.length > 0 ? Math.round((completedSubtasksCount / taskSubtasks.length) * 100) : 0;
     const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
     const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
@@ -2278,41 +2276,7 @@ export default function App() {
           ) : null}
           {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="shrink-0 text-cyan-100/90" /></span> : null}
         </span>
-        {!isSubtaskChip ? (
-          <div className="flex items-center gap-1">
-            {options?.showDeadlinePicker ? (
-              <span
-                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200/35 bg-slate-900/55 text-slate-100 transition hover:bg-slate-800"
-                onClick={(event) => event.stopPropagation()}
-                onMouseDown={(event) => event.stopPropagation()}
-                title="Изменить дедлайн"
-              >
-                <InlineDateTimePickerIcon
-                  value={task.dueDate}
-                  onChange={async (dueDate) => {
-                    await api.updateTask(task.id, { dueDate });
-                    await load();
-                  }}
-                  className="inline-flex h-4 w-4 items-center justify-center rounded-full text-slate-100 hover:text-cyan-200"
-                  title="Изменить дедлайн"
-                  timelineTasks={timelinePickerTasks}
-                />
-              </span>
-            ) : null}
-            <span
-              className="relative inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200/35 text-[9px] font-semibold text-slate-100/95"
-              style={taskSubtasks.length > 0
-                ? { background: `conic-gradient(rgb(34 197 94) ${subtaskProgressPercent}%, rgba(51,65,85,0.75) ${subtaskProgressPercent}% 100%)` }
-                : { backgroundColor: 'rgba(15,23,42,0.65)' }}
-              title={taskSubtasks.length > 0
-                ? `Подзадачи: ${completedSubtasksCount}/${taskSubtasks.length}`
-                : 'Подзадач нет'}
-            >
-              <span className="absolute inset-[2px] rounded-full bg-slate-900/90" />
-              <span className="relative">{taskSubtasks.length}</span>
-            </span>
-          </div>
-        ) : null}
+        {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -3396,7 +3360,7 @@ export default function App() {
                             style={{ top: `${lineOffsetPercent}%` }}
                           />
                         ) : null}
-                        {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true, showDeadlinePicker: true }))}
+                        {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
                       </div>
                     </div>
                   ));
