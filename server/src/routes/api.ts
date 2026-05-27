@@ -16,7 +16,7 @@ const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
 const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
-const EFFICIENCY_INACTIVE_PENALTY_PER_6H = 0.015;
+const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 0.035;
 const EFFICIENCY_AI_CREDIT_BONUS = 0.002;
 
 const toAuthUser = (user: {
@@ -64,9 +64,9 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
   const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
   const spentCredits = Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
   const latestActionAtMs = tasks.reduce((latest, task) => Math.max(latest, task.updatedAt.getTime(), task.createdAt.getTime()), 0);
-  const inactiveSlots = latestActionAtMs > 0 ? Math.floor((now.getTime() - latestActionAtMs) / (6 * 60 * 60 * 1000)) : 0;
+  const inactiveHours = latestActionAtMs > 0 ? (now.getTime() - latestActionAtMs) / (60 * 60 * 1000) : 0;
   const bonus = doneRootCount * 0.05 + doneSubtaskCount * 0.02 + createdRootCount * 0.01 + spentCredits * EFFICIENCY_AI_CREDIT_BONUS;
-  const penalty = Math.max(0, inactiveSlots) * EFFICIENCY_INACTIVE_PENALTY_PER_6H;
+  const penalty = Math.max(0, inactiveHours) * EFFICIENCY_INACTIVE_PENALTY_PER_HOUR;
   const efficiencyScore = clampEfficiency(bonus - penalty);
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
   return efficiencyScore;
