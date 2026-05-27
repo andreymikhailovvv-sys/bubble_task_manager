@@ -3894,7 +3894,7 @@ export default function App() {
                       type="button"
                     >
                       <span className="block text-left">Умная</span>
-                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
                     </button>
                   </div>
                   <button
@@ -4488,10 +4488,10 @@ export default function App() {
                   <button
                     className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
-                    title="Умный режим (gpt-5.4)"
+                    title="Умный режим (gpt-5.4-mini)"
                   >
                     <span className="block text-left">Умная</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
                   </button>
                 </div>
                 <button

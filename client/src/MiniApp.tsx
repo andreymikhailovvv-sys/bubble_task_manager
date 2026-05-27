@@ -1175,7 +1175,7 @@ export default function MiniApp() {
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
                   >
                     <span className="block text-left">Умная</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
                   </button>
                 </div>
                 <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
@@ -1353,7 +1353,7 @@ export default function MiniApp() {
                     onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
                   >
                     <span className="block text-left">Умная</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>4</span><Coins size={10} /></span>
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
                   </button>
                 </div>
                 <button
