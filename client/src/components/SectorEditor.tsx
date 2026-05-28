@@ -22,7 +22,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
   }, [sphere]);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/55 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={onCancel}>
       <aside className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-slate-100">Настройка сектора</h3>
         <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
