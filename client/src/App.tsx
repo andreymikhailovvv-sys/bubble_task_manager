@@ -3200,11 +3200,23 @@ export default function App() {
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
-                          <button className="rounded bg-slate-700 px-2 py-1 text-xs disabled:opacity-60" onClick={() => void postponeAllOverdueByOneDay()} disabled={timelineOverdueBulkPostponeLoading !== null}>
+                          <button
+                            className="rounded bg-slate-700 px-2 py-1 text-xs disabled:opacity-60"
+                            onClick={() => void postponeAllOverdueByOneDay()}
+                            disabled={timelineOverdueBulkPostponeLoading !== null}
+                            title="Откладывает задачи на завтра на это же время"
+                            aria-label="Отложить просроченные задачи на завтра на это же время"
+                          >
                             {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
                           </button>
-                          <button className="inline-flex items-center gap-1 rounded border border-pink-300/60 bg-pink-600/80 px-2 py-1 text-xs text-white disabled:opacity-60" onClick={() => void postponeAllOverdueByAi()} disabled={timelineOverdueBulkPostponeLoading !== null}>
-                            {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Отложить
+                          <button
+                            className="inline-flex items-center gap-1 rounded border border-pink-300/60 bg-pink-600/80 px-2 py-1 text-xs text-white disabled:opacity-60"
+                            onClick={() => void postponeAllOverdueByAi()}
+                            disabled={timelineOverdueBulkPostponeLoading !== null}
+                            title="Откладывает на ближайшее доступное окно, используя ИИ (снимает кредиты)"
+                            aria-label="Отложить просроченные задачи с помощью ИИ на ближайшее доступное окно"
+                          >
+                            {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Отложить (ИИ)
                             <span className="inline-flex items-center gap-1 text-pink-100"><span>{OVERDUE_AI_POSTPONE_CREDITS_COST}</span><Coins size={10} /></span>
                           </button>
                         </div>
