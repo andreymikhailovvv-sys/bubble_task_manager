@@ -373,12 +373,15 @@ apiRouter.get('/auth/me', async (req, res) => {
 
 
 apiRouter.post('/telegram/link-token', requireAuth, async (req, res) => {
+  console.info(`[TelegramLink] link-token requested userId=${req.user!.id}`);
   const tokenData = telegramService.createTelegramLinkToken(req.user!.id);
   if (!tokenData) {
+    console.warn(`[TelegramLink] link-token request failed: not configured userId=${req.user!.id}`);
     res.status(503).json({ error: 'Telegram link login is not configured' });
     return;
   }
 
+  console.info(`[TelegramLink] link-token response created userId=${req.user!.id} expiresInSeconds=${tokenData.expiresInSeconds}`);
   res.json(tokenData);
 });
 

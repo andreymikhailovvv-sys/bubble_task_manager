@@ -2561,7 +2561,7 @@ export default function App() {
             } catch (error) {
               const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
               const message = messageRaw.includes('Telegram link login is not configured')
-                ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_LINK_BOT_USERNAME и/или TELEGRAM_BOT_USERNAME.'
+                ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_BOT_TOKEN и/или TELEGRAM_BOT_USERNAME.'
                 : messageRaw;
               setTelegramLinkError(message);
               setTelegramLinkUrl(null);

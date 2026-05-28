@@ -31,6 +31,8 @@ OPENAI_API_KEY=your_openai_api_key
 # OPENAI_MODEL_FULL=gpt-5.4
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+# Username бота без @, используется для QR/deep-link подключения аккаунта
+TELEGRAM_BOT_USERNAME=your_bot_username_without_at
 # Опционально, но рекомендуется для защиты webhook
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
 # Интервал проверки «сияющих» задач в мс (по умолчанию 60000)
@@ -108,7 +110,7 @@ npm run start
 
 ## Подключение Telegram webhook
 1. Создайте бота у @BotFather и получите токен.
-2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN` и (рекомендуется) `TELEGRAM_WEBHOOK_SECRET`.
+2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (username бота без `@`) и (рекомендуется) `TELEGRAM_WEBHOOK_SECRET`.
 3. После деплоя установите webhook:
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \

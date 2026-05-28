@@ -18,6 +18,31 @@ const MAX_SHINE_WINDOW_MINUTES = 180;
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
 const TELEGRAM_LINK_SECRET = process.env.TELEGRAM_LINK_SECRET?.trim() || BOT_TOKEN || null;
 const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
+const TELEGRAM_DEEP_LINK_PREFIX = 'link_';
+
+type TelegramLinkTokenRecord = {
+  userId: string;
+  expiresAt: number;
+  createdAt: number;
+};
+
+const telegramLinkTokens = new Map<string, TelegramLinkTokenRecord>();
+
+const maskToken = (value: string) => value.length <= 8 ? `${value.length} chars` : `${value.slice(0, 4)}…${value.slice(-4)} (${value.length} chars)`;
+
+const cleanupExpiredTelegramLinkTokens = () => {
+  const now = Math.floor(Date.now() / 1000);
+  let removed = 0;
+  for (const [token, record] of telegramLinkTokens.entries()) {
+    if (record.expiresAt <= now) {
+      telegramLinkTokens.delete(token);
+      removed += 1;
+    }
+  }
+  if (removed > 0) {
+    console.info(`[TelegramLink] cleaned up expired link tokens count=${removed} remaining=${telegramLinkTokens.size}`);
+  }
+};
 
 type TelegramFile = {
   file_id: string;
@@ -122,45 +147,63 @@ const sortSubtasksByStatusAndDeadline = <T extends { status: string; dueDate: Da
   });
 
 
-const encodeBase64Url = (value: string) => Buffer.from(value, 'utf8').toString('base64url');
-const decodeBase64Url = (value: string) => Buffer.from(value, 'base64url').toString('utf8');
-
-const signTelegramLinkPayload = (payloadBase64: string) => {
-  if (!TELEGRAM_LINK_SECRET) return null;
-  return crypto.createHmac('sha256', TELEGRAM_LINK_SECRET).update(payloadBase64).digest('base64url');
-};
-
 const createTelegramLinkToken = (userId: string) => {
-  if (!TELEGRAM_LINK_SECRET || !TELEGRAM_BOT_USERNAME) return null;
+  cleanupExpiredTelegramLinkTokens();
+
+  if (!TELEGRAM_BOT_USERNAME) {
+    console.warn(`[TelegramLink] cannot create link token: TELEGRAM_BOT_USERNAME is missing userId=${userId}`);
+    return null;
+  }
+
+  if (!TELEGRAM_LINK_SECRET) {
+    console.warn(`[TelegramLink] cannot create link token: TELEGRAM_LINK_SECRET/TELEGRAM_BOT_TOKEN is missing userId=${userId}`);
+    return null;
+  }
+
   const expiresAt = Math.floor(Date.now() / 1000) + TELEGRAM_LINK_TTL_SECONDS;
-  const nonce = crypto.randomBytes(12).toString('base64url');
-  const payloadBase64 = encodeBase64Url(JSON.stringify({ userId, expiresAt, nonce }));
-  const signature = signTelegramLinkPayload(payloadBase64);
-  if (!signature) return null;
-  const token = `${payloadBase64}.${signature}`;
+  const token = crypto.randomBytes(16).toString('base64url');
+  telegramLinkTokens.set(token, { userId, expiresAt, createdAt: Math.floor(Date.now() / 1000) });
+
+  const startPayload = `${TELEGRAM_DEEP_LINK_PREFIX}${token}`;
+  const deepLinkUrl = `https://t.me/${TELEGRAM_BOT_USERNAME}?start=${encodeURIComponent(startPayload)}`;
+  console.info(
+    `[TelegramLink] created link token userId=${userId} bot=${TELEGRAM_BOT_USERNAME} token=${maskToken(token)} startPayloadLength=${startPayload.length} expiresAt=${new Date(expiresAt * 1000).toISOString()} activeTokens=${telegramLinkTokens.size}`
+  );
+
   return {
-    deepLinkUrl: `https://t.me/${TELEGRAM_BOT_USERNAME}?start=link_${encodeURIComponent(token)}`,
+    deepLinkUrl,
     expiresInSeconds: TELEGRAM_LINK_TTL_SECONDS
   };
 };
 
 const consumeTelegramLinkToken = async (token: string, chatId: string) => {
-  if (!TELEGRAM_LINK_SECRET) return { ok: false as const, reason: 'disabled' as const };
-  const [payloadBase64, signature] = token.split('.', 2);
-  if (!payloadBase64 || !signature) return { ok: false as const, reason: 'invalid' as const };
-  const expected = signTelegramLinkPayload(payloadBase64);
-  if (!expected || expected.length !== signature.length || !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature))) {
+  cleanupExpiredTelegramLinkTokens();
+  console.info(`[TelegramLink] consume attempt chatId=${chatId} token=${maskToken(token)} activeTokens=${telegramLinkTokens.size}`);
+
+  if (!TELEGRAM_LINK_SECRET) {
+    console.warn(`[TelegramLink] consume failed: link secret is not configured chatId=${chatId}`);
+    return { ok: false as const, reason: 'disabled' as const };
+  }
+
+  const record = telegramLinkTokens.get(token);
+  if (!record) {
+    console.warn(`[TelegramLink] consume failed: token not found or already used chatId=${chatId} token=${maskToken(token)} activeTokens=${telegramLinkTokens.size}`);
     return { ok: false as const, reason: 'invalid' as const };
   }
 
-  try {
-    const parsed = JSON.parse(decodeBase64Url(payloadBase64)) as { userId?: string; expiresAt?: number };
-    if (!parsed.userId || !parsed.expiresAt || Math.floor(Date.now() / 1000) > parsed.expiresAt) {
-      return { ok: false as const, reason: 'expired' as const };
-    }
+  telegramLinkTokens.delete(token);
 
-    const user = await prisma.user.findUnique({ where: { id: parsed.userId } });
-    if (!user) return { ok: false as const, reason: 'invalid' as const };
+  if (Math.floor(Date.now() / 1000) > record.expiresAt) {
+    console.warn(`[TelegramLink] consume failed: token expired chatId=${chatId} userId=${record.userId} expiresAt=${new Date(record.expiresAt * 1000).toISOString()}`);
+    return { ok: false as const, reason: 'expired' as const };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user) {
+      console.warn(`[TelegramLink] consume failed: user not found chatId=${chatId} userId=${record.userId}`);
+      return { ok: false as const, reason: 'invalid' as const };
+    }
 
     await prisma.user.update({
       where: { id: user.id },
@@ -168,8 +211,10 @@ const consumeTelegramLinkToken = async (token: string, chatId: string) => {
     });
     await resetBotMenuState(chatId);
     await setSession(chatId, { userId: user.id });
+    console.info(`[TelegramLink] consume success chatId=${chatId} userId=${user.id} username=${user.username ?? ''}`);
     return { ok: true as const, user };
-  } catch {
+  } catch (error) {
+    console.error(`[TelegramLink] consume failed with unexpected error chatId=${chatId} userId=${record.userId}`, error);
     return { ok: false as const, reason: 'invalid' as const };
   }
 };
@@ -772,20 +817,27 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   const isVoiceMessage = Boolean(updateMessage.voice || updateMessage.audio);
   const descriptionText = text || caption;
 
+  console.info(
+    `[Telegram] incoming message chatId=${chatId} hasText=${Boolean(text)} hasCaption=${Boolean(caption)} hasVoice=${isVoiceMessage} hasDocument=${Boolean(updateMessage.document)} hasPhoto=${Boolean(updateMessage.photo?.length)} isStartCommand=${descriptionText.startsWith('/start')}`
+  );
+
   const session = await prisma.telegramSession.findUnique({ where: { chatId } });
+  console.info(`[Telegram] session lookup chatId=${chatId} found=${Boolean(session)} userId=${session?.userId ?? ''} mode=${session?.mode ?? ''}`);
 
   if (descriptionText.startsWith('/start')) {
     const [, payloadRaw = ''] = descriptionText.split(/\s+/, 2);
     const payload = payloadRaw.trim();
+    console.info(`[TelegramLink] /start received chatId=${chatId} payloadLength=${payload.length} isLinkPayload=${payload.startsWith(TELEGRAM_DEEP_LINK_PREFIX)}`);
 
-    if (payload.startsWith('link_')) {
-      const token = payload.slice('link_'.length);
+    if (payload.startsWith(TELEGRAM_DEEP_LINK_PREFIX)) {
+      const token = payload.slice(TELEGRAM_DEEP_LINK_PREFIX.length);
       const result = await consumeTelegramLinkToken(token, chatId);
       if (result.ok) {
         await sendMessage(chatId, `✅ <b>Telegram подключён.</b>\nАккаунт ${escapeHtml(result.user.name ?? result.user.username ?? 'пользователя')} успешно привязан.`);
         return;
       }
 
+      console.warn(`[TelegramLink] /start link payload failed chatId=${chatId} reason=${result.reason}`);
       const errorText = result.reason === 'expired'
         ? '⌛️ Ссылка устарела. Откройте сайт и сгенерируйте новый QR-код.'
         : '❌ Не удалось подтвердить ссылку. Сгенерируйте новый QR-код в приложении.';
@@ -793,6 +845,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
+    console.info(`[TelegramLink] /start without link payload chatId=${chatId} payloadLength=${payload.length}`);
     await resetBotMenuState(chatId);
     await sendMessage(
       chatId,
@@ -1324,6 +1377,7 @@ export const telegramService = {
   },
   async processWebhookUpdate(update: TelegramUpdate) {
     try {
+      console.info(`[Telegram] processing update hasMessage=${Boolean(update.message)} hasCallback=${Boolean(update.callback_query)}`);
       if (update.callback_query) {
         await handleCallback(update);
         return;
@@ -1331,7 +1385,10 @@ export const telegramService = {
 
       if (update.message) {
         await handleIncomingMessage(update.message);
+        return;
       }
+
+      console.info('[Telegram] ignored update without message/callback_query');
     } catch (error) {
       console.error('[Telegram] Failed to process update', error);
     }
