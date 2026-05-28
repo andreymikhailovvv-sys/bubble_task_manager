@@ -245,7 +245,7 @@ export function DateTimePickerWithApply({
         ? (detachedPopup && detachedPosition ? createPortal(popupContent, document.body) : popupContent)
         : null}
       {isTimelinePreviewOpen ? createPortal(
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-cyan-100">Предпросмотр таймлайна (месяц)</h3>

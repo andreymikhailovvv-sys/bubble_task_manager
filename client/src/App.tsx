@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Phone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -1582,10 +1582,6 @@ export default function App() {
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
-  const efficiencyScore = useMemo(() => clampEfficiency(currentUser?.efficiencyScore ?? 0), [currentUser?.efficiencyScore]);
-
-  const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
-
   const efficiencyTodaySummary = useMemo(() => {
     const now = new Date();
     const nowMs = now.getTime();
@@ -1613,6 +1609,22 @@ export default function App() {
       inactivePenaltyToday
     };
   }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, rootTasks, subtasks]);
+
+  const liveEfficiencyScore = useMemo(() => {
+    const bonus = efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask
+      + efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask
+      + efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask
+      + efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
+    return clampEfficiency(bonus - efficiencyTodaySummary.inactivePenaltyToday);
+  }, [efficiencyTodaySummary]);
+
+  const efficiencyScore = useMemo(() => {
+    if (!currentUser) return liveEfficiencyScore;
+    return Math.max(clampEfficiency(currentUser.efficiencyScore ?? 0), liveEfficiencyScore);
+  }, [currentUser, liveEfficiencyScore]);
+
+  const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
+
 
   useEffect(() => {
     setCompletedVisibleCount(40);
@@ -2547,7 +2559,10 @@ export default function App() {
               setTelegramLinkUrl(result.deepLinkUrl);
               setTelegramLinkExpiresIn(result.expiresInSeconds);
             } catch (error) {
-              const message = error instanceof Error ? error.message : 'Не удалось создать ссылку';
+              const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
+              const message = messageRaw.includes('Telegram link login is not configured')
+                ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_LINK_BOT_USERNAME и/или TELEGRAM_BOT_USERNAME.'
+                : messageRaw;
               setTelegramLinkError(message);
               setTelegramLinkUrl(null);
             } finally {
@@ -2555,7 +2570,7 @@ export default function App() {
             }
           }}
         >
-          <Phone size={18} />
+          <Smartphone size={18} />
         </button>
 
         <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -3603,7 +3618,7 @@ export default function App() {
             </ul>
           </section>
           {isUpcomingSubtasksModalOpen ? (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-[1px]" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
       
         {timelineCreateMenu ? (
           <div
@@ -3867,7 +3882,7 @@ export default function App() {
       ) : null}
 
       {focusedTask && focusedDraft ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
     
         {timelineCreateMenu ? (
@@ -4422,7 +4437,7 @@ export default function App() {
           </div>
           {isAiSubtasksPromptOpen ? (
             <div
-              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
               onClick={() => {
                 if (aiSubtasksLoadingTaskId !== focusedTask.id) {
                   setIsAiSubtasksPromptOpen(false);
@@ -4525,7 +4540,7 @@ export default function App() {
       ) : null}
 
       {focusedTask && isAiExpanded ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsAiExpanded(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
           <div className="w-full max-w-4xl rounded-3xl border border-violet-200/40 bg-slate-950/99 p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
@@ -4670,7 +4685,7 @@ export default function App() {
       ) : null}
 
       {isGeneralAiFullscreen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsGeneralAiFullscreen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsGeneralAiFullscreen(false)}>
           <div className="w-full max-w-4xl rounded-3xl border border-cyan-200/30 bg-slate-950/95 p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
@@ -4749,7 +4764,7 @@ export default function App() {
         </div>
       ) : null}
       {isUpcomingSubtasksModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
   
         {timelineCreateMenu ? (
           <div
@@ -4911,7 +4926,7 @@ export default function App() {
       ) : null}
     
 
-      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
+      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
 }
