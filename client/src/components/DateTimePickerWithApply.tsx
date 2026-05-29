@@ -41,6 +41,10 @@ function formatValue(value?: string | null) {
   });
 }
 
+function getLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function DateTimePickerWithApply({
   value,
   title = 'Выбрать срок',
@@ -129,28 +133,77 @@ export function DateTimePickerWithApply({
     };
   }, [detachedOffset, detachedPopup, isOpen, popupAlign]);
 
+  useEffect(() => {
+    if (!isTimelinePreviewOpen) return;
+    const appRoot = document.getElementById('root');
+    if (!appRoot) return;
+
+    const hadInert = appRoot.hasAttribute('inert');
+    const previousAriaHidden = appRoot.getAttribute('aria-hidden');
+    if (document.activeElement instanceof HTMLElement && appRoot.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+    appRoot.setAttribute('inert', '');
+    appRoot.setAttribute('aria-hidden', 'true');
+    appRoot.classList.add('app-background-inert');
+
+    return () => {
+      if (!hadInert) {
+        appRoot.removeAttribute('inert');
+      }
+      if (previousAriaHidden === null) {
+        appRoot.removeAttribute('aria-hidden');
+      } else {
+        appRoot.setAttribute('aria-hidden', previousAriaHidden);
+      }
+      appRoot.classList.remove('app-background-inert');
+    };
+  }, [isTimelinePreviewOpen]);
+
   const popupPositionClass = popupAlign === 'right' ? 'right-0' : 'left-0';
-  const monthStart = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), 1);
-  const monthDays = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 0).getDate();
-  const firstWeekDay = (monthStart.getDay() + 6) % 7;
-  const today = new Date();
-  const monthCells = Array.from({ length: firstWeekDay + monthDays }, (_, index) => {
-    if (index < firstWeekDay) return null;
-    return new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), index - firstWeekDay + 1);
-  });
-  const selectedDayTasks = selectedPreviewDate
-    ? timelineTasks.filter((task) => task.dueDate && new Date(task.dueDate).toDateString() === selectedPreviewDate.toDateString())
-    : [];
-  const selectedDayTasksByHour = Array.from({ length: 24 }, (_, hour) => ({
-    hour,
-    tasks: selectedDayTasks
-      .filter((task) => {
-        if (!task.dueDate) return false;
-        const date = new Date(task.dueDate);
-        return !Number.isNaN(date.getTime()) && date.getHours() === hour;
-      })
-      .sort((a, b) => new Date(a.dueDate ?? '').getTime() - new Date(b.dueDate ?? '').getTime())
-  }));
+  const today = useMemo(() => new Date(), []);
+  const monthCells = useMemo(() => {
+    const monthStart = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), 1);
+    const monthDays = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 0).getDate();
+    const firstWeekDay = (monthStart.getDay() + 6) % 7;
+    return Array.from({ length: firstWeekDay + monthDays }, (_, index) => {
+      if (index < firstWeekDay) return null;
+      return new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), index - firstWeekDay + 1);
+    });
+  }, [previewMonthDate]);
+  const timelineTasksByDate = useMemo(() => {
+    const grouped = new Map<string, typeof timelineTasks>();
+    timelineTasks.forEach((task) => {
+      if (!task.dueDate) return;
+      const date = new Date(task.dueDate);
+      if (Number.isNaN(date.getTime())) return;
+      const key = getLocalDateKey(date);
+      const current = grouped.get(key);
+      if (current) {
+        current.push(task);
+      } else {
+        grouped.set(key, [task]);
+      }
+    });
+    grouped.forEach((tasks) => tasks.sort((a, b) => new Date(a.dueDate ?? '').getTime() - new Date(b.dueDate ?? '').getTime()));
+    return grouped;
+  }, [timelineTasks]);
+  const selectedDayTasks = useMemo(() => (
+    selectedPreviewDate ? timelineTasksByDate.get(getLocalDateKey(selectedPreviewDate)) ?? [] : []
+  ), [selectedPreviewDate, timelineTasksByDate]);
+  const selectedDayTasksByHour = useMemo(() => {
+    const groupedByHour = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      tasks: [] as typeof timelineTasks
+    }));
+    selectedDayTasks.forEach((task) => {
+      if (!task.dueDate) return;
+      const date = new Date(task.dueDate);
+      if (Number.isNaN(date.getTime())) return;
+      groupedByHour[date.getHours()].tasks.push(task);
+    });
+    return groupedByHour;
+  }, [selectedDayTasks, timelineTasks]);
 
   const popupContent = (
     <div
@@ -245,7 +298,7 @@ export function DateTimePickerWithApply({
         ? (detachedPopup && detachedPosition ? createPortal(popupContent, document.body) : popupContent)
         : null}
       {isTimelinePreviewOpen ? createPortal(
-        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <div className="timeline-preview-overlay fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className="w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-cyan-100">Предпросмотр таймлайна (месяц)</h3>
@@ -267,9 +320,7 @@ export function DateTimePickerWithApply({
                 </div>
                 <div className="grid grid-cols-7 gap-1">
                 {monthCells.map((date, index) => {
-                  const dayTasks = date
-                    ? timelineTasks.filter((task) => task.dueDate && new Date(task.dueDate).toDateString() === date.toDateString())
-                    : [];
+                  const dayTasks = date ? timelineTasksByDate.get(getLocalDateKey(date)) ?? [] : [];
                   const isToday = Boolean(
                     date
                     && date.getFullYear() === today.getFullYear()
@@ -302,7 +353,7 @@ export function DateTimePickerWithApply({
                   <button type="button" className="rounded bg-slate-800 px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
                   <p className="text-xs text-slate-300">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
-                <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+                <div className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
                   {selectedDayTasksByHour.map(({ hour, tasks }) => (
                     <button key={hour} type="button" className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-800/70 p-2 text-left hover:border-cyan-400" onClick={() => {
                       if (!selectedPreviewDate) return;
