@@ -58,6 +58,7 @@ const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
+const DEFAULT_MORNING_AI_CHECKUP_TIME = '10:00';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const TIMEZONE_OPTIONS = [
   'Europe/Moscow',
@@ -451,6 +452,10 @@ export default function App() {
     } catch {}
     return DEFAULT_TIMEZONE;
   });
+  const [isMorningAiCheckupEnabled, setIsMorningAiCheckupEnabled] = useState(false);
+  const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | null>(null);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
@@ -608,6 +613,22 @@ export default function App() {
     setSpheres(sphereData);
     setTasks(taskData);
   }
+
+  const updateUserSettings = async (
+    payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string },
+    savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime'
+  ) => {
+    setSettingsSavingKey(savingKey);
+    setSettingsError(null);
+    try {
+      const result = await api.updateUserSettings(payload);
+      setCurrentUser(result.user);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Не удалось сохранить настройки');
+    } finally {
+      setSettingsSavingKey(null);
+    }
+  };
 
 
   const openCreateTaskFromTimeline = (date: Date, hour?: number | null) => {
@@ -832,6 +853,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(USER_TIMEZONE_STORAGE_KEY, userTimeZone);
   }, [userTimeZone]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const profileTimeZone = currentUser.timeZone?.trim();
+    if (profileTimeZone) {
+      setUserTimeZone(profileTimeZone);
+    }
+    setIsMorningAiCheckupEnabled(currentUser.morningAiCheckupEnabled === true);
+    setMorningAiCheckupTime(currentUser.morningAiCheckupTime?.trim() || DEFAULT_MORNING_AI_CHECKUP_TIME);
+    setSettingsError(null);
+  }, [currentUser?.id, currentUser?.timeZone, currentUser?.morningAiCheckupEnabled, currentUser?.morningAiCheckupTime]);
 
   useEffect(() => {
     if (!currentUser || !focusedTaskId) return;
@@ -2641,7 +2673,12 @@ export default function App() {
               <select
                 className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
                 value={userTimeZone}
-                onChange={(event) => setUserTimeZone(event.target.value)}
+                disabled={settingsSavingKey === 'timeZone'}
+                onChange={(event) => {
+                  const nextTimeZone = event.target.value;
+                  setUserTimeZone(nextTimeZone);
+                  void updateUserSettings({ timeZone: nextTimeZone }, 'timeZone');
+                }}
               >
                 {[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => (
                   <option key={timeZone} value={timeZone}>{timeZone}</option>
@@ -2649,11 +2686,55 @@ export default function App() {
               </select>
               <button
                 type="button"
-                className="mt-2 rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600"
-                onClick={() => setUserTimeZone(DEFAULT_TIMEZONE)}
+                className="mt-2 rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={settingsSavingKey === 'timeZone'}
+                onClick={() => {
+                  setUserTimeZone(DEFAULT_TIMEZONE);
+                  void updateUserSettings({ timeZone: DEFAULT_TIMEZONE }, 'timeZone');
+                }}
               >
                 Сбросить на Москву
               </button>
+
+              <div className="mt-3 border-t border-slate-700/70 pt-3">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-slate-300">
+                  <span>Утренний ИИ-чекап</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
+                    2 <Coins size={11} /> за чекап
+                  </span>
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-slate-400">
+                  Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
+                </p>
+                <select
+                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
+                  disabled={settingsSavingKey === 'checkupEnabled'}
+                  onChange={(event) => {
+                    const enabled = event.target.value === 'enabled';
+                    setIsMorningAiCheckupEnabled(enabled);
+                    void updateUserSettings({ morningAiCheckupEnabled: enabled }, 'checkupEnabled');
+                  }}
+                >
+                  <option value="disabled">Выключен</option>
+                  <option value="enabled">Включен — 2 кредита</option>
+                </select>
+                <label className="mt-2 block text-[11px] text-slate-400">
+                  Время чекапа
+                  <input
+                    type="time"
+                    className="mt-1 w-full rounded bg-slate-800 px-2 py-1.5 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    value={morningAiCheckupTime}
+                    disabled={settingsSavingKey === 'checkupTime'}
+                    onChange={(event) => {
+                      const nextTime = event.target.value || DEFAULT_MORNING_AI_CHECKUP_TIME;
+                      setMorningAiCheckupTime(nextTime);
+                      void updateUserSettings({ morningAiCheckupTime: nextTime }, 'checkupTime');
+                    }}
+                  />
+                </label>
+              </div>
+              {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
               <div className="mt-3 border-t border-slate-700/70 pt-3">
                 <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
                   <span>Уведомления от ИИ</span>

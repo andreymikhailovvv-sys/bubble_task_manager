@@ -876,6 +876,7 @@ export const aiAssistantService = {
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
+    await chargeFixedAiCredits(input.userId, 2);
     const userTimeZone = user?.timeZone || MOSCOW_TIMEZONE;
     const now = new Date();
     const localNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
