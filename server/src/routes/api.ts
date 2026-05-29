@@ -16,6 +16,18 @@ export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
+const DEFAULT_TIMEZONE = 'Europe/Moscow';
+const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const normalizeTimeZone = (candidate: string): string | null => {
+  const normalized = candidate.trim();
+  if (!normalized) return null;
+  try {
+    Intl.DateTimeFormat('ru-RU', { timeZone: normalized }).format(new Date());
+    return normalized;
+  } catch {
+    return null;
+  }
+};
 const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
 const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 0.035;
 const EFFICIENCY_AI_CREDIT_BONUS = 0.002;
@@ -30,6 +42,9 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  timeZone?: string | null;
+  morningAiCheckupEnabled?: boolean;
+  morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
 }) => ({
@@ -42,6 +57,9 @@ const toAuthUser = (user: {
   deviceId: user.deviceId,
   aiCredits: user.aiCredits ?? 100,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
+  timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
+  morningAiCheckupEnabled: user.morningAiCheckupEnabled ?? false,
+  morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
   efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
   efficiencyScore: Math.max(0, Math.min(1, user.efficiencyScore ?? 0))
 });
@@ -350,6 +368,59 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
   });
 
   res.json({ user: updatedUser });
+});
+
+
+apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
+  const data: {
+    timeZone?: string;
+    morningAiCheckupEnabled?: boolean;
+    morningAiCheckupTime?: string;
+  } = {};
+
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'timeZone')) {
+    const normalizedTimeZone = normalizeTimeZone(String(req.body?.timeZone ?? ''));
+    if (!normalizedTimeZone) {
+      res.status(400).json({ error: 'Некорректный часовой пояс' });
+      return;
+    }
+    data.timeZone = normalizedTimeZone;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'morningAiCheckupEnabled')) {
+    data.morningAiCheckupEnabled = req.body?.morningAiCheckupEnabled === true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'morningAiCheckupTime')) {
+    const checkupTime = String(req.body?.morningAiCheckupTime ?? '').trim();
+    if (!CHECKUP_TIME_PATTERN.test(checkupTime)) {
+      res.status(400).json({ error: 'Укажите время чекапа в формате HH:mm' });
+      return;
+    }
+    data.morningAiCheckupTime = checkupTime;
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: req.user!.id },
+    data,
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      avatarUrl: true,
+      googleSub: true,
+      deviceId: true,
+      aiCredits: true,
+      aiCreditsPeriod: true,
+      timeZone: true,
+      morningAiCheckupEnabled: true,
+      morningAiCheckupTime: true,
+      efficiencyScore: true
+    }
+  });
+
+  res.json({ user: toAuthUser(updatedUser) });
 });
 
 apiRouter.get('/auth/me', async (req, res) => {

@@ -75,6 +75,9 @@ export type CurrentUser = {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  timeZone?: string | null;
+  morningAiCheckupEnabled?: boolean;
+  morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
 };
@@ -90,6 +93,8 @@ type AdminUser = {
 
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
+  updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string }) =>
+    request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   loginTelegramMiniApp: (payload: { initData: string }) =>

@@ -35,6 +35,9 @@ model User {
   googleSub    String?  @unique
   avatarUrl    String?
   timeZone     String?
+  morningAiCheckupEnabled Boolean @default(false)
+  morningAiCheckupTime String @default("10:00")
+  lastMorningAiCheckupDate String?
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
   aiCredits    Int      @default(100)
