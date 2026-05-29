@@ -118,3 +118,26 @@ body {
   width: 0;
   height: 0;
 }
+
+.app-background-inert {
+  pointer-events: none;
+  user-select: none;
+}
+
+.app-background-inert *,
+.app-background-inert *::before,
+.app-background-inert *::after {
+  animation-play-state: paused !important;
+  caret-color: transparent;
+}
+
+.timeline-preview-overlay {
+  isolation: isolate;
+  contain: layout paint style;
+}
+
+.timeline-preview-day-scroll {
+  overscroll-behavior: contain;
+  transform: translateZ(0);
+  will-change: scroll-position;
+}
