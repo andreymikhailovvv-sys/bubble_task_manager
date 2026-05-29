@@ -54,6 +54,7 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
+const getThemeStorageKey = (userId: string) => `btm:${userId}:theme-mode`;
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
@@ -133,6 +134,7 @@ const DISPLAY_MODE_OPTIONS = [
   { value: 'timeline', label: 'Таймлайн', icon: CalendarDays, iconClassName: 'text-amber-300' }
 ] as const;
 type DisplayMode = (typeof DISPLAY_MODE_OPTIONS)[number]['value'];
+type ThemeMode = 'dark' | 'light';
 type GeneralAiUndoOperation = {
   taskId: string;
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
@@ -526,6 +528,7 @@ export default function App() {
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
@@ -679,19 +682,20 @@ export default function App() {
     setAiSubtasksLoadingTaskId(null);
     setAiPendingFiles([]);
     setIsAiExpanded(false);
-            setAiDialogByTask({});
-      setAiReadCursorByTask({});
-      setGeneralAiMessages([]);
-      setGeneralAiDraft('');
-      setIsGeneralAiFullscreen(false);
-      setGeneralAiLoading(false);
-      setGeneralAiError(null);
-      setLastGeneralAiUndoOperations([]);
-      loadedAiHistoryTaskIdsRef.current = new Set();
-      setSubtaskOrderMap({});
-      setBackgroundImage(null);
-      setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
-      setAuthError(null);
+    setAiDialogByTask({});
+    setAiReadCursorByTask({});
+    setGeneralAiMessages([]);
+    setGeneralAiDraft('');
+    setIsGeneralAiFullscreen(false);
+    setGeneralAiLoading(false);
+    setGeneralAiError(null);
+    setLastGeneralAiUndoOperations([]);
+    loadedAiHistoryTaskIdsRef.current = new Set();
+    setSubtaskOrderMap({});
+    setBackgroundImage(null);
+    setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
+    setThemeMode('dark');
+    setAuthError(null);
   };
 
   useEffect(() => {
@@ -745,6 +749,7 @@ export default function App() {
       setAiReadCursorByTask({});
       setBackgroundImage(null);
       setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
+      setThemeMode('dark');
       loadedAiHistoryTaskIdsRef.current = new Set();
       return;
     }
@@ -787,6 +792,9 @@ export default function App() {
 
     setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
 
+    const storedThemeMode = localStorage.getItem(getThemeStorageKey(currentUser.id));
+    setThemeMode(storedThemeMode === 'light' ? 'light' : 'dark');
+
     const storedRankingMode = localStorage.getItem(getRankingModeStorageKey(currentUser.id));
     if (storedRankingMode === 'urgency' || storedRankingMode === 'importance' || storedRankingMode === 'coefficient') {
       setRankingMode(storedRankingMode);
@@ -807,6 +815,20 @@ export default function App() {
       isCancelled = true;
     };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    document.body.dataset.theme = themeMode;
+    document.documentElement.dataset.theme = themeMode;
+    return () => {
+      delete document.body.dataset.theme;
+      delete document.documentElement.dataset.theme;
+    };
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    localStorage.setItem(getThemeStorageKey(currentUser.id), themeMode);
+  }, [themeMode, currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -2561,12 +2583,13 @@ export default function App() {
   return (
     <main
       className="flex h-screen flex-col overflow-y-auto p-4 text-slate-100 lg:p-6"
+      data-theme={themeMode}
       style={{
-        backgroundImage: backgroundImage
+        backgroundImage: themeMode === 'dark' && backgroundImage
           ? `linear-gradient(rgba(2,6,23,${backgroundOverlayOpacity}), rgba(2,6,23,${backgroundOverlayOpacity})), url(${backgroundImage})`
           : undefined,
-        backgroundSize: backgroundImage ? 'cover' : undefined,
-        backgroundPosition: backgroundImage ? 'center' : undefined
+        backgroundSize: themeMode === 'dark' && backgroundImage ? 'cover' : undefined,
+        backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
       <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
@@ -2669,6 +2692,22 @@ export default function App() {
           </button>
           {isSettingsOpen ? (
             <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-slate-700/70 bg-slate-900/95 p-3 shadow-2xl backdrop-blur">
+              <div className="mb-3 rounded-lg border border-slate-700/70 bg-slate-800/70 p-2">
+                <div className="mb-2 text-xs font-medium text-slate-200">Тема интерфейса</div>
+                <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1 text-xs">
+                  {(['dark', 'light'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700/80'}`}
+                      onClick={() => setThemeMode(mode)}
+                    >
+                      {mode === 'dark' ? 'Тёмная' : 'Светлая'}
+                    </button>
+                  ))}
+                </div>
+                {themeMode === 'light' ? <p className="mt-2 text-[11px] leading-snug text-slate-400">В светлой теме используется чистый системный фон, поэтому выбор фонового изображения отключён.</p> : null}
+              </div>
               <div className="mb-2 text-xs text-slate-300">Часовой пояс пользователя</div>
               <select
                 className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
@@ -3889,32 +3928,43 @@ export default function App() {
             ) : null}
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
-            <h3 className="mb-2 text-sm font-semibold">Фон рабочего пространства</h3>
-            <label className="mb-2 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200 transition hover:bg-slate-700/80">
-              <span className="block font-medium">Загрузить изображение</span>
-              <span className="mt-1 block text-[11px] text-slate-400">Рекомендуемый размер: от 1920×1080 (лучше 2560×1440).</span>
-              <input type="file" accept="image/*" className="mt-2 block w-full text-[11px]" onChange={handleBackgroundUpload} />
-            </label>
-            <label className="mb-3 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">
-              <span className="block font-medium">Приглушение фона: {Math.round(backgroundOverlayOpacity * 100)}%</span>
-              <input
-                type="range"
-                min={MIN_BACKGROUND_OVERLAY_OPACITY}
-                max={MAX_BACKGROUND_OVERLAY_OPACITY}
-                step={0.05}
-                value={backgroundOverlayOpacity}
-                className="mt-2 w-full"
-                onChange={(event) => setBackgroundOverlayOpacity(Number(event.target.value))}
-              />
-              <span className="mt-1 block text-[11px] text-slate-400">Меньше — фон ярче, больше — фон темнее.</span>
-            </label>
-            <button
-              className="w-full rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50"
-              disabled={!backgroundImage}
-              onClick={() => setBackgroundImage(null)}
-            >
-              Сбросить фон
-            </button>
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <h3 className="text-sm font-semibold">Фон рабочего пространства</h3>
+              {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
+            </div>
+            {themeMode === 'light' ? (
+              <p className="rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs leading-snug text-slate-300">
+                В светлой теме фон фиксированный: без изображений и затемнения, чтобы все карточки, списки и таймлайн оставались равномерными и читаемыми.
+              </p>
+            ) : (
+              <>
+                <label className="mb-2 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200 transition hover:bg-slate-700/80">
+                  <span className="block font-medium">Загрузить изображение</span>
+                  <span className="mt-1 block text-[11px] text-slate-400">Рекомендуемый размер: от 1920×1080 (лучше 2560×1440).</span>
+                  <input type="file" accept="image/*" className="mt-2 block w-full text-[11px]" onChange={handleBackgroundUpload} />
+                </label>
+                <label className="mb-3 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">
+                  <span className="block font-medium">Приглушение фона: {Math.round(backgroundOverlayOpacity * 100)}%</span>
+                  <input
+                    type="range"
+                    min={MIN_BACKGROUND_OVERLAY_OPACITY}
+                    max={MAX_BACKGROUND_OVERLAY_OPACITY}
+                    step={0.05}
+                    value={backgroundOverlayOpacity}
+                    className="mt-2 w-full"
+                    onChange={(event) => setBackgroundOverlayOpacity(Number(event.target.value))}
+                  />
+                  <span className="mt-1 block text-[11px] text-slate-400">Меньше — фон ярче, больше — фон темнее.</span>
+                </label>
+                <button
+                  className="w-full rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50"
+                  disabled={!backgroundImage}
+                  onClick={() => setBackgroundImage(null)}
+                >
+                  Сбросить фон
+                </button>
+              </>
+            )}
           </section>
           <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
             <h3 className="mb-2 text-sm font-semibold">Управление секторами</h3>
