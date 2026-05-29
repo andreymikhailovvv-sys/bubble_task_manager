@@ -2717,7 +2717,7 @@ export default function App() {
                   }}
                 >
                   <option value="disabled">Выключен</option>
-                  <option value="enabled">Включен — 2 кредита</option>
+                  <option value="enabled">Включен</option>
                 </select>
                 <label className="mt-2 block text-[11px] text-slate-400">
                   Время чекапа
