@@ -2310,7 +2310,7 @@ export default function App() {
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick enableCommentAnnotations /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-slate-300">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           {isSubtaskChip ? (
@@ -2980,7 +2980,7 @@ export default function App() {
                     </div>
                     {isExpandedTask ? (
                       <div className="mt-2 space-y-2 text-xs text-slate-200">
-                        <p className="text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick enableCommentAnnotations /></p>
                         <p className="text-slate-400">Срок: {formatTaskDueDate(task.dueDate)}</p>
                         <div>
                           <p className="mb-1 text-slate-300">Подзадачи:</p>
@@ -3730,7 +3730,7 @@ export default function App() {
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick enableCommentAnnotations /></p>
                         <p className="mt-1 text-[11px] text-slate-400">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
@@ -4884,7 +4884,7 @@ export default function App() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-100 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick enableCommentAnnotations /></p>
                     <p className="mt-1 text-[11px] text-slate-400">
                       Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </p>
