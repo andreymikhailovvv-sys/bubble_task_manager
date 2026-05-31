@@ -1662,7 +1662,7 @@ export default function App() {
       spentAiCredits,
       inactivePenaltyToday
     };
-  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, rootTasks, subtasks]);
+  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, overdueTick, rootTasks, subtasks]);
 
   const liveEfficiencyScore = useMemo(() => {
     const bonus = efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask
@@ -1672,10 +1672,7 @@ export default function App() {
     return clampEfficiency(bonus - efficiencyTodaySummary.inactivePenaltyToday);
   }, [efficiencyTodaySummary]);
 
-  const efficiencyScore = useMemo(() => {
-    if (!currentUser) return liveEfficiencyScore;
-    return Math.max(clampEfficiency(currentUser.efficiencyScore ?? 0), liveEfficiencyScore);
-  }, [currentUser, liveEfficiencyScore]);
+  const efficiencyScore = useMemo(() => liveEfficiencyScore, [liveEfficiencyScore]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
