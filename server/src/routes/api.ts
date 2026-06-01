@@ -29,8 +29,14 @@ const normalizeTimeZone = (candidate: string): string | null => {
   }
 };
 const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
+const EFFICIENCY_RESET_AT = new Date(EFFICIENCY_RESET_AT_ISO);
 const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 0.035;
 const EFFICIENCY_AI_CREDIT_BONUS = 0.002;
+const EFFICIENCY_BONUSES = {
+  doneTask: 0.05,
+  doneSubtask: 0.02,
+  createdTask: 0.01
+} as const;
 
 const toAuthUser = (user: {
   id: string;
@@ -68,6 +74,37 @@ const toAuthUser = (user: {
 
 const clampEfficiency = (value: number) => Math.max(0, Math.min(1, Number(value.toFixed(6))));
 
+type EfficiencyScoreEvent = { atMs: number; delta: number };
+
+const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number) => {
+  const sortedEvents = events
+    .filter((event) => Number.isFinite(event.atMs) && event.atMs >= resetAtMs && event.atMs <= nowMs && event.delta > 0)
+    .sort((a, b) => a.atMs - b.atMs);
+
+  let score = 0;
+  let cursorMs = resetAtMs;
+
+  const applyInactivePenalty = (nextMs: number) => {
+    if (nextMs <= cursorMs || score <= 0) {
+      cursorMs = Math.max(cursorMs, nextMs);
+      return;
+    }
+
+    const penalty = ((nextMs - cursorMs) / (60 * 60 * 1000)) * EFFICIENCY_INACTIVE_PENALTY_PER_HOUR;
+    score = Math.max(0, score - penalty);
+    cursorMs = nextMs;
+  };
+
+  for (const event of sortedEvents) {
+    applyInactivePenalty(event.atMs);
+    score = clampEfficiency(score + event.delta);
+    cursorMs = event.atMs;
+  }
+
+  applyInactivePenalty(nowMs);
+  return clampEfficiency(score);
+};
+
 const recalculateAndPersistEfficiency = async (userId: string) => {
   const now = new Date();
   const [user, tasks] = await Promise.all([
@@ -75,18 +112,33 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
     prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } })
   ]);
   if (!user) return null;
-  const afterReset = (value: Date) => Number.isFinite(value.getTime());
-  const rootTasks = tasks.filter((task) => !task.parentTaskId);
-  const subtasks = tasks.filter((task) => !!task.parentTaskId);
-  const createdRootCount = rootTasks.filter((task) => afterReset(task.createdAt)).length;
-  const doneRootCount = rootTasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
-  const doneSubtaskCount = subtasks.filter((task) => task.status === 'DONE' && afterReset(task.updatedAt)).length;
+  const resetAtMs = EFFICIENCY_RESET_AT.getTime();
+  const nowMs = now.getTime();
+  const isToday = (value: Date) => Number.isFinite(value.getTime())
+    && value.getTime() >= resetAtMs
+    && value.getFullYear() === now.getFullYear()
+    && value.getMonth() === now.getMonth()
+    && value.getDate() === now.getDate();
+  const events: EfficiencyScoreEvent[] = [];
+
+  for (const task of tasks) {
+    if (!task.parentTaskId && isToday(task.createdAt)) {
+      events.push({ atMs: task.createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
+    }
+
+    if (task.status !== 'DONE' || !isToday(task.updatedAt)) continue;
+    events.push({
+      atMs: task.updatedAt.getTime(),
+      delta: task.parentTaskId ? EFFICIENCY_BONUSES.doneSubtask : EFFICIENCY_BONUSES.doneTask
+    });
+  }
+
   const spentCredits = Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
-  const latestActionAtMs = tasks.reduce((latest, task) => Math.max(latest, task.updatedAt.getTime(), task.createdAt.getTime()), 0);
-  const inactiveHours = latestActionAtMs > 0 ? (now.getTime() - latestActionAtMs) / (60 * 60 * 1000) : 0;
-  const bonus = doneRootCount * 0.05 + doneSubtaskCount * 0.02 + createdRootCount * 0.01 + spentCredits * EFFICIENCY_AI_CREDIT_BONUS;
-  const penalty = Math.max(0, inactiveHours) * EFFICIENCY_INACTIVE_PENALTY_PER_HOUR;
-  const efficiencyScore = clampEfficiency(bonus - penalty);
+  if (spentCredits > 0) {
+    events.push({ atMs: nowMs, delta: spentCredits * EFFICIENCY_AI_CREDIT_BONUS });
+  }
+
+  const efficiencyScore = calculateEfficiencyScore(events, nowMs, resetAtMs);
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
   return efficiencyScore;
 };

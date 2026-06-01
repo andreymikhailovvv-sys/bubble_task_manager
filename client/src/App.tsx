@@ -116,6 +116,44 @@ function clampEfficiency(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
+type EfficiencyScoreEvent = { atMs: number; delta: number };
+
+function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number) {
+  const sortedEvents = events
+    .filter((event) => Number.isFinite(event.atMs) && event.atMs >= resetAtMs && event.atMs <= nowMs && event.delta > 0)
+    .sort((a, b) => a.atMs - b.atMs);
+
+  let score = 0;
+  let cursorMs = resetAtMs;
+  let appliedPenalty = 0;
+
+  const applyInactivePenalty = (nextMs: number) => {
+    if (nextMs <= cursorMs || score <= 0) {
+      cursorMs = Math.max(cursorMs, nextMs);
+      return;
+    }
+
+    const penalty = ((nextMs - cursorMs) / (60 * 60 * 1000)) * EFFICIENCY_PENALTIES.inactivePerHour;
+    const nextScore = Math.max(0, score - penalty);
+    appliedPenalty += score - nextScore;
+    score = nextScore;
+    cursorMs = nextMs;
+  };
+
+  for (const event of sortedEvents) {
+    applyInactivePenalty(event.atMs);
+    score = clampEfficiency(score + event.delta);
+    cursorMs = event.atMs;
+  }
+
+  applyInactivePenalty(nowMs);
+
+  return {
+    score: clampEfficiency(score),
+    appliedPenalty
+  };
+}
+
 function getEfficiencyGrade(value: number): EfficiencyGrade {
   if (value < 0.3) return 'средний';
   if (value < 0.7) return 'хороший';
@@ -1641,38 +1679,55 @@ export default function App() {
     const nowMs = now.getTime();
     const resetAt = currentUser?.efficiencyResetAt ? new Date(currentUser.efficiencyResetAt) : null;
     const resetAtMs = resetAt && Number.isFinite(resetAt.getTime()) ? resetAt.getTime() : 0;
-    const isToday = (raw?: string | null) => {
-      if (!raw) return false;
+    const parseEventDate = (raw?: string | null) => {
+      if (!raw) return null;
       const parsed = new Date(raw);
-      if (Number.isNaN(parsed.getTime())) return false;
-      return parsed.getTime() >= resetAtMs && isSameLocalDay(parsed, now);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed;
+    };
+    const isToday = (raw?: string | null) => {
+      const parsed = parseEventDate(raw);
+      return Boolean(parsed && parsed.getTime() >= resetAtMs && isSameLocalDay(parsed, now));
     };
     const createdTasksToday = rootTasks.filter((task) => isToday(task.createdAt)).length;
     const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
     const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const spentAiCredits = Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
-    const hoursSinceReset = Math.max(0, (nowMs - resetAtMs) / (60 * 60 * 1000));
-    const inactivePenaltyToday = hoursSinceReset * EFFICIENCY_PENALTIES.inactivePerHour;
+    const scoreEvents: EfficiencyScoreEvent[] = [
+      ...rootTasks.flatMap((task) => {
+        const events: EfficiencyScoreEvent[] = [];
+        const createdAt = parseEventDate(task.createdAt);
+        if (createdAt && isSameLocalDay(createdAt, now)) {
+          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
+        }
+        const updatedAt = parseEventDate(task.updatedAt);
+        if (task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)) {
+          events.push({ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneTask });
+        }
+        return events;
+      }),
+      ...subtasks.flatMap((task) => {
+        const updatedAt = parseEventDate(task.updatedAt);
+        return task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)
+          ? [{ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneSubtask }]
+          : [];
+      }),
+      ...(spentAiCredits > 0 ? [{ atMs: nowMs, delta: spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent }] : [])
+    ];
+    const { score, appliedPenalty } = calculateEfficiencyScore(scoreEvents, nowMs, resetAtMs);
     return {
       createdTasksToday,
       createdSubtasksToday,
       closedTasksToday,
       closedSubtasksToday,
       spentAiCredits,
-      inactivePenaltyToday
+      inactivePenaltyToday: appliedPenalty,
+      score
     };
   }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, overdueTick, rootTasks, subtasks]);
 
-  const liveEfficiencyScore = useMemo(() => {
-    const bonus = efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask
-      + efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask
-      + efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask
-      + efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
-    return clampEfficiency(bonus - efficiencyTodaySummary.inactivePenaltyToday);
-  }, [efficiencyTodaySummary]);
-
-  const efficiencyScore = useMemo(() => liveEfficiencyScore, [liveEfficiencyScore]);
+  const efficiencyScore = useMemo(() => efficiencyTodaySummary.score, [efficiencyTodaySummary.score]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
