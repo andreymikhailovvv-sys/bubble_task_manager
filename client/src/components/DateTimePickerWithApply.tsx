@@ -302,22 +302,22 @@ export function DateTimePickerWithApply({
         ? (detachedPopup && detachedPosition ? createPortal(popupContent, document.body) : popupContent)
         : null}
       {isTimelinePreviewOpen ? createPortal(
-        <div className="timeline-preview-overlay fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-4xl rounded-2xl border border-slate-700 bg-slate-900 p-4">
+        <div className="timeline-preview-overlay fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="timeline-preview-panel w-full max-w-4xl rounded-2xl border p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-cyan-100">Предпросмотр таймлайна (месяц)</h3>
-              <button type="button" className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelinePreviewOpen(false)}>Закрыть</button>
+              <h3 className="timeline-title text-sm font-semibold">Предпросмотр таймлайна (месяц)</h3>
+              <button type="button" className="secondary-button rounded px-2 py-1 text-xs" onClick={() => setIsTimelinePreviewOpen(false)}>Закрыть</button>
             </div>
             <div className="mb-2 flex items-center justify-between text-sm">
-              <button type="button" className="rounded bg-slate-800 px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}>←</button>
+              <button type="button" className="timeline-nav-button rounded border px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() - 1, 1))}>←</button>
               <p>{previewMonthDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}</p>
-              <button type="button" className="rounded bg-slate-800 px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}>→</button>
+              <button type="button" className="timeline-nav-button rounded border px-2 py-1" onClick={() => setPreviewMonthDate((p) => new Date(p.getFullYear(), p.getMonth() + 1, 1))}>→</button>
             </div>
             {previewMode === 'month' ? (
               <div>
                 <div className="mb-1 grid grid-cols-7 gap-1">
                   {['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'].map((day) => (
-                    <div key={day} className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    <div key={day} className="px-1 text-xs font-semibold uppercase tracking-wide text-subtle">
                       {day}
                     </div>
                   ))}
@@ -332,7 +332,7 @@ export function DateTimePickerWithApply({
                     && date.getDate() === today.getDate()
                   );
                   return (
-                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`relative min-h-24 rounded border p-1 text-left text-xs ${date ? 'border-slate-700 bg-slate-800 hover:border-cyan-400' : 'border-transparent bg-transparent'} ${isToday ? 'ring-1 ring-amber-300/90 ring-inset' : ''} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'border-cyan-400 bg-cyan-900/30' : ''}`} onClick={() => {
+                    <button key={`${date?.toISOString() ?? `empty-${index}`}`} type="button" disabled={!date} className={`timeline-preview-month-cell relative min-h-24 rounded border p-1 text-left text-xs ${date ? 'timeline-preview-month-cell-active' : 'timeline-preview-month-cell-empty'} ${isToday ? 'timeline-preview-month-cell-today ring-1 ring-inset' : ''} ${selectedPreviewDate && date && selectedPreviewDate.toDateString() === date.toDateString() ? 'timeline-preview-month-cell-selected' : ''}`} onClick={() => {
                       if (!date) return;
                       setSelectedPreviewDate(date);
                       setPreviewMode('day');
@@ -340,7 +340,7 @@ export function DateTimePickerWithApply({
                       {date ? <p className="absolute left-1 top-1">{date.getDate()}</p> : null}
                       <div className="mt-5 space-y-1">
                         {dayTasks.slice(0, 3).map((task) => (
-                          <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                          <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                             {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                             {task.title}
                           </div>
@@ -354,19 +354,19 @@ export function DateTimePickerWithApply({
             ) : (
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <button type="button" className="rounded bg-slate-800 px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
-                  <p className="text-xs text-slate-300">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                  <button type="button" className="timeline-nav-button rounded border px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
+                  <p className="text-xs text-muted">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
                 <div className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
                   {selectedDayTasksByHour.map(({ hour, quarters }) => (
-                    <div key={hour} className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-800/70 p-2 text-left">
-                      <span className="w-14 shrink-0 pt-1 text-xs text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</span>
+                    <div key={hour} className="timeline-preview-hour-row flex w-full items-start gap-2 rounded border p-2 text-left">
+                      <span className="timeline-today-text w-14 shrink-0 pt-1 text-xs">{`${hour.toString().padStart(2, '0')}:00`}</span>
                       <div className="min-h-6 flex-1 space-y-1">
                         {quarters.map(({ minute, tasks }) => (
                           <button
                             key={`${hour}-${minute}`}
                             type="button"
-                            className="flex w-full items-start gap-2 rounded px-1.5 py-1 text-left transition hover:bg-cyan-950/40 hover:ring-1 hover:ring-cyan-400/80"
+                            className="timeline-preview-slot flex w-full items-start gap-2 rounded px-1.5 py-1 text-left transition"
                             onClick={() => {
                               if (!selectedPreviewDate) return;
                               const picked = new Date(selectedPreviewDate);
@@ -379,10 +379,10 @@ export function DateTimePickerWithApply({
                               setIsOpen(false);
                             }}
                           >
-                            <span className="w-10 shrink-0 text-[11px] font-medium text-cyan-100">{`:${minute.toString().padStart(2, '0')}`}</span>
+                            <span className="timeline-today-text w-10 shrink-0 text-[11px] font-medium">{`:${minute.toString().padStart(2, '0')}`}</span>
                             <div className="min-h-4 flex-1 space-y-1">
-                              {tasks.length === 0 ? <p className="text-xs text-slate-500">Свободно</p> : tasks.map((task) => (
-                                <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                              {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => (
+                                <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                                   {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                                   {task.title}
                                 </div>
