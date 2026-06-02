@@ -3553,13 +3553,13 @@ export default function App() {
         ) : null}
 
         <aside
-          className="surface-side-panel absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l p-4 backdrop-blur-sm"
+          className="app-side-panel absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l p-4"
           data-no-field-zoom="true"
           onWheel={(event) => {
             event.stopPropagation();
           }}
         >
-          <section className="surface-panel rounded-2xl border p-4">
+          <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
               <div className="flex items-center gap-1.5">
@@ -3579,7 +3579,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div ref={generalAiDialogContainerRef} className="surface-card mb-2 h-[220px] overflow-y-auto rounded-xl p-2 text-xs">
+            <div ref={generalAiDialogContainerRef} className="chat-thread mb-2 h-[220px] overflow-y-auto rounded-xl p-2 text-xs">
               {isGeneralAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 mb-2 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
                   <Search size={12} />
@@ -3596,9 +3596,9 @@ export default function App() {
                 {filteredGeneralAiMessages.map((message, index) => (
                   <div
                     key={message.id}
-                    className={`max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                    className={`chat-message max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="text-[10px] uppercase text-slate-300">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`general-${index}`, message.content)} title="Копировать" className="text-slate-300 hover:text-white transition">{copiedAiMessageKey === `general-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`general-${index}`, message.content)} title="Копировать" className="chat-message-copy transition">{copiedAiMessageKey === `general-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
@@ -3635,7 +3635,7 @@ export default function App() {
               </button>
             </div>
           </section>
-          <section className="surface-panel rounded-2xl border p-4">
+          <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
               <button
@@ -3801,7 +3801,7 @@ export default function App() {
               </aside>
             </div>
           ) : null}
-          <section className="surface-panel rounded-2xl border p-4">
+          <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Выполненные задания</h3>
               <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
@@ -3845,7 +3845,7 @@ export default function App() {
               </button>
             ) : null}
           </section>
-          <section className="surface-panel rounded-2xl border p-4">
+          <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <h3 className="text-sm font-semibold">Фон рабочего пространства</h3>
               {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
@@ -3884,7 +3884,7 @@ export default function App() {
               </>
             )}
           </section>
-          <section className="surface-panel rounded-2xl border p-4">
+          <section className="app-card rounded-2xl border p-4">
             <h3 className="mb-2 text-sm font-semibold">Управление секторами</h3>
             <ul className="space-y-2 text-xs">
               {spheres.map((sphere) => {
@@ -4005,7 +4005,7 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside className="hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border border-violet-300/30 bg-slate-950/92 p-4 shadow-2xl lg:flex">
+        <aside className="app-side-panel hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 shadow-2xl lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
@@ -4046,9 +4046,9 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              <div ref={focusedAiDialogContainerRef} className="mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl bg-slate-900/90 p-3">
+              <div ref={focusedAiDialogContainerRef} className="chat-thread mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl p-3">
                 {isFocusedAiSearchOpen ? (
-                  <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[11px] text-slate-300">
+                  <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
                     <Search size={12} />
                     <input
                       className="w-full bg-transparent text-[11px] text-primary placeholder:text-slate-400 focus:outline-none"
@@ -4062,9 +4062,9 @@ export default function App() {
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
                     key={message.id}
-                    className={`max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                    className={`chat-message max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
@@ -4602,7 +4602,7 @@ export default function App() {
 
       {focusedTask && isAiExpanded ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
-          <div className="w-full max-w-4xl rounded-3xl border border-violet-200/40 bg-slate-950/99 p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
+          <div className="app-card w-full max-w-4xl rounded-3xl border p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold text-violet-100"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
@@ -4649,9 +4649,9 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div ref={expandedAiDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
+            <div ref={expandedAiDialogContainerRef} className="chat-thread mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl p-4">
               {isFocusedAiSearchOpen ? (
-                <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[12px] text-slate-300">
+                <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
                   <Search size={12} />
                   <input
                     className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -4665,9 +4665,9 @@ export default function App() {
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-${message.id}`}
-                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                  className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
@@ -4747,7 +4747,7 @@ export default function App() {
 
       {isGeneralAiFullscreen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsGeneralAiFullscreen(false)}>
-          <div className="w-full max-w-4xl rounded-3xl border border-cyan-200/30 bg-slate-950/95 p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="app-card w-full max-w-4xl rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold text-cyan-100"><Bot size={18} /> Общий чат с ИИ</p>
@@ -4766,9 +4766,9 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div ref={generalAiFullscreenDialogContainerRef} className="mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl bg-slate-900/95 p-4">
+            <div ref={generalAiFullscreenDialogContainerRef} className="chat-thread mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl p-4">
               {isGeneralAiSearchOpen ? (
-                <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-xs text-slate-300">
+                <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
                   <Search size={12} />
                   <input
                     className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
@@ -4782,9 +4782,9 @@ export default function App() {
               {filteredGeneralAiMessages.map((message, index) => (
                 <div
                   key={`general-full-${message.id}`}
-                  className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
+                  className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId, closeGeneralAiFullscreenOnOpen: true, setGeneralAiFullscreen: setIsGeneralAiFullscreen }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
