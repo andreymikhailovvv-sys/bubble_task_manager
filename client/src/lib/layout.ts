@@ -318,7 +318,7 @@ function applyGravity(
       keepInSector(bubble, center, maxDistance, sectorGeometry);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 4, 1);
+    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 1, 1);
   }
 }
 
@@ -412,14 +412,14 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
     for (let i = 0; i < 24; i += 1) {
       medium.forEach((bubble) => {
         const anchor = nearest(bubble, large);
-        if (anchor) pullToAnchor(bubble, anchor, -2, 0.5);
+        if (anchor) pullToAnchor(bubble, anchor, 0, 0.5);
       });
       small.forEach((bubble) => {
         const biggerAnchors = [...large, ...medium].filter((anchor) => anchor.radius >= bubble.radius);
         const anchor = nearest(bubble, biggerAnchors.length > 0 ? biggerAnchors : large);
-        if (anchor) pullToAnchor(bubble, anchor, -5, 0.58);
+        if (anchor) pullToAnchor(bubble, anchor, 0, 0.58);
       });
-      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 2, 1);
+      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 1, 1);
     }
   });
 }
@@ -442,7 +442,7 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
       keepInSector(bubble, center, maxDistance, FULL_CIRCLE_GEOMETRY);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, FULL_CIRCLE_GEOMETRY, 8, 1);
+    resolveCollisions(bubbles, center, maxDistance, FULL_CIRCLE_GEOMETRY, 1, 1);
   }
 }
 
@@ -573,7 +573,7 @@ export function buildBubbles(
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 5 : 6, 82);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, 1, 82);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -615,7 +615,7 @@ export function buildBubbles(
 
   applyHierarchicalClustering(result, center, maxDistance, sectorGeometry);
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 4 : 5, 120);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, 1, 120);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
