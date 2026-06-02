@@ -2310,17 +2310,17 @@ export default function App() {
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs text-slate-100 transition-all duration-200 hover:brightness-110 ${
+        className={`timeline-task-chip relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
           borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isSubtaskChip
-            ? 'rgba(71,85,105,0.5)'
+            ? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
             : hasOverdueState
-              ? 'rgba(136,19,55,0.45)'
-              : hexToRgba(sphereColor, 0.34) ?? 'rgba(100,116,139,0.34)',
+              ? (themeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
+              : hexToRgba(sphereColor, themeMode === 'light' ? 0.16 : 0.34) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
           boxShadow: disableEffects
             ? undefined
             : hasOverdueState
@@ -2379,22 +2379,22 @@ export default function App() {
       >
         <span className="flex min-w-0 items-center gap-1">
           {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline ? (
-            <Check size={13} className="shrink-0 text-emerald-300" />
+            <Check size={13} className="timeline-task-chip-success shrink-0" />
           ) : null}
-          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="shrink-0 animate-spin text-cyan-100" /> : null}
+          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
-          <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'text-slate-300 line-through decoration-2 decoration-emerald-300' : ''}`}>
+          <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
           {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="shrink-0 text-violet-200" /></span> : null}
           {options?.showTime && task.dueDate ? (
-            <span className="ml-1 text-slate-200/80">
+            <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
             </span>
           ) : null}
-          {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="shrink-0 text-cyan-100/90" /></span> : null}
+          {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
         </span>
-        {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="rounded-full border border-slate-200/30 px-1.5 py-0.5 text-[10px] text-slate-100/90">{taskSubtasks.length}</span></div> : null}
+        {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -2405,18 +2405,18 @@ export default function App() {
         ) : null}
         {isHoverCardVisible ? createPortal((
         <div
-          className="pointer-events-none fixed z-[2147483647] w-72 rounded-lg border border-slate-500/90 bg-slate-950/90 p-2.5 text-[11px] shadow-[0_20px_45px_rgba(2,6,23,0.82)]"
+          className="timeline-hover-card pointer-events-none fixed z-[2147483647] w-72 rounded-lg border p-2.5 text-[11px]"
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
-          <p className="font-semibold text-slate-100">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
-          {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-slate-300">Основная задача: {options.parentTaskTitle}</p> : null}
-          <p className="mt-1 text-slate-300">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
+          <p className="font-semibold text-primary">{task.title}</p>
+          <p className="mt-1 whitespace-pre-wrap text-muted"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
+          <p className="mt-1 text-muted">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           {isSubtaskChip ? (
-            <div className="mt-2 border-t border-slate-700/80 pt-2">
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Основная задача</p>
+            <div className="timeline-hover-card-section mt-2 border-t pt-2">
+              <p className="text-[10px] uppercase tracking-wide text-subtle">Основная задача</p>
               <span
-                className="mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold text-slate-100"
+                className="mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold text-primary"
                 style={{
                   borderColor: parentSphereColor,
                   backgroundColor: hexToRgba(parentSphereColor, 0.36) ?? 'rgba(100,116,139,0.34)'
@@ -2426,18 +2426,18 @@ export default function App() {
               </span>
             </div>
           ) : (
-            <div className="mt-2 border-t border-slate-700/80 pt-2">
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Ближайшие подзадачи</p>
+            <div className="timeline-hover-card-section mt-2 border-t pt-2">
+              <p className="text-[10px] uppercase tracking-wide text-subtle">Ближайшие подзадачи</p>
               {previewSubtasks.length > 0 ? (
                 <ul className="mt-1 space-y-1">
                   {previewSubtasks.map((subtask) => (
-                    <li key={subtask.id} className="truncate text-slate-200">
+                    <li key={subtask.id} className="truncate text-muted">
                       • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </li>
                   ))}
                 </ul>
-              ) : <p className="mt-1 text-slate-400">Нет активных подзадач</p>}
-              {hiddenSubtasksCount > 0 ? <p className="mt-1 text-slate-400">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
+              ) : <p className="mt-1 text-subtle">Нет активных подзадач</p>}
+              {hiddenSubtasksCount > 0 ? <p className="mt-1 text-subtle">+ ещё {hiddenSubtasksCount} подзадач</p> : null}
             </div>
           )}
         </div>
@@ -2934,7 +2934,7 @@ export default function App() {
           </button>
           {isEfficiencyDetailsOpen ? (
             <div className="absolute left-1/2 top-[calc(100%+6px)] z-40 w-80 -translate-x-1/2 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3 text-xs shadow-2xl backdrop-blur">
-              <p className="mb-2 font-semibold text-slate-100">Что повлияло на рейтинг сегодня:</p>
+              <p className="mb-2 font-semibold text-primary">Что повлияло на рейтинг сегодня:</p>
               <ul className="space-y-1 text-slate-200">
                 <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
                 <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
@@ -3150,13 +3150,13 @@ export default function App() {
             </ul>
           </div>
         ) : (
-          <div ref={timelineScrollContainerRef} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              <section className="sticky top-0 z-20 rounded-2xl border border-slate-700/70 bg-slate-900/90 p-3 backdrop-blur">
+              <section className="timeline-toolbar sticky top-0 z-20 rounded-2xl border p-3 backdrop-blur">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <button
-                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
                         setTimelineAnchorDate((prev) => {
                           const next = new Date(prev);
@@ -3170,13 +3170,13 @@ export default function App() {
                       ←
                     </button>
                     <button
-                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
                       onClick={() => setTimelineAnchorDate(new Date())}
                     >
                       Сегодня
                     </button>
                     <button
-                      className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-cyan-300/70"
+                      className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
                         setTimelineAnchorDate((prev) => {
                           const next = new Date(prev);
@@ -3190,11 +3190,11 @@ export default function App() {
                       →
                     </button>
                   </div>
-                  <h3 className="text-sm font-semibold text-cyan-100">{timelineViewData.title}</h3>
+                  <h3 className="timeline-title text-sm font-semibold">{timelineViewData.title}</h3>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 hover:border-rose-300/70"
+                      className="timeline-nav-button inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
                         setIsTimelineOverdueModalOpen((prev) => !prev);
                         setIsTimelineOverdueModalCollapsedForDrag(false);
@@ -3204,13 +3204,13 @@ export default function App() {
                       Просроченные задачи
                       <span className="rounded bg-rose-600/80 px-1.5 py-0.5 text-[10px] font-semibold text-white">{timelineOverdueTasks.length}</span>
                     </button>
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'border-cyan-300/70 bg-cyan-900/40 text-cyan-100' : 'border-slate-600 bg-slate-800 text-slate-500'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'border-slate-700 bg-slate-900 text-slate-500'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
-                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'border-slate-700 bg-slate-900 text-slate-500'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'timeline-nav-button' : 'timeline-nav-button opacity-50'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
+                    <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
                     <button type="button" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
                       {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
                     </button>
-                                        <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/70 p-1">
+                    <div className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
                       {([
                         { key: 'day', label: 'День' },
                         { key: 'week', label: 'Неделя' },
@@ -3220,8 +3220,8 @@ export default function App() {
                           key={mode.key}
                           className={`rounded-md px-2 py-1 text-xs transition ${
                             timelineViewMode === mode.key
-                              ? 'bg-cyan-700 text-white'
-                              : 'text-slate-300 hover:bg-slate-800'
+                              ? 'timeline-mode-button-active'
+                              : 'timeline-mode-button-idle'
                           }`}
                           onClick={() => setTimelineViewMode(mode.key)}
                         >
@@ -3233,12 +3233,12 @@ export default function App() {
                 </div>
                 {isTimelineOverdueModalOpen ? (
                   <div className="relative mt-2">
-                    <section className={`w-full rounded-2xl border border-slate-700 bg-slate-900/95 p-3 shadow-[0_18px_40px_rgba(2,6,23,0.7)] transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
+                    <section className={`timeline-overdue-panel w-full rounded-2xl border p-3 transition-all ${isTimelineOverdueModalCollapsedForDrag ? 'pointer-events-none scale-95 opacity-0' : 'opacity-100'}`}>
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-semibold text-slate-100">Просроченные задачи</h4>
+                          <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
                           <button
-                            className="rounded bg-slate-700 px-2 py-1 text-xs disabled:opacity-60"
+                            className="secondary-button rounded px-2 py-1 text-xs disabled:opacity-60"
                             onClick={() => void postponeAllOverdueByOneDay()}
                             disabled={timelineOverdueBulkPostponeLoading !== null}
                             title="Откладывает задачи на завтра на это же время"
@@ -3275,18 +3275,18 @@ export default function App() {
               </section>
 
               {timelineViewData.tasksInRange.length === 0 ? (
-                <div className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
+                <div className="timeline-empty-state rounded-xl border px-4 py-3 text-sm">
                   Нет задач с датой для выбранного режима
                 </div>
               ) : null}
 
               {timelineViewMode === 'month' ? (
-                <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-3">
+                <section className="timeline-panel rounded-2xl border p-3">
                   <div className="mb-2 grid grid-cols-7 gap-2">
                     {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
                       <div
                         key={dayName}
-                        className={`text-center text-xs font-semibold uppercase tracking-wide ${index >= 5 ? 'text-rose-300/80' : 'text-slate-400'}`}
+                        className={`text-center text-xs font-semibold uppercase tracking-wide ${index >= 5 ? 'timeline-weekday-weekend' : 'text-subtle'}`}
                       >
                         {dayName}
                       </div>
@@ -3296,13 +3296,13 @@ export default function App() {
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
-                        className={`min-h-32 rounded-xl border p-2 ${
+                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
-                              ? 'border-rose-800/60 bg-rose-950/18'
-                              : 'border-slate-700/70 bg-slate-900/75')
-                            : 'border-transparent bg-slate-900/20'
-                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'ring-2 ring-cyan-400/70' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
+                              ? 'timeline-month-cell-weekend'
+                              : 'timeline-month-cell-active')
+                            : 'timeline-month-cell-empty'
+                        } ${cell.date ? 'transition hover:ring-1 hover:ring-cyan-400/35' : ''} ${cell.date && cell.date.toDateString() === new Date().toDateString() ? 'timeline-month-cell-today ring-2' : ''} ${isTimelineDragging && cell.date ? 'ring-1 ring-cyan-500/30 transition' : ''}`}
                         onDragOver={(event) => {
                           if (!cell.date) return;
                           event.preventDefault();
@@ -3331,14 +3331,14 @@ export default function App() {
                       >
                         {cell.date ? (
                           <>
-                            <p className="mb-2 text-xs font-semibold text-slate-300">{cell.date.getDate()}</p>
+                            <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
                               {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
                               {cell.tasks.length > 4 ? (
                                 <li>
                                   <button
                                     type="button"
-                                    className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200 transition hover:bg-cyan-500/20"
+                                    className="timeline-more-button rounded-md border px-2 py-0.5 text-[11px] transition"
                                     onClick={() => {
                                       if (!cell.date) return;
                                       setTimelineAnchorDate(new Date(cell.date));
@@ -3359,28 +3359,28 @@ export default function App() {
               ) : null}
 
               {timelineViewMode === 'week' ? (
-                <section className="overflow-x-auto rounded-2xl border border-slate-700/70 bg-slate-900/70">
+                <section className="timeline-panel overflow-x-auto rounded-2xl border">
                   {(() => {
                     const now = new Date();
                     const lineHour = now.getHours();
                     const lineOffsetPercent = (now.getMinutes() / 60) * 100;
                     return (
                   <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
-                    <div className="border-b border-r border-slate-800/80 bg-slate-900/90 p-2 text-xs text-slate-400">Время</div>
+                    <div className="timeline-grid-header border-b border-r p-2 text-xs">Время</div>
                     {timelineViewData.dayGroups.map((day) => {
                       const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
                       const isToday = day.date.toDateString() === new Date().toDateString();
                       return (
                         <div
                           key={`header-${day.key}`}
-                          className={`border-b border-r border-slate-800/80 p-2 text-center ${
-                            isToday ? 'bg-cyan-950/30 ring-1 ring-cyan-400/60' : isWeekend ? 'bg-rose-950/20' : 'bg-slate-900/85'
+                          className={`timeline-week-header border-b border-r p-2 text-center ${
+                            isToday ? 'timeline-week-header-today ring-1' : isWeekend ? 'timeline-week-header-weekend' : ''
                           }`}
                         >
-                          <p className={`text-xs ${isToday ? 'text-cyan-200' : isWeekend ? 'text-rose-200/90' : 'text-slate-400'}`}>
+                          <p className={`text-xs ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-subtle'}`}>
                             {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
                           </p>
-                          <p className={`text-sm font-semibold ${isToday ? 'text-cyan-50' : isWeekend ? 'text-rose-100' : 'text-slate-100'}`}>
+                          <p className={`text-sm font-semibold ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-primary'}`}>
                             {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                           </p>
                         </div>
@@ -3388,7 +3388,7 @@ export default function App() {
                     })}
                     {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
                       <Fragment key={`week-hour-${hour}`}>
-                        <div className="border-b border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">
+                        <div className="timeline-grid-time border-b border-r px-2 py-2 text-xs">
                           <div className="relative">
                             {String(hour).padStart(2, '0')}:00
                           </div>
@@ -3404,11 +3404,11 @@ export default function App() {
                           return (
                             <div
                               key={`${day.key}-${hour}`}
-                              className={`relative min-h-14 space-y-1 border-b border-r border-slate-800/80 px-1.5 py-1.5 ${
-                                isWeekend ? 'bg-rose-950/10' : 'bg-slate-900/40'
+                              className={`timeline-week-cell relative min-h-14 space-y-1 border-b border-r px-1.5 py-1.5 ${
+                                isWeekend ? 'timeline-week-cell-weekend' : ''
                               } ${
-                                isToday ? 'border-l border-r border-cyan-400/70' : ''
-                              } ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/20' : ''}`}
+                                isToday ? 'timeline-week-cell-today border-l border-r' : ''
+                              } ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
                               onDragOver={(event) => {
                                 event.preventDefault();
                                 event.dataTransfer.dropEffect = 'move';
@@ -3444,17 +3444,17 @@ export default function App() {
               ) : null}
 
               {timelineViewMode === 'day' ? (
-                <section className="rounded-2xl border border-slate-700/70 bg-slate-900/70">
+                <section className="timeline-panel rounded-2xl border">
                   {(() => {
                     const now = new Date();
                     const isCurrentDay = timelineAnchorDate.toDateString() === now.toDateString();
                     const lineHour = now.getHours();
                     const lineOffsetPercent = (now.getMinutes() / 60) * 100;
                     return timelineViewData.hourGroups.map((hourGroup) => (
-                    <div key={hourGroup.hour} className="grid grid-cols-[70px_minmax(0,1fr)] border-b border-slate-800/80 last:border-b-0">
-                      <div className="border-r border-slate-800/80 px-2 py-2 text-xs text-slate-400">{String(hourGroup.hour).padStart(2, '0')}:00</div>
+                    <div key={hourGroup.hour} className="timeline-day-row grid grid-cols-[70px_minmax(0,1fr)] border-b last:border-b-0">
+                      <div className="timeline-grid-time border-r px-2 py-2 text-xs">{String(hourGroup.hour).padStart(2, '0')}:00</div>
                       <div
-                        className={`relative min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'transition-colors hover:bg-cyan-900/15' : ''}`}
+                        className={`timeline-day-slot relative min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
                         onDragOver={(event) => {
                           event.preventDefault();
                           event.dataTransfer.dropEffect = 'move';
@@ -3736,7 +3736,7 @@ export default function App() {
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-2 border-b border-slate-700/70 px-4 py-3">
-                  <h4 className="text-base font-semibold text-slate-100">Ближайшие подзадачи</h4>
+                  <h4 className="text-base font-semibold text-primary">Ближайшие подзадачи</h4>
                   <button type="button" className="surface-muted rounded p-1 text-muted transition hover:brightness-110" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                     <X size={16} />
                   </button>
