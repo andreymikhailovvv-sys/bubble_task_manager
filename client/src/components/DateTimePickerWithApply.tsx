@@ -212,29 +212,29 @@ export function DateTimePickerWithApply({
   const popupContent = (
     <div
       ref={popupRef}
-      className={`z-[120] w-72 rounded-xl border border-slate-600 bg-slate-900 p-3 shadow-2xl ${
+      className={`date-time-popover z-[120] w-72 rounded-xl border p-3 shadow-2xl ${
         detachedPopup ? 'fixed' : `absolute ${popupPositionClass} mt-2`
       }`}
       style={detachedPopup && detachedPosition ? { top: detachedPosition.top, left: detachedPosition.left } : undefined}
       onClick={(event) => event.stopPropagation()}
     >
-      <p className="mb-2 text-xs text-slate-300">Выбор даты и времени</p>
+      <p className="mb-2 text-xs text-muted">Выбор даты и времени</p>
       <div className="space-y-2">
         <input
           type="date"
-          className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+          className="form-field w-full rounded border px-2 py-1.5 text-sm"
           value={draftDate}
           onChange={(event) => setDraftDate(event.target.value)}
         />
         <input
           type="time"
-          className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+          className="form-field w-full rounded border px-2 py-1.5 text-sm"
           value={draftTime}
           onChange={(event) => setDraftTime(event.target.value)}
         />
         <button
           type="button"
-          className="flex w-full items-center justify-center gap-2 rounded bg-pink-600/90 px-2 py-1.5 text-sm font-medium text-white hover:bg-pink-500"
+          className="timeline-pick-button flex w-full items-center justify-center gap-2 rounded px-2 py-1.5 text-sm font-medium"
           onClick={() => {
             setIsTimelinePreviewOpen(true);
             setSelectedPreviewDate(draftDate ? new Date(`${draftDate}T00:00`) : new Date());
@@ -249,7 +249,7 @@ export function DateTimePickerWithApply({
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          className="flex-1 rounded bg-slate-700 px-2 py-1.5 text-xs hover:bg-slate-600"
+          className="secondary-button flex-1 rounded px-2 py-1.5 text-xs"
           onClick={() => {
             void onChange(null);
             setIsOpen(false);
@@ -259,7 +259,7 @@ export function DateTimePickerWithApply({
         </button>
         <button
           type="button"
-          className="flex-1 rounded bg-emerald-600 px-2 py-1.5 text-xs font-semibold hover:bg-emerald-500"
+          className="success-button flex-1 rounded px-2 py-1.5 text-xs font-semibold"
           onClick={() => {
             if (!draftDate) {
               void onChange(null);
@@ -281,7 +281,7 @@ export function DateTimePickerWithApply({
       <button
         ref={triggerRef}
         type="button"
-        className={`flex ${iconOnly ? 'w-auto' : 'w-full'} items-center justify-between gap-2 rounded bg-slate-800 px-2 py-2 text-sm text-slate-100 hover:bg-slate-700 ${buttonClassName}`}
+        className={`date-time-trigger flex ${iconOnly ? 'w-auto' : 'w-full'} items-center justify-between gap-2 rounded px-2 py-2 text-sm ${buttonClassName}`}
         title={title}
         onClick={(event) => {
           event.stopPropagation();
@@ -295,7 +295,7 @@ export function DateTimePickerWithApply({
         }}
       >
         {iconOnly ? null : <span className="truncate text-left">{formattedValue}</span>}
-        <CalendarDays size={14} className="shrink-0 text-cyan-300" />
+        <CalendarDays size={14} className="date-time-trigger-icon shrink-0" />
       </button>
 
       {isOpen

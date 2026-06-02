@@ -211,7 +211,7 @@ function renderInlineAiMarkup(content: string): ReactNode {
     const isBoldMarkup = part.startsWith('**') && part.endsWith('**') && part.length > 4;
     if (!isBoldMarkup) return <span key={`plain-${index}`}>{part}</span>;
     const boldText = part.slice(2, -2);
-    return <strong key={`bold-${index}`} className="font-semibold text-white">{boldText}</strong>;
+    return <strong key={`bold-${index}`} className="ai-inline-strong">{boldText}</strong>;
   });
 }
 
@@ -4014,7 +4014,7 @@ export default function App() {
                 <div className="flex items-center gap-1.5">
                   <div className="surface-muted inline-flex items-center gap-1 rounded-lg border p-1 text-[11px]">
                     <button
-                      className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-muted'}`}
+                      className={`ai-mode-toggle ${focusedAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`}
                       onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                       type="button"
                     >
@@ -4022,7 +4022,7 @@ export default function App() {
                       <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                     </button>
                     <button
-                      className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-muted'}`}
+                      className={`ai-mode-toggle ${focusedAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`}
                       onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                       type="button"
                     >
@@ -4199,13 +4199,13 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside className="h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border border-cyan-200/30 bg-slate-900 p-5 shadow-2xl">
+        <aside className="dialog-surface h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
             <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="flex min-h-0 flex-col">
                 <div className="space-y-3 overflow-y-auto pr-1">
-                  <h3 className="text-xl font-semibold text-slate-100">Фокус задачи</h3>
-                  <input className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                  <textarea className="min-h-44 w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                  <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
+                  <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
+                  <textarea className="form-field min-h-44 w-full rounded border p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
                   <input
                     ref={focusedTaskAttachmentInputRef}
                     type="file"
@@ -4262,7 +4262,7 @@ export default function App() {
                       </button>
                     </div>
                   </div>
-                  <select className="w-full rounded bg-slate-800 p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
+                  <select className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
                   </select>
@@ -4304,7 +4304,7 @@ export default function App() {
                   {focusedDraft.isRecurring ? (
                     <label className="block text-xs">Описание повторения
                       <textarea
-                        className="mt-1 min-h-16 w-full rounded bg-slate-800 p-2 text-sm"
+                        className="form-field mt-1 min-h-16 w-full rounded border p-2 text-sm"
                         placeholder="Например: каждого 19 числа месяца в 12:00"
                         value={focusedDraft.recurrenceText ?? ''}
                         onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
@@ -4328,7 +4328,7 @@ export default function App() {
                   </label>
                   <label className="block text-xs">Уведомлять за
                     <select
-                      className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+                      className="form-field mt-1 w-full rounded border p-2 text-sm"
                       value={focusedNotifyPreset}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -4357,19 +4357,19 @@ export default function App() {
                   </div>
                 </div>
                 <div className="mt-3 flex shrink-0 gap-2">
-                  <button className="rounded bg-cyan-600 px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
-                  <button className="rounded bg-emerald-600 px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
-                  <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                  <button className="primary-button rounded px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
+                  <button className="success-button rounded px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
+                  <button className="danger-button rounded px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
                   <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
                 </div>
               </div>
-              <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
+              <div className="surface-card flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
                     <button
                       type="button"
-                      className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-slate-400 hover:text-slate-200'}`}
+                      className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
                       onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
                       title={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
                     >
@@ -4391,7 +4391,7 @@ export default function App() {
                       type="button"
                       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
                         ? 'border-cyan-300 bg-cyan-600/90 text-white'
-                        : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
+                        : 'secondary-button'}`}
                       onClick={() => setIsSubtaskFilterActive((prev) => !prev)}
                     >
                       Фильтровать
@@ -4402,7 +4402,7 @@ export default function App() {
                   <div className="space-y-2">
                     <input
                       ref={focusedSubtaskTitleInputRef}
-                      className="w-full rounded bg-slate-800 px-2 py-1.5 text-xs"
+                      className="form-field w-full rounded border px-2 py-1.5 text-xs"
                       placeholder="Название доп задачи"
                       value={focusedSubtaskTitle}
                       onChange={(event) => setFocusedSubtaskTitle(event.target.value)}
@@ -4430,7 +4430,7 @@ export default function App() {
                   </div>
                 ) : (
                   <button
-                    className="rounded bg-cyan-700 px-3 py-1 text-xs"
+                    className="primary-button rounded px-3 py-1 text-xs"
                     onClick={() => {
                       setFocusedSubtaskTitle('');
                       setIsAddingFocusedSubtask(true);
@@ -4452,7 +4452,7 @@ export default function App() {
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
-                      className="relative flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1"
+                      className="list-item-surface relative flex items-center gap-2 rounded px-2 py-1"
                       style={subtask.status !== 'DONE' && isOverdue(subtask)
                         ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
                         : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
@@ -4611,7 +4611,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="surface-muted flex items-center gap-1 rounded-lg p-1 text-[11px]">
                   <button
-                    className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-muted'}`}
+                    className={`ai-mode-toggle ${focusedAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                     title="Быстрый режим (gpt-5.4-mini)"
                   >
@@ -4619,7 +4619,7 @@ export default function App() {
                     <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                   </button>
                   <button
-                    className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-muted'}`}
+                    className={`ai-mode-toggle ${focusedAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                     title="Умный режим (gpt-5.4-mini)"
                   >
