@@ -300,12 +300,13 @@ function resolveAttachmentMimeType(file: File): string {
 
 
 
-function getCoefficientBadgeColor(coefficient: number) {
+function getCoefficientBadgeColor(coefficient: number, variant: 'dark' | 'light' = 'dark') {
   const intensity = Math.max(0, Math.min(1, coefficient));
   const red = Math.round(80 + intensity * 170);
   const green = Math.round(165 - intensity * 95);
   const blue = Math.round(220 - intensity * 190);
-  return `rgba(${red}, ${green}, ${blue}, 0.32)`;
+  const alpha = variant === 'light' ? 0.48 : 0.32;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function hexToRgba(hexColor: string, alpha: number) {
@@ -3117,7 +3118,7 @@ export default function App() {
                       {rankingMode === 'coefficient' ? (
                         <span
                           className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient) }}
+                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, themeMode) }}
                           title="Коэффициент важности задачи"
                         >
                           <Gauge size={12} />
@@ -3132,10 +3133,10 @@ export default function App() {
                         </span>
                       )}
                       <span
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border"
+                        className="list-task-sector-icon inline-flex h-5 w-5 items-center justify-center rounded-full border"
                         style={{
                           borderColor: sphereColor,
-                          backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
+                          backgroundColor: hexToRgba(sphereColor, themeMode === 'light' ? 0.36 : 0.26) ?? 'rgba(100,116,139,0.25)',
                           color: sphereColor
                         }}
                         title={taskSphere?.name ?? 'Без сектора'}
