@@ -878,3 +878,90 @@ body[data-theme='light'] .light-sector-management-item:hover {
   background: #f0f9ff !important;
 }
 
+
+@layer components {
+  .ai-inline-strong {
+    font-weight: 700;
+    color: currentColor;
+  }
+
+  .ai-mode-toggle {
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    color: var(--text-muted);
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  .ai-mode-toggle-idle:hover {
+    border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+    background: color-mix(in srgb, var(--muted-bg) 76%, var(--accent-soft));
+    color: var(--text-primary);
+  }
+
+  .ai-mode-toggle-active {
+    border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent-strong) 82%, #7c3aed), #7c3aed);
+    color: #ffffff;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  .danger-button {
+    background: linear-gradient(135deg, #e11d48, #be123c);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(225, 29, 72, 0.22);
+    transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .danger-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .success-button {
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(5, 150, 105, 0.2);
+    transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .success-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .date-time-trigger {
+    border: 1px solid var(--panel-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, color 160ms ease;
+  }
+
+  .date-time-trigger:hover {
+    border-color: color-mix(in srgb, var(--accent) 48%, var(--panel-border));
+    background: color-mix(in srgb, var(--input-bg) 86%, var(--accent-soft));
+  }
+
+  .date-time-trigger-icon {
+    color: color-mix(in srgb, var(--accent) 88%, var(--text-primary));
+  }
+
+  .date-time-popover {
+    border-color: var(--panel-border);
+    background: var(--popover-bg);
+    color: var(--text-primary);
+  }
+
+  .timeline-pick-button {
+    border: 1px solid color-mix(in srgb, #f472b6 52%, var(--panel-border));
+    background: linear-gradient(135deg, #db2777, #9333ea);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(219, 39, 119, 0.22);
+    transition: filter 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .timeline-pick-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+}

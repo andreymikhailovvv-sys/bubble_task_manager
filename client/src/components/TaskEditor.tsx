@@ -412,11 +412,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
 
         <div className="flex gap-2">
           <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
-          {isEditing ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
+          {isEditing ? <button className="danger-button rounded px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
           <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
         {isEditing ? (
-          <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold text-white" onClick={() => onComplete?.()}>
+          <button className="success-button w-full rounded px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
             Выполнена
           </button>
         ) : null}
