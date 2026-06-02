@@ -32,7 +32,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
             {HARMONIOUS_COLORS.map((item) => (
               <button
                 key={item}
-                className={`h-10 rounded border-2 ${color === item ? 'border-white' : 'border-transparent'}`}
+                className={`h-10 rounded border-2 ${color === item ? 'border-[color:var(--text-primary)] shadow-[0_0_0_3px_var(--focus-ring)]' : 'border-transparent'}`}
                 style={{ backgroundColor: item }}
                 onClick={() => setColor(item)}
                 aria-label={item}
@@ -46,7 +46,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
             {SPHERE_ICON_OPTIONS.map(({ key, Icon }) => (
               <button
                 key={key}
-                className={`flex h-11 items-center justify-center rounded border text-primary ${icon === key ? 'border-cyan-300 bg-cyan-600/30' : 'secondary-button'}`}
+                className={`flex h-11 items-center justify-center rounded border text-primary ${icon === key ? 'bubble-zoom-badge border-[color:var(--accent)]' : 'secondary-button'}`}
                 onClick={() => setIcon(key)}
               >
                 <Icon size={18} />
@@ -55,7 +55,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
+          <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
           <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
       </aside>

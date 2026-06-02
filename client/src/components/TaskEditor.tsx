@@ -240,11 +240,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         <h3 className="text-lg font-semibold text-primary">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         {canShowAiCreateMode ? (
           <div className="grid grid-cols-2 gap-2">
-            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'bg-cyan-600 text-white' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
+            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'primary-button' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
             <button
               className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai'
                 ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400'
-                : 'border-rose-300/70 bg-rose-500/25 text-rose-100 hover:bg-rose-500/35'}`}
+                : 'secondary-button border-rose-300/70 text-primary hover:brightness-110'}`}
               onClick={() => setCreateMode('ai')}
             >
               Через ИИ
@@ -301,7 +301,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             </select>
             <div className="flex items-center justify-between gap-2">
               <p className="min-h-4 text-xs text-rose-300">{aiError ?? ''}</p>
-              <button className="rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-60" onClick={() => void submitAiGenerate()} disabled={isGeneratingByAi}>
+              <button className="primary-button rounded px-3 py-2 text-sm disabled:opacity-60" onClick={() => void submitAiGenerate()} disabled={isGeneratingByAi}>
                 {isGeneratingByAi ? 'Формирую…' : 'Сформировать задачу'}
               </button>
             </div>
@@ -313,7 +313,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"
-            className="inline-flex rounded-full border border-cyan-300/70 bg-cyan-900/35 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-800/45"
+            className="bubble-zoom-badge inline-flex rounded-full border px-3 py-1 text-xs transition hover:brightness-110"
             onClick={onOpenParentTask}
             title={`Открыть основную задачу: ${parentTaskTitle}`}
           >
@@ -374,10 +374,10 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 <p className="mb-1 text-muted">Опишите как должна повторяться задача</p>
                 <textarea className="form-field min-h-16 w-full rounded border p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
                 <div className="mt-2 flex items-center gap-2">
-                  <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
+                  <button type="button" className="primary-button rounded px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
                   <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
                 </div>
-                <p className="mt-1 text-[11px] text-cyan-300">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p>
+                <p className="mt-1 text-[11px] text-muted">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p>
               </div>
             ) : null}
           </>
@@ -411,12 +411,12 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         </label> : null}
 
         <div className="flex gap-2">
-          <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
+          <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
           {isEditing ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
           <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
         {isEditing ? (
-          <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
+          <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold text-white" onClick={() => onComplete?.()}>
             Выполнена
           </button>
         ) : null}

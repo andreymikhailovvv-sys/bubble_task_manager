@@ -2122,7 +2122,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <main className="flex h-screen items-center justify-center bg-slate-950 p-4 text-slate-100">
+      <main className="app-shell flex h-screen items-center justify-center p-4" data-theme={themeMode}>
         <p className="text-sm text-slate-300">Проверяем авторизацию…</p>
       </main>
     );
@@ -2964,7 +2964,7 @@ export default function App() {
       </section>
 
       {authModalMode ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
@@ -2989,7 +2989,7 @@ export default function App() {
       ) : null}
 
       {isTelegramModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
           <div className="w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-900/95 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-cyan-100">Вход в Telegram-бот</h2>
@@ -3268,7 +3268,7 @@ export default function App() {
                           parentTaskTitle: task.parentTaskId ? (taskById.get(task.parentTaskId)?.title ?? 'Без основной задачи') : undefined,
                           onDragStart: () => setIsTimelineOverdueModalCollapsedForDrag(true)
                         }))}
-                        {timelineOverdueTasks.length === 0 ? <p className="text-sm text-slate-400">Просроченных задач нет</p> : null}
+                        {timelineOverdueTasks.length === 0 ? <p className="text-sm text-subtle">Просроченных задач нет</p> : null}
                       </div>
                     </section>
                   </div>
@@ -3503,7 +3503,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -3607,7 +3607,7 @@ export default function App() {
             </div>
             {generalAiError ? <p className="mb-2 text-[11px] text-rose-300">{generalAiError}</p> : null}
             <textarea
-              className="mb-2 min-h-16 w-full resize-none rounded-lg bg-slate-800 px-2 py-1.5 text-xs"
+              className="form-field mb-2 min-h-16 w-full resize-none rounded-lg border px-2 py-1.5 text-xs"
               placeholder="Например: сколько задач осталось на этой неделе?"
               value={generalAiDraft}
               onChange={(event) => setGeneralAiDraft(event.target.value)}
@@ -3620,14 +3620,14 @@ export default function App() {
             />
             <div className="flex items-center gap-2">
               <button
-                className="inline-flex items-center gap-1 rounded bg-cyan-600 px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                className="primary-button inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs disabled:opacity-50"
                 onClick={() => void sendGeneralAiQuestion()}
                 disabled={generalAiLoading || !generalAiDraft.trim()}
               >
                 <SendHorizontal size={12} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Coins size={10} /></span>
               </button>
               <button
-                className="inline-flex items-center gap-1 rounded bg-slate-700 px-2.5 py-1 text-xs text-slate-100 disabled:opacity-50"
+                className="secondary-button inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs disabled:opacity-50"
                 onClick={() => void undoGeneralAiAction()}
                 disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
               >
@@ -3640,17 +3640,17 @@ export default function App() {
               <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
               <button
                 type="button"
-                className="rounded p-1 text-slate-300 transition hover:bg-slate-700/60 hover:text-white"
+                className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
                 title="Развернуть список подзадач"
                 onClick={() => setIsUpcomingSubtasksModalOpen(true)}
               >
                 <Maximize2 size={14} />
               </button>
             </div>
-            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+            <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-muted">
               {upcomingSubtasksForPanel.length === 0 ? <li className="text-subtle">Нет подзадач с ближайшим дедлайном</li> : null}
               {upcomingSubtasksForPanel.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
+                <li key={task.id} className="list-item-surface flex items-center gap-2 rounded border px-2 py-1" title={formatDeadlineTooltip(task)}>
                   <input
                     type="checkbox"
                     checked={false}
@@ -3668,7 +3668,7 @@ export default function App() {
             </ul>
           </section>
           {isUpcomingSubtasksModalOpen ? (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+            <div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
       
         {timelineCreateMenu ? (
           <div
@@ -3680,7 +3680,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -3738,7 +3738,7 @@ export default function App() {
               >
                 <div className="flex items-center justify-between gap-2 border-b border-slate-700/70 px-4 py-3">
                   <h4 className="text-base font-semibold text-slate-100">Ближайшие подзадачи</h4>
-                  <button type="button" className="rounded p-1 text-slate-300 transition hover:bg-slate-700/60 hover:text-white" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+                  <button type="button" className="surface-muted rounded p-1 text-muted transition hover:brightness-110" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                     <X size={16} />
                   </button>
                 </div>
@@ -3753,7 +3753,7 @@ export default function App() {
                     <button
                       key={filter.key}
                       type="button"
-                      className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-100' : 'border-slate-600/80 text-slate-300 hover:bg-slate-800/80'}`}
+                      className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-primary' : 'secondary-button'}`}
                       onClick={() => setUpcomingSubtasksFilter(filter.key)}
                     >
                       {filter.label}
@@ -3762,14 +3762,14 @@ export default function App() {
                   </div>
                 </div>
                 <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 pr-3 text-sm">
-                  {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
+                  {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
                     <li key={subtask.id} className={`flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}>
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
                         <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 text-[11px] text-slate-400">
+                        <p className="mt-1 text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
                       </div>
@@ -3785,7 +3785,7 @@ export default function App() {
                         />
                         <button
                           type="button"
-                          className="rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                          className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
                           title="Удалить подзадачу"
                           onClick={async () => {
                             await api.deleteTask(subtask.id);
@@ -3819,10 +3819,10 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
+            <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-muted">
               {completedTasksForPanel.length === 0 ? <li className="text-subtle">Нет выполненных задач для выбранного фильтра</li> : null}
               {completedTasksVisible.map((task) => (
-                <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
+                <li key={task.id} className="list-item-surface flex items-center gap-2 rounded border px-2 py-1">
                   <input
                     type="checkbox"
                     checked
@@ -3956,7 +3956,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -4005,16 +4005,16 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside className="app-side-panel hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 shadow-2xl lg:flex">
+        <aside className="app-side-panel hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
-                  <p className="flex items-center gap-2 text-sm font-semibold text-violet-100"><Bot size={16} /> Помощь ИИ</p>
-                  <p className="mt-1 text-xs text-slate-300">{focusedTask.title}</p>
+                  <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
+                  <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-[11px]">
+                  <div className="surface-muted inline-flex items-center gap-1 rounded-lg border p-1 text-[11px]">
                     <button
-                      className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                      className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-muted'}`}
                       onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                       type="button"
                     >
@@ -4022,7 +4022,7 @@ export default function App() {
                       <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                     </button>
                     <button
-                      className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                      className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-muted'}`}
                       onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                       type="button"
                     >
@@ -4031,7 +4031,7 @@ export default function App() {
                     </button>
                   </div>
                   <button
-                    className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
+                    className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
                     onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
                     title="Поиск по диалогу"
                   >
@@ -4058,7 +4058,7 @@ export default function App() {
                     />
                   </label>
                 ) : null}
-                {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+                {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-subtle">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
                     key={message.id}
@@ -4068,10 +4068,10 @@ export default function App() {
                     <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                   </div>
                 ))}
-                {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-violet-200">ИИ думает…</p> : null}
+                {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
               </div>
               <textarea
-                className="mb-2 min-h-20 w-full shrink-0 resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+                className="form-field mb-2 min-h-20 w-full shrink-0 resize-none rounded-xl border px-3 py-2 text-sm leading-relaxed"
                 placeholder="Например: предложи пошаговый план с оценкой времени"
                 value={aiDraft}
                 onChange={(event) => setAiDraft(event.target.value)}
@@ -4092,14 +4092,14 @@ export default function App() {
               />
               <div className="mb-2 flex items-center gap-2">
                 <button
-                  className="inline-flex items-center gap-1 rounded-md bg-slate-700/90 px-2 py-1 text-[11px] text-slate-100 hover:bg-slate-600"
+                  className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
                   type="button"
                   onClick={() => focusedAiFileInputRef.current?.click()}
                 >
                   <Paperclip size={12} />
                   Прикрепить файл
                 </button>
-                <p className="text-[10px] text-slate-400">PDF / DOCX / XLS(X) / PNG / JPG / WEBP / GIF, до 8MB</p>
+                <p className="text-[10px] text-subtle">PDF / DOCX / XLS(X) / PNG / JPG / WEBP / GIF, до 8MB</p>
               </div>
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex flex-wrap gap-1.5">
@@ -4108,7 +4108,7 @@ export default function App() {
                       key={`ai-file-${file.name}`}
                       type="button"
                       onClick={() => removePendingAiFile(file.name)}
-                      className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
+                      className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]"
                       title="Убрать файл"
                     >
                       <Paperclip size={10} />
@@ -4122,14 +4122,14 @@ export default function App() {
                 <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
                 <div className="flex items-center gap-2">
                   <button
-                    className="rounded bg-sky-700 px-3 py-1.5 text-xs text-sky-50 disabled:opacity-50"
+                    className="primary-button rounded px-3 py-1.5 text-xs disabled:opacity-50"
                     disabled={aiLoadingTaskId === focusedTask.id}
                     onClick={() => void helpWithTask()}
                   >
                     Помочь с задачей
                   </button>
                   <button
-                    className="flex items-center gap-1 rounded bg-violet-600 px-3 py-1.5 text-xs disabled:opacity-50"
+                    className="primary-button flex items-center gap-1 rounded px-3 py-1.5 text-xs disabled:opacity-50"
                     disabled={aiLoadingTaskId === focusedTask.id}
                     onClick={() => void sendFocusedAiQuestion()}
                   >
@@ -4150,7 +4150,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -4215,7 +4215,7 @@ export default function App() {
                     onChange={handleTaskAttachmentFileSelect}
                   />
                   <div className="space-y-1">
-                    <p className="text-[11px] text-slate-400">Файлы к задаче (используются ИИ в чате, «Помочь с задачей» и «Сформировать ИИ»)</p>
+                    <p className="text-[11px] text-subtle">Файлы к задаче (используются ИИ в чате, «Помочь с задачей» и «Сформировать ИИ»)</p>
                     <div className="flex flex-wrap items-start gap-2">
                       {focusedTaskAttachments.map((attachment) => (
                         <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
@@ -4490,7 +4490,7 @@ export default function App() {
                       />
                     </Reorder.Item>
                   ))}
-                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).length === 0 ? <li className="text-xs text-slate-400">Пока нет подзадач</li> : null}
+                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
                 </Reorder.Group>
               </div>
             </div>
@@ -4498,7 +4498,7 @@ export default function App() {
           </div>
           {isAiSubtasksPromptOpen ? (
             <div
-              className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+              className="modal-backdrop fixed inset-0 z-[80] flex items-center justify-center p-4 backdrop-blur-sm"
               onClick={() => {
                 if (aiSubtasksLoadingTaskId !== focusedTask.id) {
                   setIsAiSubtasksPromptOpen(false);
@@ -4516,7 +4516,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -4565,13 +4565,13 @@ export default function App() {
           </div>
         ) : null}
 
-        <aside className="w-full max-w-lg space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(event) => event.stopPropagation()}>
-                <h4 className="text-base font-semibold text-slate-100">Пояснение для генерации подзадач</h4>
-                <p className="text-xs text-slate-300">
+        <aside className="dialog-surface w-full max-w-lg space-y-3 rounded-2xl border p-4" onClick={(event) => event.stopPropagation()}>
+                <h4 className="text-base font-semibold text-primary">Пояснение для генерации подзадач</h4>
+                <p className="text-xs text-muted">
                   При желании добавьте пояснение, чтобы ИИ лучше понял контекст. Например: желаемый формат, ограничения, приоритеты.
                 </p>
                 <textarea
-                  className="min-h-24 w-full rounded bg-slate-800 p-2 text-sm"
+                  className="form-field min-h-24 w-full rounded border p-2 text-sm"
                   placeholder="Необязательно. Например: сначала быстрые шаги на сегодня, затем всё остальное."
                   value={aiSubtasksPrompt}
                   onChange={(event) => setAiSubtasksPrompt(event.target.value)}
@@ -4601,17 +4601,17 @@ export default function App() {
       ) : null}
 
       {focusedTask && isAiExpanded ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
           <div className="app-card w-full max-w-4xl rounded-3xl border p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="flex items-center gap-2 text-base font-semibold text-violet-100"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
-                <p className="text-xs text-slate-300">{focusedTask.title}</p>
+                <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
+                <p className="text-xs text-muted">{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 rounded-lg bg-slate-900/80 p-1 text-[11px]">
+                <div className="surface-muted flex items-center gap-1 rounded-lg p-1 text-[11px]">
                   <button
-                    className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded px-2 py-1 ${focusedAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-muted'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'fast' }))}
                     title="Быстрый режим (gpt-5.4-mini)"
                   >
@@ -4619,7 +4619,7 @@ export default function App() {
                     <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
                   </button>
                   <button
-                    className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded px-2 py-1 ${focusedAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-muted'}`}
                     onClick={() => focusedTask && setAiModeByTask((prev) => ({ ...prev, [focusedTask.id]: 'smart' }))}
                     title="Умный режим (gpt-5.4-mini)"
                   >
@@ -4628,7 +4628,7 @@ export default function App() {
                   </button>
                 </div>
                 <button
-                  className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}
+                  className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
                   onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
                   title="Поиск по диалогу"
                 >
@@ -4641,10 +4641,10 @@ export default function App() {
                 >
                   Очистить диалог
                 </button>
-                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsAiExpanded(false)} title="Свернуть">
+                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsAiExpanded(false)} title="Свернуть">
                   <Minimize2 size={14} />
                 </button>
-                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => { setIsAiExpanded(false); setFocusedTaskId(null); }} title="Закрыть">
+                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); setFocusedTaskId(null); }} title="Закрыть">
                   <X size={14} />
                 </button>
               </div>
@@ -4654,14 +4654,14 @@ export default function App() {
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
                   <Search size={12} />
                   <input
-                    className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    className="w-full bg-transparent text-xs text-primary placeholder:text-subtle focus:outline-none"
                     placeholder="Поиск по сообщениям"
                     value={focusedAiSearchQuery}
                     onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
                   />
                 </label>
               ) : null}
-              {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-slate-400">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-subtle">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-${message.id}`}
@@ -4671,10 +4671,10 @@ export default function App() {
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
-              {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-violet-200">ИИ думает…</p> : null}
+              {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-muted">ИИ думает…</p> : null}
             </div>
             <textarea
-              className="mb-2 min-h-28 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+              className="form-field mb-2 min-h-28 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-relaxed"
               placeholder="Опишите вопрос подробнее…"
               value={aiDraft}
               onChange={(event) => setAiDraft(event.target.value)}
@@ -4695,14 +4695,14 @@ export default function App() {
             />
             <div className="mb-2 flex items-center gap-2">
               <button
-                className="inline-flex items-center gap-1 rounded-md bg-slate-700/90 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
                 type="button"
                 onClick={() => expandedAiFileInputRef.current?.click()}
               >
                 <Paperclip size={12} />
                 Прикрепить файл
               </button>
-              <p className="text-[11px] text-slate-400">PDF / DOCX / XLS(X) / PNG / JPG / WEBP / GIF, до 8MB</p>
+              <p className="text-[11px] text-subtle">PDF / DOCX / XLS(X) / PNG / JPG / WEBP / GIF, до 8MB</p>
             </div>
             {aiPendingFiles.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2">
@@ -4711,7 +4711,7 @@ export default function App() {
                     key={`expanded-ai-file-${file.name}`}
                     type="button"
                     onClick={() => removePendingAiFile(file.name)}
-                    className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-xs text-slate-100 hover:bg-slate-600"
+                    className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs"
                     title="Убрать файл"
                   >
                     <Paperclip size={12} />
@@ -4725,14 +4725,14 @@ export default function App() {
               <p className="min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
               <div className="flex items-center gap-2">
                 <button
-                  className="rounded bg-sky-700 px-3 py-2 text-sm text-sky-50 disabled:opacity-50"
+                  className="primary-button rounded px-3 py-2 text-sm disabled:opacity-50"
                   disabled={aiLoadingTaskId === focusedTask.id}
                   onClick={() => void helpWithTask()}
                 >
                   Помочь с задачей
                 </button>
                 <button
-                  className="flex items-center gap-1 rounded bg-violet-600 px-3 py-2 text-sm disabled:opacity-50"
+                  className="primary-button flex items-center gap-1 rounded px-3 py-2 text-sm disabled:opacity-50"
                   disabled={aiLoadingTaskId === focusedTask.id}
                   onClick={() => void sendFocusedAiQuestion()}
                 >
@@ -4746,22 +4746,22 @@ export default function App() {
       ) : null}
 
       {isGeneralAiFullscreen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsGeneralAiFullscreen(false)}>
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsGeneralAiFullscreen(false)}>
           <div className="app-card w-full max-w-4xl rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <p className="flex items-center gap-2 text-base font-semibold text-cyan-100"><Bot size={18} /> Общий чат с ИИ</p>
-                <p className="text-xs text-slate-300">Справка по задачам и команды для управления задачами.</p>
+                <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Общий чат с ИИ</p>
+                <p className="text-xs text-muted">Справка по задачам и команды для управления задачами.</p>
               </div>
               <div className="flex items-center gap-1.5">
                 <button
-                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}
+                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
                   onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
                   title="Поиск по диалогу"
                 >
                   <Search size={14} />
                 </button>
-                <button className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
+                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
                   <Minimize2 size={14} />
                 </button>
               </div>
@@ -4771,14 +4771,14 @@ export default function App() {
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
                   <Search size={12} />
                   <input
-                    className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    className="w-full bg-transparent text-xs text-primary placeholder:text-subtle focus:outline-none"
                     placeholder="Поиск по сообщениям"
                     value={generalAiSearchQuery}
                     onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
                   />
                 </label>
               ) : null}
-              {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-slate-400">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-subtle">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
               {filteredGeneralAiMessages.map((message, index) => (
                 <div
                   key={`general-full-${message.id}`}
@@ -4788,10 +4788,10 @@ export default function App() {
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId, closeGeneralAiFullscreenOnOpen: true, setGeneralAiFullscreen: setIsGeneralAiFullscreen }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
-              {generalAiLoading ? <p className="text-sm text-cyan-200">ИИ обрабатывает запрос…</p> : null}
+              {generalAiLoading ? <p className="text-sm text-muted">ИИ обрабатывает запрос…</p> : null}
             </div>
             <textarea
-              className="mb-2 min-h-24 w-full resize-none rounded-xl bg-slate-800 px-3 py-2 text-sm leading-relaxed"
+              className="form-field mb-2 min-h-24 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-relaxed"
               placeholder="Например: перенеси задачу «Подготовить отчёт» на завтра 18:00"
               value={generalAiDraft}
               onChange={(event) => setGeneralAiDraft(event.target.value)}
@@ -4806,14 +4806,14 @@ export default function App() {
               <p className="min-h-5 text-xs text-rose-300">{generalAiError ?? ''}</p>
               <div className="flex items-center gap-2">
                 <button
-                  className="inline-flex items-center gap-1 rounded bg-slate-700 px-3 py-2 text-sm text-slate-100 disabled:opacity-50"
+                  className="secondary-button inline-flex items-center gap-1 rounded px-3 py-2 text-sm disabled:opacity-50"
                   disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
                   onClick={() => void undoGeneralAiAction()}
                 >
                   <RotateCcw size={14} /> Отменить
                 </button>
                 <button
-                  className="inline-flex items-center gap-1 rounded bg-cyan-600 px-3 py-2 text-sm text-white disabled:opacity-50"
+                  className="primary-button inline-flex items-center gap-1 rounded px-3 py-2 text-sm disabled:opacity-50"
                   disabled={generalAiLoading || !generalAiDraft.trim()}
                   onClick={() => void sendGeneralAiQuestion()}
                 >
@@ -4825,7 +4825,7 @@ export default function App() {
         </div>
       ) : null}
       {isUpcomingSubtasksModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
   
         {timelineCreateMenu ? (
           <div
@@ -4837,7 +4837,7 @@ export default function App() {
             <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
-                className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
+                className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
                   openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
                   setTimelineCreateMenu(null);
@@ -4890,12 +4890,12 @@ export default function App() {
             role="dialog"
             aria-modal="true"
             aria-label="Окно ближайших подзадач"
-            className="flex h-[84vh] w-full max-w-5xl flex-col rounded-3xl border border-cyan-300/30 bg-slate-950/98 p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]"
+            className="dialog-surface flex h-[84vh] w-full max-w-5xl flex-col rounded-3xl border p-5"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h4 className="text-base font-semibold text-cyan-100">Ближайшие подзадачи</h4>
-              <button type="button" className="rounded bg-slate-700 p-1.5 text-slate-200 hover:bg-slate-600" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+              <h4 className="text-base font-semibold ai-panel-title">Ближайшие подзадачи</h4>
+              <button type="button" className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                 <X size={14} />
               </button>
             </div>
@@ -4909,19 +4909,19 @@ export default function App() {
                 <button
                   key={filter.key}
                   type="button"
-                  className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-100' : 'border-slate-600/80 text-slate-300 hover:bg-slate-800/80'}`}
+                  className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-primary' : 'secondary-button'}`}
                   onClick={() => setUpcomingSubtasksFilter(filter.key)}
                 >
                   {filter.label}
                 </button>
               ))}
             </div>
-            <ul className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-2xl bg-slate-900/95 p-3 pr-2 text-sm">
-              {filteredUpcomingSubtasksForModal.length === 0 ? <li className="rounded bg-slate-800/60 px-3 py-2 text-slate-400">Нет подзадач для выбранного фильтра</li> : null}
+            <ul className="chat-thread flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-2xl p-3 pr-2 text-sm">
+              {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] hover:border-cyan-300/60 hover:bg-slate-700/75 hover:shadow-[0_0_0_1px_rgba(34,211,238,0.25)] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}
+                  className={`list-item-surface flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input
@@ -4932,9 +4932,9 @@ export default function App() {
                     onChange={async () => { await toggleSubtaskDone(subtask); }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-100 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300 [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 text-[11px] text-slate-400">
+                    <p className="text-sm font-medium text-primary [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 text-[11px] text-subtle">
                       Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </p>
                   </div>
@@ -4948,11 +4948,11 @@ export default function App() {
                         await api.updateTask(subtask.id, { dueDate });
                         await load();
                       }}
-                      className="rounded p-1 hover:bg-slate-700/70"
+                      className="surface-muted rounded p-1 hover:brightness-110"
                     />
                     <button
                       type="button"
-                      className="rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                      className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
                       title="Удалить подзадачу"
                       onClick={async (event) => {
                         event.stopPropagation();
@@ -4987,7 +4987,7 @@ export default function App() {
       ) : null}
     
 
-      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
+      {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
 }
