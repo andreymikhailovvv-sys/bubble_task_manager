@@ -2842,18 +2842,18 @@ export default function App() {
         </div>
         <div className="relative w-full min-w-52 flex-1 sm:w-auto sm:flex-none" data-sphere-filter-root="true">
           <button
-            className={`flex w-full items-center justify-between rounded p-2 text-left text-sm ${
+            className={`light-sector-filter-trigger flex w-full items-center justify-between rounded p-2 text-left text-sm ${
               isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'
             }`}
             disabled={isTimelineMode}
             onClick={() => setIsSphereFilterOpen((prev) => !prev)}
           >
             <span className="truncate">{sphereFilterLabel}</span>
-            <span className="ml-2 text-xs text-slate-400">{isSphereFilterOpen ? '▲' : '▼'}</span>
+            <span className="ml-2 text-xs text-slate-400 light-sector-filter-arrow">{isSphereFilterOpen ? '▲' : '▼'}</span>
           </button>
           {isSphereFilterOpen ? (
-            <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
-              <label className="mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
+            <div className="light-sector-filter-panel absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
+              <label className="light-sector-filter-item mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
                 <input
                   type="checkbox"
                   checked={isAllSpheresSelected}
@@ -2865,7 +2865,7 @@ export default function App() {
               </label>
               <div className="max-h-44 space-y-1 overflow-y-auto">
                 {spheres.map((sphere) => (
-                  <label key={sphere.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
+                  <label key={sphere.id} className="light-sector-filter-item flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
                     <input
                       type="checkbox"
                       checked={selectedSphereIds.includes(sphere.id)}
@@ -2918,7 +2918,7 @@ export default function App() {
             title={`Текущий рейтинг: ${efficiencyScore.toFixed(3)} (${efficiencyGrade})`}
             onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}
           >
-            <svg width="66" height="36" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="drop-shadow-[0_0_10px_rgba(56,189,248,0.16)]">
+            <svg width="66" height="36" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="efficiency-meter drop-shadow-[0_0_10px_rgba(56,189,248,0.16)]">
               <defs>
                 <linearGradient id="effTrack" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#334155" /><stop offset="100%" stopColor="#475569" /></linearGradient>
                 <linearGradient id="effFillLow" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#b99c5d" /><stop offset="100%" stopColor="#dbc07a" /></linearGradient>
@@ -2947,14 +2947,14 @@ export default function App() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <div className="flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
+          <div className="light-credit-badge flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </div>
           <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
-            className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
             onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}
           >
@@ -3804,15 +3804,15 @@ export default function App() {
           <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Выполненные задания</h3>
-              <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
+              <div className="light-completed-toggle flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
                 <button
-                  className={`rounded px-2 py-0.5 ${completedFilter === 'today' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  className={`light-completed-toggle-button rounded px-2 py-0.5 ${completedFilter === 'today' ? 'light-completed-toggle-button-active bg-cyan-600 text-white' : 'text-slate-300'}`}
                   onClick={() => setCompletedFilter('today')}
                 >
                   сегодня
                 </button>
                 <button
-                  className={`rounded px-2 py-0.5 ${completedFilter === 'all' ? 'bg-cyan-600 text-white' : 'text-slate-300'}`}
+                  className={`light-completed-toggle-button rounded px-2 py-0.5 ${completedFilter === 'all' ? 'light-completed-toggle-button-active bg-cyan-600 text-white' : 'text-slate-300'}`}
                   onClick={() => setCompletedFilter('all')}
                 >
                   все
@@ -3851,7 +3851,7 @@ export default function App() {
               {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
             </div>
             {themeMode === 'light' ? (
-              <p className="rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs leading-snug text-slate-300">
+              <p className="light-workspace-bg-note rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs leading-snug text-slate-300">
                 В светлой теме фон фиксированный: без изображений и затемнения, чтобы все карточки, списки и таймлайн оставались равномерными и читаемыми.
               </p>
             ) : (
@@ -3890,7 +3890,7 @@ export default function App() {
               {spheres.map((sphere) => {
                 const Icon = resolveSphereIcon(sphere.icon);
                 return (
-                  <li key={sphere.id} className="flex items-center justify-between rounded bg-slate-800/70 px-2 py-1">
+                  <li key={sphere.id} className="light-sector-management-item flex items-center justify-between rounded bg-slate-800/70 px-2 py-1">
                     <button
                       className="flex min-w-0 flex-1 items-center gap-1 text-left hover:opacity-90"
                       style={{ color: sphere.color }}
