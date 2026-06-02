@@ -3059,7 +3059,7 @@ export default function App() {
                   <motion.li
                     key={task.id}
                     layout
-                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1 text-sm transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
                       hasOverdueState
                         ? 'border-rose-400/70 bg-rose-950/25'
                         : hasReminderState
@@ -3076,6 +3076,7 @@ export default function App() {
                   >
                     <input
                       type="checkbox"
+                      className="mt-1"
                       checked={task.status === 'DONE'}
                       onClick={(event) => event.stopPropagation()}
                       onChange={async () => {
@@ -3083,39 +3084,53 @@ export default function App() {
                         await load();
                       }}
                     />
-                    <span
-                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border"
-                      style={{
-                        borderColor: sphereColor,
-                        backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
-                        color: sphereColor
-                      }}
-                      title={taskSphere?.name ?? 'Без сектора'}
-                    >
-                      <SphereIcon size={12} />
-                    </span>
-                    <span className={`min-w-0 flex-1 truncate ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
-                      <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                    </span>
-                    {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="shrink-0 text-cyan-200" /></span> : null}
-                    {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="shrink-0 text-violet-300" /></span> : null}
-                    {rankingMode === 'coefficient' ? (
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                          <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                        </span>
+                        {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="shrink-0 text-cyan-200" /></span> : null}
+                        {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="shrink-0 text-violet-300" /></span> : null}
+                      </div>
+                      {task.description?.trim() ? (
+                        <p className="mt-1 truncate text-xs text-slate-300">
+                          <LinkifiedText text={task.description} stopPropagationOnLinkClick />
+                        </p>
+                      ) : null}
+                      <p className={`mt-1 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-400'}`}>
+                        Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {rankingMode === 'coefficient' ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient) }}
+                          title="Коэффициент важности задачи"
+                        >
+                          <Gauge size={12} />
+                          {taskCoefficient.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
+                          title="Важность задачи"
+                        >
+                          {task.importance}
+                        </span>
+                      )}
                       <span
-                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
-                        style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient) }}
-                        title="Коэффициент важности задачи"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border"
+                        style={{
+                          borderColor: sphereColor,
+                          backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
+                          color: sphereColor
+                        }}
+                        title={taskSphere?.name ?? 'Без сектора'}
                       >
-                        <Gauge size={12} />
-                        {taskCoefficient.toFixed(2)}
+                        <SphereIcon size={12} />
                       </span>
-                    ) : (
-                      <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
-                        title="Важность задачи"
-                      >
-                        {task.importance}
-                      </span>
-                    )}
+                    </div>
                   </motion.li>
                 );
               })}
