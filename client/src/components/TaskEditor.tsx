@@ -235,12 +235,12 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="w-full max-w-xl space-y-3 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-slate-100">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
+    <div className="surface-backdrop fixed inset-0 z-[70] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
+      <aside className="surface-panel w-full max-w-xl space-y-3 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-primary">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         {canShowAiCreateMode ? (
           <div className="grid grid-cols-2 gap-2">
-            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-200'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
+            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'bg-cyan-600 text-white' : 'surface-muted text-muted'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
             <button
               className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai'
                 ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400'
@@ -253,11 +253,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         ) : null}
         {createMode === 'ai' && canShowAiCreateMode ? (
           <>
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-muted">
               Опишите задачу в свободной форме — ИИ сам заполнит название, описание, сроки, степень важности, а также сразу даст подсказки по выполнению <span className="inline-flex items-center gap-1 text-rose-300">(стоимость 2 <Coins size={11} />)</span>
             </p>
             <textarea
-              className="min-h-28 w-full rounded bg-slate-800 p-2 text-sm"
+              className="surface-input min-h-28 w-full rounded border p-2 text-sm"
               placeholder="Например: нужно подготовить презентацию для созвона с клиентом в четверг, собрать метрики, согласовать бюджет…"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
@@ -275,7 +275,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 <button
                   key={`${file.name}:${file.size}`}
                   type="button"
-                  className="inline-flex max-w-[220px] items-center gap-1 rounded-full bg-slate-700/90 px-2 py-1 text-[11px]"
+                  className="surface-muted inline-flex max-w-[220px] items-center gap-1 rounded-full px-2 py-1 text-[11px]"
                   onClick={() => setAiPendingFiles((prev) => prev.filter((item) => `${item.name}:${item.size}` !== `${file.name}:${file.size}`))}
                 >
                   <Paperclip size={11} />
@@ -285,14 +285,14 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
               ))}
               <button
                 type="button"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed border-slate-500 bg-slate-800 text-slate-100 hover:bg-slate-700"
+                className="surface-muted inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed text-primary hover:brightness-110"
                 onClick={() => aiAttachmentInputRef.current?.click()}
                 title="Добавить файл"
               >
                 <Plus size={15} />
               </button>
             </div>
-            <select className="w-full rounded bg-slate-800 p-2 text-sm" value={aiSphereSelection} onChange={(e) => setAiSphereSelection(e.target.value)}>
+            <select className="surface-input w-full rounded border p-2 text-sm" value={aiSphereSelection} onChange={(e) => setAiSphereSelection(e.target.value)}>
               <option value="auto">Автоматически</option>
               <option value="none">Без сектора</option>
               {spheres.map((sphere) => (
@@ -308,8 +308,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           </>
         ) : (
           <>
-        <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-        <textarea className="min-h-20 w-full rounded bg-slate-800 p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+        <input className="surface-input w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+        <textarea className="surface-input min-h-20 w-full rounded border p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"
@@ -322,7 +322,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         ) : null}
         {!isSubtask ? (
           <>
-            <select className="w-full rounded bg-slate-800 p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
+            <select className="surface-input w-full rounded border p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
               <option value="">Без сектора</option>
               {spheres.map((sphere) => (
                 <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
@@ -370,9 +370,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
               уведомления от ИИ
             </label>
             {isRecurring ? (
-              <div className="rounded bg-slate-800/70 p-2 text-xs">
-                <p className="mb-1 text-slate-300">Опишите как должна повторяться задача</p>
-                <textarea className="min-h-16 w-full rounded bg-slate-900 p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
+              <div className="surface-card rounded border p-2 text-xs">
+                <p className="mb-1 text-muted">Опишите как должна повторяться задача</p>
+                <textarea className="surface-input min-h-16 w-full rounded border p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
                 <div className="mt-2 flex items-center gap-2">
                   <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
                   <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
@@ -392,7 +392,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         </label>
         {!isRecurring ? <label className="block text-xs">Уведомлять за
           <select
-            className="mt-1 w-full rounded bg-slate-800 p-2 text-sm"
+            className="surface-input mt-1 w-full rounded border p-2 text-sm"
             value={notifyPreset}
             onChange={(e) => {
               const value = e.target.value;
@@ -413,7 +413,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
           {isEditing ? <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
-          <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
+          <button className="surface-muted rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
         {isEditing ? (
           <button className="w-full rounded bg-emerald-600 px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>

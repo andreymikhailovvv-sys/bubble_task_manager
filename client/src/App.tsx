@@ -2626,7 +2626,7 @@ export default function App() {
 
   return (
     <main
-      className="flex h-screen flex-col overflow-y-auto p-4 text-slate-100 lg:p-6"
+      className="app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6"
       data-theme={themeMode}
       style={{
         backgroundImage: themeMode === 'dark' && backgroundImage
@@ -2636,13 +2636,13 @@ export default function App() {
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <header className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3 backdrop-blur">
+      <header className="surface-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
-        <div className="mr-1 text-xs text-slate-300">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
+        <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
         {currentUser.username ? (
           <div className="rounded bg-emerald-700/80 px-2 py-1 text-xs">Аккаунт: {currentUser.username}</div>
         ) : (
-          <div className="rounded bg-slate-700 px-2 py-1 text-xs">Гостевой режим</div>
+          <div className="surface-muted rounded px-2 py-1 text-xs">Гостевой режим</div>
         )}
         <button
           type="button"
@@ -2672,11 +2672,11 @@ export default function App() {
           <Smartphone size={18} />
         </button>
 
-        <input className="min-w-52 flex-1 rounded-xl bg-slate-800 px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="surface-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <button className="rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('login')}>Войти</button>
         <button className="rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('register')}>Регистрация</button>
         <button
-          className="rounded bg-slate-700 px-3 py-2 text-sm"
+          className="surface-muted rounded px-3 py-2 text-sm"
           onClick={async () => {
             try {
               await api.logout();
@@ -2694,29 +2694,29 @@ export default function App() {
       <section className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative -ml-1 shrink-0" ref={displayModeMenuRef}>
           <button
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/85 transition hover:border-cyan-300/70"
+            className="surface-popover inline-flex h-10 w-10 items-center justify-center rounded-md border transition hover:border-cyan-300/70"
             onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
             aria-label="Выбрать режим отображения"
           >
             <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
           </button>
           {isDisplayModeMenuOpen ? (
-            <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
+            <div className="surface-popover absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border p-2 shadow-2xl backdrop-blur">
               {DISPLAY_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition ${
                     option.value === displayMode
-                      ? 'bg-slate-700/90 text-slate-50'
-                      : 'text-slate-200 hover:bg-slate-800/80'
+                      ? 'surface-muted text-primary'
+                      : 'text-muted hover:brightness-110'
                   }`}
                   onClick={() => {
                     setDisplayMode(option.value);
                     setIsDisplayModeMenuOpen(false);
                   }}
                 >
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-900/80">
+                  <span className="surface-muted inline-flex h-9 w-9 items-center justify-center rounded-md border">
                     <option.icon size={18} className={option.iconClassName} />
                   </span>
                   <span>{option.label}</span>
@@ -2727,7 +2727,7 @@ export default function App() {
         </div>
         <div className="relative -ml-1 shrink-0" ref={settingsMenuRef}>
           <button
-            className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-600 bg-slate-900/85 text-lg transition hover:border-cyan-300/70"
+            className="surface-popover inline-flex h-10 w-10 items-center justify-center rounded-md border text-lg transition hover:border-cyan-300/70"
             onClick={() => setIsSettingsOpen((prev) => !prev)}
             aria-label="Настройки"
             title="Настройки"
@@ -2735,26 +2735,26 @@ export default function App() {
             ⚙️
           </button>
           {isSettingsOpen ? (
-            <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border border-slate-700/70 bg-slate-900/95 p-3 shadow-2xl backdrop-blur">
-              <div className="mb-3 rounded-lg border border-slate-700/70 bg-slate-800/70 p-2">
-                <div className="mb-2 text-xs font-medium text-slate-200">Тема интерфейса</div>
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1 text-xs">
+            <div className="surface-popover absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
+              <div className="surface-card mb-3 rounded-lg border p-2">
+                <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
+                <div className="grid grid-cols-2 gap-1 rounded-lg surface-muted p-1 text-xs">
                   {(['dark', 'light'] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
-                      className={`rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700/80'}`}
+                      className={`rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow' : 'text-muted hover:brightness-110'}`}
                       onClick={() => setThemeMode(mode)}
                     >
                       {mode === 'dark' ? 'Тёмная' : 'Светлая'}
                     </button>
                   ))}
                 </div>
-                {themeMode === 'light' ? <p className="mt-2 text-[11px] leading-snug text-slate-400">В светлой теме используется чистый системный фон, поэтому выбор фонового изображения отключён.</p> : null}
+                {themeMode === 'light' ? <p className="mt-2 text-[11px] leading-snug text-subtle">В светлой теме используется чистый системный фон, поэтому выбор фонового изображения отключён.</p> : null}
               </div>
-              <div className="mb-2 text-xs text-slate-300">Часовой пояс пользователя</div>
+              <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
               <select
-                className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+                className="surface-input w-full rounded border px-2 py-1.5 text-sm"
                 value={userTimeZone}
                 disabled={settingsSavingKey === 'timeZone'}
                 onChange={(event) => {
@@ -2769,7 +2769,7 @@ export default function App() {
               </select>
               <button
                 type="button"
-                className="mt-2 rounded bg-slate-700 px-2 py-1 text-xs hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="surface-muted mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={settingsSavingKey === 'timeZone'}
                 onClick={() => {
                   setUserTimeZone(DEFAULT_TIMEZONE);
@@ -2779,14 +2779,14 @@ export default function App() {
                 Сбросить на Москву
               </button>
 
-              <div className="mt-3 border-t border-slate-700/70 pt-3">
-                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-slate-300">
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
                   <span>Утренний ИИ-чекап</span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
                     2 <Coins size={11} /> за чекап
                   </span>
                 </div>
-                <p className="mb-2 text-[11px] leading-snug text-slate-400">
+                <p className="mb-2 text-[11px] leading-snug text-subtle">
                   Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
                 </p>
                 <select
@@ -2818,7 +2818,7 @@ export default function App() {
                 </label>
               </div>
               {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
-              <div className="mt-3 border-t border-slate-700/70 pt-3">
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
                   <span>Уведомления от ИИ</span>
                   <span
@@ -2829,7 +2829,7 @@ export default function App() {
                   </span>
                 </div>
                 <select
-                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm"
+                  className="surface-input w-full rounded border px-2 py-1.5 text-sm"
                   value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
                   onChange={(event) => setIsAiNotificationsDefaultEnabled(event.target.value === 'enabled')}
                 >
@@ -2951,7 +2951,7 @@ export default function App() {
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </div>
-          <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
+          <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
             className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
@@ -2968,7 +2968,7 @@ export default function App() {
           <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-4 shadow-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
-              <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={closeAuthModal}>Закрыть</button>
+              <button className="surface-muted rounded px-2 py-1 text-xs" onClick={closeAuthModal}>Закрыть</button>
             </div>
             <div className="space-y-2">
               <input className="w-full rounded bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
@@ -2993,7 +2993,7 @@ export default function App() {
           <div className="w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-900/95 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-cyan-100">Вход в Telegram-бот</h2>
-              <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTelegramModalOpen(false)}>Закрыть</button>
+              <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTelegramModalOpen(false)}>Закрыть</button>
             </div>
             <p className="mb-3 text-xs text-slate-300">Отсканируйте QR-код камерой Telegram, чтобы привязать аккаунт в один клик.</p>
             {isTelegramLinkLoading ? <div className="py-10 text-center text-sm text-slate-300">Генерируем ссылку…</div> : null}
@@ -3257,7 +3257,7 @@ export default function App() {
                             <span className="inline-flex items-center gap-1 text-pink-100"><span>{OVERDUE_AI_POSTPONE_CREDITS_COST}</span><Coins size={10} /></span>
                           </button>
                         </div>
-                        <button className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
+                        <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
                       </div>
                       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                         {timelineOverdueTasks.map((task) => renderTimelineTaskChip(task, {
@@ -3499,7 +3499,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3513,7 +3513,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -3521,10 +3521,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -3533,7 +3533,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -3552,25 +3552,25 @@ export default function App() {
         ) : null}
 
         <aside
-          className="absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l border-slate-700/60 bg-slate-950/90 p-4 backdrop-blur-sm"
+          className="surface-side-panel absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l p-4 backdrop-blur-sm"
           data-no-field-zoom="true"
           onWheel={(event) => {
             event.stopPropagation();
           }}
         >
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+          <section className="surface-panel rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
               <div className="flex items-center gap-1.5">
                 <button
-                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'bg-slate-700/80 text-slate-200 hover:bg-slate-600'}`}
+                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
                   onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
                   title="Поиск по диалогу"
                 >
                   <Search size={14} />
                 </button>
                 <button
-                  className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                  className="surface-muted rounded p-1.5 text-muted hover:brightness-110"
                   onClick={() => setIsGeneralAiFullscreen(true)}
                   title="Развернуть общий чат"
                 >
@@ -3578,19 +3578,19 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div ref={generalAiDialogContainerRef} className="mb-2 h-[220px] overflow-y-auto rounded-xl bg-slate-900/90 p-2 text-xs">
+            <div ref={generalAiDialogContainerRef} className="surface-card mb-2 h-[220px] overflow-y-auto rounded-xl p-2 text-xs">
               {isGeneralAiSearchOpen ? (
-                <label className="sticky top-0 z-10 mb-2 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[11px] text-slate-300">
+                <label className="surface-input sticky top-0 z-10 mb-2 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
                   <Search size={12} />
                   <input
-                    className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                    className="w-full bg-transparent text-[11px] text-primary placeholder:text-slate-400 focus:outline-none"
                     placeholder="Поиск по сообщениям"
                     value={generalAiSearchQuery}
                     onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
                   />
                 </label>
               ) : null}
-              {filteredGeneralAiMessages.length === 0 ? <p className="text-slate-400">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredGeneralAiMessages.length === 0 ? <p className="text-subtle">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
               <div className="space-y-2">
                 {filteredGeneralAiMessages.map((message, index) => (
                   <div
@@ -3634,7 +3634,7 @@ export default function App() {
               </button>
             </div>
           </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+          <section className="surface-panel rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
               <button
@@ -3647,7 +3647,7 @@ export default function App() {
               </button>
             </div>
             <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
-              {upcomingSubtasksForPanel.length === 0 ? <li className="text-slate-400">Нет подзадач с ближайшим дедлайном</li> : null}
+              {upcomingSubtasksForPanel.length === 0 ? <li className="text-subtle">Нет подзадач с ближайшим дедлайном</li> : null}
               {upcomingSubtasksForPanel.map((task) => (
                 <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1" title={formatDeadlineTooltip(task)}>
                   <input
@@ -3676,7 +3676,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3690,7 +3690,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -3698,10 +3698,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -3710,7 +3710,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -3800,7 +3800,7 @@ export default function App() {
               </aside>
             </div>
           ) : null}
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+          <section className="surface-panel rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Выполненные задания</h3>
               <div className="flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
@@ -3819,7 +3819,7 @@ export default function App() {
               </div>
             </div>
             <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-slate-200">
-              {completedTasksForPanel.length === 0 ? <li className="text-slate-400">Нет выполненных задач для выбранного фильтра</li> : null}
+              {completedTasksForPanel.length === 0 ? <li className="text-subtle">Нет выполненных задач для выбранного фильтра</li> : null}
               {completedTasksVisible.map((task) => (
                 <li key={task.id} className="flex items-center gap-2 rounded bg-slate-800/70 px-2 py-1">
                   <input
@@ -3844,7 +3844,7 @@ export default function App() {
               </button>
             ) : null}
           </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+          <section className="surface-panel rounded-2xl border p-4">
             <div className="mb-2 flex items-start justify-between gap-2">
               <h3 className="text-sm font-semibold">Фон рабочего пространства</h3>
               {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
@@ -3883,7 +3883,7 @@ export default function App() {
               </>
             )}
           </section>
-          <section className="rounded-2xl border border-slate-700/50 bg-slate-900/80 p-4">
+          <section className="surface-panel rounded-2xl border p-4">
             <h3 className="mb-2 text-sm font-semibold">Управление секторами</h3>
             <ul className="space-y-2 text-xs">
               {spheres.map((sphere) => {
@@ -3952,7 +3952,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -3966,7 +3966,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -3974,10 +3974,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -3986,7 +3986,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -4037,7 +4037,7 @@ export default function App() {
                     <Search size={14} />
                   </button>
                   <button
-                    className="rounded bg-slate-700/80 p-1.5 text-slate-200 hover:bg-slate-600"
+                    className="surface-muted rounded p-1.5 text-muted hover:brightness-110"
                     onClick={() => setIsAiExpanded(true)}
                     title="Развернуть диалог"
                   >
@@ -4050,7 +4050,7 @@ export default function App() {
                   <label className="sticky top-0 z-10 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/95 px-2 py-1 text-[11px] text-slate-300">
                     <Search size={12} />
                     <input
-                      className="w-full bg-transparent text-[11px] text-slate-100 placeholder:text-slate-400 focus:outline-none"
+                      className="w-full bg-transparent text-[11px] text-primary placeholder:text-slate-400 focus:outline-none"
                       placeholder="Поиск по сообщениям"
                       value={focusedAiSearchQuery}
                       onChange={(event) => setFocusedAiSearchQuery(event.target.value)}
@@ -4146,7 +4146,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -4160,7 +4160,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -4168,10 +4168,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -4180,7 +4180,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -4359,7 +4359,7 @@ export default function App() {
                   <button className="rounded bg-cyan-600 px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
                   <button className="rounded bg-emerald-600 px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
                   <button className="rounded bg-rose-600 px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
-                  <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
+                  <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
                 </div>
               </div>
               <div className="flex min-h-0 flex-col space-y-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3">
@@ -4512,7 +4512,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -4526,7 +4526,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -4534,10 +4534,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -4546,7 +4546,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -4578,7 +4578,7 @@ export default function App() {
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    className="rounded bg-slate-700 px-3 py-2 text-sm"
+                    className="surface-muted rounded px-3 py-2 text-sm"
                     onClick={() => setIsAiSubtasksPromptOpen(false)}
                     disabled={aiSubtasksLoadingTaskId === focusedTask.id}
                   >
@@ -4666,7 +4666,7 @@ export default function App() {
                   key={`expanded-${message.id}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'mr-auto bg-violet-600/30 text-violet-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
@@ -4783,7 +4783,7 @@ export default function App() {
                   key={`general-full-${message.id}`}
                   className={`max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'mr-auto bg-cyan-700/20 text-cyan-50' : 'ml-auto bg-slate-700/90 text-slate-50'}`}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-slate-300" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-slate-200/80">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="text-slate-300 hover:text-white transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? renderAiMessageContentWithTaskRefs(message.content, { tasks, onOpenTask: setFocusedTaskId, closeGeneralAiFullscreenOnOpen: true, setGeneralAiFullscreen: setIsGeneralAiFullscreen }) : renderAiMessageContent(message.content)}</div>
                 </div>
               ))}
@@ -4833,7 +4833,7 @@ export default function App() {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative min-w-44 rounded-xl border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+            <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
               <button
                 type="button"
                 className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-left text-sm text-white hover:bg-cyan-600"
@@ -4847,7 +4847,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="mt-1.5 flex w-full items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-left text-sm text-slate-100 enabled:hover:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -4855,10 +4855,10 @@ export default function App() {
                 }}
               >
                 <span>Отложить</span>
-                <ChevronRight size={13} className="text-slate-300" />
+                <ChevronRight size={13} className="text-muted" />
               </button>
               {timelinePostponeSubmenuOpen && timelineCreateMenu.taskId ? (
-                <div className="absolute left-full top-[46px] ml-1 w-56 rounded-md border border-slate-600 bg-slate-900 p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
                   {[
                     { value: '15m', label: 'На 15 мин' },
                     { value: '30m', label: 'На 30 мин' },
@@ -4867,7 +4867,7 @@ export default function App() {
                     { value: 'tomorrow', label: 'На завтра' },
                     { value: 'smart', label: '✦ Ближайшее окно' }
                   ].map((option) => (
-                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-slate-100 hover:bg-slate-800" onClick={async () => {
+                    <button key={option.value} type="button" className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110" onClick={async () => {
                       const task = taskById.get(timelineCreateMenu.taskId ?? '');
                       if (!task) return;
                       setTimelinePostponeLoadingTaskId(task.id);
@@ -4986,7 +4986,7 @@ export default function App() {
       ) : null}
     
 
-      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
+      {isTimelineOptimizeModalOpen ? (<div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-4"><h3 className="text-lg font-semibold text-slate-100">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-slate-300">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="mt-3 min-h-28 w-full rounded-lg bg-slate-800 p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );
 }

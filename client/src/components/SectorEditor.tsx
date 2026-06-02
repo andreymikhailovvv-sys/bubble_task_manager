@@ -22,12 +22,12 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
   }, [sphere]);
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="w-full max-w-lg space-y-4 rounded-2xl border border-slate-700/50 bg-slate-900 p-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold text-slate-100">Настройка сектора</h3>
-        <input className="w-full rounded bg-slate-800 p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
+    <div className="surface-backdrop fixed inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
+      <aside className="surface-panel w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-primary">Настройка сектора</h3>
+        <input className="surface-input w-full rounded border p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
         <div>
-          <p className="mb-2 text-sm text-slate-200">Цвет</p>
+          <p className="mb-2 text-sm text-muted">Цвет</p>
           <div className="grid grid-cols-6 gap-2">
             {HARMONIOUS_COLORS.map((item) => (
               <button
@@ -41,12 +41,12 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
           </div>
         </div>
         <div>
-          <p className="mb-2 text-sm text-slate-200">Иконка</p>
+          <p className="mb-2 text-sm text-muted">Иконка</p>
           <div className="grid grid-cols-5 gap-2">
             {SPHERE_ICON_OPTIONS.map(({ key, Icon }) => (
               <button
                 key={key}
-                className={`flex h-11 items-center justify-center rounded border text-slate-100 ${icon === key ? 'border-cyan-300 bg-slate-700' : 'border-slate-600 bg-slate-800'}`}
+                className={`flex h-11 items-center justify-center rounded border text-primary ${icon === key ? 'border-cyan-300 bg-cyan-600/30' : 'surface-muted'}`}
                 onClick={() => setIcon(key)}
               >
                 <Icon size={18} />
@@ -56,7 +56,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
         </div>
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
-          <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
+          <button className="surface-muted rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
       </aside>
     </div>
