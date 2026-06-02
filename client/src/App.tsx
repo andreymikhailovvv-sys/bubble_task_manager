@@ -2636,7 +2636,7 @@ export default function App() {
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <header className="surface-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
+      <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
         <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
         {currentUser.username ? (
@@ -2646,7 +2646,7 @@ export default function App() {
         )}
         <button
           type="button"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-cyan-400/40 bg-slate-900/85 text-cyan-200 transition hover:border-cyan-300"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-cyan-400/40 bg-slate-900/85 text-cyan-200 transition hover:border-cyan-300 light-icon-button"
           aria-label="Подключить Telegram"
           title="Подключить Telegram"
           onClick={async () => {
@@ -2672,9 +2672,9 @@ export default function App() {
           <Smartphone size={18} />
         </button>
 
-        <input className="surface-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <button className="rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('login')}>Войти</button>
-        <button className="rounded bg-indigo-700 px-3 py-2 text-sm" onClick={() => setAuthModalMode('register')}>Регистрация</button>
+        <input className="surface-input light-search-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <button className="rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setAuthModalMode('login')}>Войти</button>
+        <button className="rounded bg-indigo-700 px-3 py-2 text-sm light-secondary-action" onClick={() => setAuthModalMode('register')}>Регистрация</button>
         <button
           className="surface-muted rounded px-3 py-2 text-sm"
           onClick={async () => {
@@ -2694,21 +2694,21 @@ export default function App() {
       <section className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative -ml-1 shrink-0" ref={displayModeMenuRef}>
           <button
-            className="surface-popover inline-flex h-10 w-10 items-center justify-center rounded-md border transition hover:border-cyan-300/70"
+            className="surface-popover light-menu-trigger inline-flex h-10 w-10 items-center justify-center rounded-md border transition hover:border-cyan-300/70"
             onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
             aria-label="Выбрать режим отображения"
           >
             <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
           </button>
           {isDisplayModeMenuOpen ? (
-            <div className="surface-popover absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border p-2 shadow-2xl backdrop-blur">
+            <div className="surface-popover light-dropdown absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border p-2 shadow-2xl backdrop-blur">
               {DISPLAY_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition ${
+                  className={`light-dropdown-item flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition ${
                     option.value === displayMode
-                      ? 'surface-muted text-primary'
+                      ? 'surface-muted text-primary light-dropdown-item-active'
                       : 'text-muted hover:brightness-110'
                   }`}
                   onClick={() => {
@@ -2716,7 +2716,7 @@ export default function App() {
                     setIsDisplayModeMenuOpen(false);
                   }}
                 >
-                  <span className="surface-muted inline-flex h-9 w-9 items-center justify-center rounded-md border">
+                  <span className="surface-muted light-dropdown-icon inline-flex h-9 w-9 items-center justify-center rounded-md border">
                     <option.icon size={18} className={option.iconClassName} />
                   </span>
                   <span>{option.label}</span>
@@ -2727,7 +2727,7 @@ export default function App() {
         </div>
         <div className="relative -ml-1 shrink-0" ref={settingsMenuRef}>
           <button
-            className="surface-popover inline-flex h-10 w-10 items-center justify-center rounded-md border text-lg transition hover:border-cyan-300/70"
+            className="surface-popover light-menu-trigger inline-flex h-10 w-10 items-center justify-center rounded-md border text-lg transition hover:border-cyan-300/70"
             onClick={() => setIsSettingsOpen((prev) => !prev)}
             aria-label="Настройки"
             title="Настройки"
@@ -2735,15 +2735,15 @@ export default function App() {
             ⚙️
           </button>
           {isSettingsOpen ? (
-            <div className="surface-popover absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
-              <div className="surface-card mb-3 rounded-lg border p-2">
+            <div className="surface-popover light-dropdown absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
+              <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
                 <div className="grid grid-cols-2 gap-1 rounded-lg surface-muted p-1 text-xs">
                   {(['dark', 'light'] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
-                      className={`rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow' : 'text-muted hover:brightness-110'}`}
+                      className={`light-dropdown-item rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow light-dropdown-item-active' : 'text-muted hover:brightness-110'}`}
                       onClick={() => setThemeMode(mode)}
                     >
                       {mode === 'dark' ? 'Тёмная' : 'Светлая'}
@@ -2769,7 +2769,7 @@ export default function App() {
               </select>
               <button
                 type="button"
-                className="surface-muted mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                className="surface-muted light-dropdown-item mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={settingsSavingKey === 'timeZone'}
                 onClick={() => {
                   setUserTimeZone(DEFAULT_TIMEZONE);
@@ -2790,7 +2790,7 @@ export default function App() {
                   Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
                 </p>
                 <select
-                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  className="surface-input light-dropdown-control w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                   value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
                   disabled={settingsSavingKey === 'checkupEnabled'}
                   onChange={(event) => {
@@ -2806,7 +2806,7 @@ export default function App() {
                   Время чекапа
                   <input
                     type="time"
-                    className="mt-1 w-full rounded bg-slate-800 px-2 py-1.5 text-sm text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="surface-input light-dropdown-control mt-1 w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                     value={morningAiCheckupTime}
                     disabled={settingsSavingKey === 'checkupTime'}
                     onChange={(event) => {
@@ -2952,7 +2952,7 @@ export default function App() {
             <span>{currentUser?.aiCredits ?? 100}</span>
           </div>
           <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
-          <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
+          <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
             className="flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
