@@ -40,13 +40,14 @@ const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
 };
 
 const SIZE = 900;
-const WORKSPACE_PADDING = 320;
+const WORKSPACE_PADDING = 80;
 const FIELD_RADIUS = SIZE * 0.47;
-const ELLIPSE_RADIUS_X = (SIZE + WORKSPACE_PADDING * 2) / 2 - 84;
-const ELLIPSE_RADIUS_Y = SIZE * 0.58;
+const ELLIPSE_RADIUS_X = (SIZE + WORKSPACE_PADDING * 2) / 2 - 24;
+const ELLIPSE_RADIUS_Y = (SIZE + WORKSPACE_PADDING * 2) / 2 - 48;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
-const HOVER_EXIT_DELAY_MS = 720;
+const HOVER_EXIT_DELAY_MS = 120;
+const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
 const SUBTASK_OVERDUE_GLOW =
@@ -260,10 +261,6 @@ export function BubbleField({
     x: SIZE / 2 + (x - SIZE / 2) * ELLIPSE_X_SCALE,
     y: SIZE / 2 + (y - SIZE / 2) * ELLIPSE_Y_SCALE
   }), []);
-  const activeBubbleDisplayPoint = activeBubble ? mapToOval(activeBubble.x, activeBubble.y) : null;
-  const cameraOffset = activeBubbleDisplayPoint
-    ? { x: SIZE / 2 - activeBubbleDisplayPoint.x, y: SIZE / 2 - activeBubbleDisplayPoint.y }
-    : { x: 0, y: 0 };
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -392,7 +389,7 @@ export function BubbleField({
       <motion.g
         key={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? 2 : 1, x: displayPoint.x, y: displayPoint.y }}
         exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 30, stiffness: 140, mass: 0.95 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
@@ -493,11 +490,7 @@ export function BubbleField({
       }}
     >
       <svg viewBox={`${workspaceMin} ${workspaceMin} ${SIZE + WORKSPACE_PADDING * 2} ${SIZE + WORKSPACE_PADDING * 2}`} className="relative z-20 h-full w-full overflow-visible">
-        <motion.g
-          initial={false}
-          animate={{ x: cameraOffset.x, y: cameraOffset.y }}
-          transition={{ type: 'spring', damping: 32, stiffness: 150, mass: 0.9 }}
-        >
+        <g>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
@@ -526,8 +519,6 @@ export function BubbleField({
 
           <AnimatePresence>{inactiveBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
 
-          {activeBubble ? <rect x={workspaceMin} y={workspaceMin} width={SIZE + WORKSPACE_PADDING * 2} height={SIZE + WORKSPACE_PADDING * 2} fill="#020617" fillOpacity={0.58} pointerEvents="none" /> : null}
-
           <AnimatePresence>{activeBubble ? renderBubble(activeBubble, true) : null}</AnimatePresence>
 
           {sectorLabels.map((item) => {
@@ -549,7 +540,7 @@ export function BubbleField({
             );
           })}
 
-          {hoveredBubble ? (
+          {ENABLE_BUBBLE_HOVER_DETAILS && hoveredBubble ? (
             <>
               <foreignObject
                 x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
@@ -780,7 +771,7 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Автофокус при наведении</div>
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Наведи на пузырь</div>
     </div>
   );
 }
