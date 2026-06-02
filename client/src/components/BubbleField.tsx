@@ -490,7 +490,7 @@ export function BubbleField({
       }}
     >
       <svg viewBox={`${workspaceMin} ${workspaceMin} ${SIZE + WORKSPACE_PADDING * 2} ${SIZE + WORKSPACE_PADDING * 2}`} className="relative z-20 h-full w-full overflow-visible">
-        <g>
+        <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
