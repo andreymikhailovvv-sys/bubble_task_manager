@@ -459,7 +459,7 @@ export function BubbleField({
           </>
         ) : null}
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%' }}>
+          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-primary" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%' }}>
             <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
             {isHovered ? <span className="mt-1 text-[8px] font-medium text-cyan-100/90">{formatDeadlineLeft(bubble.task.dueDate)}</span> : null}
           </div>
@@ -513,7 +513,7 @@ export function BubbleField({
 
   return (
     <div
-      className={`relative overflow-visible rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`surface-canvas relative overflow-visible rounded-[2.2rem] border shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -538,58 +538,58 @@ export function BubbleField({
             </filter>
           </defs>
           <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
-            <div className="flex h-full flex-col rounded-[1.8rem] border border-cyan-200/20 bg-slate-950/78 p-6 text-slate-100 shadow-[inset_0_0_36px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+            <div className="surface-panel flex h-full flex-col rounded-[1.8rem] border p-6 shadow-[inset_0_0_36px_rgba(56,189,248,0.08)] backdrop-blur-sm">
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-200/70">Информация о задаче</p>
-                    <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-white">
+                    <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-primary">
                       <LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick />
                     </h3>
                   </div>
-                  <div className="rounded-2xl border border-slate-700/70 bg-slate-900/72 p-3">
-                    <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Описание</p>
-                    <div className="mt-2 max-h-44 overflow-hidden break-words text-lg leading-relaxed text-slate-200">
+                  <div className="surface-card rounded-2xl border p-3">
+                    <p className="text-sm uppercase tracking-[0.18em] text-subtle">Описание</p>
+                    <div className="mt-2 max-h-44 overflow-hidden break-words text-lg leading-relaxed text-muted">
                       <LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-base">
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <p className="text-slate-400">Дедлайн</p>
-                      <p className="mt-1 font-semibold text-slate-100">{formatDueDate(hoveredBubble.task.dueDate)}</p>
+                    <div className="surface-card rounded-xl p-3">
+                      <p className="text-subtle">Дедлайн</p>
+                      <p className="mt-1 font-semibold text-primary">{formatDueDate(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <p className="text-slate-400">Осталось</p>
+                    <div className="surface-card rounded-xl p-3">
+                      <p className="text-subtle">Осталось</p>
                       <p className="mt-1 font-semibold text-cyan-100">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <p className="text-slate-400">Статус</p>
-                      <p className="mt-1 font-semibold text-slate-100">{formatTaskStatus(hoveredBubble.task.status)}</p>
+                    <div className="surface-card rounded-xl p-3">
+                      <p className="text-subtle">Статус</p>
+                      <p className="mt-1 font-semibold text-primary">{formatTaskStatus(hoveredBubble.task.status)}</p>
                     </div>
-                    <div className="rounded-xl bg-slate-900/70 p-3">
-                      <p className="text-slate-400">Важность</p>
-                      <p className="mt-1 font-semibold text-slate-100">{hoveredBubble.task.importance}</p>
+                    <div className="surface-card rounded-xl p-3">
+                      <p className="text-subtle">Важность</p>
+                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.importance}</p>
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-700/70 bg-slate-900/72 p-4 text-base">
+                  <div className="surface-card rounded-2xl border p-4 text-base">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-100">Подзадачи</p>
+                      <p className="font-semibold text-primary">Подзадачи</p>
                       <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-cyan-100">{hoveredSubtasks.length}</span>
                     </div>
-                    <ul className="max-h-40 space-y-1 overflow-hidden text-slate-300">
-                      {hoveredSubtasks.length === 0 ? <li className="text-slate-500">Пока нет активных подзадач</li> : null}
+                    <ul className="max-h-40 space-y-1 overflow-hidden text-muted">
+                      {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет активных подзадач</li> : null}
                       {hoveredSubtasks.slice(0, 6).map((subtask) => (
-                        <li key={subtask.id} className="rounded bg-slate-800/70 px-2 py-1">
+                        <li key={subtask.id} className="surface-muted rounded px-2 py-1">
                           <span className="break-words">{subtask.title}</span>
-                          {subtask.dueDate ? <span className="mt-0.5 block text-sm text-slate-400">{formatDueDate(subtask.dueDate)}</span> : null}
+                          {subtask.dueDate ? <span className="mt-0.5 block text-sm text-subtle">{formatDueDate(subtask.dueDate)}</span> : null}
                         </li>
                       ))}
-                      {hoveredSubtasks.length > 6 ? <li className="text-slate-500">+ ещё {hoveredSubtasks.length - 6}</li> : null}
+                      {hoveredSubtasks.length > 6 ? <li className="text-subtle">+ ещё {hoveredSubtasks.length - 6}</li> : null}
                     </ul>
                   </div>
                 </div>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+                <div className="flex h-full flex-col items-center justify-center text-center text-subtle">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-200/60">Информация о задаче</p>
                   <p className="mt-3 text-lg leading-relaxed">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
                 </div>
@@ -615,7 +615,7 @@ export function BubbleField({
             return (
               <g key={item.sphere.id} transform={`translate(${item.x} ${item.y})`}>
                 <foreignObject x={-88} y={-18} width={176} height={40}>
-                  <div className="flex w-full items-center justify-center gap-1 rounded bg-slate-900/90 px-2 py-1 text-xs text-slate-100">
+                  <div className="surface-popover flex w-full items-center justify-center gap-1 rounded border px-2 py-1 text-xs">
                     <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere)}>
                       {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
                       <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
@@ -623,7 +623,7 @@ export function BubbleField({
                   </div>
                 </foreignObject>
                 <foreignObject x={-12} y={20} width={24} height={24}>
-                  <button className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-white" onClick={() => onAddTaskToSphere?.(item.sphere)}>
+                  <button className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-primary" onClick={() => onAddTaskToSphere?.(item.sphere)}>
                     <Plus size={14} />
                   </button>
                 </foreignObject>
@@ -641,29 +641,29 @@ export function BubbleField({
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
-                <div className="rounded-xl border border-slate-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                <div className="surface-popover rounded-xl border p-3 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
-                  <p className="mb-2 text-slate-200" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                  <p className="text-slate-300">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
-                  <p className="inline-flex items-center gap-1 text-slate-300">
+                  <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                  <p className="text-muted">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
+                  <p className="inline-flex items-center gap-1 text-muted">
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
                     {formatDeadlineLeft(hoveredBubble.task.dueDate)}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
-                    <p className="text-[11px] text-slate-300">Коэффициент важности</p>
+                    <p className="text-[11px] text-muted">Коэффициент важности</p>
                     <div
-                      className="inline-flex items-center gap-1 rounded-full border border-slate-400/50 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                      className="inline-flex items-center gap-1 rounded-full border border-[color:var(--panel-border)] px-2 py-0.5 text-[11px] font-semibold text-primary"
                       style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap)) }}
                     >
                       <Gauge size={11} />
                       {getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap).toFixed(2)}
                     </div>
                   </div>
-                  <div className="mt-2 border-t border-slate-700/80 pt-2">
+                  <div className="mt-2 border-t border-[color:var(--panel-border)] pt-2">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-500"
+                        className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-primary transition hover:bg-emerald-500"
                         onClick={(event) => {
                           event.stopPropagation();
                           void onQuickCompleteTask(hoveredBubble.task);
@@ -674,7 +674,7 @@ export function BubbleField({
                       <div className="ml-auto flex items-center gap-2">
                         <div className="flex items-center">
                           <select
-                            className="h-7 max-w-[136px] rounded bg-slate-800 px-2 text-[11px] text-white"
+                            className="h-7 max-w-[136px] surface-input rounded border px-2 text-[11px] text-primary"
                             defaultValue=""
                             onClick={(event) => event.stopPropagation()}
                             onChange={(event) => {
@@ -718,17 +718,17 @@ export function BubbleField({
                           </select>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                          <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {
                             event.stopPropagation();
                             void onQuickChangeTaskImportance(hoveredBubble.task, -1);
                           }}>-</button>
                           <div
-                            className="h-7 min-w-8 rounded px-2 text-center text-[11px] font-semibold leading-7 text-white"
+                            className="h-7 min-w-8 rounded px-2 text-center text-[11px] font-semibold leading-7 text-primary"
                             style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
                           >
                             {hoveredBubble.task.importance}
                           </div>
-                          <button type="button" className="rounded bg-slate-700 px-2 py-1 text-[11px] font-semibold text-white hover:bg-slate-600" onClick={(event) => {
+                          <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {
                             event.stopPropagation();
                             void onQuickChangeTaskImportance(hoveredBubble.task, 1);
                           }}>+</button>
@@ -747,15 +747,15 @@ export function BubbleField({
                 onMouseLeave={scheduleHoverExit}
               >
                 <div
-                  className="rounded-xl border border-cyan-200/30 bg-slate-950/92 p-3 text-xs text-slate-100 shadow-[0_16px_30px_rgba(2,6,23,0.8)]"
+                  className="surface-popover rounded-xl border p-3 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.8)]"
                   data-no-field-zoom="true"
                 >
                   <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
                   <button
                     type="button"
                     className={`mb-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
-                      ? 'border-cyan-300 bg-cyan-600/90 text-white'
-                      : 'border-slate-500 bg-slate-800/80 text-slate-200 hover:bg-slate-700/80'}`}
+                      ? 'border-cyan-300 bg-cyan-600/90 text-primary'
+                      : 'border-[color:var(--panel-border)] surface-muted text-muted hover:brightness-110'}`}
                     onClick={(event) => {
                       event.stopPropagation();
                       onToggleSubtaskFilter();
@@ -764,11 +764,11 @@ export function BubbleField({
                     Фильтровать
                   </button>
                   <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
-                    {hoveredSubtasks.length === 0 ? <li className="text-slate-400">Пока нет подзадач</li> : null}
+                    {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask) => (
                       <li
                         key={subtask.id}
-                        className="relative flex items-center gap-2 rounded bg-slate-800/80 px-2 py-1"
+                        className="relative flex items-center gap-2 surface-muted rounded px-2 py-1"
                         style={subtask.status !== 'DONE' && isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: SUBTASK_OVERDUE_GLOW }
                           : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
@@ -784,7 +784,7 @@ export function BubbleField({
                           }}
                         />
                         <div
-                          className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : ''}`}
+                          className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-subtle' : ''}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             onSelectSubtask(subtask);
@@ -811,7 +811,7 @@ export function BubbleField({
                     <div className="space-y-2">
                       <input
                         ref={subtaskTitleInputRef}
-                        className="w-full rounded bg-slate-800 px-2 py-1.5 text-[11px]"
+                        className="w-full surface-input rounded border px-2 py-1.5 text-[11px]"
                         placeholder="Название доп задачи"
                         value={activeDraft.title}
                         onClick={(event) => event.stopPropagation()}
@@ -834,7 +834,7 @@ export function BubbleField({
                           Сохранить
                         </button>
                         <button
-                          className="rounded bg-slate-700 px-2 py-1.5 text-[11px]"
+                          className="surface-muted rounded px-2 py-1.5 text-[11px]"
                           onClick={(event) => {
                             event.stopPropagation();
                             setIsAddingSubtask(false);
@@ -862,7 +862,7 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Наведи на пузырь</div>
+      <div className="pointer-events-none absolute bottom-3 left-3 surface-popover rounded border px-3 py-1 text-xs text-muted">Наведи на пузырь</div>
     </div>
   );
 }
