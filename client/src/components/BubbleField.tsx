@@ -42,15 +42,21 @@ const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
 const SIZE = 900;
 const WORKSPACE_PADDING = 80;
 const FIELD_RADIUS = SIZE * 0.47;
-const VIEWBOX_SIZE = SIZE + WORKSPACE_PADDING * 2;
-const TASK_INFO_PANEL_WIDTH = Math.round(VIEWBOX_SIZE / 3) - 28;
-const TASK_INFO_PANEL_X = -WORKSPACE_PADDING + 18;
-const BUBBLE_WORKSPACE_X = TASK_INFO_PANEL_X + TASK_INFO_PANEL_WIDTH + 28;
-const BUBBLE_WORKSPACE_WIDTH = VIEWBOX_SIZE - TASK_INFO_PANEL_WIDTH - 46;
+const VIEWBOX_HEIGHT = SIZE + WORKSPACE_PADDING * 2;
+const VIEWBOX_WIDTH = 1640;
+const VIEWBOX_LEFT = -WORKSPACE_PADDING;
+const VIEWBOX_TOP = -WORKSPACE_PADDING;
+const VIEWBOX_RIGHT = VIEWBOX_LEFT + VIEWBOX_WIDTH;
+const VIEWBOX_BOTTOM = VIEWBOX_TOP + VIEWBOX_HEIGHT;
+const TASK_INFO_PANEL_WIDTH = 520;
+const TASK_INFO_PANEL_X = VIEWBOX_LEFT + 24;
+const BUBBLE_WORKSPACE_GAP = 36;
+const BUBBLE_WORKSPACE_X = TASK_INFO_PANEL_X + TASK_INFO_PANEL_WIDTH + BUBBLE_WORKSPACE_GAP;
+const BUBBLE_WORKSPACE_WIDTH = VIEWBOX_RIGHT - BUBBLE_WORKSPACE_X - 28;
 const BUBBLE_FIELD_CENTER_X = BUBBLE_WORKSPACE_X + BUBBLE_WORKSPACE_WIDTH / 2;
 const BUBBLE_FIELD_CENTER_Y = SIZE / 2;
-const ELLIPSE_RADIUS_X = BUBBLE_WORKSPACE_WIDTH / 2 - 22;
-const ELLIPSE_RADIUS_Y = VIEWBOX_SIZE / 2 - 52;
+const ELLIPSE_RADIUS_X = BUBBLE_WORKSPACE_WIDTH / 2 - 16;
+const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
@@ -433,8 +439,9 @@ export function BubbleField({
 
     return clamp(belowY, workspaceMin + 8, workspaceMax - hoverSubtasksCard.height - 8);
   };
-  const workspaceMin = -WORKSPACE_PADDING;
-  const workspaceMax = SIZE + WORKSPACE_PADDING;
+  const workspaceMin = VIEWBOX_TOP;
+  const workspaceMax = VIEWBOX_BOTTOM;
+  const workspaceMaxX = VIEWBOX_RIGHT;
 
 
   const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
@@ -562,7 +569,7 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
-      <svg viewBox={`${workspaceMin} ${workspaceMin} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="relative z-20 h-full w-full overflow-visible">
+      <svg viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="relative z-20 h-full w-full overflow-visible">
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -580,7 +587,7 @@ export function BubbleField({
               <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
             </filter>
           </defs>
-          <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_SIZE - 48} pointerEvents="none">
+          <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
             <div className="flex h-full flex-col rounded-[1.8rem] border border-cyan-200/20 bg-slate-950/78 p-5 text-slate-100 shadow-[inset_0_0_36px_rgba(56,189,248,0.08)] backdrop-blur-sm">
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
@@ -693,7 +700,7 @@ export function BubbleField({
             return (
               <foreignObject
                 key={`${item.sphere.id}-hidden`}
-                x={clamp(item.x - popoverWidth / 2, BUBBLE_WORKSPACE_X + 8, workspaceMax - popoverWidth - 8)}
+                x={clamp(item.x - popoverWidth / 2, BUBBLE_WORKSPACE_X + 8, workspaceMaxX - popoverWidth - 8)}
                 y={clamp(item.y + 48, workspaceMin + 8, workspaceMax - popoverHeight - 8)}
                 width={popoverWidth}
                 height={popoverHeight}
@@ -724,7 +731,7 @@ export function BubbleField({
           {ENABLE_BUBBLE_HOVER_DETAILS && hoveredBubble ? (
             <>
               <foreignObject
-                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverInfoCard.width / 2, BUBBLE_WORKSPACE_X + 8, workspaceMaxX - hoverInfoCard.width - 8)}
                 y={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
                 width={hoverInfoCard.width}
                 height={hoverInfoCard.height}
@@ -829,7 +836,7 @@ export function BubbleField({
                 </div>
               </foreignObject>
               <foreignObject
-                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverSubtasksCard.width / 2, workspaceMin + 8, workspaceMax - hoverSubtasksCard.width - 8)}
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverSubtasksCard.width / 2, BUBBLE_WORKSPACE_X + 8, workspaceMaxX - hoverSubtasksCard.width - 8)}
                 y={getSubtasksCardY(mapToOval(hoveredBubble.x, hoveredBubble.y).y, hoveredBubble.radius)}
                 width={hoverSubtasksCard.width}
                 height={hoverSubtasksCard.height}
