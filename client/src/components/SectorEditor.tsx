@@ -22,10 +22,10 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
   }, [sphere]);
 
   return (
-    <div className="surface-backdrop fixed inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="surface-panel w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop fixed inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
+      <aside className="modal-card w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-primary">Настройка сектора</h3>
-        <input className="surface-input w-full rounded border p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
         <div>
           <p className="mb-2 text-sm text-muted">Цвет</p>
           <div className="grid grid-cols-6 gap-2">
@@ -46,7 +46,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
             {SPHERE_ICON_OPTIONS.map(({ key, Icon }) => (
               <button
                 key={key}
-                className={`flex h-11 items-center justify-center rounded border text-primary ${icon === key ? 'border-cyan-300 bg-cyan-600/30' : 'surface-muted'}`}
+                className={`flex h-11 items-center justify-center rounded border text-primary ${icon === key ? 'border-cyan-300 bg-cyan-600/30' : 'secondary-button'}`}
                 onClick={() => setIcon(key)}
               >
                 <Icon size={18} />
@@ -56,7 +56,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
         </div>
         <div className="flex gap-2">
           <button className="flex-1 rounded bg-cyan-600 px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
-          <button className="surface-muted rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
+          <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
         </div>
       </aside>
     </div>
