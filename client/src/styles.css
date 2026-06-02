@@ -2,9 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+body[data-theme='dark'] {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #e2e8f0;
+  color: var(--text-primary);
+  color-scheme: dark;
+  --app-bg: radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.15) 0 1px, transparent 1.5px), radial-gradient(circle at 70% 30%, rgba(148, 163, 184, 0.18) 0 1px, transparent 1.4px), radial-gradient(circle at 45% 65%, rgba(226, 232, 240, 0.12) 0 1px, transparent 1.5px), radial-gradient(circle at 80% 78%, rgba(125, 211, 252, 0.12) 0 1px, transparent 1.6px), radial-gradient(circle at top, #1e293b 0%, #020617 56%, #020617 100%);
+  --app-bg-size: 280px 280px, 360px 360px, 320px 320px, 420px 420px, auto;
+  --panel-bg: rgba(15, 23, 42, 0.92);
+  --panel-border: rgba(51, 65, 85, 0.7);
+  --card-bg: rgba(30, 41, 59, 0.72);
+  --muted-bg: rgba(51, 65, 85, 0.82);
+  --topbar-bg: rgba(15, 23, 42, 0.72);
+  --canvas-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.84), rgba(2, 6, 23, 0.78) 52%, rgba(49, 46, 129, 0.72));
+  --side-panel-bg: rgba(2, 6, 23, 0.9);
+  --popover-bg: rgba(15, 23, 42, 0.96);
+  --input-bg: rgba(30, 41, 59, 0.96);
+  --overlay-bg: rgba(2, 6, 23, 0.72);
+  --text-primary: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-subtle: #94a3b8;
+  --accent: #22d3ee;
+}
+
+body[data-theme='light'] {
+  color: var(--text-primary);
+  color-scheme: light;
+  --app-bg: radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.16) 0 1px, transparent 1.7px), radial-gradient(circle at 76% 22%, rgba(99, 102, 241, 0.12) 0 1px, transparent 1.6px), linear-gradient(135deg, #f8fafc 0%, #eef7ff 45%, #f8fbff 100%);
+  --app-bg-size: 300px 300px, 380px 380px, auto;
+  --panel-bg: rgba(255, 255, 255, 0.94);
+  --panel-border: rgba(148, 163, 184, 0.42);
+  --card-bg: rgba(248, 250, 252, 0.95);
+  --muted-bg: rgba(226, 232, 240, 0.88);
+  --topbar-bg: rgba(255, 255, 255, 0.82);
+  --canvas-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(239, 246, 255, 0.94) 48%, rgba(224, 242, 254, 0.9));
+  --side-panel-bg: rgba(248, 250, 252, 0.94);
+  --popover-bg: rgba(255, 255, 255, 0.98);
+  --input-bg: rgba(255, 255, 255, 0.96);
+  --overlay-bg: rgba(15, 23, 42, 0.36);
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  --accent: #0891b2;
 }
 
 html,
@@ -16,13 +55,9 @@ body,
 body {
   margin: 0;
   overflow: auto;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.15) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 70% 30%, rgba(148, 163, 184, 0.18) 0 1px, transparent 1.4px),
-    radial-gradient(circle at 45% 65%, rgba(226, 232, 240, 0.12) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 80% 78%, rgba(125, 211, 252, 0.12) 0 1px, transparent 1.6px),
-    radial-gradient(circle at top, #1e293b 0%, #020617 56%, #020617 100%);
-  background-size: 280px 280px, 360px 360px, 320px 320px, 420px 420px, auto;
+  color: var(--text-primary);
+  background: var(--app-bg);
+  background-size: var(--app-bg-size);
 }
 
 @keyframes subtask-reminder-glow {
@@ -142,20 +177,6 @@ body {
   will-change: scroll-position;
 }
 
-body[data-theme='light'] {
-  color: #0f172a;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.16) 0 1px, transparent 1.7px),
-    radial-gradient(circle at 76% 22%, rgba(99, 102, 241, 0.12) 0 1px, transparent 1.6px),
-    linear-gradient(135deg, #f8fafc 0%, #eef7ff 45%, #f8fbff 100%);
-  background-size: 300px 300px, 380px 380px, auto;
-}
-
-html[data-theme='light'],
-body[data-theme='light'],
-body[data-theme='light'] #root {
-  color-scheme: light;
-}
 
 body[data-theme='light'] * {
   scrollbar-color: rgba(14, 165, 233, 0.65) rgba(226, 232, 240, 0.9);
@@ -171,101 +192,17 @@ body[data-theme='light'] *::-webkit-scrollbar-thumb {
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
-body[data-theme='light'] main[data-theme='light'] {
-  color: #0f172a !important;
-  background:
-    radial-gradient(circle at 10% 8%, rgba(14, 165, 233, 0.14), transparent 26%),
-    radial-gradient(circle at 88% 16%, rgba(124, 58, 237, 0.11), transparent 24%),
-    linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(239, 246, 255, 0.96) 48%, rgba(255, 255, 255, 0.98)) !important;
+
+body[data-theme] input,
+body[data-theme] textarea,
+body[data-theme] select {
+  color: var(--text-primary);
+  border-color: var(--panel-border);
 }
 
-body[data-theme='light'] [class~='bg-slate-950'],
-body[data-theme='light'] [class~='bg-slate-950/70'],
-body[data-theme='light'] [class~='bg-slate-950/90'],
-body[data-theme='light'] [class~='bg-slate-950/92'],
-body[data-theme='light'] [class~='bg-slate-950/95'],
-body[data-theme='light'] [class~='bg-slate-950/98'],
-body[data-theme='light'] [class~='bg-slate-950/99'],
-body[data-theme='light'] [class~='bg-slate-900'],
-body[data-theme='light'] [class~='bg-slate-900/20'],
-body[data-theme='light'] [class~='bg-slate-900/40'],
-body[data-theme='light'] [class~='bg-slate-900/70'],
-body[data-theme='light'] [class~='bg-slate-900/75'],
-body[data-theme='light'] [class~='bg-slate-900/80'],
-body[data-theme='light'] [class~='bg-slate-900/85'],
-body[data-theme='light'] [class~='bg-slate-900/90'],
-body[data-theme='light'] [class~='bg-slate-900/95'] {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-}
-
-body[data-theme='light'] [class~='bg-slate-800'],
-body[data-theme='light'] [class~='bg-slate-800/55'],
-body[data-theme='light'] [class~='bg-slate-800/60'],
-body[data-theme='light'] [class~='bg-slate-800/70'],
-body[data-theme='light'] [class~='bg-slate-800/80'],
-body[data-theme='light'] [class~='bg-slate-800/90'],
-body[data-theme='light'] [class~='bg-slate-800/95'] {
-  background-color: rgba(248, 250, 252, 0.92) !important;
-}
-
-body[data-theme='light'] [class~='bg-slate-700'],
-body[data-theme='light'] [class~='bg-slate-700/80'],
-body[data-theme='light'] [class~='bg-slate-700/90'] {
-  background-color: rgba(226, 232, 240, 0.9) !important;
-}
-
-body[data-theme='light'] [class~='bg-slate-600/80'] {
-  background-color: rgba(203, 213, 225, 0.88) !important;
-}
-
-body[data-theme='light'] [class~='border-slate-700'],
-body[data-theme='light'] [class~='border-slate-700/50'],
-body[data-theme='light'] [class~='border-slate-700/60'],
-body[data-theme='light'] [class~='border-slate-700/70'],
-body[data-theme='light'] [class~='border-slate-700/80'],
-body[data-theme='light'] [class~='border-slate-600'],
-body[data-theme='light'] [class~='border-slate-600/70'],
-body[data-theme='light'] [class~='border-slate-600/80'],
-body[data-theme='light'] [class~='border-slate-800/80'] {
-  border-color: rgba(148, 163, 184, 0.42) !important;
-}
-
-body[data-theme='light'] [class~='border-slate-500'],
-body[data-theme='light'] [class~='border-slate-500/90'],
-body[data-theme='light'] [class~='border-slate-400/50'],
-body[data-theme='light'] [class~='border-slate-300/40'],
-body[data-theme='light'] [class~='border-slate-200/30'] {
-  border-color: rgba(100, 116, 139, 0.42) !important;
-}
-
-body[data-theme='light'] [class~='text-slate-50'],
-body[data-theme='light'] [class~='text-slate-100'],
-body[data-theme='light'] [class~='text-slate-100/90'],
-body[data-theme='light'] [class~='text-slate-200'],
-body[data-theme='light'] [class~='text-slate-200/80'] {
-  color: #0f172a !important;
-}
-
-body[data-theme='light'] [class~='text-slate-300'],
-body[data-theme='light'] [class~='text-slate-400'] {
-  color: #475569 !important;
-}
-
-body[data-theme='light'] [class~='text-slate-500'] {
-  color: #64748b !important;
-}
-
-body[data-theme='light'] input,
-body[data-theme='light'] textarea,
-body[data-theme='light'] select {
-  color: #0f172a;
-  background-color: rgba(255, 255, 255, 0.92);
-  border-color: rgba(148, 163, 184, 0.42);
-}
-
-body[data-theme='light'] input::placeholder,
-body[data-theme='light'] textarea::placeholder {
-  color: #64748b;
+body[data-theme] input::placeholder,
+body[data-theme] textarea::placeholder {
+  color: var(--text-subtle);
 }
 
 body[data-theme='light'] [class~='bg-cyan-900/30'],
@@ -329,4 +266,75 @@ body[data-theme='light'] .shadow-lg {
 body[data-theme='light'] .backdrop-blur,
 body[data-theme='light'] .backdrop-blur-sm {
   backdrop-filter: blur(18px) saturate(1.08);
+}
+
+@layer components {
+  .app-shell {
+    color: var(--text-primary);
+    background: var(--app-bg);
+    background-size: var(--app-bg-size);
+  }
+
+  .surface-topbar {
+    border-color: var(--panel-border);
+    background: var(--topbar-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-side-panel {
+    border-color: var(--panel-border);
+    background: var(--side-panel-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-panel {
+    border-color: var(--panel-border);
+    background: var(--panel-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-canvas {
+    border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+    background: var(--canvas-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-card {
+    border-color: var(--panel-border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-muted {
+    background: var(--muted-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-popover {
+    border-color: var(--panel-border);
+    background: var(--popover-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-input {
+    border-color: var(--panel-border);
+    background: var(--input-bg);
+    color: var(--text-primary);
+  }
+
+  .surface-backdrop {
+    background: var(--overlay-bg);
+  }
+
+  .text-primary {
+    color: var(--text-primary);
+  }
+
+  .text-muted {
+    color: var(--text-muted);
+  }
+
+  .text-subtle {
+    color: var(--text-subtle);
+  }
 }
