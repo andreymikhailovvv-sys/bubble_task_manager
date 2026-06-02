@@ -769,7 +769,7 @@ export function BubbleField({
               </foreignObject>
             </>
           ) : null}
-        </g>
+        </motion.g>
       </svg>
       <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Наведи на пузырь</div>
     </div>
