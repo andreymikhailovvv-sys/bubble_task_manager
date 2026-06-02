@@ -194,16 +194,20 @@ export function DateTimePickerWithApply({
   const selectedDayTasksByHour = useMemo(() => {
     const groupedByHour = Array.from({ length: 24 }, (_, hour) => ({
       hour,
-      tasks: [] as typeof timelineTasks
+      quarters: Array.from({ length: 4 }, (_, quarterIndex) => ({
+        minute: quarterIndex * 15,
+        tasks: [] as typeof timelineTasks
+      }))
     }));
     selectedDayTasks.forEach((task) => {
       if (!task.dueDate) return;
       const date = new Date(task.dueDate);
       if (Number.isNaN(date.getTime())) return;
-      groupedByHour[date.getHours()].tasks.push(task);
+      const quarterIndex = Math.min(3, Math.floor(date.getMinutes() / 15));
+      groupedByHour[date.getHours()].quarters[quarterIndex].tasks.push(task);
     });
     return groupedByHour;
-  }, [selectedDayTasks, timelineTasks]);
+  }, [selectedDayTasks]);
 
   const popupContent = (
     <div
@@ -354,28 +358,40 @@ export function DateTimePickerWithApply({
                   <p className="text-xs text-slate-300">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
                 <div className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
-                  {selectedDayTasksByHour.map(({ hour, tasks }) => (
-                    <button key={hour} type="button" className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-800/70 p-2 text-left hover:border-cyan-400" onClick={() => {
-                      if (!selectedPreviewDate) return;
-                      const picked = new Date(selectedPreviewDate);
-                      picked.setHours(hour, 0, 0, 0);
-                      const parts = toLocalParts(picked.toISOString());
-                      setDraftDate(parts.date);
-                      setDraftTime(parts.time);
-                      void onChange(picked.toISOString());
-                      setIsTimelinePreviewOpen(false);
-                      setIsOpen(false);
-                    }}>
-                      <span className="w-14 shrink-0 text-xs text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</span>
+                  {selectedDayTasksByHour.map(({ hour, quarters }) => (
+                    <div key={hour} className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-800/70 p-2 text-left">
+                      <span className="w-14 shrink-0 pt-1 text-xs text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</span>
                       <div className="min-h-6 flex-1 space-y-1">
-                        {tasks.length === 0 ? <p className="text-xs text-slate-500">Свободный слот</p> : tasks.slice(0, 3).map((task) => (
-                          <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
-                            {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
-                            {task.title}
-                          </div>
+                        {quarters.map(({ minute, tasks }) => (
+                          <button
+                            key={`${hour}-${minute}`}
+                            type="button"
+                            className="flex w-full items-start gap-2 rounded px-1.5 py-1 text-left transition hover:bg-cyan-950/40 hover:ring-1 hover:ring-cyan-400/80"
+                            onClick={() => {
+                              if (!selectedPreviewDate) return;
+                              const picked = new Date(selectedPreviewDate);
+                              picked.setHours(hour, minute, 0, 0);
+                              const parts = toLocalParts(picked.toISOString());
+                              setDraftDate(parts.date);
+                              setDraftTime(parts.time);
+                              void onChange(picked.toISOString());
+                              setIsTimelinePreviewOpen(false);
+                              setIsOpen(false);
+                            }}
+                          >
+                            <span className="w-10 shrink-0 text-[11px] font-medium text-cyan-100">{`:${minute.toString().padStart(2, '0')}`}</span>
+                            <div className="min-h-4 flex-1 space-y-1">
+                              {tasks.length === 0 ? <p className="text-xs text-slate-500">Свободно</p> : tasks.map((task) => (
+                                <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                                  {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
+                                  {task.title}
+                                </div>
+                              ))}
+                            </div>
+                          </button>
                         ))}
                       </div>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
