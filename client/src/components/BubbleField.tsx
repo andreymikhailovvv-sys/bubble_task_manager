@@ -282,8 +282,13 @@ export function BubbleField({
   }, [sectorCount, spheres, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const inactiveBubbles = hoveredTaskId ? visibleBubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : visibleBubbles;
-  const activeBubble = hoveredTaskId ? visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
+  const orderedBubbles = useMemo(() => {
+    if (!hoveredTaskId) return visibleBubbles;
+    return [
+      ...visibleBubbles.filter((bubble) => bubble.task.id !== hoveredTaskId),
+      ...visibleBubbles.filter((bubble) => bubble.task.id === hoveredTaskId)
+    ];
+  }, [hoveredTaskId, visibleBubbles]);
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -392,7 +397,7 @@ export function BubbleField({
   const workspaceMaxX = VIEWBOX_RIGHT;
 
 
-  const renderBubble = (bubble: (typeof bubbles)[number], isRaisedLayer = false) => {
+  const renderBubble = (bubble: (typeof bubbles)[number]) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
@@ -409,8 +414,8 @@ export function BubbleField({
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
     const hoverScale = HOVER_TARGET_RADIUS / bubble.radius;
-    const titleLineClamp = isHovered ? 6 : 4;
-    const titleFontSize = isHovered ? Math.max(10, bubble.radius / 4.2) : Math.max(9, bubble.radius / 4.8);
+    const titleLineClamp = 4;
+    const titleFontSize = Math.max(9, bubble.radius / 4.8);
 
     return (
       <motion.g
@@ -461,7 +466,6 @@ export function BubbleField({
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
           <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%' }}>
             <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
-            {isHovered ? <span className="mt-1 text-[8px] font-medium text-cyan-100/90">{formatDeadlineLeft(bubble.task.dueDate)}</span> : null}
           </div>
         </foreignObject>
         {bubble.task.isRecurring ? (
@@ -606,9 +610,7 @@ export function BubbleField({
             return <line key={idx} x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke="#334155" strokeWidth="1.5" />;
           })}
 
-          <AnimatePresence>{inactiveBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
-
-          <AnimatePresence>{activeBubble ? renderBubble(activeBubble, true) : null}</AnimatePresence>
+          <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
 
           {sectorLabels.map((item) => {
             const Icon = resolveSphereIcon(item.sphere.icon);
