@@ -1594,6 +1594,13 @@ export default function App() {
 
   const selectedDisplayMode = DISPLAY_MODE_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_MODE_OPTIONS[0];
   const isTimelineMode = displayMode === 'timeline';
+  const isBubblesMode = displayMode === 'bubbles';
+
+  useEffect(() => {
+    if (isBubblesMode && rankingMode !== 'coefficient') {
+      setRankingMode('coefficient');
+    }
+  }, [isBubblesMode, rankingMode]);
   useEffect(() => {
     if (!isTimelineMode || (timelineViewMode !== 'day' && timelineViewMode !== 'week')) return;
     const container = timelineScrollContainerRef.current;
@@ -2888,14 +2895,20 @@ export default function App() {
         </div>
         <div className="w-full min-w-52 flex-1 sm:w-auto sm:flex-none">
           <select
-            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
-            value={rankingMode}
+            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : isBubblesMode ? 'cursor-default bg-slate-800/80 text-slate-100' : 'bg-slate-800'}`}
+            value={isBubblesMode ? 'coefficient' : rankingMode}
             disabled={isTimelineMode}
             onChange={(event) => setRankingMode(event.target.value as BubbleRankingMode)}
           >
-            <option value="urgency">По срочности</option>
-            <option value="importance">По важности</option>
-            <option value="coefficient">По коэффициенту</option>
+            {isBubblesMode ? (
+              <option value="coefficient">По коэффициенту</option>
+            ) : (
+              <>
+                <option value="urgency">По срочности</option>
+                <option value="importance">По важности</option>
+                <option value="coefficient">По коэффициенту</option>
+              </>
+            )}
           </select>
         </div>
         <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
@@ -3006,7 +3019,7 @@ export default function App() {
             className="h-full"
             tasks={visibleTasks}
             spheres={visibleSpheres}
-            rankingMode={rankingMode}
+            rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
             isSubtaskFilterActive={isSubtaskFilterActive}
             onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}

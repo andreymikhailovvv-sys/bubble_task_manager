@@ -303,7 +303,7 @@ function applyGravity(
   targetDistanceById: Record<string, number>,
   gravityById: Record<string, number>
 ) {
-  for (let t = 0; t < 170; t += 1) {
+  for (let t = 0; t < 190; t += 1) {
     bubbles.forEach((bubble) => {
       const dx = bubble.x - center;
       const dy = bubble.y - center;
@@ -312,13 +312,13 @@ function applyGravity(
       const ny = dy / currentDistance;
       const targetDistance = targetDistanceById[bubble.task.id] ?? 18;
       const gravity = gravityById[bubble.task.id] ?? 0.5;
-      const spring = (targetDistance - currentDistance) * (0.08 + gravity * 0.12);
+      const spring = (targetDistance - currentDistance) * (0.1 + gravity * 0.16);
       bubble.x += nx * spring;
       bubble.y += ny * spring;
       keepInSector(bubble, center, maxDistance, sectorGeometry);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 9, 1);
+    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 4, 1);
   }
 }
 
@@ -326,8 +326,8 @@ function getDistanceByRank(index: number, total: number, maxDistance: number, mo
   const minDistance = 16;
   if (total <= 1) return minDistance;
   const compactOuter = mode === 'global'
-    ? Math.min(maxDistance * 0.28, 24 + Math.sqrt(total) * 12)
-    : Math.min(maxDistance * 0.42, 34 + Math.sqrt(total) * 20);
+    ? Math.min(maxDistance * 0.24, 20 + Math.sqrt(total) * 10)
+    : Math.min(maxDistance * 0.34, 28 + Math.sqrt(total) * 16);
   const rankRatio = index / (total - 1);
   const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.48) : Math.pow(rankRatio, 0.72);
   return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
@@ -352,8 +352,8 @@ function getRadiusByRank(
   const maxRadius = mode === 'global' ? 92 : 82;
 
   if (rankingMode === 'coefficient') {
-    const minReadableRadius = mode === 'global' ? 30 : 27;
-    const scaledMaxRadius = mode === 'global' ? 110 : 98;
+    const minReadableRadius = mode === 'global' ? 28 : 25;
+    const scaledMaxRadius = mode === 'global' ? 104 : 94;
     const proportionalRadius = relativeCoefficient * scaledMaxRadius;
     const importanceSupport = (importance - 1) * (mode === 'global' ? 1 : 0.8);
     const radius = Math.max(minReadableRadius, proportionalRadius) + importanceSupport;
@@ -409,16 +409,17 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
       keepInSector(bubble, center, maxDistance, sectorGeometry);
     };
 
-    for (let i = 0; i < 18; i += 1) {
+    for (let i = 0; i < 24; i += 1) {
       medium.forEach((bubble) => {
         const anchor = nearest(bubble, large);
-        if (anchor) pullToAnchor(bubble, anchor, 2, 0.42);
+        if (anchor) pullToAnchor(bubble, anchor, -2, 0.5);
       });
       small.forEach((bubble) => {
-        const anchor = nearest(bubble, medium.length > 0 ? medium : large);
-        if (anchor) pullToAnchor(bubble, anchor, 2, 0.46);
+        const biggerAnchors = [...large, ...medium].filter((anchor) => anchor.radius >= bubble.radius);
+        const anchor = nearest(bubble, biggerAnchors.length > 0 ? biggerAnchors : large);
+        if (anchor) pullToAnchor(bubble, anchor, -5, 0.58);
       });
-      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 7, 1);
+      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 2, 1);
     }
   });
 }
@@ -528,7 +529,7 @@ export function buildBubbles(
       const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
       const distance = rankingMode === 'coefficient'
-        ? 14 + (1 - coefficient) * Math.max(16, maxDistance * (mode === 'global' ? 0.26 : 0.4)) + i * 0.45
+        ? 10 + Math.pow(1 - coefficient, 1.75) * Math.max(14, maxDistance * (mode === 'global' ? 0.22 : 0.3)) + i * 0.18
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
@@ -572,7 +573,7 @@ export function buildBubbles(
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 8 : 10, 82);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 5 : 6, 82);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -587,12 +588,12 @@ export function buildBubbles(
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = rankingMode === 'coefficient'
-        ? 14 + (1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap)) * Math.max(16, maxDistance * (mode === 'global' ? 0.26 : 0.4)) + idx * 0.3
+        ? 10 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.75) * Math.max(14, maxDistance * (mode === 'global' ? 0.22 : 0.3)) + idx * 0.14
         : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
-        : Math.max(targetDistance - 12, previousDistance + bubble.radius * 0.2 + 4);
-      const maxDistanceForRank = Math.min(maxDistance - bubble.radius - 6, minDistance + Math.max(8, bubble.radius * 0.45));
+        : Math.max(targetDistance - 14, previousDistance + bubble.radius * 0.12 + 2);
+      const maxDistanceForRank = Math.min(maxDistance - bubble.radius - 4, minDistance + Math.max(7, bubble.radius * 0.36));
       if (currentDistance < minDistance || currentDistance > maxDistanceForRank) {
         const clampedDistance = Math.min(maxDistanceForRank, Math.max(minDistance, currentDistance));
         const nx = dx / currentDistance;
@@ -614,7 +615,7 @@ export function buildBubbles(
 
   applyHierarchicalClustering(result, center, maxDistance, sectorGeometry);
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 8 : 10, 130);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, mode === 'global' ? 4 : 5, 120);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
