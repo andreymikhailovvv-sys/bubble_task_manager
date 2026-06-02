@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -40,8 +40,14 @@ const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
 };
 
 const SIZE = 900;
-const WORKSPACE_PADDING = 320;
-const HOVER_EXIT_DELAY_MS = 220;
+const WORKSPACE_PADDING = 80;
+const FIELD_RADIUS = SIZE * 0.47;
+const ELLIPSE_RADIUS_X = (SIZE + WORKSPACE_PADDING * 2) / 2 - 24;
+const ELLIPSE_RADIUS_Y = (SIZE + WORKSPACE_PADDING * 2) / 2 - 48;
+const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
+const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
+const HOVER_EXIT_DELAY_MS = 120;
+const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
 const SUBTASK_OVERDUE_GLOW =
@@ -179,8 +185,6 @@ export function BubbleField({
   onAddTaskToSphere,
   className
 }: Props) {
-  const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
@@ -189,7 +193,6 @@ export function BubbleField({
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
   const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
-  const dragStart = useRef<{ x: number; y: number } | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -254,6 +257,10 @@ export function BubbleField({
 
   const inactiveBubbles = hoveredTaskId ? bubbles.filter((bubble) => bubble.task.id !== hoveredTaskId) : bubbles;
   const activeBubble = hoveredTaskId ? bubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null : null;
+  const mapToOval = useCallback((x: number, y: number) => ({
+    x: SIZE / 2 + (x - SIZE / 2) * ELLIPSE_X_SCALE,
+    y: SIZE / 2 + (y - SIZE / 2) * ELLIPSE_Y_SCALE
+  }), []);
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -290,13 +297,14 @@ export function BubbleField({
     return spheres.map((sphere, idx) => {
       const angle = sectorGeometry[idx]?.midAngle ?? 0;
       const distance = SIZE * 0.46;
+      const point = mapToOval(SIZE / 2 + Math.cos(angle) * distance, SIZE / 2 + Math.sin(angle) * distance);
       return {
         sphere,
-        x: SIZE / 2 + Math.cos(angle) * distance,
-        y: SIZE / 2 + Math.sin(angle) * distance
+        x: point.x,
+        y: point.y
       };
     });
-  }, [sectorCount, sectorGeometry, spheres]);
+  }, [mapToOval, sectorCount, sectorGeometry, spheres]);
 
   const cancelHoverExit = () => {
     if (hoverExitTimer.current) {
@@ -375,13 +383,14 @@ export function BubbleField({
     const aiBadgeX = bubble.radius * 0.66;
     const aiBadgeY = -bubble.radius * 0.66;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
+    const displayPoint = mapToOval(bubble.x, bubble.y);
 
     return (
       <motion.g
         key={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: isRaisedLayer ? 1 : activeBubble ? 0.25 : 1, scale: isHovered ? 1.2 : 1, x: bubble.x, y: bubble.y }}
-        exit={{ opacity: 1, scale: 1, x: bubble.x, y: bubble.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? 2 : 1, x: displayPoint.x, y: displayPoint.y }}
+        exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         transition={{ type: isPopping ? 'tween' : 'spring', duration: isPopping ? 0.33 : undefined, damping: 30, stiffness: 140, mass: 0.95 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
@@ -475,43 +484,13 @@ export function BubbleField({
   return (
     <div
       className={`relative overflow-visible rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
-      onWheel={(event) => {
-        if (event.target instanceof Element && event.target.closest('[data-no-field-zoom="true"]')) {
-          event.stopPropagation();
-          return;
-        }
-        if (isNativeCalendarOpen) return;
-        event.preventDefault();
-        const svgRect = event.currentTarget.getBoundingClientRect();
-        const workspaceSize = SIZE + WORKSPACE_PADDING * 2;
-        const mouseX = workspaceMin + ((event.clientX - svgRect.left) / svgRect.width) * workspaceSize;
-        const mouseY = workspaceMin + ((event.clientY - svgRect.top) / svgRect.height) * workspaceSize;
-        const nextZoom = Math.min(2.2, Math.max(0.6, zoom + (event.deltaY > 0 ? -0.08 : 0.08)));
-        const worldX = (mouseX - offset.x) / zoom;
-        const worldY = (mouseY - offset.y) / zoom;
-        setOffset({ x: mouseX - worldX * nextZoom, y: mouseY - worldY * nextZoom });
-        setZoom(nextZoom);
-      }}
-      onMouseDown={(event) => {
-        if (isNativeCalendarOpen) return;
-        dragStart.current = { x: event.clientX - offset.x, y: event.clientY - offset.y };
-      }}
-      onMouseMove={(event) => {
-        if (isNativeCalendarOpen || !dragStart.current) return;
-        setOffset({ x: event.clientX - dragStart.current.x, y: event.clientY - dragStart.current.y });
-      }}
-      onMouseUp={() => {
-        if (isNativeCalendarOpen) return;
-        dragStart.current = null;
-      }}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
-        dragStart.current = null;
         scheduleHoverExit();
       }}
     >
       <svg viewBox={`${workspaceMin} ${workspaceMin} ${SIZE + WORKSPACE_PADDING * 2} ${SIZE + WORKSPACE_PADDING * 2}`} className="relative z-20 h-full w-full overflow-visible">
-        <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
+        <g>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
               <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
@@ -528,20 +507,17 @@ export function BubbleField({
               <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
             </filter>
           </defs>
-          <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.47} fill="url(#bg)" opacity={0.86} />
-          <circle cx={SIZE / 2} cy={SIZE / 2} r={SIZE * 0.485} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={0.7} />
+          <ellipse cx={SIZE / 2} cy={SIZE / 2} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={0.86} />
+          <ellipse cx={SIZE / 2} cy={SIZE / 2} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={0.7} />
 
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
-            const x = SIZE / 2 + Math.cos(angle) * SIZE * 0.47;
-            const y = SIZE / 2 + Math.sin(angle) * SIZE * 0.47;
-            return <line key={idx} x1={SIZE / 2} y1={SIZE / 2} x2={x} y2={y} stroke="#334155" strokeWidth="1.5" />;
+            const point = mapToOval(SIZE / 2 + Math.cos(angle) * FIELD_RADIUS, SIZE / 2 + Math.sin(angle) * FIELD_RADIUS);
+            return <line key={idx} x1={SIZE / 2} y1={SIZE / 2} x2={point.x} y2={point.y} stroke="#334155" strokeWidth="1.5" />;
           })}
 
           <AnimatePresence>{inactiveBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
-
-          {activeBubble ? <rect x={0} y={0} width={SIZE} height={SIZE} fill="#020617" fillOpacity={0.58} pointerEvents="none" /> : null}
 
           <AnimatePresence>{activeBubble ? renderBubble(activeBubble, true) : null}</AnimatePresence>
 
@@ -564,11 +540,11 @@ export function BubbleField({
             );
           })}
 
-          {hoveredBubble ? (
+          {ENABLE_BUBBLE_HOVER_DETAILS && hoveredBubble ? (
             <>
               <foreignObject
-                x={clamp(hoveredBubble.x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
-                y={clamp(hoveredBubble.y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverInfoCard.width / 2, workspaceMin + 8, workspaceMax - hoverInfoCard.width - 8)}
+                y={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
                 width={hoverInfoCard.width}
                 height={hoverInfoCard.height}
                 onMouseEnter={cancelHoverExit}
@@ -672,8 +648,8 @@ export function BubbleField({
                 </div>
               </foreignObject>
               <foreignObject
-                x={clamp(hoveredBubble.x - hoverSubtasksCard.width / 2, workspaceMin + 8, workspaceMax - hoverSubtasksCard.width - 8)}
-                y={getSubtasksCardY(hoveredBubble.y, hoveredBubble.radius)}
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverSubtasksCard.width / 2, workspaceMin + 8, workspaceMax - hoverSubtasksCard.width - 8)}
+                y={getSubtasksCardY(mapToOval(hoveredBubble.x, hoveredBubble.y).y, hoveredBubble.radius)}
                 width={hoverSubtasksCard.width}
                 height={hoverSubtasksCard.height}
                 onMouseEnter={cancelHoverExit}
@@ -795,7 +771,7 @@ export function BubbleField({
           ) : null}
         </g>
       </svg>
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Zoom {zoom.toFixed(2)} • Pan drag</div>
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/70 px-3 py-1 text-xs text-slate-300">Наведи на пузырь</div>
     </div>
   );
 }
