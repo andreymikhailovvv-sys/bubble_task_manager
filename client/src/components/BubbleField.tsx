@@ -401,7 +401,7 @@ export function BubbleField({
   const containerShadowClass = isLightTheme
     ? 'shadow-[0_18px_48px_rgba(15,23,42,0.12),0_4px_18px_rgba(14,165,233,0.10),inset_0_1px_32px_rgba(255,255,255,0.72)]'
     : 'shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)]';
-  const sectorStroke = isLightTheme ? 'rgba(100,116,139,0.35)' : '#334155';
+  const sectorStroke = 'var(--sector-line)';
 
 
   const renderBubble = (bubble: (typeof bubbles)[number]) => {
@@ -522,7 +522,7 @@ export function BubbleField({
         {postponeResultByTaskId[bubble.task.id] ? (
           <motion.g initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: -8 }} exit={{ opacity: 0, y: -14 }} pointerEvents="none">
             <foreignObject x={-44} y={-bubble.radius - 26} width={88} height={16}>
-              <div className="w-full text-center text-[10px] font-semibold text-cyan-100">{postponeResultByTaskId[bubble.task.id]}</div>
+              <div className="w-full text-center text-[10px] font-semibold text-primary">{postponeResultByTaskId[bubble.task.id]}</div>
             </foreignObject>
           </motion.g>
         ) : null}
@@ -532,13 +532,13 @@ export function BubbleField({
 
   return (
     <div
-      className={`surface-canvas relative overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`bubble-field-container surface-canvas relative overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
       }}
     >
-      <svg viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="relative z-20 h-full w-full overflow-visible">
+      <svg viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible">
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -577,11 +577,11 @@ export function BubbleField({
             </filter>
           </defs>
           <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
-            <div className="surface-panel flex h-full flex-col rounded-[1.8rem] border p-6 shadow-[inset_0_0_36px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+            <div className="bubble-tooltip-card flex h-full flex-col rounded-[1.8rem] border p-6">
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
                   <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.28em] text-cyan-200/70">Информация о задаче</p>
+                    <p className="text-sm font-semibold uppercase tracking-[0.28em] text-muted">Информация о задаче</p>
                     <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-primary">
                       <LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick />
                     </h3>
@@ -599,7 +599,7 @@ export function BubbleField({
                     </div>
                     <div className="surface-card rounded-xl p-3">
                       <p className="text-subtle">Осталось</p>
-                      <p className="mt-1 font-semibold text-cyan-100">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                      <p className="mt-1 font-semibold text-primary">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                     </div>
                     <div className="surface-card rounded-xl p-3">
                       <p className="text-subtle">Статус</p>
@@ -613,7 +613,7 @@ export function BubbleField({
                   <div className="surface-card rounded-2xl border p-4 text-base">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="font-semibold text-primary">Подзадачи</p>
-                      <span className="rounded-full bg-cyan-500/15 px-2 py-0.5 text-cyan-100">{hoveredSubtasks.length}</span>
+                      <span className="bubble-zoom-badge rounded-full border px-2 py-0.5">{hoveredSubtasks.length}</span>
                     </div>
                     <ul className="max-h-40 space-y-1 overflow-hidden text-muted">
                       {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет активных подзадач</li> : null}
@@ -629,7 +629,7 @@ export function BubbleField({
                 </div>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center text-center text-subtle">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-cyan-200/60">Информация о задаче</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-subtle">Информация о задаче</p>
                   <p className="mt-3 text-lg leading-relaxed">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
                 </div>
               )}
@@ -642,7 +642,7 @@ export function BubbleField({
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
             const point = mapToOval(SIZE / 2 + Math.cos(angle) * FIELD_RADIUS, SIZE / 2 + Math.sin(angle) * FIELD_RADIUS);
-            return <line key={idx} x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
+            return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
           <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
@@ -652,7 +652,7 @@ export function BubbleField({
             return (
               <g key={item.sphere.id} transform={`translate(${item.x} ${item.y})`}>
                 <foreignObject x={-88} y={-18} width={176} height={40}>
-                  <div className="surface-popover flex w-full items-center justify-center gap-1 rounded border px-2 py-1 text-xs">
+                  <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded border px-2 py-1 text-xs">
                     <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere)}>
                       {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
                       <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
@@ -678,7 +678,7 @@ export function BubbleField({
                 onMouseEnter={cancelHoverExit}
                 onMouseLeave={scheduleHoverExit}
               >
-                <div className="surface-popover rounded-xl border p-3 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.8)]">
+                <div className="bubble-tooltip-card rounded-xl border p-3 text-xs">
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
                   <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-muted">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
@@ -784,10 +784,10 @@ export function BubbleField({
                 onMouseLeave={scheduleHoverExit}
               >
                 <div
-                  className="surface-popover rounded-xl border p-3 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.8)]"
+                  className="bubble-tooltip-card rounded-xl border p-3 text-xs"
                   data-no-field-zoom="true"
                 >
-                  <p className="mb-2 font-semibold text-cyan-100">Подзадачи</p>
+                  <p className="mb-2 font-semibold text-primary">Подзадачи</p>
                   <button
                     type="button"
                     className={`mb-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
@@ -899,7 +899,7 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
-      <div className="pointer-events-none absolute bottom-3 left-3 surface-popover rounded border px-3 py-1 text-xs text-muted">Наведи на пузырь</div>
+      <div className="bubble-zoom-badge pointer-events-none absolute bottom-3 left-3 rounded border px-3 py-1 text-xs">Наведи на пузырь</div>
     </div>
   );
 }
