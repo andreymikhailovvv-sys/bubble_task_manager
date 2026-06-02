@@ -357,16 +357,16 @@ export function DateTimePickerWithApply({
                   <button type="button" className="rounded bg-slate-800 px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
                   <p className="text-xs text-slate-300">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
-                <div className="timeline-preview-day-scroll max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+                <div className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
                   {selectedDayTasksByHour.map(({ hour, quarters }) => (
-                    <div key={hour} className="rounded border border-slate-700 bg-slate-800/70 p-2">
-                      <p className="mb-2 text-xs font-semibold text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</p>
-                      <div className="grid gap-1 sm:grid-cols-4">
+                    <div key={hour} className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-800/70 p-2 text-left">
+                      <span className="w-14 shrink-0 pt-1 text-xs text-cyan-200">{`${hour.toString().padStart(2, '0')}:00`}</span>
+                      <div className="min-h-6 flex-1 space-y-1">
                         {quarters.map(({ minute, tasks }) => (
                           <button
                             key={`${hour}-${minute}`}
                             type="button"
-                            className="min-h-16 rounded border border-slate-700/80 bg-slate-900/50 p-2 text-left transition hover:border-cyan-400 hover:bg-cyan-950/40"
+                            className="flex w-full items-start gap-2 rounded px-1.5 py-1 text-left transition hover:bg-cyan-950/40 hover:ring-1 hover:ring-cyan-400/80"
                             onClick={() => {
                               if (!selectedPreviewDate) return;
                               const picked = new Date(selectedPreviewDate);
@@ -379,10 +379,10 @@ export function DateTimePickerWithApply({
                               setIsOpen(false);
                             }}
                           >
-                            <span className="mb-1 block text-xs font-medium text-cyan-100">{`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`}</span>
-                            <div className="space-y-1">
+                            <span className="w-10 shrink-0 text-[11px] font-medium text-cyan-100">{`:${minute.toString().padStart(2, '0')}`}</span>
+                            <div className="min-h-4 flex-1 space-y-1">
                               {tasks.length === 0 ? <p className="text-xs text-slate-500">Свободно</p> : tasks.map((task) => (
-                                <div key={task.id} className={`whitespace-normal break-words rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                                <div key={task.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'bg-slate-600/80 text-slate-100' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                                   {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                                   {task.title}
                                 </div>
