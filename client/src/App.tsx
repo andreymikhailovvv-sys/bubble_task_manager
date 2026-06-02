@@ -3017,6 +3017,7 @@ export default function App() {
         {displayMode === 'bubbles' ? (
           <BubbleField
             className="h-full"
+            themeMode={themeMode}
             tasks={visibleTasks}
             spheres={visibleSpheres}
             rankingMode="coefficient"

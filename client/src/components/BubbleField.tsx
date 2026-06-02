@@ -28,6 +28,7 @@ type Props = {
   onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
+  themeMode?: 'dark' | 'light';
   className?: string;
 };
 
@@ -203,9 +204,11 @@ export function BubbleField({
   onQuickPostponeTask,
   onRenameSphere,
   onAddTaskToSphere,
+  themeMode = 'dark',
   className
 }: Props) {
   const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
+  const isLightTheme = themeMode === 'light';
   const [subtaskDrafts, setSubtaskDrafts] = useState<Record<string, SubtaskDraft>>({});
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
   const [smartPostponeTaskId, setSmartPostponeTaskId] = useState<string | null>(null);
@@ -395,6 +398,10 @@ export function BubbleField({
   const workspaceMin = VIEWBOX_TOP;
   const workspaceMax = VIEWBOX_BOTTOM;
   const workspaceMaxX = VIEWBOX_RIGHT;
+  const containerShadowClass = isLightTheme
+    ? 'shadow-[0_18px_48px_rgba(15,23,42,0.12),0_4px_18px_rgba(14,165,233,0.10),inset_0_1px_32px_rgba(255,255,255,0.72)]'
+    : 'shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)]';
+  const sectorStroke = isLightTheme ? 'rgba(100,116,139,0.35)' : '#334155';
 
 
   const renderBubble = (bubble: (typeof bubbles)[number]) => {
@@ -416,6 +423,14 @@ export function BubbleField({
     const hoverScale = HOVER_TARGET_RADIUS / bubble.radius;
     const titleLineClamp = 4;
     const titleFontSize = Math.max(9, bubble.radius / 4.8);
+    const bubbleTextStyle = {
+      fontSize: titleFontSize,
+      fontWeight: 600,
+      lineHeight: '1.15',
+      maxHeight: '100%',
+      color: isLightTheme ? '#0f172a' : '#f8fafc',
+      textShadow: isLightTheme ? '0 1px 0 rgba(255,255,255,0.68)' : '0 2px 10px rgba(2,6,23,0.72)'
+    };
 
     return (
       <motion.g
@@ -438,9 +453,9 @@ export function BubbleField({
           cy={0}
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
-          fillOpacity={0.48}
-          stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : 0.65}
+          fillOpacity={isLightTheme ? 0.66 : 0.48}
+          stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
           filter={shouldGlow ? 'url(#bubbleGlow)' : undefined}
           className={shouldGlow ? 'animate-pulse' : ''}
@@ -464,16 +479,16 @@ export function BubbleField({
           </>
         ) : null}
         <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-primary" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%' }}>
+          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center" style={bubbleTextStyle}>
             <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
         </foreignObject>
         {bubble.task.isRecurring ? (
           <g pointerEvents="none">
-            <circle cx={0} cy={-bubble.radius * 0.72} r={10} fill="rgba(15,23,42,0.75)" />
+            <circle cx={0} cy={-bubble.radius * 0.72} r={10} fill={isLightTheme ? 'rgba(255,255,255,0.86)' : 'rgba(15,23,42,0.75)'} stroke={isLightTheme ? 'rgba(14,116,144,0.24)' : undefined} />
             <foreignObject x={-6} y={-bubble.radius * 0.72 - 6} width={12} height={12}>
               <div className="flex h-full w-full items-center justify-center">
-                <Repeat size={12} color="#bae6fd" />
+                <Repeat size={12} color={isLightTheme ? '#0e7490' : '#bae6fd'} />
               </div>
             </foreignObject>
           </g>
@@ -517,7 +532,7 @@ export function BubbleField({
 
   return (
     <div
-      className={`surface-canvas relative overflow-visible rounded-[2.2rem] border shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`surface-canvas relative overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
@@ -527,14 +542,34 @@ export function BubbleField({
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
-              <stop offset="55%" stopColor="#1d4ed8" stopOpacity="0.11" />
-              <stop offset="100%" stopColor="#020617" stopOpacity="0.58" />
+              {isLightTheme ? (
+                <>
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.92" />
+                  <stop offset="58%" stopColor="#dff6ff" stopOpacity="0.54" />
+                  <stop offset="100%" stopColor="#bfdbfe" stopOpacity="0.22" />
+                </>
+              ) : (
+                <>
+                  <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.18" />
+                  <stop offset="55%" stopColor="#1d4ed8" stopOpacity="0.11" />
+                  <stop offset="100%" stopColor="#020617" stopOpacity="0.58" />
+                </>
+              )}
             </radialGradient>
             <radialGradient id="fieldHalo" cx="50%" cy="50%" r="62%">
-              <stop offset="68%" stopColor="#67e8f9" stopOpacity="0" />
-              <stop offset="88%" stopColor="#67e8f9" stopOpacity="0.14" />
-              <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.02" />
+              {isLightTheme ? (
+                <>
+                  <stop offset="62%" stopColor="#7dd3fc" stopOpacity="0" />
+                  <stop offset="88%" stopColor="#38bdf8" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#93c5fd" stopOpacity="0.04" />
+                </>
+              ) : (
+                <>
+                  <stop offset="68%" stopColor="#67e8f9" stopOpacity="0" />
+                  <stop offset="88%" stopColor="#67e8f9" stopOpacity="0.14" />
+                  <stop offset="100%" stopColor="#67e8f9" stopOpacity="0.02" />
+                </>
+              )}
             </radialGradient>
             <filter id="bubbleGlow" x="-60%" y="-60%" width="220%" height="220%">
               <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="#7dd3fc" floodOpacity="0.42" />
@@ -600,14 +635,14 @@ export function BubbleField({
               )}
             </div>
           </foreignObject>
-          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={0.86} />
-          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={0.7} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
             const point = mapToOval(SIZE / 2 + Math.cos(angle) * FIELD_RADIUS, SIZE / 2 + Math.sin(angle) * FIELD_RADIUS);
-            return <line key={idx} x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke="#334155" strokeWidth="1.5" />;
+            return <line key={idx} x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
           <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
