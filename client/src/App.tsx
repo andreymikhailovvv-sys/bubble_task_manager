@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -527,10 +527,6 @@ export default function App() {
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
-  const [listHoveredTaskId, setListHoveredTaskId] = useState<string | null>(null);
-  const [expandedListTaskIds, setExpandedListTaskIds] = useState<string[]>([]);
-  const [addingListSubtaskTaskId, setAddingListSubtaskTaskId] = useState<string | null>(null);
-  const [listSubtaskTitle, setListSubtaskTitle] = useState('');
   const [hideClosedFocusedSubtasks, setHideClosedFocusedSubtasks] = useState(true);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
@@ -573,7 +569,6 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
-  const listSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1317,10 +1312,6 @@ export default function App() {
     focusedSubtaskTitleInputRef.current?.focus();
   }, [isAddingFocusedSubtask]);
 
-  useEffect(() => {
-    if (!addingListSubtaskTaskId) return;
-    listSubtaskTitleInputRef.current?.focus();
-  }, [addingListSubtaskTaskId]);
 
   useEffect(() => {
     if (!focusedTask) return;
@@ -2029,12 +2020,6 @@ export default function App() {
     setIsAddingFocusedSubtask(false);
   };
 
-  const addListSubtask = async (parentTask: Task) => {
-    const title = listSubtaskTitle.trim() || 'Новая доп задача';
-    await createSubtaskForParent(parentTask, { title, notifyBeforeMinutes: 30 });
-    setListSubtaskTitle('');
-    setAddingListSubtaskTaskId(null);
-  };
 
   const generateFocusedSubtasksWithAi = async () => {
     if (!focusedTask) return;
@@ -3064,221 +3049,73 @@ export default function App() {
                 </li>
               ) : null}
               {activeListTasks.map((task) => {
-                const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
-                const activeTaskSubtasks = getActiveSubtasks(task.id);
-                const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
-                const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
-                const isExpandedByState = shouldTaskGlow(task) || isOverdue(task) || hasOverdueSubtask || hasReminderSubtask;
-                const isExpandedTask = isExpandedByState || expandedListTaskIds.includes(task.id);
-                const isSubtasksFullyExpanded = expandedListTaskIds.includes(task.id);
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
-                const isHoveredTask = listHoveredTaskId === task.id;
                 const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
                 const sphereColor = taskSphere?.color ?? '#64748b';
-                const sectorBadgeStyle = {
-                  backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
-                  borderColor: sphereColor
-                };
+                const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
+                const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
                 return (
                   <motion.li
                     key={task.id}
                     layout
-                    className={`cursor-pointer rounded-xl border px-4 py-3 transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-1 text-sm transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
                       hasOverdueState
                         ? 'border-rose-400/70 bg-rose-950/25'
                         : hasReminderState
                           ? 'border-cyan-300/60 bg-cyan-950/20'
-                          : 'border-slate-700/70 bg-slate-900/75'
+                          : 'border-slate-700/70 bg-slate-800/70'
                     }`}
                     style={hasOverdueState
                       ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow-static 2.3s ease-in-out infinite' }
                       : hasReminderState
                         ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow-static 2.3s ease-in-out infinite' }
                         : undefined}
-                    onMouseEnter={() => setListHoveredTaskId(task.id)}
-                    onMouseLeave={() => setListHoveredTaskId((prev) => (prev === task.id ? null : prev))}
+                    title={taskSphere?.name ?? 'Без сектора'}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <button
-                            type="button"
-                            className="mt-0.5 rounded p-0.5 text-slate-300 hover:bg-slate-700/70"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setExpandedListTaskIds((prev) => (prev.includes(task.id) ? prev.filter((id) => id !== task.id) : [...prev, task.id]));
-                            }}
-                            title={isExpandedTask ? 'Свернуть задачу' : 'Развернуть задачу'}
-                          >
-                            {isExpandedTask ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-                          <h3 className={`relative pr-5 text-sm font-semibold ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
-                            <span className="inline-block">
-                              <LinkifiedText text={task.title} stopPropagationOnLinkClick />
-                            </span>
-                            {task.isRecurring ? <span title="Повторяющаяся задача" className="ml-1 inline-block"><Repeat size={13} className="inline text-cyan-200" /></span> : null}
-                            {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление" className="absolute ml-1"><Sparkles size={14} className="text-violet-300" /></span> : null}
-                          </h3>
-                          <span className={`shrink-0 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-300'}`}>
-                            Дедлайн задачи: {formatDeadlineLeft(task.dueDate)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span
-                          className="rounded-full border px-2 py-0.5 text-[11px] text-slate-100"
-                          style={sectorBadgeStyle}
-                        >
-                          Сектор: {taskSphere?.name ?? 'Без сектора'}
-                        </span>
-                        {rankingMode === 'coefficient' ? (
-                          <span
-                            className="group inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
-                            style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(task, displayedSubtaskMap)) }}
-                            title="Коэффициент важности задачи"
-                          >
-                            <Gauge size={12} />
-                            {getTaskCoefficient(task, displayedSubtaskMap).toFixed(2)}
-                            
-                          </span>
-                        ) : (
-                          <span className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}>
-                            Важность: {task.importance}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {isExpandedTask ? (
-                      <div className="mt-2 space-y-2 text-xs text-slate-200">
-                        <p className="text-slate-300"><LinkifiedText text={task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                        <p className="text-slate-400">Срок: {formatTaskDueDate(task.dueDate)}</p>
-                        <div>
-                          <p className="mb-1 text-slate-300">Подзадачи:</p>
-                          <ul className="space-y-1">
-                            {activeTaskSubtasks.length === 0 ? <li className="text-slate-500">Активных подзадач пока нет</li> : null}
-                            {(isSubtasksFullyExpanded ? activeTaskSubtasks : activeTaskSubtasks.slice(0, 10)).map((subtask) => {
-                              const hasSubtaskOverdueState = subtask.status !== 'DONE' && isOverdue(subtask);
-                              const hasSubtaskReminderState = subtask.status !== 'DONE' && !hasSubtaskOverdueState && shouldTaskGlow(subtask);
-                              return (
-                                <li
-                                  key={subtask.id}
-                                  className={`flex items-center gap-2 rounded border px-2 py-1 ${
-                                    hasSubtaskOverdueState
-                                      ? 'border-rose-400/70 bg-rose-950/25'
-                                      : hasSubtaskReminderState
-                                        ? 'border-cyan-300/60 bg-cyan-950/25'
-                                        : 'border-slate-700/70 bg-slate-800/70'
-                                  }`}
-                                  style={hasSubtaskOverdueState
-                                    ? { animation: `${isHoveredTask ? 'subtask-overdue-glow-static' : 'subtask-overdue-glow'} 2.3s ease-in-out infinite` }
-                                    : hasSubtaskReminderState
-                                      ? { animation: `${isHoveredTask ? 'subtask-reminder-glow-static' : 'subtask-reminder-glow'} 2.3s ease-in-out infinite` }
-                                      : undefined}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={subtask.status === 'DONE'}
-                                    onChange={() => {
-                                      void toggleSubtaskDone(subtask);
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-slate-400' : 'text-slate-100'}`}
-                                    onClick={() => setEditorState({ task: subtask })}
-                                  >
-                                    <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
-                                  </button>
-                                  {formatSubtaskRelativeDeadline(subtask.dueDate) ? (
-                                    <span className="shrink-0 text-[11px] text-slate-300">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span>
-                                  ) : null}
-                                  <InlineDateTimePickerIcon
-                                    value={subtask.dueDate}
-                                    title="Изменить срок подзадачи"
-                                    timelineTasks={timelinePickerTasks}
-                                    onChange={(dueDate) => {
-                                      void api.updateTask(subtask.id, { dueDate }).then(load);
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    className="shrink-0 rounded p-1 text-slate-300 transition hover:bg-rose-500/20 hover:text-rose-200"
-                                    title="Удалить подзадачу"
-                                    onClick={async () => {
-                                      await api.deleteTask(subtask.id);
-                                      await load();
-                                    }}
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </li>
-                              );
-                            })}
-                            {activeTaskSubtasks.length > 10 && !isSubtasksFullyExpanded ? (
-                              <li>
-                                <button
-                                  type="button"
-                                  className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 text-[11px] text-cyan-200 transition hover:bg-cyan-500/20"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setExpandedListTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
-                                  }}
-                                >
-                                  + еще {activeTaskSubtasks.length - 10} подзадач
-                                </button>
-                              </li>
-                            ) : null}
-                          </ul>
-                          <div className="mt-2" onClick={(event) => event.stopPropagation()}>
-                            {addingListSubtaskTaskId === task.id ? (
-                              <div className="space-y-2">
-                                <input
-                                  ref={listSubtaskTitleInputRef}
-                                  className="w-full rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-100"
-                                  placeholder="Название доп задачи"
-                                  value={listSubtaskTitle}
-                                  onChange={(event) => setListSubtaskTitle(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      void addListSubtask(task);
-                                    }
-                                  }}
-                                />
-                                <div className="flex gap-2">
-                                  <button className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-xs" onClick={() => void addListSubtask(task)}>
-                                    Сохранить
-                                  </button>
-                                  <button
-                                    className="rounded bg-slate-700 px-2 py-1.5 text-xs"
-                                    onClick={() => {
-                                      setAddingListSubtaskTaskId(null);
-                                      setListSubtaskTitle('');
-                                    }}
-                                  >
-                                    Отмена
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="rounded bg-cyan-700 px-3 py-1 text-xs text-white"
-                                onClick={() => {
-                                  setListSubtaskTitle('');
-                                  setAddingListSubtaskTaskId(task.id);
-                                }}
-                              >
-                                + Добавить подзадачу
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
+                    <input
+                      type="checkbox"
+                      checked={task.status === 'DONE'}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={async () => {
+                        await api.updateTask(task.id, { status: task.status === 'DONE' ? 'TODO' : 'DONE' });
+                        await load();
+                      }}
+                    />
+                    <span
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border"
+                      style={{
+                        borderColor: sphereColor,
+                        backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
+                        color: sphereColor
+                      }}
+                      title={taskSphere?.name ?? 'Без сектора'}
+                    >
+                      <SphereIcon size={12} />
+                    </span>
+                    <span className={`min-w-0 flex-1 truncate ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                      <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+                    </span>
+                    {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="shrink-0 text-cyan-200" /></span> : null}
+                    {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="shrink-0 text-violet-300" /></span> : null}
+                    {rankingMode === 'coefficient' ? (
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
+                        style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient) }}
+                        title="Коэффициент важности задачи"
+                      >
+                        <Gauge size={12} />
+                        {taskCoefficient.toFixed(2)}
+                      </span>
+                    ) : (
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
+                        title="Важность задачи"
+                      >
+                        {task.importance}
+                      </span>
+                    )}
                   </motion.li>
                 );
               })}
