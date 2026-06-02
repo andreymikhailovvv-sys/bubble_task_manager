@@ -300,12 +300,13 @@ function resolveAttachmentMimeType(file: File): string {
 
 
 
-function getCoefficientBadgeColor(coefficient: number) {
+function getCoefficientBadgeColor(coefficient: number, variant: 'dark' | 'light' = 'dark') {
   const intensity = Math.max(0, Math.min(1, coefficient));
   const red = Math.round(80 + intensity * 170);
   const green = Math.round(165 - intensity * 95);
   const blue = Math.round(220 - intensity * 190);
-  return `rgba(${red}, ${green}, ${blue}, 0.32)`;
+  const alpha = variant === 'light' ? 0.48 : 0.32;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function hexToRgba(hexColor: string, alpha: number) {
@@ -3055,10 +3056,10 @@ export default function App() {
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
           />
         ) : displayMode === 'list' ? (
-          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="h-full overflow-y-auto rounded-[2.2rem] border border-cyan-300/20 bg-gradient-to-br from-slate-900/80 via-slate-950/76 to-indigo-950/72 p-4 shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)] backdrop-blur-sm">
+          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {activeListTasks.length === 0 ? (
-                <li className="rounded-xl border border-slate-700/70 bg-slate-900/75 px-4 py-3 text-sm text-slate-300">
+                <li className="list-empty-state rounded-xl border px-4 py-3 text-sm">
                   Нет задач для выбранных фильтров
                 </li>
               ) : null}
@@ -3069,28 +3070,26 @@ export default function App() {
                 const sphereColor = taskSphere?.color ?? '#64748b';
                 const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
                 const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
+                const hasAiNotificationState = hasUnreadAiMessage(task.id);
                 return (
                   <motion.li
                     key={task.id}
                     layout
-                    className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition hover:border-cyan-300/70 hover:bg-slate-800/70 ${
+                    className={`list-task-item flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition ${
                       hasOverdueState
-                        ? 'border-rose-400/70 bg-rose-950/25'
+                        ? 'list-task-item-overdue'
                         : hasReminderState
-                          ? 'border-cyan-300/60 bg-cyan-950/20'
-                          : 'border-slate-700/70 bg-slate-800/70'
+                          ? 'list-task-item-reminder'
+                          : hasAiNotificationState
+                            ? 'list-task-item-ai'
+                            : ''
                     }`}
-                    style={hasOverdueState
-                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow-static 2.3s ease-in-out infinite' }
-                      : hasReminderState
-                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow-static 2.3s ease-in-out infinite' }
-                        : undefined}
                     title={taskSphere?.name ?? 'Без сектора'}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
                     <input
                       type="checkbox"
-                      className="mt-1"
+                      className="list-task-checkbox mt-1"
                       checked={task.status === 'DONE'}
                       onClick={(event) => event.stopPropagation()}
                       onChange={async () => {
@@ -3100,26 +3099,26 @@ export default function App() {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' ? 'text-slate-400 line-through' : 'text-slate-100'}`}>
+                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' ? 'text-subtle line-through opacity-70' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
-                        {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="shrink-0 text-cyan-200" /></span> : null}
-                        {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="shrink-0 text-violet-300" /></span> : null}
+                        {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
+                        {hasAiNotificationState ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={14} className="list-task-ai-icon shrink-0" /></span> : null}
                       </div>
                       {task.description?.trim() ? (
-                        <p className="mt-1 truncate text-xs text-slate-300">
+                        <p className="mt-1 truncate text-xs text-muted">
                           <LinkifiedText text={task.description} stopPropagationOnLinkClick />
                         </p>
                       ) : null}
-                      <p className={`mt-1 text-[11px] ${hasOverdueState ? 'text-rose-200' : 'text-slate-400'}`}>
+                      <p className={`mt-1 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
                         Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       {rankingMode === 'coefficient' ? (
                         <span
-                          className="inline-flex items-center gap-1 rounded-full border border-slate-300/40 px-2 py-0.5 text-[11px] font-semibold text-slate-100"
-                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient) }}
+                          className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, themeMode) }}
                           title="Коэффициент важности задачи"
                         >
                           <Gauge size={12} />
@@ -3127,17 +3126,17 @@ export default function App() {
                         </span>
                       ) : (
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[11px] text-slate-100 ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
+                          className={`list-task-importance-badge rounded-full border px-2 py-0.5 text-[11px] ${IMPORTANCE_STYLES[task.importance] ?? IMPORTANCE_STYLES[3]}`}
                           title="Важность задачи"
                         >
                           {task.importance}
                         </span>
                       )}
                       <span
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border"
+                        className="list-task-sector-icon inline-flex h-5 w-5 items-center justify-center rounded-full border"
                         style={{
                           borderColor: sphereColor,
-                          backgroundColor: hexToRgba(sphereColor, 0.26) ?? 'rgba(100,116,139,0.25)',
+                          backgroundColor: hexToRgba(sphereColor, themeMode === 'light' ? 0.36 : 0.26) ?? 'rgba(100,116,139,0.25)',
                           color: sphereColor
                         }}
                         title={taskSphere?.name ?? 'Без сектора'}
