@@ -407,21 +407,22 @@ export function BubbleField({
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
-    const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
+    const visualRadius = isHovered ? Math.max(bubble.radius, HOVER_TARGET_RADIUS) : bubble.radius;
+    const progressRadius = visualRadius + 6;
+    const progressCircumference = 2 * Math.PI * progressRadius;
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
-    const aiBadgeX = bubble.radius * 0.66;
-    const aiBadgeY = -bubble.radius * 0.66;
+    const aiBadgeX = visualRadius * 0.66;
+    const aiBadgeY = -visualRadius * 0.66;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
-    const hoverScale = HOVER_TARGET_RADIUS / bubble.radius;
     const titleLineClamp = 4;
-    const titleFontSize = Math.max(9, bubble.radius / 4.8);
+    const titleFontSize = Math.max(9, visualRadius / 4.8);
 
     return (
       <motion.g
         key={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? hoverScale : 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         transition={isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
@@ -432,11 +433,12 @@ export function BubbleField({
         onMouseLeave={scheduleHoverExit}
         className="cursor-pointer"
       >
-        <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
-        <circle
+        <motion.circle cx={0} cy={0} r={bubble.radius + 10} animate={{ r: visualRadius + 10 }} fill="transparent" />
+        <motion.circle
           cx={0}
           cy={0}
           r={bubble.radius}
+          animate={{ r: visualRadius }}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={0.48}
           stroke={selectedId === bubble.task.id ? '#f8fafc' : '#bae6fd'}
@@ -448,11 +450,12 @@ export function BubbleField({
         />
         {bubbleSubtasks.length > 0 ? (
           <>
-            <circle cx={0} cy={0} r={bubble.radius + 6} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
-            <circle
+            <motion.circle cx={0} cy={0} r={bubble.radius + 6} animate={{ r: progressRadius }} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
+            <motion.circle
               cx={0}
               cy={0}
               r={bubble.radius + 6}
+              animate={{ r: progressRadius }}
               fill="none"
               stroke="#22c55e"
               strokeWidth={4.4}
@@ -463,19 +466,19 @@ export function BubbleField({
             />
           </>
         ) : null}
-        <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-primary" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%' }}>
+        <motion.foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} animate={{ x: -visualRadius * 0.8, y: -visualRadius * 0.8, width: visualRadius * 1.6, height: visualRadius * 1.6 }} pointerEvents="none">
+          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center text-slate-100" style={{ fontSize: titleFontSize, fontWeight: 600, lineHeight: '1.15', maxHeight: '100%', overflowWrap: 'anywhere', transition: 'font-size 180ms ease' }}>
             <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
           </div>
-        </foreignObject>
+        </motion.foreignObject>
         {bubble.task.isRecurring ? (
           <g pointerEvents="none">
-            <circle cx={0} cy={-bubble.radius * 0.72} r={10} fill="rgba(15,23,42,0.75)" />
-            <foreignObject x={-6} y={-bubble.radius * 0.72 - 6} width={12} height={12}>
+            <motion.circle cx={0} cy={-bubble.radius * 0.72} animate={{ cy: -visualRadius * 0.72 }} r={10} fill="rgba(15,23,42,0.75)" />
+            <motion.foreignObject x={-6} y={-bubble.radius * 0.72 - 6} width={12} height={12} animate={{ x: -6, y: -visualRadius * 0.72 - 6, width: 12, height: 12 }}>
               <div className="flex h-full w-full items-center justify-center">
                 <Repeat size={12} color="#bae6fd" />
               </div>
-            </foreignObject>
+            </motion.foreignObject>
           </g>
         ) : null}
 
@@ -485,30 +488,30 @@ export function BubbleField({
             transition={{ duration: 1.7, repeat: Infinity, ease: 'easeInOut' }}
             pointerEvents="none"
           >
-            <circle cx={aiBadgeX} cy={aiBadgeY} r={11} fill="#7c3aed" />
-            <foreignObject x={aiBadgeX - 6} y={aiBadgeY - 6} width={12} height={12}>
+            <motion.circle cx={bubble.radius * 0.66} cy={-bubble.radius * 0.66} animate={{ cx: aiBadgeX, cy: aiBadgeY }} r={11} fill="#7c3aed" />
+            <motion.foreignObject x={bubble.radius * 0.66 - 6} y={-bubble.radius * 0.66 - 6} width={12} height={12} animate={{ x: aiBadgeX - 6, y: aiBadgeY - 6, width: 12, height: 12 }}>
               <div className="flex h-full w-full items-center justify-center">
                 <Sparkles size={12} color="#ffffff" />
               </div>
-            </foreignObject>
+            </motion.foreignObject>
           </motion.g>
         ) : null}
 
         {isSmartPostponing ? (
           <motion.g initial={{ opacity: 0, y: -1 }} animate={{ opacity: 1, y: -6 }} exit={{ opacity: 0, y: -10 }} pointerEvents="none">
-            <foreignObject x={-10} y={-bubble.radius - 30} width={20} height={20}>
+            <motion.foreignObject x={-10} y={-bubble.radius - 30} width={20} height={20} animate={{ x: -10, y: -visualRadius - 30, width: 20, height: 20 }}>
               <div className="flex h-full w-full items-center justify-center">
                 <LoaderCircle size={14} className="animate-spin text-cyan-200" />
               </div>
-            </foreignObject>
+            </motion.foreignObject>
           </motion.g>
         ) : null}
 
         {postponeResultByTaskId[bubble.task.id] ? (
           <motion.g initial={{ opacity: 0, y: -2 }} animate={{ opacity: 1, y: -8 }} exit={{ opacity: 0, y: -14 }} pointerEvents="none">
-            <foreignObject x={-44} y={-bubble.radius - 26} width={88} height={16}>
+            <motion.foreignObject x={-44} y={-bubble.radius - 26} width={88} height={16} animate={{ x: -44, y: -visualRadius - 26, width: 88, height: 16 }}>
               <div className="w-full text-center text-[10px] font-semibold text-cyan-100">{postponeResultByTaskId[bubble.task.id]}</div>
-            </foreignObject>
+            </motion.foreignObject>
           </motion.g>
         ) : null}
       </motion.g>
