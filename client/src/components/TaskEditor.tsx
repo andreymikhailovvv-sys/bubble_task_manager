@@ -313,7 +313,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"
-            className="bubble-zoom-badge inline-flex rounded-full border px-3 py-1 text-xs transition hover:brightness-110"
+            className="main-task-link-button inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition"
             onClick={onOpenParentTask}
             title={`Открыть основную задачу: ${parentTaskTitle}`}
           >
@@ -374,7 +374,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 <p className="mb-1 text-muted">Опишите как должна повторяться задача</p>
                 <textarea className="form-field min-h-16 w-full rounded border p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
                 <div className="mt-2 flex items-center gap-2">
-                  <button type="button" className="primary-button rounded px-2 py-1 text-xs" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
+                  <button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-70" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
                   <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
                 </div>
                 <p className="mt-1 text-[11px] text-muted">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p>

@@ -404,7 +404,7 @@ export function BubbleField({
 
 
   const hoverInfoCard = { width: 340, height: 228 };
-  const hoverSubtasksCard = { width: 360, height: 310 };
+  const hoverSubtasksCard = { width: 400, height: 340 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
     const belowY = bubbleY + bubbleRadius + 18;
@@ -830,45 +830,54 @@ export function BubbleField({
                   >
                     Фильтровать
                   </button>
-                  <ul className="mb-3 max-h-36 space-y-1 overflow-y-auto pr-1" data-no-field-zoom="true">
+                  <ul className="mb-3 max-h-40 space-y-1.5 overflow-y-auto pr-1" data-no-field-zoom="true">
                     {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask) => (
                       <li
                         key={subtask.id}
-                        className="relative flex items-center gap-2 surface-muted rounded px-2 py-1"
+                        className="relative surface-muted rounded px-2 py-1.5"
                         style={subtask.status !== 'DONE' && isOverdue(subtask)
                           ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: SUBTASK_OVERDUE_GLOW }
                           : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
                             ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
                             : undefined}
                       >
-                        <input
-                          type="checkbox"
-                          checked={subtask.status === 'DONE'}
-                          onChange={(event) => {
-                            event.stopPropagation();
-                            onToggleSubtaskDone(subtask);
-                          }}
-                        />
-                        <div
-                          className={`flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through text-subtle' : ''}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onSelectSubtask(subtask);
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 shrink-0"
+                            checked={subtask.status === 'DONE'}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              onToggleSubtaskDone(subtask);
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`cursor-pointer break-words text-left leading-snug ${subtask.status === 'DONE' ? 'line-through text-subtle' : ''}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSelectSubtask(subtask);
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                            </div>
+                            <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] text-muted">
+                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">Срок: {formatDueDate(subtask.dueDate)}</span>
+                              <InlineDateTimePickerIcon
+                                value={subtask.dueDate}
+                                title="Изменить срок подзадачи"
+                                className="shrink-0"
+                                detachedPopup
+                                timelineTasks={timelinePickerTasks}
+                                onOpenChange={handleNativeCalendarOpenChange}
+                                onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <InlineDateTimePickerIcon
-                          value={subtask.dueDate}
-                          title="Изменить срок подзадачи"
-                          detachedPopup
-                          timelineTasks={timelinePickerTasks}
-                          onOpenChange={handleNativeCalendarOpenChange}
-                          onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
-                        />
                       </li>
                     ))}
                   </ul>
@@ -892,7 +901,7 @@ export function BubbleField({
                       />
                       <div className="flex gap-2">
                         <button
-                          className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
+                          className="primary-button flex-1 rounded px-2 py-1.5 text-[11px] font-semibold"
                           onClick={(event) => {
                             event.stopPropagation();
                             void onAddSubtask(hoveredBubble.task);
@@ -901,7 +910,7 @@ export function BubbleField({
                           Сохранить
                         </button>
                         <button
-                          className="surface-muted rounded px-2 py-1.5 text-[11px]"
+                          className="secondary-button rounded px-2 py-1.5 text-[11px] font-semibold"
                           onClick={(event) => {
                             event.stopPropagation();
                             setIsAddingSubtask(false);
