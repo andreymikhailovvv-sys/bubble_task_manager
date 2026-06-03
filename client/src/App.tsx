@@ -2386,7 +2386,7 @@ export default function App() {
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
-          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="shrink-0 text-violet-200" /></span> : null}
+          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
@@ -2429,10 +2429,11 @@ export default function App() {
             <div className="timeline-hover-card-section mt-2 border-t pt-2">
               <p className="text-[10px] uppercase tracking-wide text-subtle">Ближайшие подзадачи</p>
               {previewSubtasks.length > 0 ? (
-                <ul className="mt-1 space-y-1">
+                <ul className="mt-1 space-y-1.5">
                   {previewSubtasks.map((subtask) => (
-                    <li key={subtask.id} className="truncate text-muted">
-                      • {subtask.title}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
+                    <li key={subtask.id} className="rounded border border-[color:var(--timeline-grid-border)] bg-[color:var(--muted-bg)] px-2 py-1 text-muted">
+                      <span className="block whitespace-normal break-words leading-snug">• {subtask.title}</span>
+                      <span className="mt-0.5 block whitespace-normal break-words text-[10px] text-subtle">{subtask.dueDate ? `Срок: ${formatTaskDueDate(subtask.dueDate)} · ${formatDeadlineLeft(subtask.dueDate)}` : 'Срок не задан'}</span>
                     </li>
                   ))}
                 </ul>
@@ -4413,11 +4414,11 @@ export default function App() {
                       }}
                     />
                     <div className="flex gap-2">
-                      <button className="flex-1 rounded bg-cyan-600 px-2 py-1.5 text-xs" onClick={() => void addFocusedSubtask()}>
+                      <button className="primary-button flex-1 rounded px-2 py-1.5 text-xs font-semibold" onClick={() => void addFocusedSubtask()}>
                         Сохранить
                       </button>
                       <button
-                        className="rounded bg-slate-700 px-2 py-1.5 text-xs"
+                        className="secondary-button rounded px-2 py-1.5 text-xs font-semibold"
                         onClick={() => {
                           setIsAddingFocusedSubtask(false);
                           setFocusedSubtaskTitle('');
