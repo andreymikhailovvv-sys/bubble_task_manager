@@ -318,7 +318,7 @@ function applyGravity(
       keepInSector(bubble, center, maxDistance, sectorGeometry);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 1, 1);
+    resolveCollisions(bubbles, center, maxDistance, sectorGeometry, 0, 1);
   }
 }
 
@@ -383,8 +383,8 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
 
   bySector.forEach((sectorBubbles) => {
     const sorted = [...sectorBubbles].sort((a, b) => b.radius - a.radius);
-    const largeCount = Math.max(1, Math.ceil(sorted.length * 0.22));
-    const mediumCount = Math.max(1, Math.ceil(sorted.length * 0.4));
+    const largeCount = Math.max(1, Math.ceil(sorted.length * 0.18));
+    const mediumCount = Math.max(1, Math.ceil(sorted.length * 0.34));
     const large = sorted.slice(0, largeCount);
     const medium = sorted.slice(largeCount, largeCount + mediumCount);
     const small = sorted.slice(largeCount + mediumCount);
@@ -403,23 +403,24 @@ function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDista
       const dy = bubble.y - anchor.y;
       const dist = Math.hypot(dx, dy) || 1;
       const desired = anchor.radius + bubble.radius + touchGap;
-      const shift = (desired - dist) * factor;
+      const closeRangeBonus = dist > desired ? Math.min(18, (dist - desired) * 0.28) : 0;
+      const shift = (desired - closeRangeBonus - dist) * factor;
       bubble.x += (dx / dist) * shift;
       bubble.y += (dy / dist) * shift;
       keepInSector(bubble, center, maxDistance, sectorGeometry);
     };
 
-    for (let i = 0; i < 24; i += 1) {
+    for (let i = 0; i < 40; i += 1) {
       medium.forEach((bubble) => {
         const anchor = nearest(bubble, large);
-        if (anchor) pullToAnchor(bubble, anchor, 0, 0.5);
+        if (anchor) pullToAnchor(bubble, anchor, -1, 0.62);
       });
       small.forEach((bubble) => {
         const biggerAnchors = [...large, ...medium].filter((anchor) => anchor.radius >= bubble.radius);
         const anchor = nearest(bubble, biggerAnchors.length > 0 ? biggerAnchors : large);
-        if (anchor) pullToAnchor(bubble, anchor, 0, 0.58);
+        if (anchor) pullToAnchor(bubble, anchor, -2, 0.72);
       });
-      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 1, 1);
+      resolveCollisions(sectorBubbles, center, maxDistance, sectorGeometry, 0, 1);
     }
   });
 }
@@ -442,7 +443,7 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
       keepInSector(bubble, center, maxDistance, FULL_CIRCLE_GEOMETRY);
     });
 
-    resolveCollisions(bubbles, center, maxDistance, FULL_CIRCLE_GEOMETRY, 1, 1);
+    resolveCollisions(bubbles, center, maxDistance, FULL_CIRCLE_GEOMETRY, 0, 1);
   }
 }
 
@@ -573,7 +574,7 @@ export function buildBubbles(
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, 1, 82);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, 0, 82);
 
   bySector.forEach((sectorTasks, sectorIndex) => {
     const sectorBubbles = result.filter((bubble) => bubble.sectorIndex === sectorIndex);
@@ -615,7 +616,7 @@ export function buildBubbles(
 
   applyHierarchicalClustering(result, center, maxDistance, sectorGeometry);
 
-  resolveCollisions(result, center, maxDistance, sectorGeometry, 1, 120);
+  resolveCollisions(result, center, maxDistance, sectorGeometry, 0, 100);
 
   result.forEach((bubble) => {
     const dist = Math.hypot(bubble.x - center, bubble.y - center);
