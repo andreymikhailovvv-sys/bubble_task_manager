@@ -597,6 +597,17 @@ body[data-theme='light'] .backdrop-blur-sm {
     backdrop-filter: blur(16px) saturate(1.08);
   }
 
+
+  .bubble-info-badge {
+    border-color: color-mix(in srgb, var(--panel-border) 86%, var(--accent) 14%);
+  }
+
+  .bubble-subtask-preview {
+    min-height: 3.9rem;
+    max-height: 3.9rem;
+    border-color: color-mix(in srgb, var(--panel-border) 78%, var(--accent) 22%);
+  }
+
   .bubble-zoom-badge,
   .bubble-sector-label {
     border-color: var(--badge-border);
@@ -1373,4 +1384,14 @@ body[data-theme='light'] .list-task-importance-badge {
 body[data-theme='light'] .list-task-sector-icon {
   box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 42%, transparent), 0 3px 9px rgba(15, 23, 42, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.65);
   filter: saturate(1.28) contrast(1.08);
+}
+
+body[data-theme='light'] .bubble-info-badge {
+  border-color: rgba(100, 116, 139, 0.58) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+body[data-theme='light'] .bubble-subtask-preview {
+  border-color: rgba(100, 116, 139, 0.46) !important;
+  background: rgba(248, 250, 252, 0.94) !important;
 }

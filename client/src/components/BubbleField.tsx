@@ -61,7 +61,7 @@ const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
 const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
 const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
-const HOVER_TARGET_RADIUS = 104;
+const BUBBLE_HOVER_SCALE = 1.08;
 const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW =
   'subtask-reminder-glow 2.3s ease-in-out infinite';
@@ -104,23 +104,17 @@ function formatDueDate(value?: string | null) {
   });
 }
 
-function formatTaskStatus(status?: Task['status']) {
-  if (status === 'DONE') return 'Выполнена';
-  if (status === 'IN_PROGRESS') return 'В работе';
-  return 'Запланирована';
-}
-
 function formatDeadlineLeft(value?: string | null) {
   if (!value) return 'Без дедлайна';
   const due = new Date(value);
   if (Number.isNaN(due.getTime())) return 'Без дедлайна';
   const diffMs = due.getTime() - Date.now();
-  if (diffMs <= 0) return 'Дедлайн истёк';
+  if (diffMs <= 0) return 'Истёк';
   const totalMinutes = Math.floor(diffMs / 60_000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours <= 0) return `Дедлайн через ${minutes} мин`;
-  return `Дедлайн через ${hours} ч ${minutes} мин`;
+  if (hours <= 0) return `${minutes} мин`;
+  return `${hours} ч ${minutes} мин`;
 }
 
 function shouldTaskGlow(task: Task) {
@@ -176,6 +170,33 @@ function getCoefficientBadgeColor(coefficient: number) {
   const green = Math.round(165 - intensity * 95);
   const blue = Math.round(220 - intensity * 190);
   return `rgba(${red}, ${green}, ${blue}, 0.32)`;
+}
+
+function getInfoBadgeStyle(color: string, isLightTheme: boolean) {
+  const { r, g, b } = hexToRgb(color);
+  return {
+    backgroundColor: `rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.2 : 0.24})`,
+    borderColor: `rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.78 : 0.62})`,
+    boxShadow: `0 10px 24px rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.14 : 0.2})`
+  };
+}
+
+function getBubbleTitlePreview(title: string, radius: number) {
+  const normalized = title.trim();
+  if (!normalized) return '';
+
+  const maxWords = radius < 26 ? 2 : radius < 36 ? 3 : radius < 50 ? 5 : radius < 68 ? 8 : 12;
+  const maxChars = Math.max(10, Math.floor(radius * (radius < 36 ? 0.62 : 0.9)));
+  const words = normalized.split(/\s+/);
+  let preview = words.slice(0, maxWords).join(' ');
+
+  if (preview.length > maxChars) {
+    preview = `${preview.slice(0, Math.max(7, maxChars - 1)).trimEnd()}…`;
+  } else if (words.length > maxWords) {
+    preview = `${preview}…`;
+  }
+
+  return preview;
 }
 
 
@@ -273,6 +294,10 @@ export function BubbleField({
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
+  const hoveredSphere = hoveredBubble?.task.sphereId ? spheres.find((sphere) => sphere.id === hoveredBubble.task.sphereId) : null;
+  const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
+  const visibleHoverSubtasks = hoveredSubtasks.slice(0, 6);
+  const hiddenHoverSubtaskCount = Math.max(0, hoveredSubtasks.length - visibleHoverSubtasks.length);
   const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
   const sectorTaskCounts = useMemo(() => {
     if (sectorCount === 1) return [tasks.length];
@@ -420,9 +445,9 @@ export function BubbleField({
     const aiBadgeY = -bubble.radius * 0.66;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
-    const hoverScale = HOVER_TARGET_RADIUS / bubble.radius;
-    const titleLineClamp = 4;
-    const titleFontSize = Math.max(9, bubble.radius / 4.8);
+    const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
+    const titleFontSize = Math.max(8, Math.min(18, bubble.radius / (bubble.radius < 34 ? 6.2 : 5.2)));
+    const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
     const bubbleTextStyle = {
       fontSize: titleFontSize,
       fontWeight: 600,
@@ -436,7 +461,7 @@ export function BubbleField({
       <motion.g
         key={bubble.task.id}
         initial={false}
-        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? hoverScale : 1, x: displayPoint.x, y: displayPoint.y }}
+        animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? BUBBLE_HOVER_SCALE : 1, x: displayPoint.x, y: displayPoint.y }}
         exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         transition={isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
@@ -478,9 +503,9 @@ export function BubbleField({
             />
           </>
         ) : null}
-        <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-2 text-center" style={bubbleTextStyle}>
-            <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{bubble.task.title}</span>
+        <foreignObject x={-bubble.radius * 0.74} y={-bubble.radius * 0.74} width={bubble.radius * 1.48} height={bubble.radius * 1.48} pointerEvents="none">
+          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-1.5 text-center" style={bubbleTextStyle}>
+            <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{titlePreview}</span>
           </div>
         </foreignObject>
         {bubble.task.isRecurring ? (
@@ -593,37 +618,42 @@ export function BubbleField({
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-base">
-                    <div className="surface-card rounded-xl p-3">
+                    <div className="surface-card bubble-info-badge rounded-xl border p-3">
                       <p className="text-subtle">Дедлайн</p>
                       <p className="mt-1 font-semibold text-primary">{formatDueDate(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="surface-card rounded-xl p-3">
+                    <div className="surface-card bubble-info-badge rounded-xl border p-3">
                       <p className="text-subtle">Осталось</p>
                       <p className="mt-1 font-semibold text-primary">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="surface-card rounded-xl p-3">
-                      <p className="text-subtle">Статус</p>
-                      <p className="mt-1 font-semibold text-primary">{formatTaskStatus(hoveredBubble.task.status)}</p>
-                    </div>
-                    <div className="surface-card rounded-xl p-3">
+                    <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Важность</p>
                       <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.importance}</p>
                     </div>
-                  </div>
-                  <div className="surface-card rounded-2xl border p-4 text-base">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="font-semibold text-primary">Подзадачи</p>
-                      <span className="bubble-zoom-badge rounded-full border px-2 py-0.5">{hoveredSubtasks.length}</span>
+                    <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(hoveredSphere?.color ?? '#64748b', isLightTheme)}>
+                      <p className="text-subtle">Сектор</p>
+                      <p className="mt-1 truncate font-semibold text-primary">{hoveredSphere?.name ?? 'Без сектора'}</p>
                     </div>
-                    <ul className="max-h-40 space-y-1 overflow-hidden text-muted">
-                      {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет активных подзадач</li> : null}
-                      {hoveredSubtasks.slice(0, 6).map((subtask) => (
-                        <li key={subtask.id} className="surface-muted rounded px-2 py-1">
-                          <span className="break-words">{subtask.title}</span>
-                          {subtask.dueDate ? <span className="mt-0.5 block text-sm text-subtle">{formatDueDate(subtask.dueDate)}</span> : null}
+                  </div>
+                  <div className="flex text-base">
+                    <div className="surface-card bubble-info-badge w-full rounded-xl border p-3" style={{ backgroundColor: getCoefficientBadgeColor(hoveredTaskCoefficient) }}>
+                      <p className="text-subtle">Коэффициент важности</p>
+                      <p className="mt-1 font-semibold text-primary">{hoveredTaskCoefficient.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <div className="surface-card bubble-info-badge rounded-2xl border p-4 text-base">
+                    <div className="mb-2">
+                      <p className="font-semibold text-primary">Подзадачи</p>
+                    </div>
+                    <ul className="grid grid-cols-2 gap-2 overflow-hidden text-muted">
+                      {hoveredSubtasks.length === 0 ? <li className="col-span-2 text-subtle">Пока нет активных подзадач</li> : null}
+                      {visibleHoverSubtasks.map((subtask) => (
+                        <li key={subtask.id} className="bubble-subtask-preview surface-muted rounded border px-2 py-1.5">
+                          <span className="line-clamp-2 break-words">{subtask.title}</span>
+                          {subtask.dueDate ? <span className="mt-0.5 block truncate text-sm text-subtle">{formatDueDate(subtask.dueDate)}</span> : null}
                         </li>
                       ))}
-                      {hoveredSubtasks.length > 6 ? <li className="text-subtle">+ ещё {hoveredSubtasks.length - 6}</li> : null}
+                      {hiddenHoverSubtaskCount > 0 ? <li className="col-span-2 text-subtle">Ещё осталось: {hiddenHoverSubtaskCount}</li> : null}
                     </ul>
                   </div>
                 </div>
