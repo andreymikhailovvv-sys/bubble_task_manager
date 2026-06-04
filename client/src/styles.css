@@ -603,9 +603,61 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   .bubble-subtask-preview {
-    min-height: 3.9rem;
-    max-height: 3.9rem;
+    position: relative;
+    min-height: 4.9rem;
+    max-height: 4.9rem;
+    overflow: hidden;
     border-color: color-mix(in srgb, var(--panel-border) 78%, var(--accent) 22%);
+  }
+
+  .bubble-subtask-preview::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .bubble-subtask-preview > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .bubble-subtask-preview-title {
+    display: -webkit-box;
+    min-height: 2.4em;
+    max-height: 2.4em;
+    overflow: hidden;
+    line-height: 1.2;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .bubble-subtask-preview-date {
+    line-height: 1.2;
+  }
+
+  .bubble-subtask-preview-overdue {
+    border-color: var(--list-overdue-border);
+    background: var(--list-overdue-bg);
+    animation: list-overdue-glow 2.3s ease-in-out infinite;
+  }
+
+  .bubble-subtask-preview-overdue::before {
+    opacity: 1;
+    background: radial-gradient(circle at 12% 20%, rgba(244, 63, 94, 0.22), transparent 34%), linear-gradient(90deg, rgba(244, 63, 94, 0.16), transparent 42%);
+  }
+
+  .bubble-subtask-preview-reminder {
+    border-color: var(--list-reminder-border);
+    background: var(--list-reminder-bg);
+    animation: list-reminder-glow 2.3s ease-in-out infinite;
+  }
+
+  .bubble-subtask-preview-reminder::before {
+    opacity: 1;
+    background: radial-gradient(circle at 12% 20%, rgba(14, 165, 233, 0.2), transparent 36%), linear-gradient(90deg, rgba(14, 165, 233, 0.14), transparent 42%);
   }
 
   .bubble-zoom-badge,

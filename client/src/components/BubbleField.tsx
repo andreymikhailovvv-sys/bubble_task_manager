@@ -310,13 +310,7 @@ export function BubbleField({
   }, [sectorCount, spheres, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
-  const orderedBubbles = useMemo(() => {
-    if (!hoveredTaskId) return visibleBubbles;
-    return [
-      ...visibleBubbles.filter((bubble) => bubble.task.id !== hoveredTaskId),
-      ...visibleBubbles.filter((bubble) => bubble.task.id === hoveredTaskId)
-    ];
-  }, [hoveredTaskId, visibleBubbles]);
+  const orderedBubbles = visibleBubbles;
 
   useEffect(() => {
     if (isAddingSubtask) {
@@ -483,7 +477,6 @@ export function BubbleField({
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
           filter={shouldGlow ? 'url(#bubbleGlow)' : undefined}
-          className={shouldGlow ? 'animate-pulse' : ''}
           style={overdue ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' } : undefined}
         />
         {bubbleSubtasks.length > 0 ? (
@@ -628,17 +621,27 @@ export function BubbleField({
                     </div>
                     <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Важность</p>
-                      <p className="mt-1 font-semibold text-primary">{hoveredBubble.task.importance}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className="list-task-importance-badge inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold"
+                          style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                          title="Важность задачи"
+                        >
+                          {hoveredBubble.task.importance}
+                        </span>
+                        <span
+                          className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold"
+                          style={{ backgroundColor: getCoefficientBadgeColor(hoveredTaskCoefficient) }}
+                          title="Коэффициент важности задачи"
+                        >
+                          <Gauge size={14} />
+                          {hoveredTaskCoefficient.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                     <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(hoveredSphere?.color ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Сектор</p>
                       <p className="mt-1 truncate font-semibold text-primary">{hoveredSphere?.name ?? 'Без сектора'}</p>
-                    </div>
-                  </div>
-                  <div className="flex text-base">
-                    <div className="surface-card bubble-info-badge w-full rounded-xl border p-3" style={{ backgroundColor: getCoefficientBadgeColor(hoveredTaskCoefficient) }}>
-                      <p className="text-subtle">Коэффициент важности</p>
-                      <p className="mt-1 font-semibold text-primary">{hoveredTaskCoefficient.toFixed(2)}</p>
                     </div>
                   </div>
                   <div className="surface-card bubble-info-badge rounded-2xl border p-4 text-base">
@@ -647,12 +650,19 @@ export function BubbleField({
                     </div>
                     <ul className="grid grid-cols-2 gap-2 overflow-hidden text-muted">
                       {hoveredSubtasks.length === 0 ? <li className="col-span-2 text-subtle">Пока нет активных подзадач</li> : null}
-                      {visibleHoverSubtasks.map((subtask) => (
-                        <li key={subtask.id} className="bubble-subtask-preview surface-muted rounded border px-2 py-1.5">
-                          <span className="line-clamp-2 break-words">{subtask.title}</span>
-                          {subtask.dueDate ? <span className="mt-0.5 block truncate text-sm text-subtle">{formatDueDate(subtask.dueDate)}</span> : null}
-                        </li>
-                      ))}
+                      {visibleHoverSubtasks.map((subtask) => {
+                        const glowClass = subtask.status !== 'DONE' && isOverdue(subtask)
+                          ? 'bubble-subtask-preview-overdue'
+                          : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
+                            ? 'bubble-subtask-preview-reminder'
+                            : '';
+                        return (
+                          <li key={subtask.id} className={`bubble-subtask-preview surface-muted rounded border px-2 py-1.5 ${glowClass}`}>
+                            <span className="bubble-subtask-preview-title break-words" title={subtask.title}>{subtask.title}</span>
+                            <span className="bubble-subtask-preview-date mt-0.5 block truncate text-sm text-subtle">Срок: {formatDueDate(subtask.dueDate)}</span>
+                          </li>
+                        );
+                      })}
                       {hiddenHoverSubtaskCount > 0 ? <li className="col-span-2 text-subtle">Ещё осталось: {hiddenHoverSubtaskCount}</li> : null}
                     </ul>
                   </div>
