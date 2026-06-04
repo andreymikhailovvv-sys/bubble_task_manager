@@ -2271,20 +2271,17 @@ export default function App() {
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
     const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
-    const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
     const hasOverdueState = task.status !== 'DONE' && (isOverdue(task) || hasOverdueSubtask);
-    const hasReminderState = task.status !== 'DONE' && !hasOverdueState && (shouldTaskGlow(task) || hasReminderSubtask);
     const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
     const sphereColor = taskSphere?.color ?? '#64748b';
     return {
       taskSubtasks,
       hasOverdueState,
-      hasReminderState,
       sphereColor
     };
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
-    const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
     const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
     const parentSphereColor = parentSphere?.color ?? '#64748b';
@@ -2324,9 +2321,7 @@ export default function App() {
           boxShadow: disableEffects
             ? undefined
             : hasOverdueState
-            ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
-            : hasReminderState
-              ? '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)'
+              ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
               : undefined,
         }}
         onDragStartCapture={(event) => {
@@ -4445,12 +4440,7 @@ export default function App() {
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
-                      className="list-item-surface relative flex items-center gap-2 rounded px-2 py-1"
-                      style={subtask.status !== 'DONE' && isOverdue(subtask)
-                        ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)' }
-                        : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
-                          ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)' }
-                          : undefined}
+                      className={`list-item-surface relative flex items-center gap-2 rounded px-2 py-1 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                     >
                       <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
                         <GripVertical size={14} />
