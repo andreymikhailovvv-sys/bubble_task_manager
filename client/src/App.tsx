@@ -2271,20 +2271,17 @@ export default function App() {
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
     const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
-    const hasReminderSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && !isOverdue(subtask) && shouldTaskGlow(subtask));
     const hasOverdueState = task.status !== 'DONE' && (isOverdue(task) || hasOverdueSubtask);
-    const hasReminderState = task.status !== 'DONE' && !hasOverdueState && (shouldTaskGlow(task) || hasReminderSubtask);
     const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
     const sphereColor = taskSphere?.color ?? '#64748b';
     return {
       taskSubtasks,
       hasOverdueState,
-      hasReminderState,
       sphereColor
     };
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
-    const { taskSubtasks, hasOverdueState, hasReminderState, sphereColor } = getTimelineTaskViewModel(task);
+    const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
     const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
     const parentSphereColor = parentSphere?.color ?? '#64748b';
@@ -2324,17 +2321,8 @@ export default function App() {
           boxShadow: disableEffects
             ? undefined
             : hasOverdueState
-            ? '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)'
-            : hasReminderState
-              ? '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)'
+              ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
               : undefined,
-          animation: disableEffects
-            ? undefined
-            : hasOverdueState
-            ? 'subtask-overdue-glow 2.3s ease-in-out infinite'
-            : hasReminderState
-              ? 'subtask-reminder-glow 2.3s ease-in-out infinite'
-              : undefined
         }}
         onDragStartCapture={(event) => {
           if (!canDragTask) return;
@@ -3764,7 +3752,7 @@ export default function App() {
                 <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 pr-3 text-sm">
                   {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
-                    <li key={subtask.id} className={`flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}>
+                    <li key={subtask.id} className={`flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}>
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
@@ -4452,12 +4440,7 @@ export default function App() {
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
-                      className="list-item-surface relative flex items-center gap-2 rounded px-2 py-1"
-                      style={subtask.status !== 'DONE' && isOverdue(subtask)
-                        ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
-                        : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
-                          ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
-                          : undefined}
+                      className={`list-item-surface relative flex items-center gap-2 rounded px-2 py-1 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                     >
                       <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
                         <GripVertical size={14} />
@@ -4921,7 +4904,7 @@ export default function App() {
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className={`list-item-surface flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'animate-[subtask-overdue-glow_2.3s_ease-in-out_infinite]' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'animate-[subtask-reminder-glow_2.3s_ease-in-out_infinite]' : ''}`}
+                  className={`list-item-surface flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input

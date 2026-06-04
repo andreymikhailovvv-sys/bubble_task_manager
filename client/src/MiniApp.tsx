@@ -973,9 +973,9 @@ export default function MiniApp() {
                   key={task.id}
                   className="rounded-lg border border-slate-700 bg-slate-800/80 p-3"
                   style={hasOverdueState
-                    ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                    ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
                     : hasReminderState
-                      ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                      ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
                       : { borderLeftWidth: '4px', borderLeftColor: leftStripeColor }}
                 >
                   <button
@@ -1260,9 +1260,9 @@ export default function MiniApp() {
                     key={subtask.id}
                     className="rounded-md border border-slate-700 bg-slate-900 p-2"
                     style={hasOverdueSubtaskState
-                      ? { boxShadow: '0 0 12px rgba(239,68,68,0.45), inset 0 0 8px rgba(239,68,68,0.2)', animation: 'subtask-overdue-glow 2.3s ease-in-out infinite' }
+                      ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)' }
                       : hasReminderSubtaskState
-                        ? { boxShadow: '0 0 12px rgba(56,189,248,0.45), inset 0 0 8px rgba(56,189,248,0.2)', animation: 'subtask-reminder-glow 2.3s ease-in-out infinite' }
+                        ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)' }
                         : undefined}
                   >
                     <button

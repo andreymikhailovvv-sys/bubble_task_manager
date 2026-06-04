@@ -176,44 +176,28 @@ body {
   background-size: var(--app-bg-size);
 }
 
-@keyframes subtask-reminder-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 7px rgba(56, 189, 248, 0.42), inset 0 0 6px rgba(56, 189, 248, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.72), inset 0 0 10px rgba(56, 189, 248, 0.3);
-  }
+
+
+.subtask-reminder-glow-static {
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.72), inset 0 0 10px rgba(56, 189, 248, 0.3);
 }
 
-@keyframes subtask-overdue-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 7px rgba(239, 68, 68, 0.45), inset 0 0 6px rgba(239, 68, 68, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.78), inset 0 0 10px rgba(239, 68, 68, 0.34);
-  }
+.subtask-overdue-glow-static {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.78), inset 0 0 10px rgba(239, 68, 68, 0.34);
 }
 
-@keyframes subtask-reminder-glow-static {
-  0%,
-  100% {
-    box-shadow: 0 0 7px rgba(56, 189, 248, 0.42), inset 0 0 6px rgba(56, 189, 248, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.72), inset 0 0 10px rgba(56, 189, 248, 0.3);
-  }
+.subtask-compact-reminder-static {
+  overflow: hidden;
+  border-color: rgba(56, 189, 248, 0.56);
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.14), rgba(14, 165, 233, 0.05));
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.24), inset 0 0 12px rgba(56, 189, 248, 0.28);
 }
 
-@keyframes subtask-overdue-glow-static {
-  0%,
-  100% {
-    box-shadow: 0 0 7px rgba(239, 68, 68, 0.45), inset 0 0 6px rgba(239, 68, 68, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 15px rgba(239, 68, 68, 0.78), inset 0 0 10px rgba(239, 68, 68, 0.34);
-  }
+.subtask-compact-overdue-static {
+  overflow: hidden;
+  border-color: rgba(239, 68, 68, 0.6);
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.16), rgba(244, 63, 94, 0.06));
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28), inset 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
 @keyframes task-postpone-success-flash {
@@ -614,6 +598,7 @@ body[data-theme='light'] .backdrop-blur-sm {
     content: '';
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     pointer-events: none;
     opacity: 0;
     transition: opacity 180ms ease;
@@ -641,7 +626,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   .bubble-subtask-preview-overdue {
     border-color: var(--list-overdue-border);
     background: var(--list-overdue-bg);
-    animation: list-overdue-glow 2.3s ease-in-out infinite;
+    box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.24), inset 0 0 12px rgba(225, 29, 72, 0.28);
   }
 
   .bubble-subtask-preview-overdue::before {
@@ -652,7 +637,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   .bubble-subtask-preview-reminder {
     border-color: var(--list-reminder-border);
     background: var(--list-reminder-bg);
-    animation: list-reminder-glow 2.3s ease-in-out infinite;
+    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.22), inset 0 0 12px rgba(14, 165, 233, 0.26);
   }
 
   .bubble-subtask-preview-reminder::before {
@@ -723,7 +708,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   .list-task-item-overdue {
     border-color: var(--list-overdue-border);
     background: var(--list-overdue-bg);
-    animation: list-overdue-glow 2.3s ease-in-out infinite;
+    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 18px rgba(225, 29, 72, 0.62), inset 0 0 12px rgba(225, 29, 72, 0.22);
   }
 
   .list-task-item-overdue::before {
@@ -734,7 +719,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   .list-task-item-reminder {
     border-color: var(--list-reminder-border);
     background: var(--list-reminder-bg);
-    animation: list-reminder-glow 2.3s ease-in-out infinite;
+    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 17px rgba(14, 165, 233, 0.58), inset 0 0 12px rgba(14, 165, 233, 0.22);
   }
 
   .list-task-item-reminder::before {
@@ -745,7 +730,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   .list-task-item-ai {
     border-color: var(--list-ai-border);
     background: var(--list-ai-bg);
-    animation: list-ai-notification-glow 2.6s ease-in-out infinite;
+    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 18px rgba(139, 92, 246, 0.52), inset 0 0 12px rgba(139, 92, 246, 0.2);
   }
 
   .list-task-item-ai::before {
@@ -795,6 +780,18 @@ body[data-theme='light'] .backdrop-blur-sm {
   .list-item-surface:hover {
     border-color: color-mix(in srgb, var(--accent) 52%, var(--panel-border));
     background: color-mix(in srgb, var(--card-bg) 82%, var(--accent-soft));
+  }
+
+  .list-item-surface.subtask-compact-reminder-static {
+    border-color: rgba(56, 189, 248, 0.56);
+    background: linear-gradient(90deg, rgba(14, 165, 233, 0.14), rgba(14, 165, 233, 0.05));
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.24), inset 0 0 12px rgba(56, 189, 248, 0.28);
+  }
+
+  .list-item-surface.subtask-compact-overdue-static {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: linear-gradient(90deg, rgba(244, 63, 94, 0.16), rgba(244, 63, 94, 0.06));
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.28), inset 0 0 12px rgba(239, 68, 68, 0.3);
   }
 
 
@@ -1411,35 +1408,8 @@ body[data-theme='light'] .light-sector-management-item:hover {
   }
 }
 
-@keyframes list-reminder-glow {
-  0%,
-  100% {
-    box-shadow: 0 10px 30px color-mix(in srgb, #020617 16%, transparent), 0 0 7px rgba(14, 165, 233, 0.34), inset 0 0 8px rgba(14, 165, 233, 0.14);
-  }
-  50% {
-    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 17px rgba(14, 165, 233, 0.58), inset 0 0 12px rgba(14, 165, 233, 0.22);
-  }
-}
 
-@keyframes list-overdue-glow {
-  0%,
-  100% {
-    box-shadow: 0 10px 30px color-mix(in srgb, #020617 16%, transparent), 0 0 8px rgba(225, 29, 72, 0.34), inset 0 0 8px rgba(225, 29, 72, 0.14);
-  }
-  50% {
-    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 18px rgba(225, 29, 72, 0.62), inset 0 0 12px rgba(225, 29, 72, 0.22);
-  }
-}
 
-@keyframes list-ai-notification-glow {
-  0%,
-  100% {
-    box-shadow: 0 10px 30px color-mix(in srgb, #020617 16%, transparent), 0 0 7px rgba(139, 92, 246, 0.3), inset 0 0 8px rgba(139, 92, 246, 0.12);
-  }
-  50% {
-    box-shadow: 0 14px 34px color-mix(in srgb, #020617 18%, transparent), 0 0 18px rgba(139, 92, 246, 0.52), inset 0 0 12px rgba(139, 92, 246, 0.2);
-  }
-}
 
 body[data-theme='light'] .list-task-item {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
@@ -1447,6 +1417,18 @@ body[data-theme='light'] .list-task-item {
 
 body[data-theme='light'] .list-task-item:hover {
   box-shadow: 0 16px 34px rgba(14, 116, 144, 0.12), 0 0 0 1px rgba(14, 165, 233, 0.1) inset;
+}
+
+body[data-theme='light'] .list-task-item.list-task-item-overdue {
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1), 0 0 18px rgba(225, 29, 72, 0.42), inset 0 0 12px rgba(225, 29, 72, 0.16);
+}
+
+body[data-theme='light'] .list-task-item.list-task-item-reminder {
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1), 0 0 17px rgba(14, 165, 233, 0.42), inset 0 0 12px rgba(14, 165, 233, 0.16);
+}
+
+body[data-theme='light'] .list-task-item.list-task-item-ai {
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1), 0 0 18px rgba(139, 92, 246, 0.4), inset 0 0 12px rgba(139, 92, 246, 0.14);
 }
 
 body[data-theme='light'] .list-task-ai-icon {
@@ -1510,4 +1492,16 @@ body[data-theme='light'] .bubble-info-badge {
 body[data-theme='light'] .bubble-subtask-preview {
   border-color: rgba(100, 116, 139, 0.46) !important;
   background: rgba(248, 250, 252, 0.94) !important;
+}
+
+body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-overdue {
+  border-color: rgba(225, 29, 72, 0.5) !important;
+  background: rgba(255, 241, 242, 0.96) !important;
+  box-shadow: 0 0 0 1px rgba(225, 29, 72, 0.2), inset 0 0 12px rgba(225, 29, 72, 0.14);
+}
+
+body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder {
+  border-color: rgba(14, 165, 233, 0.5) !important;
+  background: rgba(240, 249, 255, 0.96) !important;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18), inset 0 0 12px rgba(14, 165, 233, 0.14);
 }
