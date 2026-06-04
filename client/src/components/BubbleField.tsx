@@ -63,10 +63,10 @@ const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
 const BUBBLE_HOVER_SCALE = 1.08;
 const ENABLE_BUBBLE_HOVER_DETAILS = false;
-const SUBTASK_REMINDER_GLOW =
-  'subtask-reminder-glow 2.3s ease-in-out infinite';
-const SUBTASK_OVERDUE_GLOW =
-  'subtask-overdue-glow 2.3s ease-in-out infinite';
+const SUBTASK_REMINDER_GLOW_STYLE =
+  '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)';
+const SUBTASK_OVERDUE_GLOW_STYLE =
+  '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 type SubtaskDraft = {
   title: string;
@@ -847,9 +847,9 @@ export function BubbleField({
                         key={subtask.id}
                         className="relative surface-muted rounded px-2 py-1.5"
                         style={subtask.status !== 'DONE' && isOverdue(subtask)
-                          ? { boxShadow: '0 0 10px rgba(239,68,68,0.55), inset 0 0 8px rgba(239,68,68,0.2)', animation: SUBTASK_OVERDUE_GLOW }
+                          ? { boxShadow: SUBTASK_OVERDUE_GLOW_STYLE }
                           : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
-                            ? { boxShadow: '0 0 10px rgba(56,189,248,0.5), inset 0 0 8px rgba(56,189,248,0.2)', animation: SUBTASK_REMINDER_GLOW }
+                            ? { boxShadow: SUBTASK_REMINDER_GLOW_STYLE }
                             : undefined}
                       >
                         <div className="flex items-start gap-2">
