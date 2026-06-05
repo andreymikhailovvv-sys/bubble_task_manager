@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
@@ -999,7 +999,7 @@ export default function MiniApp() {
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="Поиск по задачам"
-              className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              className="miniapp-search-input w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
             </div>
             <div className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
@@ -1122,16 +1122,17 @@ export default function MiniApp() {
               const progressPercent = hasSubtasks
                 ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
                 : 0;
+              const taskCardStyle: CSSProperties & Record<'--miniapp-task-stripe', string> = hasOverdueState
+                ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                : hasReminderState
+                  ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                  : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
 
               return (
                 <article
                   key={task.id}
-                  className="rounded-lg border border-slate-700 bg-slate-800/80 p-3"
-                  style={hasOverdueState
-                    ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                    : hasReminderState
-                      ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                      : { borderLeftWidth: '4px', borderLeftColor: leftStripeColor }}
+                  className="miniapp-task-list-card rounded-lg border border-slate-700 bg-slate-800/80 p-3"
+                  style={taskCardStyle}
                 >
                   <button
                     type="button"
@@ -1146,12 +1147,12 @@ export default function MiniApp() {
                     <ChevronDown size={18} className="absolute right-0 top-0 shrink-0" />
                     {hasSubtasks ? (
                       <span
-                        className="pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
+                        className="miniapp-subtask-progress pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
                         style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
                         title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
                         aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
                       >
-                        <span className="absolute inset-[3px] rounded-full bg-slate-800/95" />
+                        <span className="miniapp-subtask-progress-core absolute inset-[3px] rounded-full bg-slate-800/95" />
                       </span>
                     ) : null}
                   </button>
@@ -1353,7 +1354,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void saveTask(openedTask.id)}
                   disabled={savingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Save size={14} />
                   {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить задачу'}
@@ -1362,7 +1363,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void completeTask(openedTask.id)}
                   disabled={completingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <CheckCircle2 size={14} />
                   {completingId === openedTask.id ? 'Завершаем…' : 'Выполнить'}
@@ -1371,7 +1372,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void deleteTask(openedTask.id)}
                   disabled={deletingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Trash2 size={14} />
                   {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
@@ -1379,7 +1380,7 @@ export default function MiniApp() {
                 <button
                   type="button"
                   onClick={() => setIsAiDialogOpen(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium text-white"
                 >
                   <Bot size={14} />
                   Диалог с ИИ
@@ -1475,7 +1476,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void addSubtask(openedTask)}
                   disabled={creatingSubtaskForId === openedTask.id}
-                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
                 >
                   {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить подзадачу'}
                 </button>
@@ -1559,15 +1560,15 @@ export default function MiniApp() {
                 className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Save size={14} />
                   {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
                 </button>
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <CheckCircle2 size={14} />
                   {completingId === openedSubtask.id ? 'Завершаем…' : 'Выполнить'}
                 </button>
-                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Trash2 size={14} />
                   {deletingId === openedSubtask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
