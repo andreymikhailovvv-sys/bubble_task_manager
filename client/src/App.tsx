@@ -12,6 +12,8 @@ import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/lay
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
+import { NotesEditor } from './components/NotesEditor';
+import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
 const MAX_AI_ATTACHMENTS = 3;
@@ -525,6 +527,7 @@ export default function App() {
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
+  const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
@@ -1188,6 +1191,7 @@ export default function App() {
   useEffect(() => {
     if (!focusedTask) {
       setFocusedDraft(null);
+      setIsFocusedNotesEditorOpen(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
       setIsAiSubtasksPromptOpen(false);
@@ -1204,6 +1208,7 @@ export default function App() {
       focusedAutosaveSignatureRef.current = null;
       return;
     }
+    setIsFocusedNotesEditorOpen(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
@@ -4193,7 +4198,27 @@ export default function App() {
                 <div className="space-y-3 overflow-y-auto pr-1">
                   <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
                   <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                  <textarea className="form-field min-h-44 w-full rounded border p-2 text-sm" value={focusedDraft.description ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                  <div>
+                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '')} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                    <div className="mt-1 flex justify-end">
+                      <button
+                        type="button"
+                        className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                        onClick={() => setIsFocusedNotesEditorOpen(true)}
+                        title="Открыть заметки"
+                        aria-label="Открыть заметки"
+                      >
+                        <Maximize2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                  {isFocusedNotesEditorOpen ? (
+                    <NotesEditor
+                      value={focusedDraft.description ?? ''}
+                      onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
+                      onClose={() => setIsFocusedNotesEditorOpen(false)}
+                    />
+                  ) : null}
                   <input
                     ref={focusedTaskAttachmentInputRef}
                     type="file"

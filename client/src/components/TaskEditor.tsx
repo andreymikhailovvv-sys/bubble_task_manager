@@ -1,8 +1,10 @@
-import { Coins, Loader2, Paperclip, Plus, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Bold, Coins, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Underline, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 import { api } from '../lib/api';
+import { noteHtmlToPlainText } from '../lib/notes';
+import { NotesEditor as TaskNotesEditor } from './NotesEditor';
 
 type Props = {
   task?: Task;
@@ -73,6 +75,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(null);
   const [recurrenceNextDueLabel, setRecurrenceNextDueLabel] = useState<string | null>(null);
+  const [isNotesEditorOpen, setIsNotesEditorOpen] = useState(false);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
@@ -98,6 +101,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     setRecurrenceText(nextForm.recurrenceText ?? '');
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     setRecurrenceNextDueLabel(nextForm.dueDate ? new Date(nextForm.dueDate).toLocaleString('ru-RU') : null);
+    setIsNotesEditorOpen(false);
     autosaveSignatureRef.current = task ? JSON.stringify({
       title: task.title ?? '',
       description: task.description ?? '',
@@ -161,6 +165,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const selectedImportance = form.importance ?? 3;
   const isSubtask = Boolean(form.parentTaskId);
   const canShowAiCreateMode = !isEditing && !isSubtask;
+  const descriptionValue = form.description ?? '';
+  const updateDescription = (description: string) => setForm((previous) => ({ ...previous, description }));
 
   const resolveAttachmentMimeType = (file: File): string => {
     const fromBrowser = file.type?.trim();
@@ -309,7 +315,21 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         ) : (
           <>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-        <textarea className="form-field min-h-20 w-full rounded border p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+        <div>
+          <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue)} onChange={(e) => updateDescription(e.target.value)} />
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+              onClick={() => setIsNotesEditorOpen(true)}
+              title="Открыть заметки"
+              aria-label="Открыть заметки"
+            >
+              <Maximize2 size={15} />
+            </button>
+          </div>
+        </div>
+        {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"
