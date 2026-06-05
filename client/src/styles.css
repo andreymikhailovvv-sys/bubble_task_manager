@@ -1761,3 +1761,77 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-rose-600'],
 body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
   color: #ffffff !important;
 }
+
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-fullscreen-backdrop {
+  background: rgba(15, 23, 42, 0.22) !important;
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog {
+  border-color: rgba(167, 139, 250, 0.34) !important;
+  background: linear-gradient(135deg, #ffffff, #f8fafc) !important;
+  color: #0f172a !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog .text-violet-100,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-title {
+  color: #5b21b6 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog .text-slate-300,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog .text-slate-400 {
+  color: #475569 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-mode-switch {
+  border-color: rgba(167, 139, 250, 0.34) !important;
+  background: #f8fafc !important;
+  color: #334155 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-mode-switch button:not([class*='bg-violet-600']) {
+  color: #475569 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-thread {
+  border: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9) !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-message-assistant {
+  border-color: rgba(124, 58, 237, 0.28) !important;
+  background: #ede9fe !important;
+  color: #3b0764 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-message-user {
+  border-color: rgba(14, 165, 233, 0.34) !important;
+  background: #e0f2fe !important;
+  color: #0c4a6e !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-message .text-slate-100,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-message .text-slate-300 {
+  color: currentColor !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-file-pill,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-attach-button,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-input {
+  border-color: rgba(203, 213, 225, 0.86) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
+  color: #64748b !important;
+}
