@@ -4200,7 +4200,30 @@ export default function App() {
                   <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <div>
                     <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '')} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
-                    <div className="mt-1 flex justify-end">
+                    <div className="mt-1 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className={`notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                        onClick={() => focusedTaskAttachmentInputRef.current?.click()}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          setIsTaskAttachmentDragActive(true);
+                        }}
+                        onDragLeave={(event) => {
+                          event.preventDefault();
+                          setIsTaskAttachmentDragActive(false);
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const files = Array.from(event.dataTransfer.files ?? []);
+                          void uploadFocusedTaskFiles(files);
+                        }}
+                        disabled={isUploadingTaskAttachment}
+                        title="Добавить файлы к задаче"
+                        aria-label="Добавить файлы к задаче"
+                      >
+                        <Plus size={15} />
+                      </button>
                       <button
                         type="button"
                         className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
@@ -4227,8 +4250,7 @@ export default function App() {
                     className="hidden"
                     onChange={handleTaskAttachmentFileSelect}
                   />
-                  <div className="space-y-1">
-                    <p className="text-[11px] text-subtle">Файлы к задаче (используются ИИ в чате, «Помочь с задачей» и «Сформировать ИИ»)</p>
+                  {focusedTaskAttachments.length > 0 ? (
                     <div className="flex flex-wrap items-start gap-2">
                       {focusedTaskAttachments.map((attachment) => (
                         <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
@@ -4251,30 +4273,8 @@ export default function App() {
                           </button>
                         </div>
                       ))}
-                      <button
-                        type="button"
-                        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed text-slate-200 transition ${isTaskAttachmentDragActive ? 'border-cyan-300 bg-cyan-700/30' : 'border-slate-500 bg-slate-800 hover:bg-slate-700'} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
-                        onClick={() => focusedTaskAttachmentInputRef.current?.click()}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          setIsTaskAttachmentDragActive(true);
-                        }}
-                        onDragLeave={(event) => {
-                          event.preventDefault();
-                          setIsTaskAttachmentDragActive(false);
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          const files = Array.from(event.dataTransfer.files ?? []);
-                          void uploadFocusedTaskFiles(files);
-                        }}
-                        disabled={isUploadingTaskAttachment}
-                        title="Добавить файл или перетащить в плюс"
-                      >
-                        <Plus size={16} />
-                      </button>
                     </div>
-                  </div>
+                  ) : null}
                   <select className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
                   <option value="">Без сектора</option>
                   {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
