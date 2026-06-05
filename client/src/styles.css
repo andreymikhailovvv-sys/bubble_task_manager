@@ -1551,13 +1551,34 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
   transform: translateY(-1px);
 }
 
-.notes-editor-textarea {
+.notes-editor-content {
   background: var(--input-bg);
   color: var(--text-primary);
 }
 
-.notes-editor-textarea::placeholder {
+.notes-editor-content:empty::before {
+  content: attr(data-placeholder);
   color: var(--field-placeholder);
+  pointer-events: none;
+}
+
+.notes-editor-content h1 {
+  margin: 0.35rem 0 0.45rem;
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.notes-editor-content h2 {
+  margin: 0.3rem 0 0.4rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.notes-editor-content p,
+.notes-editor-content div {
+  margin: 0 0 0.45rem;
 }
 
 body[data-theme='light'] .notes-open-button,
@@ -1587,7 +1608,25 @@ body[data-theme='light'] .notes-editor-toolbar {
   background: #ffffff !important;
 }
 
-body[data-theme='light'] .notes-editor-textarea {
+body[data-theme='light'] .notes-editor-content {
   background: #f8fafc !important;
   color: #0f172a !important;
+}
+
+.note-formatted-h1,
+.note-formatted-h2,
+.note-formatted-block {
+  display: block;
+}
+
+.note-formatted-h1 {
+  font-size: 1.18em;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.note-formatted-h2 {
+  font-size: 1.08em;
+  font-weight: 700;
+  line-height: 1.3;
 }

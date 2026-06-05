@@ -1,8 +1,10 @@
-import { Bold, Coins, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Underline, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
+import { Coins, Loader2, Maximize2, Paperclip, Plus, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 import { api } from '../lib/api';
+import { noteHtmlToPlainText } from '../lib/notes';
+import { NotesEditor } from './NotesEditor';
 
 type Props = {
   task?: Task;
@@ -419,17 +421,19 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         ) : (
           <>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-        <div className="grid grid-cols-[1fr_auto] items-stretch gap-2">
-          <textarea className="form-field min-h-20 w-full rounded border p-2 text-sm" placeholder="Описание" value={descriptionValue} onChange={(e) => updateDescription(e.target.value)} />
-          <button
-            type="button"
-            className="notes-open-button inline-flex min-w-20 flex-col items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-semibold transition"
-            onClick={() => setIsNotesEditorOpen(true)}
-            title="Открыть широкое окно заметок"
-          >
-            <Maximize2 size={16} />
-            <span>Заметки</span>
-          </button>
+        <div>
+          <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue)} onChange={(e) => updateDescription(e.target.value)} />
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+              onClick={() => setIsNotesEditorOpen(true)}
+              title="Открыть заметки"
+              aria-label="Открыть заметки"
+            >
+              <Maximize2 size={15} />
+            </button>
+          </div>
         </div>
         {isNotesEditorOpen ? <NotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
