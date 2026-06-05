@@ -1,5 +1,5 @@
-import { Coins, Loader2, Paperclip, Plus, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Bold, Coins, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Underline, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 import { api } from '../lib/api';
@@ -58,6 +58,112 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   5: 'bg-rose-500/75 border-rose-300'
 };
 
+type NoteFormat = 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
+
+type NotesEditorProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+};
+
+const NOTE_FORMAT_BUTTONS: Array<{ format: NoteFormat; label: string; title: string; icon: typeof Bold }> = [
+  { format: 'h1', label: 'H1', title: 'Заголовок первого порядка', icon: Heading1 },
+  { format: 'h2', label: 'H2', title: 'Заголовок второго порядка', icon: Heading2 },
+  { format: 'bold', label: 'B', title: 'Жирный', icon: Bold },
+  { format: 'underline', label: 'U', title: 'Подчёркнутый', icon: Underline },
+  { format: 'italic', label: 'I', title: 'Курсив', icon: Italic }
+];
+
+function replaceSelection(
+  textareaRef: RefObject<HTMLTextAreaElement | null>,
+  value: string,
+  onChange: (value: string) => void,
+  formatter: (selectedText: string) => { text: string; selectionStart: number; selectionEnd: number }
+) {
+  const textarea = textareaRef.current;
+  const start = textarea?.selectionStart ?? value.length;
+  const end = textarea?.selectionEnd ?? value.length;
+  const selectedText = value.slice(start, end);
+  const formatted = formatter(selectedText);
+  const nextValue = `${value.slice(0, start)}${formatted.text}${value.slice(end)}`;
+  onChange(nextValue);
+  window.requestAnimationFrame(() => {
+    textarea?.focus();
+    textarea?.setSelectionRange(start + formatted.selectionStart, start + formatted.selectionEnd);
+  });
+}
+
+function formatHeading(selectedText: string, level: 1 | 2) {
+  const marker = level === 1 ? '# ' : '## ';
+  const text = selectedText || (level === 1 ? 'Заголовок' : 'Подзаголовок');
+  const formattedText = text
+    .split('\n')
+    .map((line) => `${marker}${line.replace(/^#{1,6}\s+/, '')}`)
+    .join('\n');
+  return { text: formattedText, selectionStart: marker.length, selectionEnd: formattedText.length };
+}
+
+function formatInline(selectedText: string, prefix: string, suffix = prefix, placeholder = 'текст') {
+  const text = selectedText || placeholder;
+  return {
+    text: `${prefix}${text}${suffix}`,
+    selectionStart: prefix.length,
+    selectionEnd: prefix.length + text.length
+  };
+}
+
+function NotesEditor({ value, onChange, onClose }: NotesEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const applyFormat = (format: NoteFormat) => {
+    const formatters: Record<NoteFormat, (selectedText: string) => { text: string; selectionStart: number; selectionEnd: number }> = {
+      h1: (selectedText) => formatHeading(selectedText, 1),
+      h2: (selectedText) => formatHeading(selectedText, 2),
+      bold: (selectedText) => formatInline(selectedText, '**'),
+      underline: (selectedText) => formatInline(selectedText, '<u>', '</u>'),
+      italic: (selectedText) => formatInline(selectedText, '_')
+    };
+    replaceSelection(textareaRef, value, onChange, formatters[format]);
+  };
+
+  return (
+    <div className="notes-editor-backdrop fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={onClose}>
+      <section className="notes-editor-panel flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="notes-editor-header flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+          <div>
+            <h4 className="text-base font-semibold text-primary">Заметки</h4>
+            <p className="text-xs text-muted">Выделите текст и примените простое форматирование.</p>
+          </div>
+          <button type="button" className="notes-editor-close rounded-full px-3 py-1.5 text-sm font-semibold" onClick={onClose}>Готово</button>
+        </div>
+        <div className="notes-editor-toolbar flex flex-wrap gap-2 border-b px-4 py-3">
+          {NOTE_FORMAT_BUTTONS.map(({ format, label, title, icon: Icon }) => (
+            <button
+              key={format}
+              type="button"
+              className="notes-editor-tool inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold"
+              title={title}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => applyFormat(format)}
+            >
+              <Icon size={15} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+        <textarea
+          ref={textareaRef}
+          className="notes-editor-textarea min-h-0 flex-1 resize-none border-0 p-5 text-sm leading-6 outline-none"
+          placeholder="Пишите заметки, детали задачи, ссылки и план действий…"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoFocus
+        />
+      </section>
+    </div>
+  );
+}
+
 export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled, timelineTasks = [] }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
@@ -73,6 +179,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(null);
   const [recurrenceNextDueLabel, setRecurrenceNextDueLabel] = useState<string | null>(null);
+  const [isNotesEditorOpen, setIsNotesEditorOpen] = useState(false);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
@@ -98,6 +205,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
     setRecurrenceText(nextForm.recurrenceText ?? '');
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     setRecurrenceNextDueLabel(nextForm.dueDate ? new Date(nextForm.dueDate).toLocaleString('ru-RU') : null);
+    setIsNotesEditorOpen(false);
     autosaveSignatureRef.current = task ? JSON.stringify({
       title: task.title ?? '',
       description: task.description ?? '',
@@ -161,6 +269,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   const selectedImportance = form.importance ?? 3;
   const isSubtask = Boolean(form.parentTaskId);
   const canShowAiCreateMode = !isEditing && !isSubtask;
+  const descriptionValue = form.description ?? '';
+  const updateDescription = (description: string) => setForm((previous) => ({ ...previous, description }));
 
   const resolveAttachmentMimeType = (file: File): string => {
     const fromBrowser = file.type?.trim();
@@ -309,7 +419,19 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         ) : (
           <>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-        <textarea className="form-field min-h-20 w-full rounded border p-2 text-sm" placeholder="Описание" value={form.description ?? ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+        <div className="grid grid-cols-[1fr_auto] items-stretch gap-2">
+          <textarea className="form-field min-h-20 w-full rounded border p-2 text-sm" placeholder="Описание" value={descriptionValue} onChange={(e) => updateDescription(e.target.value)} />
+          <button
+            type="button"
+            className="notes-open-button inline-flex min-w-20 flex-col items-center justify-center gap-1 rounded-xl border px-3 py-2 text-xs font-semibold transition"
+            onClick={() => setIsNotesEditorOpen(true)}
+            title="Открыть широкое окно заметок"
+          >
+            <Maximize2 size={16} />
+            <span>Заметки</span>
+          </button>
+        </div>
+        {isNotesEditorOpen ? <NotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"

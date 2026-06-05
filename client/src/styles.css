@@ -1505,3 +1505,89 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
   background: rgba(240, 249, 255, 0.96) !important;
   box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.18), inset 0 0 12px rgba(14, 165, 233, 0.14);
 }
+
+.notes-open-button {
+  border-color: color-mix(in srgb, var(--panel-border) 86%, transparent);
+  background: color-mix(in srgb, var(--muted-bg) 82%, transparent);
+  color: var(--text-primary);
+}
+
+.notes-open-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--panel-border));
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--muted-bg));
+  transform: translateY(-1px);
+}
+
+.notes-editor-backdrop {
+  background: color-mix(in srgb, var(--overlay-bg) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.notes-editor-panel {
+  border-color: color-mix(in srgb, var(--panel-border) 92%, transparent);
+  background: color-mix(in srgb, var(--panel-bg) 96%, var(--popover-bg));
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.notes-editor-header,
+.notes-editor-toolbar {
+  border-color: color-mix(in srgb, var(--panel-border) 82%, transparent);
+  background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
+}
+
+.notes-editor-close,
+.notes-editor-tool {
+  border: 1px solid color-mix(in srgb, var(--panel-border) 84%, transparent);
+  background: color-mix(in srgb, var(--muted-bg) 90%, transparent);
+  color: var(--text-primary);
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.notes-editor-close:hover,
+.notes-editor-tool:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--panel-border));
+  background: color-mix(in srgb, var(--accent-soft) 66%, var(--muted-bg));
+  transform: translateY(-1px);
+}
+
+.notes-editor-textarea {
+  background: var(--input-bg);
+  color: var(--text-primary);
+}
+
+.notes-editor-textarea::placeholder {
+  color: var(--field-placeholder);
+}
+
+body[data-theme='light'] .notes-open-button,
+body[data-theme='light'] .notes-editor-close,
+body[data-theme='light'] .notes-editor-tool {
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .notes-open-button:hover,
+body[data-theme='light'] .notes-editor-close:hover,
+body[data-theme='light'] .notes-editor-tool:hover {
+  border-color: #38bdf8 !important;
+  background: #eff6ff !important;
+}
+
+body[data-theme='light'] .notes-editor-panel {
+  border-color: rgba(148, 163, 184, 0.32) !important;
+  background: #ffffff !important;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.18) !important;
+}
+
+body[data-theme='light'] .notes-editor-header,
+body[data-theme='light'] .notes-editor-toolbar {
+  border-color: rgba(203, 213, 225, 0.9) !important;
+  background: #ffffff !important;
+}
+
+body[data-theme='light'] .notes-editor-textarea {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
