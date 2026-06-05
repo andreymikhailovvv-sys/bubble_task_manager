@@ -1,10 +1,10 @@
-import { Coins, Loader2, Maximize2, Paperclip, Plus, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Bold, Coins, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Underline, X } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 import { api } from '../lib/api';
 import { noteHtmlToPlainText } from '../lib/notes';
-import { NotesEditor } from './NotesEditor';
+import { NotesEditor as TaskNotesEditor } from './NotesEditor';
 
 type Props = {
   task?: Task;
@@ -435,7 +435,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             </button>
           </div>
         </div>
-        {isNotesEditorOpen ? <NotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
+        {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
         {isSubtask && parentTaskTitle && onOpenParentTask ? (
           <button
             type="button"
