@@ -1532,9 +1532,28 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 }
 
 .notes-editor-header,
-.notes-editor-toolbar {
+.notes-editor-toolbar,
+.notes-editor-toolbar-spacer {
   border-color: color-mix(in srgb, var(--panel-border) 82%, transparent);
   background: color-mix(in srgb, var(--panel-bg) 90%, transparent);
+}
+
+.notes-editor-selection-menu {
+  border-color: color-mix(in srgb, var(--panel-border) 82%, transparent);
+  background: color-mix(in srgb, var(--popover-bg) 96%, var(--panel-bg));
+  color: var(--text-primary);
+  backdrop-filter: blur(16px) saturate(1.1);
+}
+
+.notes-editor-selection-menu-button {
+  background: color-mix(in srgb, var(--muted-bg) 86%, transparent);
+  color: var(--text-primary);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.notes-editor-selection-menu-button:hover {
+  background: color-mix(in srgb, var(--accent-soft) 66%, var(--muted-bg));
+  transform: translateY(-1px);
 }
 
 .notes-editor-close,
@@ -1584,7 +1603,8 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 
 body[data-theme='light'] .notes-open-button,
 body[data-theme='light'] .notes-editor-close,
-body[data-theme='light'] .notes-editor-tool {
+body[data-theme='light'] .notes-editor-tool,
+body[data-theme='light'] .notes-editor-selection-menu-button {
   border-color: rgba(148, 163, 184, 0.36) !important;
   background: #f8fafc !important;
   color: #0f172a !important;
@@ -1593,7 +1613,8 @@ body[data-theme='light'] .notes-editor-tool {
 body[data-theme='light'] .notes-open-button:hover,
 body[data-theme='light'] .notes-open-button.notes-open-button-active,
 body[data-theme='light'] .notes-editor-close:hover,
-body[data-theme='light'] .notes-editor-tool:hover {
+body[data-theme='light'] .notes-editor-tool:hover,
+body[data-theme='light'] .notes-editor-selection-menu-button:hover {
   border-color: #38bdf8 !important;
   background: #eff6ff !important;
 }
@@ -1605,9 +1626,16 @@ body[data-theme='light'] .notes-editor-panel {
 }
 
 body[data-theme='light'] .notes-editor-header,
-body[data-theme='light'] .notes-editor-toolbar {
+body[data-theme='light'] .notes-editor-toolbar,
+body[data-theme='light'] .notes-editor-toolbar-spacer {
   border-color: rgba(203, 213, 225, 0.9) !important;
   background: #ffffff !important;
+}
+
+body[data-theme='light'] .notes-editor-selection-menu {
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16) !important;
 }
 
 body[data-theme='light'] .notes-editor-content {
