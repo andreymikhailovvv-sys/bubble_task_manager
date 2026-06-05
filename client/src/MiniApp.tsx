@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Paperclip, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -31,6 +31,7 @@ const extractInitDataFromUrl = () => {
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
 type ListSortMode = 'sector' | 'importance';
+type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_HOUR_HEIGHT = 88;
@@ -214,6 +215,11 @@ export default function MiniApp() {
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
   const [listSortMode, setListSortMode] = useState<ListSortMode>('sector');
+  const [miniThemeMode, setMiniThemeMode] = useState<MiniThemeMode>(() => {
+    const stored = localStorage.getItem('btm:miniapp-theme-mode');
+    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -287,6 +293,17 @@ export default function MiniApp() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    document.body.dataset.theme = miniThemeMode;
+    document.documentElement.dataset.theme = miniThemeMode;
+    localStorage.setItem('btm:miniapp-theme-mode', miniThemeMode);
+
+    return () => {
+      delete document.body.dataset.theme;
+      delete document.documentElement.dataset.theme;
+    };
+  }, [miniThemeMode]);
 
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -528,6 +545,8 @@ export default function MiniApp() {
 
     return placements;
   }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
+
+  const isLightTheme = miniThemeMode === 'light';
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -955,7 +974,7 @@ export default function MiniApp() {
   }, [displayMode, timelineToday.currentTimeTop, timelineToday.isTodayVisible]);
 
   if (loading) {
-    return <main className="h-screen overflow-y-auto miniapp-scrollless bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
+    return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем мини-приложение…</main>;
   }
 
   return (
@@ -969,7 +988,7 @@ export default function MiniApp() {
         else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
         lastMainScrollTopRef.current = nextTop;
       }}
-      className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100"
+      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
@@ -983,7 +1002,7 @@ export default function MiniApp() {
               className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
             </div>
-            <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
+            <div className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
               <button
                 type="button"
                 onClick={openCreateTaskModal}
@@ -1006,6 +1025,46 @@ export default function MiniApp() {
                   <CalendarDays size={16} className="text-violet-400" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen((prev) => !prev)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                aria-label="Открыть настройки"
+                title="Настройки"
+              >
+                <Settings size={16} className="text-slate-300" />
+              </button>
+              {isSettingsOpen ? (
+                <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-100">Настройки</span>
+                    <button type="button" onClick={() => setIsSettingsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-800" aria-label="Закрыть настройки">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-400">Тема мини-приложения</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMiniThemeMode('light')}
+                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${isLightTheme ? 'border-sky-400 bg-sky-500/20 text-sky-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
+                      >
+                        <Sun size={13} />
+                        Светлая
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMiniThemeMode('dark')}
+                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${!isLightTheme ? 'border-violet-400 bg-violet-500/20 text-violet-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
+                      >
+                        <Moon size={13} />
+                        Тёмная
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
@@ -1148,16 +1207,16 @@ export default function MiniApp() {
                             width: 'calc(100% - 4rem - 8px)',
                             zIndex: 10,
                             borderColor: isSubtask
-                              ? 'rgba(100,116,139,0.9)'
-                              : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
+                              ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
+                              : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
                             background: isSubtask
-                              ? 'rgba(71,85,105,0.82)'
-                              : (hexToRgba(sphereColor ?? '', 0.25) ?? 'rgba(14,165,233,0.18)'),
+                              ? (isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(71,85,105,0.82)')
+                              : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
                             borderLeftWidth: isSubtask ? '4px' : '1px',
                             borderLeftColor: isSubtask
                               ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
                               : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
-                            boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
+                            boxShadow: hasOverdueState ? (isLightTheme ? '0 10px 28px rgba(225,29,72,0.18)' : '0 0 12px rgba(239,68,68,0.45)') : undefined
                           }}
                           onClick={() => openTaskModal(parentTask ?? task)}
                         >
