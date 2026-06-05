@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, List, Paperclip, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Paperclip, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task } from './lib/types';
+import { NotesEditor } from './components/NotesEditor';
+import { noteHtmlToPlainText } from './lib/notes';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -151,6 +153,23 @@ function resolveAttachmentMimeType(file: File): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
+async function fileToAttachmentPayload(file: File): Promise<ChatAttachmentPayload> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return {
+    name: file.name,
+    mimeType: resolveAttachmentMimeType(file),
+    size: file.size,
+    contentBase64: btoa(binary)
+  };
+}
+
 function shouldTaskGlow(task: Task) {
   if (task.status === 'DONE' || !task.dueDate) return false;
   const due = new Date(task.dueDate);
@@ -212,6 +231,11 @@ export default function MiniApp() {
     description: '',
     dueDate: ''
   });
+  const [isTaskNotesEditorOpen, setIsTaskNotesEditorOpen] = useState(false);
+  const [isSubtaskNotesEditorOpen, setIsSubtaskNotesEditorOpen] = useState(false);
+  const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
+  const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
+  const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -223,6 +247,7 @@ export default function MiniApp() {
   const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const launchParams = useMemo(() => {
@@ -547,8 +572,11 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
+    setIsTaskNotesEditorOpen(false);
+    setIsSubtaskNotesEditorOpen(false);
     setIsAiDialogOpen(false);
     setAiDraft('');
+    setTaskAttachments([]);
   };
 
   const onChangeDraft = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -698,6 +726,88 @@ export default function MiniApp() {
   const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
 
   useEffect(() => {
+    setIsSubtaskNotesEditorOpen(false);
+  }, [openedSubtaskId]);
+
+  useEffect(() => {
+    setIsTaskNotesEditorOpen(false);
+    setIsSubtaskNotesEditorOpen(false);
+    setTaskAttachments([]);
+    setIsTaskAttachmentDragActive(false);
+    if (!openedTaskId) return;
+
+    let isCancelled = false;
+    const loadTaskAttachments = async () => {
+      try {
+        const attachments = await api.getTaskAttachments(openedTaskId);
+        if (!isCancelled) setTaskAttachments(attachments);
+      } catch (e) {
+        if (!isCancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить файлы задачи');
+      }
+    };
+    void loadTaskAttachments();
+    return () => {
+      isCancelled = true;
+    };
+  }, [openedTaskId]);
+
+  const uploadTaskAttachmentFiles = async (files: File[]) => {
+    if (!openedTask || files.length === 0) return;
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== files.length) {
+      setError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+    }
+    if (normalized.length === 0) return;
+
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      return;
+    }
+
+    setIsUploadingTaskAttachment(true);
+    try {
+      for (const file of normalized) {
+        await api.createTaskAttachment(openedTask.id, await fileToAttachmentPayload(file));
+      }
+      const attachments = await api.getTaskAttachments(openedTask.id);
+      setTaskAttachments(attachments);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к задаче');
+    } finally {
+      setIsUploadingTaskAttachment(false);
+      setIsTaskAttachmentDragActive(false);
+    }
+  };
+
+  const handleTaskAttachmentFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    void uploadTaskAttachmentFiles(selectedFiles);
+    event.target.value = '';
+  };
+
+  const removeTaskAttachment = async (attachmentId: string) => {
+    if (!openedTask) return;
+    try {
+      await api.deleteTaskAttachment(openedTask.id, attachmentId);
+      setTaskAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить файл');
+    }
+  };
+
+  const downloadTaskAttachment = (attachment: TaskAttachment) => {
+    if (!openedTask) return;
+    const link = document.createElement('a');
+    link.href = api.getTaskAttachmentDownloadUrl(openedTask.id, attachment.id);
+    link.download = attachment.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  useEffect(() => {
     const raw = localStorage.getItem('btm:task-ai-mode-map');
     if (!raw) return;
     try {
@@ -763,21 +873,7 @@ export default function MiniApp() {
     const fileNames = aiPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(aiPendingFiles.map(async (file) => ({
-        name: file.name,
-        mimeType: resolveAttachmentMimeType(file),
-        size: file.size,
-        contentBase64: await file.arrayBuffer().then((buffer) => {
-          const bytes = new Uint8Array(buffer);
-          let binary = '';
-          const chunkSize = 0x8000;
-          for (let index = 0; index < bytes.length; index += chunkSize) {
-            const chunk = bytes.subarray(index, index + chunkSize);
-            binary += String.fromCharCode(...chunk);
-          }
-          return btoa(binary);
-        })
-      })));
+      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
     } catch {
       setError('Не удалось прочитать приложенные файлы');
       setAiLoadingTaskId(null);
@@ -1105,11 +1201,85 @@ export default function MiniApp() {
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Описание</label>
                 <textarea
-                  value={openedTaskDraft.description}
+                  value={noteHtmlToPlainText(openedTaskDraft.description)}
                   onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
                   className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={`notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                    onClick={() => taskAttachmentInputRef.current?.click()}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsTaskAttachmentDragActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setIsTaskAttachmentDragActive(false);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const files = Array.from(event.dataTransfer.files ?? []);
+                      void uploadTaskAttachmentFiles(files);
+                    }}
+                    disabled={isUploadingTaskAttachment}
+                    title="Добавить файлы к задаче"
+                    aria-label="Добавить файлы к задаче"
+                  >
+                    <Plus size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                    onClick={() => setIsTaskNotesEditorOpen(true)}
+                    title="Открыть заметки"
+                    aria-label="Открыть заметки"
+                  >
+                    <Maximize2 size={15} />
+                  </button>
+                </div>
+                <input
+                  ref={taskAttachmentInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={handleTaskAttachmentFileSelect}
+                />
+                {taskAttachments.length > 0 ? (
+                  <div className="flex flex-wrap items-start gap-2">
+                    {taskAttachments.map((attachment) => (
+                      <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
+                        <button
+                          type="button"
+                          title={`${attachment.name} • скачать`}
+                          onClick={() => downloadTaskAttachment(attachment)}
+                          className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
+                        >
+                          <FileText size={12} className="shrink-0 text-cyan-300" />
+                          <span className="truncate">{attachment.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="Удалить файл"
+                          onClick={() => void removeTaskAttachment(attachment.id)}
+                          className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
+                        >
+                          <X size={11} className="shrink-0" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+              {isTaskNotesEditorOpen ? (
+                <NotesEditor
+                  value={openedTaskDraft.description}
+                  onChange={(description) => onChangeDraft(openedTask.id, { description })}
+                  onClose={() => setIsTaskNotesEditorOpen(false)}
+                />
+              ) : null}
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Срок</label>
                 <input
@@ -1220,7 +1390,7 @@ export default function MiniApp() {
                     style={{ WebkitTapHighlightColor: 'transparent' }}
                     className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
+                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                         event.preventDefault();
                         void sendAiMessage();
                       }
@@ -1300,11 +1470,29 @@ export default function MiniApp() {
                 placeholder="Название подзадачи"
               />
               <textarea
-                value={openedSubtaskDraft.description}
+                value={noteHtmlToPlainText(openedSubtaskDraft.description)}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
                 className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Описание подзадачи"
               />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  onClick={() => setIsSubtaskNotesEditorOpen(true)}
+                  title="Открыть заметки"
+                  aria-label="Открыть заметки"
+                >
+                  <Maximize2 size={15} />
+                </button>
+              </div>
+              {isSubtaskNotesEditorOpen ? (
+                <NotesEditor
+                  value={openedSubtaskDraft.description}
+                  onChange={(description) => onChangeDraft(openedSubtask.id, { description })}
+                  onClose={() => setIsSubtaskNotesEditorOpen(false)}
+                />
+              ) : null}
               <input
                 type="datetime-local"
                 value={openedSubtaskDraft.dueDate}
@@ -1408,7 +1596,7 @@ export default function MiniApp() {
                 style={{ WebkitTapHighlightColor: 'transparent' }}
                 className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
                     void sendAiMessage();
                   }
