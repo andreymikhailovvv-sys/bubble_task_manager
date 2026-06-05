@@ -430,6 +430,14 @@ export function BubbleField({
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const isSelected = selectedId === bubble.task.id;
+    const glowColor = overdue ? '#ef4444' : '#38bdf8';
+    const glowFilter = overdue
+      ? 'drop-shadow(0 0 10px rgba(239,68,68,0.82)) drop-shadow(0 0 22px rgba(220,38,38,0.56))'
+      : 'drop-shadow(0 0 10px rgba(56,189,248,0.78)) drop-shadow(0 0 22px rgba(129,140,248,0.42))';
+    const staticGlowFilter = overdue
+      ? 'drop-shadow(0 0 8px rgba(239,68,68,0.7)) drop-shadow(0 0 14px rgba(220,38,38,0.42))'
+      : 'drop-shadow(0 0 8px rgba(56,189,248,0.62)) drop-shadow(0 0 14px rgba(129,140,248,0.34))';
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
@@ -473,12 +481,44 @@ export function BubbleField({
           r={bubble.radius}
           fill={getBubbleShade(bubble.color, bubble.distanceRatio)}
           fillOpacity={isLightTheme ? 0.66 : 0.48}
-          stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
-          strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
-          strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter={shouldGlow ? 'url(#bubbleGlow)' : undefined}
-          style={overdue ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' } : undefined}
+          stroke={shouldGlow && !isSelected ? glowColor : isSelected ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
+          strokeOpacity={shouldGlow && !isSelected ? (overdue ? 0.92 : 0.78) : isSelected ? 1 : isLightTheme ? 0.78 : 0.65}
+          strokeWidth={shouldGlow && !isSelected ? 3.2 : isSelected ? 3.5 : 2.4}
+          style={shouldGlow ? { filter: staticGlowFilter } : undefined}
         />
+        {shouldGlow ? (
+          <circle
+            cx={0}
+            cy={0}
+            r={bubble.radius + 1}
+            fill={glowColor}
+            fillOpacity={overdue ? 0.22 : 0.13}
+            stroke={glowColor}
+            strokeOpacity={overdue ? 0.58 : 0.42}
+            strokeWidth={2.4}
+            pointerEvents="none"
+            style={{ filter: staticGlowFilter }}
+          />
+        ) : null}
+        {shouldGlow && isHovered ? (
+          <motion.circle
+            cx={0}
+            cy={0}
+            r={bubble.radius + 2}
+            fill={glowColor}
+            fillOpacity={overdue ? 0.1 : 0.07}
+            stroke={glowColor}
+            strokeOpacity={overdue ? 0.72 : 0.58}
+            pointerEvents="none"
+            animate={{
+              opacity: [0.55, 1, 0.55],
+              r: [bubble.radius + 2, bubble.radius + 9, bubble.radius + 2],
+              strokeWidth: [2, 4.5, 2]
+            }}
+            transition={{ duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ filter: glowFilter }}
+          />
+        ) : null}
         {bubbleSubtasks.length > 0 ? (
           <>
             <circle cx={0} cy={0} r={bubble.radius + 6} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
