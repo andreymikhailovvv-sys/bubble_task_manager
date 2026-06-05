@@ -10,12 +10,12 @@ type Props = {
   onClose: () => void;
 };
 
-const NOTE_FORMAT_BUTTONS: Array<{ format: NoteFormat; label: string; title: string; icon: typeof Bold; command: string; value?: string }> = [
-  { format: 'h1', label: 'H1', title: 'Заголовок первого порядка', icon: Heading1, command: 'formatBlock', value: '<h1>' },
-  { format: 'h2', label: 'H2', title: 'Заголовок второго порядка', icon: Heading2, command: 'formatBlock', value: '<h2>' },
-  { format: 'bold', label: 'B', title: 'Жирный', icon: Bold, command: 'bold' },
-  { format: 'underline', label: 'U', title: 'Подчёркнутый', icon: Underline, command: 'underline' },
-  { format: 'italic', label: 'I', title: 'Курсив', icon: Italic, command: 'italic' }
+const NOTE_FORMAT_BUTTONS: Array<{ format: NoteFormat; label: string; title: string; icon: typeof Bold; tagName: 'h1' | 'h2' | 'strong' | 'u' | 'em' }> = [
+  { format: 'h1', label: 'H1', title: 'Заголовок первого порядка', icon: Heading1, tagName: 'h1' },
+  { format: 'h2', label: 'H2', title: 'Заголовок второго порядка', icon: Heading2, tagName: 'h2' },
+  { format: 'bold', label: 'B', title: 'Жирный', icon: Bold, tagName: 'strong' },
+  { format: 'underline', label: 'U', title: 'Подчёркнутый', icon: Underline, tagName: 'u' },
+  { format: 'italic', label: 'I', title: 'Курсив', icon: Italic, tagName: 'em' }
 ];
 
 function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) {
@@ -58,10 +58,17 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const selection = window.getSelection();
     if (!editor || !selection || !selectionBelongsToEditor(editor, selection)) return;
 
+    const range = selection.getRangeAt(0);
+    const wrapper = document.createElement(button.tagName);
+    wrapper.append(range.extractContents());
+    range.insertNode(wrapper);
+    selection.removeAllRanges();
+    const nextRange = document.createRange();
+    nextRange.selectNodeContents(wrapper);
+    selection.addRange(nextRange);
     editor.focus();
-    document.execCommand(button.command, false, button.value);
     syncValue();
-    setHasSelection(false);
+    setHasSelection(true);
   };
 
   return (
