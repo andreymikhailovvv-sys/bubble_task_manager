@@ -157,29 +157,6 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
             })}
           </div>
         </div>
-        {selectionMenuPosition ? (
-          <div
-            className="notes-editor-selection-menu fixed z-[95] flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap justify-center gap-1 rounded-2xl border px-2 py-1.5 shadow-2xl"
-            style={{ top: selectionMenuPosition.top, left: selectionMenuPosition.left }}
-            onMouseDown={(event) => event.preventDefault()}
-          >
-            {NOTE_FORMAT_BUTTONS.map((button) => (
-              <button
-                key={`selection-${button.format}`}
-                type="button"
-                className="notes-editor-selection-menu-button rounded-full px-2.5 py-1 text-xs font-semibold"
-                onMouseDown={(event) => event.preventDefault()}
-                onTouchStart={(event) => {
-                  event.preventDefault();
-                  applyFormat(button);
-                }}
-                onClick={() => applyFormat(button)}
-              >
-                {button.menuLabel}
-              </button>
-            ))}
-          </div>
-        ) : null}
         <div className="notes-editor-toolbar-spacer h-6 shrink-0 border-b" aria-hidden="true" />
         <div
           ref={editorRef}
