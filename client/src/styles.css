@@ -1630,3 +1630,10 @@ body[data-theme='light'] .notes-editor-content {
   font-weight: 700;
   line-height: 1.3;
 }
+
+.notes-editor-content a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

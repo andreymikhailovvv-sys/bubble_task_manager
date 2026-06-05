@@ -1,8 +1,8 @@
 import { Bold, Heading1, Heading2, Italic, Underline, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { noteValueToEditorHtml, sanitizeNoteHtml } from '../lib/notes';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
-type NoteFormat = 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
+type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
 
 type Props = {
   value: string;
@@ -10,13 +10,22 @@ type Props = {
   onClose: () => void;
 };
 
-const NOTE_FORMAT_BUTTONS: Array<{ format: NoteFormat; label: string; title: string; icon: typeof Bold; tagName: 'h1' | 'h2' | 'strong' | 'u' | 'em' }> = [
-  { format: 'h1', label: 'H1', title: 'Заголовок первого порядка', icon: Heading1, tagName: 'h1' },
-  { format: 'h2', label: 'H2', title: 'Заголовок второго порядка', icon: Heading2, tagName: 'h2' },
-  { format: 'bold', label: 'B', title: 'Жирный', icon: Bold, tagName: 'strong' },
-  { format: 'underline', label: 'U', title: 'Подчёркнутый', icon: Underline, tagName: 'u' },
-  { format: 'italic', label: 'I', title: 'Курсив', icon: Italic, tagName: 'em' }
+type FormatButton = {
+  format: NoteFormat;
+  title: string;
+  icon: typeof Bold;
+  tagName?: 'h1' | 'h2' | 'strong' | 'u' | 'em';
+};
+
+const NOTE_FORMAT_BUTTONS: FormatButton[] = [
+  { format: 'plain', title: 'Обычный текст', icon: X },
+  { format: 'h1', title: 'Заголовок первого порядка', icon: Heading1, tagName: 'h1' },
+  { format: 'h2', title: 'Заголовок второго порядка', icon: Heading2, tagName: 'h2' },
+  { format: 'bold', title: 'Жирный', icon: Bold, tagName: 'strong' },
+  { format: 'underline', title: 'Подчёркнутый', icon: Underline, tagName: 'u' },
+  { format: 'italic', title: 'Курсив', icon: Italic, tagName: 'em' }
 ];
+
 
 function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) {
   if (!selection.rangeCount || selection.isCollapsed) return false;
@@ -50,14 +59,24 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
   const syncValue = () => {
     const editor = editorRef.current;
     if (!editor) return;
-    onChange(sanitizeNoteHtml(editor.innerHTML));
+    onChange(linkifyNoteHtml(editor.innerHTML));
   };
 
-  const applyFormat = (button: (typeof NOTE_FORMAT_BUTTONS)[number]) => {
+  const applyFormat = (button: FormatButton) => {
     const editor = editorRef.current;
     const selection = window.getSelection();
     if (!editor || !selection || !selectionBelongsToEditor(editor, selection)) return;
 
+    editor.focus();
+    if (button.format === 'plain') {
+      document.execCommand('removeFormat');
+      document.execCommand('formatBlock', false, '<div>');
+      syncValue();
+      setHasSelection(true);
+      return;
+    }
+
+    if (!button.tagName) return;
     const range = selection.getRangeAt(0);
     const wrapper = document.createElement(button.tagName);
     wrapper.append(range.extractContents());
@@ -66,9 +85,25 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const nextRange = document.createRange();
     nextRange.selectNodeContents(wrapper);
     selection.addRange(nextRange);
-    editor.focus();
     syncValue();
     setHasSelection(true);
+  };
+
+  const handleEditorClick = (event: MouseEvent<HTMLDivElement>) => {
+    const link = (event.target as HTMLElement).closest('a');
+    if (!link?.href) return;
+    event.preventDefault();
+    window.open(link.href, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleEditorBlur = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const nextHtml = linkifyNoteHtml(editor.innerHTML);
+    if (editor.innerHTML !== nextHtml) {
+      editor.innerHTML = nextHtml;
+    }
+    onChange(nextHtml);
   };
 
   return (
@@ -90,14 +125,14 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
               <button
                 key={button.format}
                 type="button"
-                className="notes-editor-tool inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
                 title={hasSelection ? button.title : `${button.title} — сначала выделите текст`}
+                aria-label={button.title}
                 disabled={!hasSelection}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => applyFormat(button)}
               >
                 <Icon size={15} />
-                <span>{button.label}</span>
               </button>
             );
           })}
@@ -110,6 +145,8 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
           aria-multiline="true"
           data-placeholder="Пишите заметки, детали задачи, ссылки и план действий…"
           suppressContentEditableWarning
+          onClick={handleEditorClick}
+          onBlur={handleEditorBlur}
           onInput={syncValue}
         />
       </section>
