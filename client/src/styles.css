@@ -1512,7 +1512,8 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
   color: var(--text-primary);
 }
 
-.notes-open-button:hover {
+.notes-open-button:hover,
+.notes-open-button-active {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--panel-border));
   background: color-mix(in srgb, var(--accent-soft) 58%, var(--muted-bg));
   transform: translateY(-1px);
@@ -1590,6 +1591,7 @@ body[data-theme='light'] .notes-editor-tool {
 }
 
 body[data-theme='light'] .notes-open-button:hover,
+body[data-theme='light'] .notes-open-button.notes-open-button-active,
 body[data-theme='light'] .notes-editor-close:hover,
 body[data-theme='light'] .notes-editor-tool:hover {
   border-color: #38bdf8 !important;

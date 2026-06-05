@@ -430,6 +430,13 @@ export function BubbleField({
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const glowColor = overdue ? '#ef4444' : '#38bdf8';
+    const staticGlowStyle = overdue
+      ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
+      : undefined;
+    const hoverGlowFilter = overdue
+      ? 'drop-shadow(0 0 9px rgba(239,68,68,0.62)) drop-shadow(0 0 16px rgba(220,38,38,0.34))'
+      : 'drop-shadow(0 0 9px rgba(56,189,248,0.56)) drop-shadow(0 0 16px rgba(129,140,248,0.3))';
     const bubbleSubtasks = subtaskMap[bubble.task.id] ?? [];
     const doneSubtasksCount = bubbleSubtasks.filter((task) => task.status === 'DONE').length;
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
@@ -476,9 +483,27 @@ export function BubbleField({
           stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter={shouldGlow ? 'url(#bubbleGlow)' : undefined}
-          style={overdue ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' } : undefined}
+          filter={shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined}
+          style={staticGlowStyle}
         />
+        {shouldGlow && isHovered ? (
+          <motion.circle
+            cx={0}
+            cy={0}
+            r={bubble.radius + 2}
+            fill="none"
+            stroke={glowColor}
+            strokeOpacity={overdue ? 0.4 : 0.34}
+            pointerEvents="none"
+            animate={{
+              opacity: [0.38, 0.78, 0.38],
+              r: [bubble.radius + 2, bubble.radius + 8, bubble.radius + 2],
+              strokeWidth: [1.6, 3.2, 1.6]
+            }}
+            transition={{ duration: overdue ? 1.25 : 1.65, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ filter: hoverGlowFilter }}
+          />
+        ) : null}
         {bubbleSubtasks.length > 0 ? (
           <>
             <circle cx={0} cy={0} r={bubble.radius + 6} fill="none" stroke="rgba(148,163,184,0.35)" strokeWidth={4} />
