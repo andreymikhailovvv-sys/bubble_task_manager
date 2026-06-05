@@ -13,17 +13,23 @@ type Props = {
 type FormatButton = {
   format: NoteFormat;
   title: string;
+  menuLabel: string;
   icon: typeof Bold;
   tagName?: 'h1' | 'h2' | 'strong' | 'u' | 'em';
 };
 
+type SelectionMenuPosition = {
+  top: number;
+  left: number;
+};
+
 const NOTE_FORMAT_BUTTONS: FormatButton[] = [
-  { format: 'plain', title: 'Обычный текст', icon: X },
-  { format: 'h1', title: 'Заголовок первого порядка', icon: Heading1, tagName: 'h1' },
-  { format: 'h2', title: 'Заголовок второго порядка', icon: Heading2, tagName: 'h2' },
-  { format: 'bold', title: 'Жирный', icon: Bold, tagName: 'strong' },
-  { format: 'underline', title: 'Подчёркнутый', icon: Underline, tagName: 'u' },
-  { format: 'italic', title: 'Курсив', icon: Italic, tagName: 'em' }
+  { format: 'plain', title: 'Обычный текст', menuLabel: 'Обычный', icon: X },
+  { format: 'h1', title: 'Заголовок первого порядка', menuLabel: 'Заголовок 1', icon: Heading1, tagName: 'h1' },
+  { format: 'h2', title: 'Заголовок второго порядка', menuLabel: 'Заголовок 2', icon: Heading2, tagName: 'h2' },
+  { format: 'bold', title: 'Жирный', menuLabel: 'Жирный', icon: Bold, tagName: 'strong' },
+  { format: 'underline', title: 'Подчёркнутый', menuLabel: 'Подчёркнутый', icon: Underline, tagName: 'u' },
+  { format: 'italic', title: 'Курсив', menuLabel: 'Курсив', icon: Italic, tagName: 'em' }
 ];
 
 
@@ -36,6 +42,7 @@ function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) 
 export function NotesEditor({ value, onChange, onClose }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
+  const [selectionMenuPosition, setSelectionMenuPosition] = useState<SelectionMenuPosition | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -50,7 +57,18 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const updateSelection = () => {
       const editor = editorRef.current;
       const selection = window.getSelection();
-      setHasSelection(Boolean(editor && selection && selectionBelongsToEditor(editor, selection)));
+      const nextHasSelection = Boolean(editor && selection && selectionBelongsToEditor(editor, selection));
+      setHasSelection(nextHasSelection);
+
+      if (!nextHasSelection || !selection?.rangeCount) {
+        setSelectionMenuPosition(null);
+        return;
+      }
+
+      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      const top = Math.max(12, rect.top - 52);
+      const left = Math.min(window.innerWidth - 12, Math.max(12, rect.left + rect.width / 2));
+      setSelectionMenuPosition({ top, left });
     };
     document.addEventListener('selectionchange', updateSelection);
     return () => document.removeEventListener('selectionchange', updateSelection);
@@ -73,6 +91,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
       document.execCommand('formatBlock', false, '<div>');
       syncValue();
       setHasSelection(true);
+      setSelectionMenuPosition(null);
       return;
     }
 
@@ -87,6 +106,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     selection.addRange(nextRange);
     syncValue();
     setHasSelection(true);
+    setSelectionMenuPosition(null);
   };
 
   const handleEditorClick = (event: MouseEvent<HTMLDivElement>) => {

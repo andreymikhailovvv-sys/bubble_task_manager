@@ -1586,7 +1586,8 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 
 body[data-theme='light'] .notes-open-button,
 body[data-theme='light'] .notes-editor-close,
-body[data-theme='light'] .notes-editor-tool {
+body[data-theme='light'] .notes-editor-tool,
+body[data-theme='light'] .notes-editor-selection-menu-button {
   border-color: rgba(148, 163, 184, 0.36) !important;
   background: #f8fafc !important;
   color: #0f172a !important;
@@ -1595,7 +1596,8 @@ body[data-theme='light'] .notes-editor-tool {
 body[data-theme='light'] .notes-open-button:hover,
 body[data-theme='light'] .notes-open-button.notes-open-button-active,
 body[data-theme='light'] .notes-editor-close:hover,
-body[data-theme='light'] .notes-editor-tool:hover {
+body[data-theme='light'] .notes-editor-tool:hover,
+body[data-theme='light'] .notes-editor-selection-menu-button:hover {
   border-color: #38bdf8 !important;
   background: #eff6ff !important;
 }
