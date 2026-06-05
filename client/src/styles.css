@@ -1645,3 +1645,98 @@ body[data-theme='light'] .notes-editor-content {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* Telegram Mini App light theme overrides */
+body[data-theme='light'] .miniapp-shell {
+  color: #0f172a !important;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef7ff 48%, #ffffff 100%) !important;
+  background-size: auto !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-950'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-950/50'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-950/85'] {
+  background-color: rgba(248, 250, 252, 0.92) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-900'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-900/95'] {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-900/80'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-800'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-800/70'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-800/80'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-800/90'],
+body[data-theme='light'] .miniapp-shell [class~='bg-slate-700/80'] {
+  background-color: rgba(241, 245, 249, 0.92) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='border-slate-700'],
+body[data-theme='light'] .miniapp-shell [class~='border-slate-700/80'],
+body[data-theme='light'] .miniapp-shell [class~='border-slate-600'],
+body[data-theme='light'] .miniapp-shell [class~='border-slate-500/80'] {
+  border-color: rgba(203, 213, 225, 0.95) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-slate-100'],
+body[data-theme='light'] .miniapp-shell [class~='text-slate-200'] {
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-slate-300'],
+body[data-theme='light'] .miniapp-shell [class~='text-slate-400'] {
+  color: #475569 !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-slate-500'] {
+  color: #64748b !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-sky-200'],
+body[data-theme='light'] .miniapp-shell [class~='text-sky-400'] {
+  color: #0369a1 !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-violet-200'],
+body[data-theme='light'] .miniapp-shell [class~='text-violet-400'] {
+  color: #6d28d9 !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='text-emerald-400'] {
+  color: #047857 !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='placeholder:text-slate-500']::placeholder {
+  color: #64748b !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='bg-sky-500/20'] {
+  background-color: rgba(224, 242, 254, 0.98) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='bg-violet-500/20'] {
+  background-color: rgba(237, 233, 254, 0.98) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='border-sky-400'] {
+  border-color: rgba(14, 165, 233, 0.75) !important;
+}
+
+body[data-theme='light'] .miniapp-shell [class~='border-violet-400'] {
+  border-color: rgba(139, 92, 246, 0.75) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .fixed[class*='bg-slate-950'] {
+  background-color: rgba(15, 23, 42, 0.34) !important;
+}
+
+body[data-theme='light'] .miniapp-shell button:not([class*='bg-emerald-600']):not([class*='bg-sky-600']):not([class*='bg-rose-600']):not([class*='bg-violet-600']):hover {
+  background-color: rgba(226, 232, 240, 0.96) !important;
+}
+
+body[data-theme='light'] .miniapp-shell article,
+body[data-theme='light'] .miniapp-shell section {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
