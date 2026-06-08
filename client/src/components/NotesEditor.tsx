@@ -166,6 +166,12 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
       savedRangeRef.current = selection.getRangeAt(0).cloneRange();
       if (!nextHasSelection) {
         setSelectionMenuPosition(null);
+        return;
+      }
+
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+      if (!nextHasSelection) {
+        setSelectionMenuPosition(null);
         setIsListMenuOpen(false);
         return;
       }
@@ -225,12 +231,12 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
 
     const nextRange = range && editor.contains(range.commonAncestorContainer) ? range : createFallbackRange(editor);
     editor.focus();
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    range.collapse(false);
+    const caretRange = document.createRange();
+    caretRange.selectNodeContents(element);
+    caretRange.collapse(false);
     selection.removeAllRanges();
-    selection.addRange(range);
-    savedRangeRef.current = range.cloneRange();
+    selection.addRange(caretRange);
+    savedRangeRef.current = caretRange.cloneRange();
   };
 
   const finishFormatting = (keepSelection = false) => {
