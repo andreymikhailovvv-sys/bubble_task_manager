@@ -534,6 +534,7 @@ export function BubbleField({
     const staticGlowStyle = overdue
       ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
       : undefined;
+    const glowFilter = shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined;
     const hoverGlowFilter = overdue
       ? 'drop-shadow(0 0 9px rgba(239,68,68,0.62)) drop-shadow(0 0 16px rgba(220,38,38,0.34))'
       : 'drop-shadow(0 0 9px rgba(56,189,248,0.56)) drop-shadow(0 0 16px rgba(129,140,248,0.3))';
@@ -584,7 +585,7 @@ export function BubbleField({
           stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter={shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined}
+          filter={glowFilter}
           style={staticGlowStyle}
         />
         {shouldGlow ? (
