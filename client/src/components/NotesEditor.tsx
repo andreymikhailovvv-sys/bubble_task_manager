@@ -137,27 +137,26 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
             <h4 className="text-base font-semibold text-primary">Заметки</h4>
             <p className="text-xs text-muted">Форматирование применяется только к выделенному тексту.</p>
           </div>
-          <div className="notes-editor-toolbar flex flex-wrap justify-end gap-2">
-            {NOTE_FORMAT_BUTTONS.map((button) => {
-              const Icon = button.icon;
-              return (
-                <button
-                  key={button.format}
-                  type="button"
-                  className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
-                  title={hasSelection ? button.title : `${button.title} — сначала выделите текст`}
-                  aria-label={button.title}
-                  disabled={!hasSelection}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => applyFormat(button)}
-                >
-                  <Icon size={15} />
-                </button>
-              );
-            })}
-          </div>
         </div>
-        <div className="notes-editor-toolbar-spacer h-6 shrink-0 border-b" aria-hidden="true" />
+        <div className="notes-editor-toolbar flex flex-wrap gap-2 border-b px-4 py-3">
+          {NOTE_FORMAT_BUTTONS.map((button) => {
+            const Icon = button.icon;
+            return (
+              <button
+                key={button.format}
+                type="button"
+                className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
+                title={hasSelection ? button.title : `${button.title} — сначала выделите текст`}
+                aria-label={button.title}
+                disabled={!hasSelection}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => applyFormat(button)}
+              >
+                <Icon size={15} />
+              </button>
+            );
+          })}
+        </div>
         <div
           ref={editorRef}
           className="notes-editor-content min-h-0 flex-1 overflow-y-auto p-5 text-sm leading-6 outline-none"
