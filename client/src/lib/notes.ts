@@ -1,5 +1,5 @@
-const ALLOWED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR']);
-const NOTE_HTML_PATTERN = /<(?:a|b|strong|i|em|u|h1|h2|p|div|br)(?:\s[^>]*)?>/i;
+const ALLOWED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
+const NOTE_HTML_PATTERN = /<(?:a|b|strong|i|em|u|h1|h2|p|div|br|ul|ol|li|label|input|span)(?:\s[^>]*)?>/i;
 const LINK_PATTERN = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
 
 export function isFormattedNoteHtml(value?: string | null) {
@@ -31,6 +31,10 @@ function setSafeLinkAttributes(element: Element, href: string) {
 
 function sanitizeElement(element: Element) {
   const href = element.tagName === 'A' ? normalizeNoteHref(element.getAttribute('href') ?? '') : '';
+  const className = element.getAttribute('class') ?? '';
+  const isCheckedInput = element.tagName === 'INPUT'
+    && (element.getAttribute('type') ?? '').toLowerCase() === 'checkbox'
+    && element.hasAttribute('checked');
   Array.from(element.attributes).forEach((attribute) => element.removeAttribute(attribute.name));
 
   if (element.tagName === 'A') {
@@ -41,6 +45,18 @@ function sanitizeElement(element: Element) {
     setSafeLinkAttributes(element, href);
   }
 
+  if (element.tagName === 'INPUT') {
+    element.setAttribute('type', 'checkbox');
+    if (isCheckedInput) element.setAttribute('checked', '');
+  }
+
+  const safeClasses = className
+    .split(/\s+/)
+    .filter((item) => ['note-list', 'note-list-ordered', 'note-list-unordered', 'note-checklist', 'note-checkbox-item', 'note-checkbox-item-checked'].includes(item));
+  if (safeClasses.length > 0) {
+    element.setAttribute('class', safeClasses.join(' '));
+  }
+
   Array.from(element.children).forEach((child) => {
     if (!ALLOWED_NOTE_TAGS.has(child.tagName)) {
       child.replaceWith(...Array.from(child.childNodes));
@@ -48,6 +64,14 @@ function sanitizeElement(element: Element) {
     }
     sanitizeElement(child);
   });
+
+  if (element.tagName === 'LABEL') {
+    const replacement = document.createElement('div');
+    const sanitizedClassName = element.getAttribute('class');
+    if (sanitizedClassName) replacement.setAttribute('class', sanitizedClassName);
+    replacement.append(...Array.from(element.childNodes));
+    element.replaceWith(replacement);
+  }
 }
 
 export function sanitizeNoteHtml(value: string) {
@@ -118,7 +142,7 @@ export function noteHtmlToPlainText(value: string, options: { trimEnd?: boolean 
 
   const wrapper = document.createElement('div');
   wrapper.innerHTML = sanitizeNoteHtml(value).replace(/<br\s*\/?>/gi, '\n');
-  wrapper.querySelectorAll('h1,h2,p,div').forEach((block) => {
+  wrapper.querySelectorAll('h1,h2,p,div,li,label').forEach((block) => {
     if (block.nextSibling) block.append(document.createTextNode('\n'));
   });
   const plainText = (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n');

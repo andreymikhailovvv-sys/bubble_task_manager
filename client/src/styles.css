@@ -1866,3 +1866,139 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input {
 body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
   color: #64748b !important;
 }
+
+.bubble-layout-toggle {
+  border-color: color-mix(in srgb, var(--badge-border) 78%, var(--accent) 22%);
+  background: color-mix(in srgb, var(--badge-bg) 86%, transparent);
+  color: var(--text-muted);
+}
+
+.bubble-layout-toggle-button {
+  color: var(--text-muted);
+}
+
+.bubble-layout-toggle-button:hover,
+.bubble-layout-toggle-button-active {
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--muted-bg));
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 44%, transparent), 0 8px 18px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.importance-choice-button-active {
+  --tw-ring-color: color-mix(in srgb, var(--accent) 78%, var(--text-primary));
+  box-shadow: 0 0 0 2px var(--tw-ring-color), 0 8px 20px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.recurrence-submit-button {
+  background: linear-gradient(135deg, #7c3aed, color-mix(in srgb, var(--accent-strong) 52%, #7c3aed));
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.24);
+}
+
+.recurrence-submit-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.recurrence-submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.recurrence-summary-text {
+  color: color-mix(in srgb, var(--success) 88%, var(--text-primary));
+}
+
+.notes-editor-list-dropdown {
+  border-color: color-mix(in srgb, var(--panel-border) 88%, transparent);
+  background: var(--popover-bg);
+  color: var(--text-primary);
+}
+
+.notes-editor-list-option:hover {
+  background: color-mix(in srgb, var(--accent-soft) 64%, var(--muted-bg));
+}
+
+.notes-editor-content .note-list,
+.note-list {
+  display: block;
+  margin: 0.35rem 0 0.65rem 1.25rem;
+  padding-left: 1.1rem;
+}
+
+.notes-editor-content .note-list-unordered,
+.note-list-unordered {
+  list-style: disc;
+}
+
+.notes-editor-content .note-list-ordered,
+.note-list-ordered {
+  list-style: decimal;
+}
+
+.notes-editor-content .note-list li,
+.note-list li {
+  margin: 0.12rem 0;
+  padding-left: 0.15rem;
+}
+
+.notes-editor-content .note-checklist,
+.note-checklist {
+  display: block;
+  margin: 0.35rem 0 0.65rem;
+}
+
+.notes-editor-content .note-checkbox-item,
+.note-checkbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.18rem 0;
+}
+
+.notes-editor-content .note-checkbox-item input,
+.note-checkbox-item input {
+  margin-top: 0.25rem;
+  accent-color: var(--accent-strong);
+}
+
+.notes-editor-content .note-checkbox-item-checked span,
+.note-checkbox-item-checked span {
+  color: var(--text-subtle);
+  text-decoration: line-through;
+}
+
+body[data-theme='light'] .bubble-layout-toggle {
+  border-color: rgba(14, 116, 144, 0.24) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12) !important;
+}
+
+body[data-theme='light'] .bubble-layout-toggle-button-active,
+body[data-theme='light'] .bubble-layout-toggle-button:hover {
+  background: #e0f2fe !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .importance-choice-button-active {
+  --tw-ring-color: #0e7490;
+  box-shadow: 0 0 0 2px #0e7490, 0 8px 18px rgba(14, 116, 144, 0.18);
+}
+
+body[data-theme='light'] .recurrence-submit-button {
+  background: linear-gradient(135deg, #0891b2, #7c3aed) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme='light'] .recurrence-summary-text {
+  color: #047857 !important;
+}
+
+body[data-theme='light'] .notes-editor-list-dropdown {
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.16) !important;
+}
+
+body[data-theme='light'] .notes-editor-list-option:hover {
+  background: #eff6ff !important;
+}
