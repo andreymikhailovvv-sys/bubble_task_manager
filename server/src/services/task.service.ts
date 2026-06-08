@@ -177,6 +177,9 @@ export const taskService = {
     return created;
   },
   update: async (id: string, userId: string, input: TaskInput) => {
+    const currentTask = await prisma.task.findFirstOrThrow({
+      where: { id, userId }
+    });
     const patch: Prisma.TaskUpdateInput = {};
 
     if (input.title !== undefined) {
@@ -202,9 +205,8 @@ export const taskService = {
     }
 
     if (input.importance !== undefined || input.urgency !== undefined) {
-      const current = await prisma.task.findFirstOrThrow({ where: { id, userId } });
-      const importance = toNumber(input.importance ?? current.importance, 'importance');
-      const urgency = toNumber(input.urgency ?? current.urgency, 'urgency');
+      const importance = toNumber(input.importance ?? currentTask.importance, 'importance');
+      const urgency = toNumber(input.urgency ?? currentTask.urgency, 'urgency');
       patch.priorityScore = calcScore(importance, urgency);
     }
 
@@ -214,16 +216,21 @@ export const taskService = {
     if (input.notifyBeforeMinutes !== undefined) {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
-    if (input.status !== undefined || input.dueDate !== undefined || input.notifyBeforeMinutes !== undefined) {
+    const nextDueDate = input.dueDate !== undefined ? toDueDate(input.dueDate) : currentTask.dueDate;
+    const currentDueTime = currentTask.dueDate?.getTime() ?? null;
+    const nextDueTime = nextDueDate?.getTime() ?? null;
+    const shouldResetTelegramNotification =
+      (input.status !== undefined && input.status !== currentTask.status)
+      || (input.dueDate !== undefined && nextDueTime !== currentDueTime)
+      || (input.notifyBeforeMinutes !== undefined && toNotifyBeforeMinutes(input.notifyBeforeMinutes) !== currentTask.notifyBeforeMinutes);
+
+    if (shouldResetTelegramNotification) {
       patch.telegramNotifiedAt = null;
     }
     if (input.aiNotificationsEnabled !== undefined) {
       patch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
     }
 
-    const currentTask = await prisma.task.findFirstOrThrow({
-      where: { id, userId }
-    });
     const isSubtask = Boolean(currentTask.parentTaskId);
     if (!isSubtask) {
       if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);

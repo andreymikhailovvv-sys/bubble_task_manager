@@ -422,7 +422,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           <>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <div>
-          <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue)} onChange={(e) => updateDescription(e.target.value)} />
+          <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue, { trimEnd: false })} onChange={(e) => updateDescription(e.target.value)} />
           <div className="mt-1 flex justify-end">
             <button
               type="button"

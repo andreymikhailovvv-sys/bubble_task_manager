@@ -111,7 +111,8 @@ export function noteValueToEditorHtml(value: string) {
   return linkifyNoteHtml(escapeNoteText(value).replace(/\n/g, '<br>'));
 }
 
-export function noteHtmlToPlainText(value: string) {
+export function noteHtmlToPlainText(value: string, options: { trimEnd?: boolean } = {}) {
+  const shouldTrimEnd = options.trimEnd ?? true;
   if (!value.trim()) return '';
   if (typeof document === 'undefined') return value.replace(/<[^>]+>/g, '');
 
@@ -120,5 +121,6 @@ export function noteHtmlToPlainText(value: string) {
   wrapper.querySelectorAll('h1,h2,p,div').forEach((block) => {
     if (block.nextSibling) block.append(document.createTextNode('\n'));
   });
-  return (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n').trimEnd();
+  const plainText = (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n');
+  return shouldTrimEnd ? plainText.trimEnd() : plainText;
 }

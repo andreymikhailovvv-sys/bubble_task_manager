@@ -3060,6 +3060,9 @@ export default function App() {
               {activeListTasks.map((task) => {
                 const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
                 const hasReminderState = task.status !== 'DONE' && !hasOverdueState && shouldTaskGlow(task);
+                const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
+                const hasOverdueSubtaskState = !hasOverdueState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
+                const hasReminderSubtaskState = !hasOverdueState && !hasReminderState && !hasOverdueSubtaskState && taskSubtasks.some((subtask) => subtask.status !== 'DONE' && shouldTaskGlow(subtask));
                 const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
                 const sphereColor = taskSphere?.color ?? '#64748b';
                 const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
@@ -3074,9 +3077,13 @@ export default function App() {
                         ? 'list-task-item-overdue'
                         : hasReminderState
                           ? 'list-task-item-reminder'
-                          : hasAiNotificationState
-                            ? 'list-task-item-ai'
-                            : ''
+                          : hasOverdueSubtaskState
+                            ? 'list-task-item-subtask-overdue'
+                            : hasReminderSubtaskState
+                              ? 'list-task-item-subtask-reminder'
+                              : hasAiNotificationState
+                                ? 'list-task-item-ai'
+                                : ''
                     }`}
                     title={taskSphere?.name ?? 'Без сектора'}
                     onClick={() => setFocusedTaskId(task.id)}
@@ -4199,7 +4206,7 @@ export default function App() {
                   <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
                   <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <div>
-                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '')} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
                     <div className="mt-1 flex justify-end gap-2">
                       <button
                         type="button"

@@ -1137,7 +1137,7 @@ export const aiAssistantService = {
 
     const messages = await prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId, userId: input.userId },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { role: true, content: true }
     });
 
@@ -1158,12 +1158,15 @@ export const aiAssistantService = {
       select: { id: true }
     });
 
+    const appendStartedAt = Date.now();
+
     await prisma.taskAiMessage.createMany({
-      data: normalizedMessages.map((message) => ({
+      data: normalizedMessages.map((message, index) => ({
         taskId: input.taskId,
         userId: input.userId,
         role: message.role,
-        content: message.content
+        content: message.content,
+        createdAt: new Date(appendStartedAt + index)
       }))
     });
   },

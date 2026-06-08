@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, List, Paperclip, Plus, Save, Search, SendHorizontal, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task } from './lib/types';
+import { NotesEditor } from './components/NotesEditor';
+import { noteHtmlToPlainText } from './lib/notes';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -29,6 +31,7 @@ const extractInitDataFromUrl = () => {
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
 type ListSortMode = 'sector' | 'importance';
+type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_HOUR_HEIGHT = 88;
@@ -151,6 +154,23 @@ function resolveAttachmentMimeType(file: File): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
+async function fileToAttachmentPayload(file: File): Promise<ChatAttachmentPayload> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return {
+    name: file.name,
+    mimeType: resolveAttachmentMimeType(file),
+    size: file.size,
+    contentBase64: btoa(binary)
+  };
+}
+
 function shouldTaskGlow(task: Task) {
   if (task.status === 'DONE' || !task.dueDate) return false;
   const due = new Date(task.dueDate);
@@ -195,6 +215,11 @@ export default function MiniApp() {
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
   const [listSortMode, setListSortMode] = useState<ListSortMode>('sector');
+  const [miniThemeMode, setMiniThemeMode] = useState<MiniThemeMode>(() => {
+    const stored = localStorage.getItem('btm:miniapp-theme-mode');
+    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -212,6 +237,11 @@ export default function MiniApp() {
     description: '',
     dueDate: ''
   });
+  const [isTaskNotesEditorOpen, setIsTaskNotesEditorOpen] = useState(false);
+  const [isSubtaskNotesEditorOpen, setIsSubtaskNotesEditorOpen] = useState(false);
+  const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
+  const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
+  const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -223,6 +253,7 @@ export default function MiniApp() {
   const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const launchParams = useMemo(() => {
@@ -262,6 +293,17 @@ export default function MiniApp() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    document.body.dataset.theme = miniThemeMode;
+    document.documentElement.dataset.theme = miniThemeMode;
+    localStorage.setItem('btm:miniapp-theme-mode', miniThemeMode);
+
+    return () => {
+      delete document.body.dataset.theme;
+      delete document.documentElement.dataset.theme;
+    };
+  }, [miniThemeMode]);
 
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -504,6 +546,8 @@ export default function MiniApp() {
     return placements;
   }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
 
+  const isLightTheme = miniThemeMode === 'light';
+
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
     : sphereFilter === 'without-sphere'
@@ -547,8 +591,11 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
+    setIsTaskNotesEditorOpen(false);
+    setIsSubtaskNotesEditorOpen(false);
     setIsAiDialogOpen(false);
     setAiDraft('');
+    setTaskAttachments([]);
   };
 
   const onChangeDraft = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -698,6 +745,88 @@ export default function MiniApp() {
   const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
 
   useEffect(() => {
+    setIsSubtaskNotesEditorOpen(false);
+  }, [openedSubtaskId]);
+
+  useEffect(() => {
+    setIsTaskNotesEditorOpen(false);
+    setIsSubtaskNotesEditorOpen(false);
+    setTaskAttachments([]);
+    setIsTaskAttachmentDragActive(false);
+    if (!openedTaskId) return;
+
+    let isCancelled = false;
+    const loadTaskAttachments = async () => {
+      try {
+        const attachments = await api.getTaskAttachments(openedTaskId);
+        if (!isCancelled) setTaskAttachments(attachments);
+      } catch (e) {
+        if (!isCancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить файлы задачи');
+      }
+    };
+    void loadTaskAttachments();
+    return () => {
+      isCancelled = true;
+    };
+  }, [openedTaskId]);
+
+  const uploadTaskAttachmentFiles = async (files: File[]) => {
+    if (!openedTask || files.length === 0) return;
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== files.length) {
+      setError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+    }
+    if (normalized.length === 0) return;
+
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      return;
+    }
+
+    setIsUploadingTaskAttachment(true);
+    try {
+      for (const file of normalized) {
+        await api.createTaskAttachment(openedTask.id, await fileToAttachmentPayload(file));
+      }
+      const attachments = await api.getTaskAttachments(openedTask.id);
+      setTaskAttachments(attachments);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к задаче');
+    } finally {
+      setIsUploadingTaskAttachment(false);
+      setIsTaskAttachmentDragActive(false);
+    }
+  };
+
+  const handleTaskAttachmentFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    void uploadTaskAttachmentFiles(selectedFiles);
+    event.target.value = '';
+  };
+
+  const removeTaskAttachment = async (attachmentId: string) => {
+    if (!openedTask) return;
+    try {
+      await api.deleteTaskAttachment(openedTask.id, attachmentId);
+      setTaskAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить файл');
+    }
+  };
+
+  const downloadTaskAttachment = (attachment: TaskAttachment) => {
+    if (!openedTask) return;
+    const link = document.createElement('a');
+    link.href = api.getTaskAttachmentDownloadUrl(openedTask.id, attachment.id);
+    link.download = attachment.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  useEffect(() => {
     const raw = localStorage.getItem('btm:task-ai-mode-map');
     if (!raw) return;
     try {
@@ -763,21 +892,7 @@ export default function MiniApp() {
     const fileNames = aiPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(aiPendingFiles.map(async (file) => ({
-        name: file.name,
-        mimeType: resolveAttachmentMimeType(file),
-        size: file.size,
-        contentBase64: await file.arrayBuffer().then((buffer) => {
-          const bytes = new Uint8Array(buffer);
-          let binary = '';
-          const chunkSize = 0x8000;
-          for (let index = 0; index < bytes.length; index += chunkSize) {
-            const chunk = bytes.subarray(index, index + chunkSize);
-            binary += String.fromCharCode(...chunk);
-          }
-          return btoa(binary);
-        })
-      })));
+      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
     } catch {
       setError('Не удалось прочитать приложенные файлы');
       setAiLoadingTaskId(null);
@@ -859,7 +974,7 @@ export default function MiniApp() {
   }, [displayMode, timelineToday.currentTimeTop, timelineToday.isTodayVisible]);
 
   if (loading) {
-    return <main className="h-screen overflow-y-auto miniapp-scrollless bg-slate-950 p-4 text-sm text-slate-100">Загружаем мини-приложение…</main>;
+    return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем мини-приложение…</main>;
   }
 
   return (
@@ -873,7 +988,7 @@ export default function MiniApp() {
         else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
         lastMainScrollTopRef.current = nextTop;
       }}
-      className="miniapp-scrollless h-screen overflow-y-auto bg-slate-950 p-4 text-slate-100"
+      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
@@ -884,10 +999,10 @@ export default function MiniApp() {
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="Поиск по задачам"
-              className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              className="miniapp-search-input w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
             </div>
-            <div className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
+            <div className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
               <button
                 type="button"
                 onClick={openCreateTaskModal}
@@ -910,6 +1025,46 @@ export default function MiniApp() {
                   <CalendarDays size={16} className="text-violet-400" />
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen((prev) => !prev)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                aria-label="Открыть настройки"
+                title="Настройки"
+              >
+                <Settings size={16} className="text-slate-300" />
+              </button>
+              {isSettingsOpen ? (
+                <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-slate-100">Настройки</span>
+                    <button type="button" onClick={() => setIsSettingsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-800" aria-label="Закрыть настройки">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-400">Тема мини-приложения</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMiniThemeMode('light')}
+                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${isLightTheme ? 'border-sky-400 bg-sky-500/20 text-sky-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
+                      >
+                        <Sun size={13} />
+                        Светлая
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMiniThemeMode('dark')}
+                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${!isLightTheme ? 'border-violet-400 bg-violet-500/20 text-violet-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
+                      >
+                        <Moon size={13} />
+                        Тёмная
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </section>
@@ -951,6 +1106,9 @@ export default function MiniApp() {
             {listTasks.map((task) => {
               const hasOverdueState = isOverdue(task);
               const hasReminderState = !hasOverdueState && shouldTaskGlow(task);
+              const taskSubtasks = subtasksByParent[task.id] ?? [];
+              const hasOverdueSubtaskState = !hasOverdueState && taskSubtasks.some((subtask) => isOverdue(subtask));
+              const hasReminderSubtaskState = !hasOverdueState && !hasReminderState && !hasOverdueSubtaskState && taskSubtasks.some((subtask) => shouldTaskGlow(subtask));
               const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
               const importanceColors: Record<number, string> = {
                 1: 'rgba(148,163,184,0.95)',
@@ -967,16 +1125,21 @@ export default function MiniApp() {
               const progressPercent = hasSubtasks
                 ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
                 : 0;
+              const taskCardStyle: CSSProperties & Record<'--miniapp-task-stripe', string> = hasOverdueState
+                ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                : hasReminderState
+                  ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                  : hasOverdueSubtaskState
+                    ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 11px rgba(239,68,68,0.38), inset 0 0 8px rgba(239,68,68,0.16)', backgroundColor: 'rgba(127,29,29,0.18)', borderColor: 'rgba(248,113,113,0.46)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                    : hasReminderSubtaskState
+                      ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 11px rgba(56,189,248,0.34), inset 0 0 8px rgba(56,189,248,0.14)', backgroundColor: 'rgba(8,47,73,0.18)', borderColor: 'rgba(103,232,249,0.42)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
+                      : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
 
               return (
                 <article
                   key={task.id}
-                  className="rounded-lg border border-slate-700 bg-slate-800/80 p-3"
-                  style={hasOverdueState
-                    ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                    : hasReminderState
-                      ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                      : { borderLeftWidth: '4px', borderLeftColor: leftStripeColor }}
+                  className="miniapp-task-list-card rounded-lg border border-slate-700 bg-slate-800/80 p-3"
+                  style={taskCardStyle}
                 >
                   <button
                     type="button"
@@ -991,12 +1154,12 @@ export default function MiniApp() {
                     <ChevronDown size={18} className="absolute right-0 top-0 shrink-0" />
                     {hasSubtasks ? (
                       <span
-                        className="pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
+                        className="miniapp-subtask-progress pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
                         style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
                         title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
                         aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
                       >
-                        <span className="absolute inset-[3px] rounded-full bg-slate-800/95" />
+                        <span className="miniapp-subtask-progress-core absolute inset-[3px] rounded-full bg-slate-800/95" />
                       </span>
                     ) : null}
                   </button>
@@ -1021,7 +1184,7 @@ export default function MiniApp() {
                   <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                     {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
                       <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
-                        <span className="absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
+                        <span className="miniapp-timeline-hour-label absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
                       </div>
                     ))}
                     <div className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.totalHeight - 1}px` }} />
@@ -1052,16 +1215,16 @@ export default function MiniApp() {
                             width: 'calc(100% - 4rem - 8px)',
                             zIndex: 10,
                             borderColor: isSubtask
-                              ? 'rgba(100,116,139,0.9)'
-                              : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
+                              ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
+                              : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
                             background: isSubtask
-                              ? 'rgba(71,85,105,0.82)'
-                              : (hexToRgba(sphereColor ?? '', 0.25) ?? 'rgba(14,165,233,0.18)'),
+                              ? (isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(71,85,105,0.82)')
+                              : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
                             borderLeftWidth: isSubtask ? '4px' : '1px',
                             borderLeftColor: isSubtask
                               ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
                               : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
-                            boxShadow: hasOverdueState ? '0 0 12px rgba(239,68,68,0.45)' : undefined
+                            boxShadow: hasOverdueState ? (isLightTheme ? '0 10px 28px rgba(225,29,72,0.18)' : '0 0 12px rgba(239,68,68,0.45)') : undefined
                           }}
                           onClick={() => openTaskModal(parentTask ?? task)}
                         >
@@ -1105,11 +1268,85 @@ export default function MiniApp() {
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Описание</label>
                 <textarea
-                  value={openedTaskDraft.description}
+                  value={noteHtmlToPlainText(openedTaskDraft.description)}
                   onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
                   className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    className={`notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                    onClick={() => taskAttachmentInputRef.current?.click()}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsTaskAttachmentDragActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setIsTaskAttachmentDragActive(false);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const files = Array.from(event.dataTransfer.files ?? []);
+                      void uploadTaskAttachmentFiles(files);
+                    }}
+                    disabled={isUploadingTaskAttachment}
+                    title="Добавить файлы к задаче"
+                    aria-label="Добавить файлы к задаче"
+                  >
+                    <Plus size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                    onClick={() => setIsTaskNotesEditorOpen(true)}
+                    title="Открыть заметки"
+                    aria-label="Открыть заметки"
+                  >
+                    <Maximize2 size={15} />
+                  </button>
+                </div>
+                <input
+                  ref={taskAttachmentInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                  multiple
+                  className="hidden"
+                  onChange={handleTaskAttachmentFileSelect}
+                />
+                {taskAttachments.length > 0 ? (
+                  <div className="flex flex-wrap items-start gap-2">
+                    {taskAttachments.map((attachment) => (
+                      <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
+                        <button
+                          type="button"
+                          title={`${attachment.name} • скачать`}
+                          onClick={() => downloadTaskAttachment(attachment)}
+                          className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
+                        >
+                          <FileText size={12} className="shrink-0 text-cyan-300" />
+                          <span className="truncate">{attachment.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="Удалить файл"
+                          onClick={() => void removeTaskAttachment(attachment.id)}
+                          className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
+                        >
+                          <X size={11} className="shrink-0" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
+              {isTaskNotesEditorOpen ? (
+                <NotesEditor
+                  value={openedTaskDraft.description}
+                  onChange={(description) => onChangeDraft(openedTask.id, { description })}
+                  onClose={() => setIsTaskNotesEditorOpen(false)}
+                />
+              ) : null}
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Срок</label>
                 <input
@@ -1124,7 +1361,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void saveTask(openedTask.id)}
                   disabled={savingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Save size={14} />
                   {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить задачу'}
@@ -1133,7 +1370,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void completeTask(openedTask.id)}
                   disabled={completingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <CheckCircle2 size={14} />
                   {completingId === openedTask.id ? 'Завершаем…' : 'Выполнить'}
@@ -1142,7 +1379,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void deleteTask(openedTask.id)}
                   disabled={deletingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Trash2 size={14} />
                   {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
@@ -1150,7 +1387,7 @@ export default function MiniApp() {
                 <button
                   type="button"
                   onClick={() => setIsAiDialogOpen(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium text-white"
                 >
                   <Bot size={14} />
                   Диалог с ИИ
@@ -1158,9 +1395,9 @@ export default function MiniApp() {
               </div>
             </div>
             {isAiDialogOpen ? (
-              <div className="mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
+              <div className="miniapp-ai-dialog mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
                 <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
-                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
                   <button
                     type="button"
                     className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
@@ -1178,10 +1415,10 @@ export default function MiniApp() {
                     <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
                   </button>
                 </div>
-                <div ref={inlineAiDialogContainerRef} className="max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
+                <div ref={inlineAiDialogContainerRef} className="miniapp-ai-thread max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
                   {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
                   {openedTaskAiDialog.map((message, index) => (
-                    <div key={`mini-ai-${index}`} className={`max-w-[94%] rounded-xl border px-2.5 py-2 ${message.role === 'assistant' ? 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
+                    <div key={`mini-ai-${index}`} className={`miniapp-ai-message max-w-[94%] rounded-xl border px-2.5 py-2 ${message.role === 'assistant' ? 'miniapp-ai-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'miniapp-ai-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
                       <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                       <div className="text-[13px] leading-relaxed">{renderMiniAiText(message.content)}</div>
                     </div>
@@ -1199,7 +1436,7 @@ export default function MiniApp() {
                 {aiPendingFiles.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {aiPendingFiles.map((file) => (
-                      <button key={`mini-ai-file-${file.name}-${file.size}`} type="button" className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
+                      <button key={`mini-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
                         <Paperclip size={10} />
                         <span className="max-w-[170px] truncate">{file.name}</span>
                         <X size={10} />
@@ -1208,7 +1445,7 @@ export default function MiniApp() {
                   </div>
                 ) : null}
                 <div className="flex items-end gap-2">
-                  <button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
+                  <button type="button" className="miniapp-ai-attach-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
                     <Paperclip size={15} />
                   </button>
                   <textarea
@@ -1218,9 +1455,9 @@ export default function MiniApp() {
                     placeholder="Напишите сообщение для ИИ"
                     rows={1}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
+                    className="miniapp-ai-input max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
+                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                         event.preventDefault();
                         void sendAiMessage();
                       }
@@ -1246,7 +1483,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void addSubtask(openedTask)}
                   disabled={creatingSubtaskForId === openedTask.id}
-                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium disabled:opacity-60"
+                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
                 >
                   {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить подзадачу'}
                 </button>
@@ -1300,11 +1537,29 @@ export default function MiniApp() {
                 placeholder="Название подзадачи"
               />
               <textarea
-                value={openedSubtaskDraft.description}
+                value={noteHtmlToPlainText(openedSubtaskDraft.description)}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
                 className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Описание подзадачи"
               />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  onClick={() => setIsSubtaskNotesEditorOpen(true)}
+                  title="Открыть заметки"
+                  aria-label="Открыть заметки"
+                >
+                  <Maximize2 size={15} />
+                </button>
+              </div>
+              {isSubtaskNotesEditorOpen ? (
+                <NotesEditor
+                  value={openedSubtaskDraft.description}
+                  onChange={(description) => onChangeDraft(openedSubtask.id, { description })}
+                  onClose={() => setIsSubtaskNotesEditorOpen(false)}
+                />
+              ) : null}
               <input
                 type="datetime-local"
                 value={openedSubtaskDraft.dueDate}
@@ -1312,15 +1567,15 @@ export default function MiniApp() {
                 className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Save size={14} />
                   {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
                 </button>
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <CheckCircle2 size={14} />
                   {completingId === openedSubtask.id ? 'Завершаем…' : 'Выполнить'}
                 </button>
-                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium disabled:opacity-60">
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Trash2 size={14} />
                   {deletingId === openedSubtask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
@@ -1330,15 +1585,15 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedTask && isAiDialogOpen ? (
-        <div className="fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6">
-          <div className="mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
+        <div className="miniapp-ai-fullscreen-backdrop fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6">
+          <div className="miniapp-ai-dialog mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-violet-100">Диалог с ИИ</h3>
+                <h3 className="miniapp-ai-title text-base font-semibold text-violet-100">Диалог с ИИ</h3>
                 <p className="text-xs text-slate-300">{openedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className="inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
+                <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
                   <button
                     type="button"
                     className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
@@ -1366,10 +1621,10 @@ export default function MiniApp() {
                 </button>
               </div>
             </div>
-            <div ref={fullscreenAiDialogContainerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-950/70 p-3 text-sm">
+            <div ref={fullscreenAiDialogContainerRef} className="miniapp-ai-thread min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-950/70 p-3 text-sm">
               {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
               {openedTaskAiDialog.map((message, index) => (
-                <div key={`mini-ai-full-${index}`} className={`max-w-[94%] rounded-xl border px-3 py-2.5 ${message.role === 'assistant' ? 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
+                <div key={`mini-ai-full-${index}`} className={`miniapp-ai-message max-w-[94%] rounded-xl border px-3 py-2.5 ${message.role === 'assistant' ? 'miniapp-ai-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'miniapp-ai-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
                 </div>
@@ -1387,7 +1642,7 @@ export default function MiniApp() {
             {aiPendingFiles.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {aiPendingFiles.map((file) => (
-                  <button key={`mini-ai-file-full-${file.name}-${file.size}`} type="button" className="inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
+                  <button key={`mini-ai-file-full-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
                     <Paperclip size={10} />
                     <span className="max-w-[220px] truncate">{file.name}</span>
                     <X size={10} />
@@ -1396,7 +1651,7 @@ export default function MiniApp() {
               </div>
             ) : null}
             <div className="mt-3 flex items-end gap-2">
-              <button type="button" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
+              <button type="button" className="miniapp-ai-attach-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
                 <Paperclip size={15} />
               </button>
               <textarea
@@ -1406,9 +1661,9 @@ export default function MiniApp() {
                 placeholder="Напишите сообщение для ИИ"
                 rows={1}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
-                className="max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
+                className="miniapp-ai-input max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                     event.preventDefault();
                     void sendAiMessage();
                   }
