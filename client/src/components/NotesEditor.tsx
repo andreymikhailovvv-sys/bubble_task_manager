@@ -169,6 +169,14 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
         return;
       }
 
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+      if (!nextHasSelection) {
+        setSelectionMenuPosition(null);
+        setIsListMenuOpen(false);
+        return;
+      }
+
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
       const rect = selection.getRangeAt(0).getBoundingClientRect();
       const top = Math.max(12, rect.top - 52);
       const left = Math.min(window.innerWidth - 12, Math.max(12, rect.left + rect.width / 2));
@@ -221,6 +229,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const selection = window.getSelection();
     if (!editor || !selection) return;
 
+    const nextRange = range && editor.contains(range.commonAncestorContainer) ? range : createFallbackRange(editor);
     editor.focus();
     const caretRange = document.createRange();
     caretRange.selectNodeContents(element);
