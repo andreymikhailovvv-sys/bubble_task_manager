@@ -9,7 +9,7 @@ type Props = {
 };
 
 const LINK_PATTERN = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
-const SUPPORTED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR']);
+const SUPPORTED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
 
 const createLinkedTextParts = (value: string, onClick: (event: MouseEvent<HTMLAnchorElement>) => void, keyPrefix: string): ReactNode[] => (
   value.split(LINK_PATTERN).map((part, index) => {
@@ -62,7 +62,19 @@ const createFormattedNoteNode = (node: ChildNode, onClick: (event: MouseEvent<HT
       return <span key={key} className="note-formatted-h2">{children}</span>;
     case 'P':
     case 'DIV':
-      return <span key={key} className="note-formatted-block">{children}</span>;
+      return <span key={key} className={element.getAttribute('class') || 'note-formatted-block'}>{children}</span>;
+    case 'UL':
+      return <ul key={key} className={element.getAttribute('class') || 'note-list note-list-unordered'}>{children}</ul>;
+    case 'OL':
+      return <ol key={key} className={element.getAttribute('class') || 'note-list note-list-ordered'}>{children}</ol>;
+    case 'LI':
+      return <li key={key}>{children}</li>;
+    case 'LABEL':
+      return <span key={key} className={element.getAttribute('class') || 'note-checkbox-item'}>{children}</span>;
+    case 'SPAN':
+      return <span key={key} className={element.getAttribute('class') ?? undefined}>{children}</span>;
+    case 'INPUT':
+      return <input key={key} type="checkbox" checked={element.hasAttribute('checked')} readOnly />;
     case 'A': {
       const href = element.getAttribute('href') ?? '';
       return (
