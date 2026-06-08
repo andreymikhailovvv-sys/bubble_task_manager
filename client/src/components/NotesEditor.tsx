@@ -227,9 +227,8 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
   const setCaretInside = (element: HTMLElement) => {
     const editor = editorRef.current;
     const selection = window.getSelection();
-    if (!editor || !selection) return;
+    if (!editor || !selection || !editor.contains(element)) return;
 
-    const nextRange = range && editor.contains(range.commonAncestorContainer) ? range : createFallbackRange(editor);
     editor.focus();
     const caretRange = document.createRange();
     caretRange.selectNodeContents(element);
