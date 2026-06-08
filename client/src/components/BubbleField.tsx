@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -1045,7 +1046,7 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
-      {contextMenu ? (
+      {contextMenu ? createPortal(
         <div
           className="fixed z-[130]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -1099,7 +1100,8 @@ export function BubbleField({
               </div>
             ) : null}
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
       <div className="bubble-zoom-badge pointer-events-none absolute bottom-3 left-3 rounded border px-3 py-1 text-xs">Наведи на пузырь</div>
     </div>
