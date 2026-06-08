@@ -677,6 +677,7 @@ body[data-theme='light'] .backdrop-blur-sm {
 
   .list-task-item {
     position: relative;
+    height: 88px;
     overflow: hidden;
     border-color: var(--list-item-border);
     background: var(--list-item-bg);
@@ -725,6 +726,28 @@ body[data-theme='light'] .backdrop-blur-sm {
   .list-task-item-reminder::before {
     opacity: 1;
     background: radial-gradient(circle at 12% 20%, rgba(14, 165, 233, 0.2), transparent 36%), linear-gradient(90deg, rgba(14, 165, 233, 0.14), transparent 42%);
+  }
+
+  .list-task-item-subtask-overdue {
+    border-color: color-mix(in srgb, var(--list-overdue-border) 68%, var(--list-item-border));
+    background: color-mix(in srgb, var(--list-overdue-bg) 62%, var(--list-item-bg));
+    box-shadow: 0 12px 30px color-mix(in srgb, #020617 16%, transparent), 0 0 12px rgba(225, 29, 72, 0.36), inset 0 0 10px rgba(225, 29, 72, 0.13);
+  }
+
+  .list-task-item-subtask-overdue::before {
+    opacity: 1;
+    background: radial-gradient(circle at 12% 20%, rgba(244, 63, 94, 0.12), transparent 34%), linear-gradient(90deg, rgba(244, 63, 94, 0.09), transparent 42%);
+  }
+
+  .list-task-item-subtask-reminder {
+    border-color: color-mix(in srgb, var(--list-reminder-border) 66%, var(--list-item-border));
+    background: color-mix(in srgb, var(--list-reminder-bg) 60%, var(--list-item-bg));
+    box-shadow: 0 12px 30px color-mix(in srgb, #020617 16%, transparent), 0 0 12px rgba(14, 165, 233, 0.34), inset 0 0 10px rgba(14, 165, 233, 0.12);
+  }
+
+  .list-task-item-subtask-reminder::before {
+    opacity: 1;
+    background: radial-gradient(circle at 12% 20%, rgba(14, 165, 233, 0.11), transparent 36%), linear-gradient(90deg, rgba(14, 165, 233, 0.08), transparent 42%);
   }
 
   .list-task-item-ai {
@@ -1425,6 +1448,14 @@ body[data-theme='light'] .list-task-item.list-task-item-overdue {
 
 body[data-theme='light'] .list-task-item.list-task-item-reminder {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.1), 0 0 17px rgba(14, 165, 233, 0.42), inset 0 0 12px rgba(14, 165, 233, 0.16);
+}
+
+body[data-theme='light'] .list-task-item.list-task-item-subtask-overdue {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 0 12px rgba(225, 29, 72, 0.26), inset 0 0 10px rgba(225, 29, 72, 0.1);
+}
+
+body[data-theme='light'] .list-task-item.list-task-item-subtask-reminder {
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08), 0 0 12px rgba(14, 165, 233, 0.24), inset 0 0 10px rgba(14, 165, 233, 0.09);
 }
 
 body[data-theme='light'] .list-task-item.list-task-item-ai {

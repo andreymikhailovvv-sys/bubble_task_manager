@@ -363,6 +363,56 @@ const truncateEscapedText = (value: string, maxLength: number) => {
   return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
+const decodeHtmlEntity = (entity: string) => {
+  const namedEntities: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' '
+  };
+
+  const named = entity.match(/^&([a-zA-Z][a-zA-Z0-9]+);$/);
+  if (named) return namedEntities[named[1]] ?? entity;
+
+  const decimal = entity.match(/^&#(\d+);$/);
+  if (decimal) {
+    const codePoint = Number(decimal[1]);
+    return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+  }
+
+  const hex = entity.match(/^&#x([\da-fA-F]+);$/);
+  if (hex) {
+    const codePoint = Number.parseInt(hex[1], 16);
+    return Number.isFinite(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : entity;
+  }
+
+  return entity;
+};
+
+const noteHtmlToTelegramText = (value?: string | null) => {
+  const raw = value?.trim();
+  if (!raw) return 'Без описания';
+
+  const plain = raw
+    .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '• ')
+    .replace(/<\/\s*(p|div|li|ul|ol|h[1-6]|blockquote)\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(?:[a-zA-Z][a-zA-Z0-9]+|#\d+|#x[\da-fA-F]+);/g, decodeHtmlEntity)
+    .replace(/\u00a0/g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return plain || 'Без описания';
+};
+
+const escapeTaskDescription = (value?: string | null) => escapeHtml(noteHtmlToTelegramText(value));
+
 const editMessage = async (chatId: string, messageId: number, text: string, replyMarkup?: Record<string, unknown>) => {
   await telegramRequest('editMessageText', {
     chat_id: chatId,
@@ -393,7 +443,7 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   if (!task) return null;
 
   const title = escapeHtml(task.title);
-  const description = escapeHtml(task.description ?? 'Без описания');
+  const description = escapeTaskDescription(task.description);
   const lines = [
     '🔔 <b>Задача начинает сиять</b>',
     '',
@@ -406,7 +456,7 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   if (task.parentTaskId) {
     lines.push('', '📌 <b>Основная задача</b>');
     lines.push(`• <b>${escapeHtml(task.parentTask?.title ?? '—')}</b>`);
-    lines.push(`${escapeHtml(task.parentTask?.description ?? 'Без описания')}`);
+    lines.push(`${escapeTaskDescription(task.parentTask?.description)}`);
   } else if (task.subtasks.length > 0) {
     lines.push('', '🗂 <b>Подзадачи</b>');
     for (const subtask of task.subtasks) {
@@ -446,7 +496,7 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
   const pageEnd = pageStart + TASK_DETAILS_SUBTASKS_PER_PAGE;
   let subtaskLines = allSubtaskLines.slice(pageStart, pageEnd);
   const escapedDescription = truncateEscapedText(
-    escapeHtml(task.description?.trim() || 'Без описания'),
+    escapeTaskDescription(task.description),
     MAX_TASK_DETAILS_DESCRIPTION_LENGTH
   );
 
@@ -532,7 +582,7 @@ const getSubtaskDetailsByIndex = async (parentTaskId: string, userId: string, su
     `📍 <b>${escapeHtml(subtask.title)}</b>`,
     '',
     '🧩 <b>Описание</b>',
-    escapeHtml(subtask.description?.trim() || 'Без описания'),
+    escapeTaskDescription(subtask.description),
     '',
     `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(subtask.dueDate))}`,
     `📌 <b>Статус:</b> ${subtask.status === 'DONE' ? '✅ Выполнена' : '▫️ Активна'}`
@@ -561,7 +611,7 @@ const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMes
     '🚨 <b>Дедлайн краснеет!</b>',
     '',
     `🧩 <b>${escapeHtml(task.title)}</b>`,
-    `${escapeHtml(task.description ?? 'Без описания')}`,
+    `${escapeTaskDescription(task.description)}`,
     '',
     '🤖 <b>Сообщение от ИИ</b>',
     escapeHtml(aiMessage)
@@ -748,7 +798,7 @@ const createTaskFromPromptAndNotify = async (
       transcript ? `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}` : null,
       transcript ? '' : null,
       `🧩 <b>${escapeHtml(created.createdTask.title)}</b>`,
-      `${escapeHtml(created.createdTask.description ?? 'Без описания')}`,
+      `${escapeTaskDescription(created.createdTask.description)}`,
       `⏰ Дедлайн: <b>${escapeHtml(dueDateLabel)}</b>`,
       `🗂 Подзадач: <b>${created.generated.task.subtasks.length}</b>`,
       attachment ? '📎 Файл прикреплён к задаче.' : '📎 Файл не прикреплялся.',
