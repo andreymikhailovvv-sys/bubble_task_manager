@@ -39,6 +39,7 @@ const NOTE_LIST_BUTTONS: Array<{ format: NoteListFormat; title: string; icon: ty
 ];
 
 const STRUCTURED_NOTE_SELECTOR = '.note-list, .note-checklist';
+const NOTE_LINE_BREAK_TAGS = new Set(['BR', 'DIV', 'P', 'H1', 'H2', 'LI']);
 
 function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) {
   if (!selection.rangeCount) return false;
@@ -47,9 +48,53 @@ function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) 
 }
 
 function getSelectedLines(range: Range) {
-  const text = range.toString().replace(/\u00a0/g, ' ').trim();
-  if (!text) return [''];
-  return text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const lines: string[] = [];
+  let currentLine = '';
+
+  const pushLine = () => {
+    const normalizedLine = currentLine.replace(/\u00a0/g, ' ').trim();
+    if (normalizedLine) {
+      lines.push(normalizedLine);
+    }
+    currentLine = '';
+  };
+
+  const appendText = (value: string) => {
+    value.replace(/\u00a0/g, ' ').split(/\r?\n/).forEach((part, index) => {
+      if (index > 0) pushLine();
+      currentLine += part;
+    });
+  };
+
+  const walkNode = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendText(node.textContent ?? '');
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const element = node as Element;
+    if (element.tagName === 'BR') {
+      pushLine();
+      return;
+    }
+
+    if (element.tagName === 'INPUT') return;
+
+    Array.from(element.childNodes).forEach(walkNode);
+    if (NOTE_LINE_BREAK_TAGS.has(element.tagName)) {
+      pushLine();
+    }
+  };
+
+  Array.from(range.cloneContents().childNodes).forEach(walkNode);
+  pushLine();
+
+  if (lines.length > 0) return lines;
+
+  const fallbackText = range.toString().replace(/\u00a0/g, ' ').trim();
+  return fallbackText ? fallbackText.split(/\n+/).map((line) => line.trim()).filter(Boolean) : [''];
 }
 
 function getRangeElement(range: Range) {
@@ -178,6 +223,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const selection = window.getSelection();
     if (!editor || !selection) return;
 
+    const nextRange = range && editor.contains(range.commonAncestorContainer) ? range : createFallbackRange(editor);
     editor.focus();
     const range = document.createRange();
     range.selectNodeContents(element);
@@ -295,13 +341,28 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
   };
 
   const handleEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Backspace') return;
     const selection = window.getSelection();
     const editor = editorRef.current;
     if (!editor || !selection?.rangeCount || !selection.isCollapsed || !selectionBelongsToEditor(editor, selection)) return;
 
     const range = selection.getRangeAt(0);
-    const structuredBlock = getRangeElement(range)?.closest(STRUCTURED_NOTE_SELECTOR);
+    const rangeElement = getRangeElement(range);
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      const currentChecklistItem = rangeElement?.closest<HTMLElement>('.note-checklist .note-checkbox-item');
+      if (!currentChecklistItem) return;
+
+      event.preventDefault();
+      const nextChecklistItem = createChecklistItem('');
+      currentChecklistItem.after(nextChecklistItem);
+      setCaretInside(nextChecklistItem.querySelector<HTMLElement>('span') ?? nextChecklistItem);
+      finishFormatting();
+      return;
+    }
+
+    if (event.key !== 'Backspace') return;
+
+    const structuredBlock = rangeElement?.closest(STRUCTURED_NOTE_SELECTOR);
     if (!structuredBlock || structuredBlock.textContent?.trim()) return;
 
     event.preventDefault();
