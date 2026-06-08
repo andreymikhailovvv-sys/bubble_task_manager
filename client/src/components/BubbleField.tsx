@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -68,6 +69,17 @@ const SUBTASK_REMINDER_GLOW_STYLE =
 const SUBTASK_OVERDUE_GLOW_STYLE =
   '0 0 0 1px rgba(239,68,68,0.28), inset 0 0 12px rgba(239,68,68,0.3)';
 const MAX_SHINE_WINDOW_MINUTES = 180;
+const SMART_POSTPONE_CREDITS_COST = 1;
+const POSTPONE_OPTIONS = [
+  { value: '15m', label: 'На 15 мин' },
+  { value: '30m', label: 'На 30 мин' },
+  { value: '1h', label: 'На час' },
+  { value: '3h', label: 'На 3 часа' },
+  { value: 'tomorrow', label: 'На завтра' },
+  { value: 'smart', label: '✦ Ближайшее окно' }
+] as const;
+type PostponeOption = (typeof POSTPONE_OPTIONS)[number]['value'];
+type BubbleContextMenu = { x: number; y: number; task: Task | null; sphere: Sphere | null };
 type SubtaskDraft = {
   title: string;
   description: string;
@@ -236,9 +248,12 @@ export function BubbleField({
   const [postponeResultByTaskId, setPostponeResultByTaskId] = useState<Record<string, string>>({});
   const [isNativeCalendarOpen, setIsNativeCalendarOpen] = useState(false);
   const [deadlineShiftMinutes, setDeadlineShiftMinutes] = useState('30');
+  const [contextMenu, setContextMenu] = useState<BubbleContextMenu | null>(null);
+  const [contextPostponeSubmenuOpen, setContextPostponeSubmenuOpen] = useState(false);
   const subtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const hoverExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '30' } satisfies SubtaskDraft);
 
@@ -256,6 +271,80 @@ export function BubbleField({
     if (!Number.isFinite(parsed) || parsed <= 0) return 30;
     return Math.min(parsed, 1440);
   })();
+
+
+  const getSphereAtClientPoint = (clientX: number, clientY: number, fallbackTask?: Task | null) => {
+    if (fallbackTask?.sphereId) {
+      return spheres.find((sphere) => sphere.id === fallbackTask.sphereId) ?? null;
+    }
+    if (mode !== 'sectors' || spheres.length === 0) return spheres[0] ?? null;
+
+    const svg = svgRef.current;
+    if (!svg) return spheres[0] ?? null;
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const matrix = svg.getScreenCTM();
+    if (!matrix) return spheres[0] ?? null;
+    const svgPoint = point.matrixTransform(matrix.inverse());
+    if (sectorCount <= 1) return spheres[0] ?? null;
+    const angle = ((Math.atan2((svgPoint.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE, (svgPoint.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const sectorIndex = sectorGeometry.findIndex((geometry) => angle >= geometry.startAngle && angle < geometry.endAngle);
+    return spheres[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
+  };
+
+  const showContextMenu = (event: MouseEvent, task: Task | null) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      task,
+      sphere: getSphereAtClientPoint(event.clientX, event.clientY, task)
+    });
+    setContextPostponeSubmenuOpen(false);
+  };
+
+  const runQuickPostpone = (task: Task, option: PostponeOption) => {
+    if (option === 'smart') {
+      setSmartPostponeTaskId(task.id);
+    }
+    const previousDueDateSnapshot = task.dueDate ?? null;
+    void onQuickPostponeTask(task, option)
+      .then((nextDueDate) => {
+        const deltaLabel = formatPostponeDelta(previousDueDateSnapshot, nextDueDate);
+        if (!deltaLabel) return;
+        setPostponeResultByTaskId((prev) => ({ ...prev, [task.id]: deltaLabel }));
+        window.setTimeout(() => {
+          setPostponeResultByTaskId((prev) => {
+            if (!prev[task.id]) return prev;
+            const next = { ...prev };
+            delete next[task.id];
+            return next;
+          });
+        }, 1200);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (option === 'smart') {
+          setSmartPostponeTaskId((prev) => (prev === task.id ? null : prev));
+        }
+      });
+  };
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => {
+      setContextMenu(null);
+      setContextPostponeSubmenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
 
   const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
@@ -471,6 +560,7 @@ export function BubbleField({
         onClick={() => !isPopping && onSelect(bubble.task)}
         onMouseEnter={() => activateHover(bubble.task.id)}
         onMouseLeave={scheduleHoverExit}
+        onContextMenu={(event) => showContextMenu(event, bubble.task)}
         className="cursor-pointer"
       >
         <circle cx={0} cy={0} r={bubble.radius + 10} fill="transparent" />
@@ -581,7 +671,7 @@ export function BubbleField({
         scheduleHoverExit();
       }}
     >
-      <svg viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible">
+      <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -782,31 +872,7 @@ export function BubbleField({
                             onChange={(event) => {
                               const value = event.target.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart' | '';
                               if (!value) return;
-                              if (value === 'smart') {
-                                setSmartPostponeTaskId(hoveredBubble.task.id);
-                              }
-                              const previousDueDateSnapshot = hoveredBubble.task.dueDate ?? null;
-                              void onQuickPostponeTask(hoveredBubble.task, value)
-                                .then((nextDueDate) => {
-                                  if (value !== 'smart') return;
-                                  const deltaLabel = formatPostponeDelta(previousDueDateSnapshot, nextDueDate);
-                                  if (!deltaLabel) return;
-                                  setPostponeResultByTaskId((prev) => ({ ...prev, [hoveredBubble.task.id]: deltaLabel }));
-                                  setTimeout(() => {
-                                    setPostponeResultByTaskId((prev) => {
-                                      if (!prev[hoveredBubble.task.id]) return prev;
-                                      const next = { ...prev };
-                                      delete next[hoveredBubble.task.id];
-                                      return next;
-                                    });
-                                  }, 1000);
-                                })
-                                .catch(() => undefined)
-                                .finally(() => {
-                                  if (value === 'smart') {
-                                    setSmartPostponeTaskId((prev) => (prev === hoveredBubble.task.id ? null : prev));
-                                  }
-                                });
+                              runQuickPostpone(hoveredBubble.task, value);
                               event.target.value = '';
                             }}
                           >
@@ -973,6 +1039,63 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
+      {contextMenu ? createPortal(
+        <div
+          className="fixed z-[130]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
+            <button
+              type="button"
+              disabled={!contextMenu.task}
+              className="surface-muted flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+              onMouseEnter={() => contextMenu.task && setContextPostponeSubmenuOpen(true)}
+              onClick={() => {
+                if (!contextMenu.task) return;
+                setContextPostponeSubmenuOpen((prev) => !prev);
+              }}
+            >
+              <span>Отложить</span>
+              <ChevronRight size={13} className="text-muted" />
+            </button>
+            <button
+              type="button"
+              className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!contextMenu.sphere || !onAddTaskToSphere}
+              onClick={() => {
+                if (!contextMenu.sphere || !onAddTaskToSphere) return;
+                onAddTaskToSphere(contextMenu.sphere);
+                setContextMenu(null);
+              }}
+            >
+              Добавить задачу
+            </button>
+            {contextPostponeSubmenuOpen && contextMenu.task ? (
+              <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                {POSTPONE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110"
+                    onClick={() => {
+                      if (!contextMenu.task) return;
+                      runQuickPostpone(contextMenu.task, option.value);
+                      setContextMenu(null);
+                      setContextPostponeSubmenuOpen(false);
+                    }}
+                  >
+                    <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                    {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>,
+        document.body
+      ) : null}
       <div className="bubble-zoom-badge pointer-events-none absolute bottom-3 left-3 rounded border px-3 py-1 text-xs">Наведи на пузырь</div>
     </div>
   );

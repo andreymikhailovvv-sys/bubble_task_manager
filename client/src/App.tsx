@@ -99,6 +99,15 @@ const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const SMART_POSTPONE_CREDITS_COST = 1;
+const QUICK_POSTPONE_OPTIONS = [
+  { value: '15m', label: 'На 15 мин' },
+  { value: '30m', label: 'На 30 мин' },
+  { value: '1h', label: 'На час' },
+  { value: '3h', label: 'На 3 часа' },
+  { value: 'tomorrow', label: 'На завтра' },
+  { value: 'smart', label: '✦ Ближайшее окно' }
+] as const;
+type QuickPostponeOption = (typeof QUICK_POSTPONE_OPTIONS)[number]['value'];
 const OVERDUE_AI_POSTPONE_CREDITS_COST = 2;
 
 const EFFICIENCY_BONUSES = {
@@ -514,6 +523,8 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
+  const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
+  const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
   const [timelinePostponeHighlightedTaskId, setTimelinePostponeHighlightedTaskId] = useState<string | null>(null);
@@ -620,6 +631,20 @@ export default function App() {
     };
   }, [timelineCreateMenu]);
 
+  useEffect(() => {
+    if (!listTaskContextMenu) return;
+    const close = () => {
+      setListTaskContextMenu(null);
+      setListTaskPostponeSubmenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [listTaskContextMenu]);
+
   const formatDeadlineTooltip = (task: Task) => {
     const dueDate = task.dueDate ? new Date(task.dueDate) : null;
     const dueDateText = dueDate && !Number.isNaN(dueDate.getTime())
@@ -700,6 +725,10 @@ export default function App() {
         priorityScore: 0
       }
     });
+  };
+
+  const openCreateTaskFromListTask = (task: Task) => {
+    setEditorState({ initialSphereId: task.sphereId ?? spheres[0]?.id });
   };
 
   const clearUserState = () => {
@@ -2196,7 +2225,7 @@ export default function App() {
     const subtaskDue = nearestSubtaskDue ? new Date(nearestSubtaskDue).getTime() : Number.POSITIVE_INFINITY;
     return Math.min(taskDue, subtaskDue);
   };
-  const quickPostponeTask = async (task: Task, option: '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart') => {
+  const quickPostponeTask = async (task: Task, option: QuickPostponeOption) => {
     const now = new Date();
     const userTz = userTimeZone || DEFAULT_TIMEZONE;
     const formatLocal = (iso: string | null) => {
@@ -3086,6 +3115,12 @@ export default function App() {
                                 : ''
                     }`}
                     title={taskSphere?.name ?? 'Без сектора'}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setListTaskContextMenu({ x: event.clientX, y: event.clientY, taskId: task.id });
+                      setListTaskPostponeSubmenuOpen(false);
+                    }}
                     onClick={() => setFocusedTaskId(task.id)}
                   >
                     <input
@@ -3149,6 +3184,64 @@ export default function App() {
                 );
               })}
             </ul>
+            {listTaskContextMenu ? createPortal((() => {
+              const contextTask = taskById.get(listTaskContextMenu.taskId);
+              if (!contextTask) return null;
+              return (
+                <div
+                  className="fixed z-[130]"
+                  style={{ left: listTaskContextMenu.x, top: listTaskContextMenu.y }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="surface-popover relative min-w-44 rounded-xl border p-2 shadow-2xl">
+                    <button
+                      type="button"
+                      className="surface-muted flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:brightness-110"
+                      onMouseEnter={() => setListTaskPostponeSubmenuOpen(true)}
+                      onClick={() => setListTaskPostponeSubmenuOpen((prev) => !prev)}
+                    >
+                      <span>Отложить</span>
+                      <ChevronRight size={13} className="text-muted" />
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onClick={() => {
+                        openCreateTaskFromListTask(contextTask);
+                        setListTaskContextMenu(null);
+                      }}
+                    >
+                      Добавить задачу
+                    </button>
+                    {listTaskPostponeSubmenuOpen ? (
+                      <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                        {QUICK_POSTPONE_OPTIONS.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-left text-primary hover:brightness-110"
+                            onClick={async () => {
+                              setTimelinePostponeLoadingTaskId(contextTask.id);
+                              setListTaskContextMenu(null);
+                              setListTaskPostponeSubmenuOpen(false);
+                              try {
+                                await quickPostponeTask(contextTask, option.value);
+                              } finally {
+                                setTimelinePostponeLoadingTaskId((prev) => (prev === contextTask.id ? null : prev));
+                              }
+                            }}
+                          >
+                            <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
+                            {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })(), document.body) : null}
           </div>
         ) : (
           <div ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
@@ -4206,7 +4299,7 @@ export default function App() {
                   <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
                   <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <div>
-                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '')} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
                     <div className="mt-1 flex justify-end gap-2">
                       <button
                         type="button"
