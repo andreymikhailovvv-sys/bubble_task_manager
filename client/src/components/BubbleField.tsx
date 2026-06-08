@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -533,6 +534,7 @@ export function BubbleField({
     const staticGlowStyle = overdue
       ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
       : undefined;
+    const glowFilter = shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined;
     const hoverGlowFilter = overdue
       ? 'drop-shadow(0 0 9px rgba(239,68,68,0.62)) drop-shadow(0 0 16px rgba(220,38,38,0.34))'
       : 'drop-shadow(0 0 9px rgba(56,189,248,0.56)) drop-shadow(0 0 16px rgba(129,140,248,0.3))';
@@ -583,7 +585,7 @@ export function BubbleField({
           stroke={selectedId === bubble.task.id ? (isLightTheme ? '#0f172a' : '#f8fafc') : (isLightTheme ? 'rgba(14,116,144,0.56)' : '#bae6fd')}
           strokeOpacity={selectedId === bubble.task.id ? 1 : isLightTheme ? 0.78 : 0.65}
           strokeWidth={selectedId === bubble.task.id ? 3.5 : 2.4}
-          filter={shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined}
+          filter={glowFilter}
           style={staticGlowStyle}
         />
         {shouldGlow ? (
@@ -1045,7 +1047,7 @@ export function BubbleField({
           ) : null}
         </motion.g>
       </svg>
-      {contextMenu ? (
+      {contextMenu ? createPortal(
         <div
           className="fixed z-[130]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -1099,7 +1101,8 @@ export function BubbleField({
               </div>
             ) : null}
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
       <div className="bubble-zoom-badge pointer-events-none absolute bottom-3 left-3 rounded border px-3 py-1 text-xs">Наведи на пузырь</div>
     </div>
