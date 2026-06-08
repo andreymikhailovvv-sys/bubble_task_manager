@@ -519,6 +519,17 @@ export function BubbleField({
     const shouldGlow = bubble.task.status !== 'DONE' && (shouldTaskGlow(bubble.task) || hasUrgentSubtask);
     const overdue = isOverdue(bubble.task);
     const isHovered = hoveredTaskId === bubble.task.id;
+    const glowPulseState = isHovered
+      ? {
+        opacity: [0.55, 1, 0.55],
+        r: [bubble.radius + 2, bubble.radius + 9, bubble.radius + 2],
+        strokeWidth: [2, 4.5, 2]
+      }
+      : {
+        opacity: 0.72,
+        r: bubble.radius + 5,
+        strokeWidth: 3
+      };
     const glowColor = overdue ? '#ef4444' : '#38bdf8';
     const staticGlowStyle = overdue
       ? { filter: 'drop-shadow(0 0 10px rgba(239,68,68,0.8)) drop-shadow(0 0 18px rgba(220,38,38,0.5))' }
@@ -576,7 +587,7 @@ export function BubbleField({
           filter={shouldGlow && !overdue ? 'url(#bubbleGlow)' : undefined}
           style={staticGlowStyle}
         />
-        {shouldGlow && isHovered ? (
+        {shouldGlow ? (
           <motion.circle
             cx={0}
             cy={0}
@@ -585,13 +596,9 @@ export function BubbleField({
             stroke={glowColor}
             strokeOpacity={overdue ? 0.4 : 0.34}
             pointerEvents="none"
-            animate={{
-              opacity: [0.38, 0.78, 0.38],
-              r: [bubble.radius + 2, bubble.radius + 8, bubble.radius + 2],
-              strokeWidth: [1.6, 3.2, 1.6]
-            }}
-            transition={{ duration: overdue ? 1.25 : 1.65, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ filter: hoverGlowFilter }}
+            animate={glowPulseState}
+            transition={isHovered ? { duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.18, ease: 'easeOut' }}
+            style={{ filter: glowFilter }}
           />
         ) : null}
         {bubbleSubtasks.length > 0 ? (
