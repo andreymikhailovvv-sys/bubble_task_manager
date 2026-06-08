@@ -1,9 +1,9 @@
 import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Underline, X } from 'lucide-react';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
 type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
-type NoteListFormat = 'ordered' | 'unordered' | 'checklist';
+type NoteListFormat = 'ordered' | 'unordered';
 
 type Props = {
   value: string;
@@ -38,15 +38,55 @@ const NOTE_LIST_BUTTONS: Array<{ format: NoteListFormat; title: string; icon: ty
   { format: 'ordered', title: 'Список цифрами', icon: ListOrdered }
 ];
 
+const STRUCTURED_NOTE_SELECTOR = '.note-list, .note-checklist';
+
 function selectionBelongsToEditor(editor: HTMLDivElement, selection: Selection) {
-  if (!selection.rangeCount || selection.isCollapsed) return false;
+  if (!selection.rangeCount) return false;
   const range = selection.getRangeAt(0);
   return editor.contains(range.commonAncestorContainer);
 }
 
 function getSelectedLines(range: Range) {
   const text = range.toString().replace(/\u00a0/g, ' ').trim();
-  return (text ? text.split(/\n+/) : ['']).map((line) => line.trim()).filter(Boolean);
+  if (!text) return [''];
+  return text.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+}
+
+function getRangeElement(range: Range) {
+  return range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer as Element
+    : range.commonAncestorContainer.parentElement;
+}
+
+function createTextBlockFromHtml(html: string) {
+  const block = document.createElement('div');
+  block.innerHTML = html.trim() || '<br>';
+  return block;
+}
+
+function createListItem(line: string) {
+  const item = document.createElement('li');
+  if (line) {
+    item.textContent = line;
+  } else {
+    item.append(document.createElement('br'));
+  }
+  return item;
+}
+
+function createChecklistItem(line: string) {
+  const item = document.createElement('div');
+  item.className = 'note-checkbox-item';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  const text = document.createElement('span');
+  if (line) {
+    text.textContent = line;
+  } else {
+    text.append(document.createElement('br'));
+  }
+  item.append(checkbox, text);
+  return item;
 }
 
 export function NotesEditor({ value, onChange, onClose }: Props) {
@@ -69,10 +109,17 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     const updateSelection = () => {
       const editor = editorRef.current;
       const selection = window.getSelection();
-      const nextHasSelection = Boolean(editor && selection && selectionBelongsToEditor(editor, selection));
+      const nextSelectionBelongsToEditor = Boolean(editor && selection && selectionBelongsToEditor(editor, selection));
+      const nextHasSelection = Boolean(nextSelectionBelongsToEditor && selection && !selection.isCollapsed);
       setHasSelection(nextHasSelection);
 
-      if (!nextHasSelection || !selection?.rangeCount) {
+      if (!nextSelectionBelongsToEditor || !selection?.rangeCount) {
+        setSelectionMenuPosition(null);
+        return;
+      }
+
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+      if (!nextHasSelection) {
         setSelectionMenuPosition(null);
         setIsListMenuOpen(false);
         return;
@@ -104,23 +151,72 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     onChange(linkifyNoteHtml(getSerializedEditorHtml()));
   };
 
+  const createFallbackRange = (editor: HTMLDivElement) => {
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    savedRangeRef.current = range.cloneRange();
+    return range;
+  };
+
   const restoreSelection = () => {
     const editor = editorRef.current;
     const selection = window.getSelection();
     const range = savedRangeRef.current;
-    if (!editor || !selection || !range || !editor.contains(range.commonAncestorContainer)) return null;
+    if (!editor || !selection) return null;
 
+    const nextRange = range && editor.contains(range.commonAncestorContainer) ? range : createFallbackRange(editor);
     editor.focus();
     selection.removeAllRanges();
-    selection.addRange(range);
-    return range;
+    selection.addRange(nextRange);
+    return nextRange;
   };
 
-  const finishFormatting = () => {
+  const setCaretInside = (element: HTMLElement) => {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection) return;
+
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    savedRangeRef.current = range.cloneRange();
+  };
+
+  const finishFormatting = (keepSelection = false) => {
     syncValue();
-    setHasSelection(true);
+    setHasSelection(keepSelection);
     setSelectionMenuPosition(null);
     setIsListMenuOpen(false);
+  };
+
+  const unwrapStructuredBlock = (range: Range) => {
+    const rangeElement = getRangeElement(range);
+    const structuredBlock = rangeElement?.closest(STRUCTURED_NOTE_SELECTOR);
+    if (!structuredBlock) return false;
+
+    const replacement = document.createDocumentFragment();
+    if (structuredBlock.classList.contains('note-checklist')) {
+      structuredBlock.querySelectorAll<HTMLElement>('.note-checkbox-item').forEach((item) => {
+        const textElement = item.querySelector('span');
+        replacement.append(createTextBlockFromHtml(textElement?.innerHTML ?? item.textContent ?? ''));
+      });
+    } else {
+      structuredBlock.querySelectorAll('li').forEach((item) => {
+        replacement.append(createTextBlockFromHtml(item.innerHTML));
+      });
+    }
+
+    const firstReplacement = replacement.firstChild as HTMLElement | null;
+    structuredBlock.replaceWith(replacement);
+    if (firstReplacement) {
+      setCaretInside(firstReplacement);
+    }
+    return true;
   };
 
   const applyFormat = (button: FormatButton) => {
@@ -129,13 +225,17 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     if (!editor || !range) return;
 
     if (button.format === 'plain') {
+      if (unwrapStructuredBlock(range)) {
+        finishFormatting();
+        return;
+      }
       document.execCommand('removeFormat');
       document.execCommand('formatBlock', false, '<div>');
       finishFormatting();
       return;
     }
 
-    if (!button.tagName) return;
+    if (!hasSelection || !button.tagName) return;
     const wrapper = document.createElement(button.tagName);
     wrapper.append(range.extractContents());
     range.insertNode(wrapper);
@@ -145,7 +245,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     nextRange.selectNodeContents(wrapper);
     selection?.addRange(nextRange);
     savedRangeRef.current = nextRange.cloneRange();
-    finishFormatting();
+    finishFormatting(true);
   };
 
   const applyListFormat = (format: NoteListFormat) => {
@@ -153,24 +253,13 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     if (!range) return;
 
     const selectedLines = getSelectedLines(range);
-    if (selectedLines.length === 0) return;
-
     const wrapper = document.createElement(format === 'ordered' ? 'ol' : 'ul');
     wrapper.className = format === 'ordered' ? 'note-list note-list-ordered' : 'note-list note-list-unordered';
-    selectedLines.forEach((line) => {
-      const item = document.createElement('li');
-      item.textContent = line;
-      wrapper.append(item);
-    });
+    selectedLines.forEach((line) => wrapper.append(createListItem(line)));
 
     range.deleteContents();
     range.insertNode(wrapper);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    const nextRange = document.createRange();
-    nextRange.selectNodeContents(wrapper);
-    selection?.addRange(nextRange);
-    savedRangeRef.current = nextRange.cloneRange();
+    setCaretInside(wrapper.querySelector('li') ?? wrapper);
     finishFormatting();
   };
 
@@ -179,34 +268,19 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     if (!range) return;
 
     const selectedLines = getSelectedLines(range);
-    if (selectedLines.length === 0) return;
-
     const list = document.createElement('div');
     list.className = 'note-checklist';
-    selectedLines.forEach((line) => {
-      const label = document.createElement('label');
-      label.className = 'note-checkbox-item';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      const span = document.createElement('span');
-      span.textContent = line;
-      label.append(checkbox, span);
-      list.append(label);
-    });
+    selectedLines.forEach((line) => list.append(createChecklistItem(line)));
 
     range.deleteContents();
     range.insertNode(list);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    const nextRange = document.createRange();
-    nextRange.selectNodeContents(list);
-    selection?.addRange(nextRange);
-    savedRangeRef.current = nextRange.cloneRange();
+    setCaretInside(list.querySelector<HTMLElement>('.note-checkbox-item span') ?? list);
     finishFormatting();
   };
 
   const handleEditorClick = (event: MouseEvent<HTMLDivElement>) => {
-    const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>('.note-checklist input[type="checkbox"]');
+    const target = event.target as HTMLElement;
+    const checkbox = target instanceof HTMLInputElement && target.matches('.note-checklist input[type="checkbox"]') ? target : null;
     if (checkbox) {
       const item = checkbox.closest('.note-checkbox-item');
       item?.classList.toggle('note-checkbox-item-checked', checkbox.checked);
@@ -214,10 +288,26 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
       return;
     }
 
-    const link = (event.target as HTMLElement).closest('a');
+    const link = target.closest('a');
     if (!link?.href) return;
     event.preventDefault();
     window.open(link.href, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Backspace') return;
+    const selection = window.getSelection();
+    const editor = editorRef.current;
+    if (!editor || !selection?.rangeCount || !selection.isCollapsed || !selectionBelongsToEditor(editor, selection)) return;
+
+    const range = selection.getRangeAt(0);
+    const structuredBlock = getRangeElement(range)?.closest(STRUCTURED_NOTE_SELECTOR);
+    if (!structuredBlock || structuredBlock.textContent?.trim()) return;
+
+    event.preventDefault();
+    if (unwrapStructuredBlock(range)) {
+      finishFormatting();
+    }
   };
 
   const handleEditorBlur = () => {
@@ -239,20 +329,22 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
         <div className="notes-editor-header flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 pr-14">
           <div>
             <h4 className="text-base font-semibold text-primary">Заметки</h4>
-            <p className="text-xs text-muted">Форматирование применяется только к выделенному тексту.</p>
+            <p className="text-xs text-muted">Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.</p>
           </div>
         </div>
         <div className="notes-editor-toolbar flex flex-wrap gap-2 border-b px-4 py-3">
           {NOTE_FORMAT_BUTTONS.map((button) => {
             const Icon = button.icon;
+            const isPlainButton = button.format === 'plain';
+            const isDisabled = !isPlainButton && !hasSelection;
             return (
               <button
                 key={button.format}
                 type="button"
                 className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
-                title={hasSelection ? button.title : `${button.title} — сначала выделите текст`}
+                title={isDisabled ? `${button.title} — сначала выделите текст` : button.title}
                 aria-label={button.title}
-                disabled={!hasSelection}
+                disabled={isDisabled}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => applyFormat(button)}
               >
@@ -263,11 +355,10 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
           <div className="notes-editor-list-menu relative">
             <button
               type="button"
-              className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
-              title={hasSelection ? 'Список' : 'Список — сначала выделите текст'}
+              className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2"
+              title="Список"
               aria-label="Список"
               aria-expanded={isListMenuOpen}
-              disabled={!hasSelection}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setIsListMenuOpen((prev) => !prev)}
             >
@@ -294,10 +385,9 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
           </div>
           <button
             type="button"
-            className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2 disabled:cursor-not-allowed disabled:opacity-45"
-            title={hasSelection ? 'Чекбоксы' : 'Чекбоксы — сначала выделите текст'}
+            className="notes-editor-tool inline-flex items-center justify-center rounded-full p-2"
+            title="Чекбоксы"
             aria-label="Чекбоксы"
-            disabled={!hasSelection}
             onMouseDown={(event) => event.preventDefault()}
             onClick={applyChecklistFormat}
           >
@@ -315,6 +405,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
           onClick={handleEditorClick}
           onBlur={handleEditorBlur}
           onInput={syncValue}
+          onKeyDown={handleEditorKeyDown}
         />
       </section>
     </div>

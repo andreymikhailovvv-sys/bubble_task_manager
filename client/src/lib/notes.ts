@@ -64,6 +64,14 @@ function sanitizeElement(element: Element) {
     }
     sanitizeElement(child);
   });
+
+  if (element.tagName === 'LABEL') {
+    const replacement = document.createElement('div');
+    const sanitizedClassName = element.getAttribute('class');
+    if (sanitizedClassName) replacement.setAttribute('class', sanitizedClassName);
+    replacement.append(...Array.from(element.childNodes));
+    element.replaceWith(replacement);
+  }
 }
 
 export function sanitizeNoteHtml(value: string) {
