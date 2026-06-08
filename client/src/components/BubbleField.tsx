@@ -599,7 +599,7 @@ export function BubbleField({
             pointerEvents="none"
             animate={glowPulseState}
             transition={isHovered ? { duration: overdue ? 1.15 : 1.55, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.18, ease: 'easeOut' }}
-            style={{ filter: glowFilter }}
+            style={{ filter: hoverGlowFilter }}
           />
         ) : null}
         {bubbleSubtasks.length > 0 ? (

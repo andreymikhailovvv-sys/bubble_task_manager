@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronRight, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronRight, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Paperclip, PieChart, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -2975,7 +2975,6 @@ export default function App() {
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </div>
-          <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setMode((m) => (m === 'global' ? 'sectors' : 'global'))}>{mode === 'global' ? 'Сектора' : 'Общий круг'}</button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
@@ -3039,9 +3038,32 @@ export default function App() {
 
       <div className="relative min-h-0 flex-1 overflow-hidden pr-[320px]">
         {displayMode === 'bubbles' ? (
-          <BubbleField
-            className="h-full"
-            themeMode={themeMode}
+          <div className="relative h-full">
+            <div className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
+              <button
+                type="button"
+                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'global' ? 'bubble-layout-toggle-button-active' : ''}`}
+                onClick={() => setMode('global')}
+                title="Общий круг"
+                aria-label="Показать баблы общим кругом"
+                aria-pressed={mode === 'global'}
+              >
+                <CircleIcon size={19} strokeWidth={2.1} />
+              </button>
+              <button
+                type="button"
+                className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'sectors' ? 'bubble-layout-toggle-button-active' : ''}`}
+                onClick={() => setMode('sectors')}
+                title="Сектора"
+                aria-label="Показать баблы по секторам"
+                aria-pressed={mode === 'sectors'}
+              >
+                <PieChart size={19} strokeWidth={2.1} />
+              </button>
+            </div>
+            <BubbleField
+              className="h-full"
+              themeMode={themeMode}
             tasks={visibleTasks}
             spheres={visibleSpheres}
             rankingMode="coefficient"
@@ -3077,7 +3099,8 @@ export default function App() {
             onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
-          />
+            />
+          </div>
         ) : displayMode === 'list' ? (
           <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
@@ -4423,10 +4446,10 @@ export default function App() {
                         onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), recurrenceText: e.target.value }))}
                       />
                       <div className="mt-2 flex items-center gap-2">
-                        <button type="button" className="rounded bg-violet-600 px-2 py-1 text-xs" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
+                        <button type="button" className="recurrence-submit-button rounded px-2 py-1 text-xs font-semibold" onClick={() => void applyFocusedRecurrence()} disabled={focusedRecurrenceLoading}>
                           {focusedRecurrenceLoading ? 'Отправка…' : 'Отправить'}
                         </button>
-                        <p className="text-[11px] text-emerald-300">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
+                        <p className="recurrence-summary-text text-[11px]">{focusedRecurrenceSummary ?? focusedDraft.recurrenceSummary ?? ''}</p>
                       </div>
                     </label>
                   ) : null}
@@ -4460,7 +4483,7 @@ export default function App() {
                       {[1, 2, 3, 4, 5].map((level) => (
                         <button
                           key={level}
-                          className={`rounded border px-2 py-1 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                          className={`importance-choice-button rounded border px-2 py-1 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
                           onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}
                         >
                           {level}
