@@ -4206,7 +4206,7 @@ export default function App() {
                   <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
                   <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
                   <div>
-                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '')} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
+                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
                     <div className="mt-1 flex justify-end gap-2">
                       <button
                         type="button"
