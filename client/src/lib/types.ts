@@ -74,6 +74,7 @@ export type Habit = {
   intervalDays?: number | null;
   weekdays: number[];
   reminderTime?: string | null;
+  reminderTimes?: string[];
   isArchived?: boolean;
   stats: HabitStat[];
   createdAt?: string;

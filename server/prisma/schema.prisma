@@ -179,6 +179,9 @@ model Habit {
   intervalDays   Int?
   weekdays       Json                @default("[]")
   reminderTime   String?
+  reminderTimes  Json                @default("[]")
+  reminderSnoozedUntil DateTime?
+  lastReminderNotifiedKey String?
   isArchived     Boolean             @default(false)
   completions    HabitCompletion[]
   createdAt      DateTime            @default(now())

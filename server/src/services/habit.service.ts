@@ -16,6 +16,7 @@ type HabitInput = {
   intervalDays?: number | string | null;
   weekdays?: number[] | null;
   reminderTime?: string | null;
+  reminderTimes?: string[] | null;
   isArchived?: boolean;
 };
 
@@ -64,6 +65,14 @@ const normalizeReminderTime = (value: unknown) => {
   return TIME_PATTERN.test(text) ? text : null;
 };
 
+const normalizeReminderTimes = (value: unknown, fallback?: unknown) => {
+  const source = Array.isArray(value) ? value : (Array.isArray(fallback) ? fallback : []);
+  return Array.from(new Set(source
+    .map((item) => normalizeReminderTime(item))
+    .filter((item): item is string => Boolean(item))))
+    .sort((a, b) => a.localeCompare(b));
+};
+
 const normalizeRecurrenceType = (value: unknown): HabitRecurrenceType => {
   const text = typeof value === 'string' ? value.trim().toUpperCase() : '';
   return ALLOWED_RECURRENCE_TYPES.has(text) ? text as HabitRecurrenceType : 'DAILY';
@@ -100,6 +109,7 @@ const serializeHabit = async (habit: Awaited<ReturnType<typeof prisma.habit.find
   return {
     ...habit,
     weekdays: Array.isArray(habit.weekdays) ? habit.weekdays : [],
+    reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : []),
     stats: completionStats.map((item) => ({
       dateKey: item.dateKey,
       amount: item._sum.amount ?? 0,
@@ -129,7 +139,8 @@ export const habitService = {
         recurrenceType,
         intervalDays: recurrenceType === 'INTERVAL' ? normalizeIntervalDays(input.intervalDays ?? 2) : null,
         weekdays: recurrenceType === 'WEEKDAYS' ? normalizeWeekdays(input.weekdays) : [],
-        reminderTime: normalizeReminderTime(input.reminderTime)
+        reminderTime: normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : [])[0] ?? null,
+        reminderTimes: normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : [])
       }
     });
     return serializeHabit(habit);
@@ -151,7 +162,13 @@ export const habitService = {
     if (input.weekdays !== undefined || input.recurrenceType !== undefined) {
       patch.weekdays = recurrenceType === 'WEEKDAYS' ? normalizeWeekdays(input.weekdays ?? current.weekdays) : [];
     }
-    if (input.reminderTime !== undefined) patch.reminderTime = normalizeReminderTime(input.reminderTime);
+    if (input.reminderTimes !== undefined || input.reminderTime !== undefined) {
+      const reminderTimes = normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : []);
+      patch.reminderTimes = reminderTimes;
+      patch.reminderTime = reminderTimes[0] ?? null;
+      patch.reminderSnoozedUntil = null;
+      patch.lastReminderNotifiedKey = null;
+    }
     if (input.isArchived !== undefined) patch.isArchived = Boolean(input.isArchived);
 
     const habit = await prisma.habit.update({ where: { id }, data: patch });
@@ -172,7 +189,8 @@ export const habitService = {
           recurrenceType: habit.recurrenceType,
           intervalDays: habit.intervalDays,
           weekdays: habit.weekdays,
-          reminderTime: habit.reminderTime
+          reminderTime: habit.reminderTime,
+          reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : [])
         }
       }
     });
