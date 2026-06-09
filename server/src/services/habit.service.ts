@@ -26,6 +26,11 @@ type CompleteHabitInput = {
   completedAt?: string | Date;
 };
 
+type UncompleteHabitInput = {
+  dateKey?: string;
+  amount?: number | string;
+};
+
 const normalizeName = (value: unknown, fallback = 'Новая привычка') => {
   const text = typeof value === 'string' ? value.trim() : '';
   return text || fallback;
@@ -203,6 +208,35 @@ export const habitService = {
         }
       }
     });
+    return serializeHabit(habit);
+  },
+
+  uncomplete: async (id: string, userId: string, input: UncompleteHabitInput) => {
+    const habit = await prisma.habit.findFirstOrThrow({ where: { id, userId, isArchived: false } });
+    const dateKey = normalizeDateKey(input.dateKey);
+    let remainingAmount = toCompletionAmount(input.amount ?? 1);
+
+    await prisma.$transaction(async (tx) => {
+      const completions = await tx.habitCompletion.findMany({
+        where: { habitId: id, userId, dateKey },
+        orderBy: [{ completedAt: 'desc' }, { createdAt: 'desc' }]
+      });
+
+      for (const completion of completions) {
+        if (remainingAmount <= 0) break;
+        const amountToRemove = Math.min(completion.amount, remainingAmount);
+        if (amountToRemove >= completion.amount) {
+          await tx.habitCompletion.delete({ where: { id: completion.id } });
+        } else {
+          await tx.habitCompletion.update({
+            where: { id: completion.id },
+            data: { amount: completion.amount - amountToRemove }
+          });
+        }
+        remainingAmount -= amountToRemove;
+      }
+    });
+
     return serializeHabit(habit);
   },
 

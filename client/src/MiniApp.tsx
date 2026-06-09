@@ -168,10 +168,6 @@ function parseHabitTargetCount(value: string) {
   return Math.min(99, Math.max(1, Math.round(numeric)));
 }
 
-function adjustHabitTargetCount(value: string, delta: number) {
-  return String(Math.min(99, Math.max(1, parseHabitTargetCount(value) + delta)));
-}
-
 function normalizeCustomHabitIcon(value: string) {
   return Array.from(value.trim()).slice(0, 2).join('');
 }
@@ -949,6 +945,26 @@ export default function MiniApp() {
     }
   };
 
+  const updateHabitCompletionLocally = (habitId: string, dateKey: string, delta: number) => {
+    setHabits((currentHabits) => currentHabits.map((currentHabit) => {
+      if (currentHabit.id !== habitId) return currentHabit;
+      const currentStats = currentHabit.stats ?? [];
+      const stat = currentStats.find((item) => item.dateKey === dateKey);
+      const nextAmount = Math.min(currentHabit.targetCount, Math.max(0, (stat?.amount ?? 0) + delta));
+
+      if (!stat && nextAmount > 0) return { ...currentHabit, stats: [{ dateKey, amount: nextAmount, events: 1 }, ...currentStats] };
+      if (!stat) return currentHabit;
+      if (nextAmount <= 0) return { ...currentHabit, stats: currentStats.filter((item) => item.dateKey !== dateKey) };
+
+      return {
+        ...currentHabit,
+        stats: currentStats.map((item) => item.dateKey === dateKey
+          ? { ...item, amount: nextAmount, events: Math.max(0, item.events + (delta > 0 ? 1 : -1)) }
+          : item)
+      };
+    }));
+  };
+
   const completeHabit = async (habit: Habit) => {
     const dateKey = toDateKey(new Date());
     const completed = getHabitCompletedForDate(habit, dateKey);
@@ -957,18 +973,7 @@ export default function MiniApp() {
     setCompletedHabitPulseId(habit.id);
     setCompletingHabitIds((ids) => ids.includes(habit.id) ? ids : [...ids, habit.id]);
     setError(null);
-    setHabits((currentHabits) => currentHabits.map((currentHabit) => {
-      if (currentHabit.id !== habit.id) return currentHabit;
-      const currentStats = currentHabit.stats ?? [];
-      const stat = currentStats.find((item) => item.dateKey === dateKey);
-      const nextAmount = Math.min(currentHabit.targetCount, (stat?.amount ?? 0) + 1);
-      return {
-        ...currentHabit,
-        stats: stat
-          ? currentStats.map((item) => item.dateKey === dateKey ? { ...item, amount: nextAmount, events: item.events + 1 } : item)
-          : [{ dateKey, amount: 1, events: 1 }, ...currentStats]
-      };
-    }));
+    updateHabitCompletionLocally(habit.id, dateKey, 1);
     try {
       const updatedHabit = await api.completeHabit(habit.id, { dateKey, amount: 1, completedAt: new Date().toISOString() });
       setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
@@ -977,6 +982,25 @@ export default function MiniApp() {
       setCompletedHabitPulseId(null);
       setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === habit.id ? habit : currentHabit));
       setError(e instanceof Error ? e.message : 'Не удалось отметить привычку');
+    } finally {
+      setCompletingHabitIds((ids) => ids.filter((id) => id !== habit.id));
+    }
+  };
+
+  const uncompleteHabit = async (habit: Habit) => {
+    const dateKey = toDateKey(new Date());
+    const completed = getHabitCompletedForDate(habit, dateKey);
+    if (completed <= 0 || completingHabitIds.includes(habit.id)) return;
+
+    setCompletingHabitIds((ids) => ids.includes(habit.id) ? ids : [...ids, habit.id]);
+    setError(null);
+    updateHabitCompletionLocally(habit.id, dateKey, -1);
+    try {
+      const updatedHabit = await api.uncompleteHabit(habit.id, { dateKey, amount: 1 });
+      setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
+    } catch (e) {
+      setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === habit.id ? habit : currentHabit));
+      setError(e instanceof Error ? e.message : 'Не удалось снять отметку привычки');
     } finally {
       setCompletingHabitIds((ids) => ids.filter((id) => id !== habit.id));
     }
@@ -1011,6 +1035,11 @@ export default function MiniApp() {
     clearHabitLongPressTimer();
     window.setTimeout(() => { habitLongPressTriggeredRef.current = false; }, 0);
   };
+
+  const editingHabit = editingHabitId ? habits.find((habit) => habit.id === editingHabitId) ?? null : null;
+  const habitModalDateKey = toDateKey(new Date());
+  const habitModalCompleted = editingHabit ? Math.min(getHabitCompletedForDate(editingHabit, habitModalDateKey), editingHabit.targetCount) : 0;
+  const isHabitCompletionActionPending = editingHabit ? completingHabitIds.includes(editingHabit.id) : false;
 
   const openedTask = openedTaskId
     ? tasks.find((task) => task.id === openedTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
@@ -2080,23 +2109,23 @@ export default function MiniApp() {
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2">
-                    <span className="text-xs text-slate-300">Повторов: <span className="font-semibold text-slate-100">{parseHabitTargetCount(habitDraft.targetCount)}</span></span>
+                    <span className="text-xs text-slate-300">Повторы: <span className="font-semibold text-slate-100">{habitModalCompleted}/{parseHabitTargetCount(habitDraft.targetCount)}</span></span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: adjustHabitTargetCount(prev.targetCount, -1) }))}
+                        onClick={() => editingHabit ? void uncompleteHabit(editingHabit) : undefined}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-600 bg-slate-900 text-slate-100 disabled:opacity-50"
-                        disabled={parseHabitTargetCount(habitDraft.targetCount) <= 1}
-                        aria-label="Уменьшить количество повторов"
+                        disabled={!editingHabit || habitModalCompleted <= 0 || isHabitCompletionActionPending}
+                        aria-label="Снять отметку повтора"
                       >
                         <Minus size={14} />
                       </button>
                       <button
                         type="button"
-                        onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: adjustHabitTargetCount(prev.targetCount, 1) }))}
+                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
                         className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/15 text-emerald-200 disabled:opacity-50"
-                        disabled={parseHabitTargetCount(habitDraft.targetCount) >= 99}
-                        aria-label="Увеличить количество повторов"
+                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
+                        aria-label="Отметить повтор"
                       >
                         <Plus size={14} />
                       </button>
@@ -2171,6 +2200,22 @@ export default function MiniApp() {
                     />
                   </label>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Повторов в день</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={habitDraft.targetCount}
+                  onChange={(event) => {
+                    const value = event.target.value.replace(/\D/g, '').slice(0, 2);
+                    setHabitDraft((prev) => ({ ...prev, targetCount: value }));
+                  }}
+                  onBlur={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(parseHabitTargetCount(prev.targetCount)) }))}
+                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                />
               </div>
 
               <div className="space-y-2">
