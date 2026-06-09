@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -72,11 +72,12 @@ type HabitDraft = {
   name: string;
   icon: string;
   color: string;
-  targetCount: number;
+  targetCount: string;
   recurrenceType: HabitRecurrenceType;
   intervalDays: number;
   weekdays: number[];
   reminderTime: string;
+  reminderTimes: string[];
 };
 
 const timeFilterLabel: Record<TimeFilter, string> = {
@@ -106,11 +107,12 @@ function createEmptyHabitDraft(): HabitDraft {
     name: '',
     icon: '✨',
     color: '#22c55e',
-    targetCount: 1,
+    targetCount: '1',
     recurrenceType: 'DAILY',
     intervalDays: 2,
     weekdays: [1, 2, 3, 4, 5],
-    reminderTime: ''
+    reminderTime: '',
+    reminderTimes: []
   };
 }
 
@@ -119,11 +121,12 @@ function habitToDraft(habit: Habit): HabitDraft {
     name: habit.name,
     icon: habit.icon || '✨',
     color: habit.color || '#22c55e',
-    targetCount: habit.targetCount || 1,
+    targetCount: String(habit.targetCount || 1),
     recurrenceType: habit.recurrenceType || 'DAILY',
     intervalDays: habit.intervalDays || 2,
     weekdays: habit.weekdays?.length ? habit.weekdays : [1, 2, 3, 4, 5],
-    reminderTime: habit.reminderTime ?? ''
+    reminderTime: (habit.reminderTimes?.[0] ?? habit.reminderTime) ?? '',
+    reminderTimes: habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : [])
   };
 }
 
@@ -158,6 +161,17 @@ function formatHabitSchedule(draft: Pick<HabitDraft, 'recurrenceType' | 'interva
   }
   return 'Каждый день';
 }
+
+function parseHabitTargetCount(value: string) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(99, Math.max(1, Math.round(numeric)));
+}
+
+function normalizeHabitReminderTimes(times: string[]) {
+  return Array.from(new Set(times.filter((time) => /^([01]\d|2[0-3]):[0-5]\d$/.test(time)))).sort((a, b) => a.localeCompare(b));
+}
+
 
 function formatDueDate(value?: string | null) {
   if (!value) return 'Без дедлайна';
@@ -874,11 +888,12 @@ export default function MiniApp() {
         name: habitDraft.name.trim() || 'Новая привычка',
         icon: habitDraft.icon,
         color: habitDraft.color,
-        targetCount: habitDraft.targetCount,
+        targetCount: parseHabitTargetCount(habitDraft.targetCount),
         recurrenceType: habitDraft.recurrenceType,
         intervalDays: habitDraft.recurrenceType === 'INTERVAL' ? habitDraft.intervalDays : null,
         weekdays: habitDraft.recurrenceType === 'WEEKDAYS' ? habitDraft.weekdays : [],
-        reminderTime: habitDraft.reminderTime || null
+        reminderTime: normalizeHabitReminderTimes(habitDraft.reminderTimes)[0] ?? null,
+        reminderTimes: normalizeHabitReminderTimes(habitDraft.reminderTimes)
       };
       if (editingHabitId) await api.updateHabit(editingHabitId, payload);
       else await api.createHabit(payload);
@@ -1308,7 +1323,7 @@ export default function MiniApp() {
                   className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
                   style={{
                     '--habit-color': habit.color,
-                    background: `conic-gradient(${habit.color} ${progress}%, ${isLightTheme ? 'rgba(226,232,240,0.94)' : 'rgba(30,41,59,0.95)'} ${progress}% 100%)`
+                    '--habit-progress': `${progress}%`
                   } as CSSProperties}
                   onMouseDown={() => startHabitPress(habit)}
                   onMouseUp={() => finishHabitPress(habit)}
@@ -1319,10 +1334,10 @@ export default function MiniApp() {
                   aria-label={`${habit.name}: ${completed} из ${habit.targetCount}`}
                   title="Нажмите для редактирования, зажмите для отметки"
                 >
-                  <span className="miniapp-habit-circle-core absolute inset-[4px] rounded-full bg-slate-900/95" />
+                  <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
                   <span className="relative z-10 flex flex-col items-center leading-none">
                     <span className="text-lg">{habit.icon}</span>
-                    <span className="mt-1 text-[10px] font-semibold">{completed}-{habit.targetCount}</span>
+                    <span className="mt-1 text-[10px] font-semibold">{completed}/{habit.targetCount}</span>
                   </span>
                 </button>
               );
@@ -1523,12 +1538,12 @@ export default function MiniApp() {
                           }}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base" style={{ background: `conic-gradient(${habit.color} ${progress}%, rgba(100,116,139,0.28) ${progress}% 100%)` }}>
-                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/95">{habit.icon}</span>
+                            <span className="miniapp-habit-circle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-base" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
+                              <span className="miniapp-habit-circle-core inline-flex h-6 w-6 items-center justify-center rounded-full">{habit.icon}</span>
                             </span>
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">{habit.name}</p>
-                              <p className="text-xs text-emerald-200">Привычка · {habit.reminderTime} · {completed}-{habit.targetCount}</p>
+                              <p className="text-xs text-emerald-200">Привычка · {(habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—'} · {completed}/{habit.targetCount}</p>
                             </div>
                           </div>
                         </div>
@@ -2001,9 +2016,9 @@ export default function MiniApp() {
               <div className="grid grid-cols-[68px_1fr] items-center gap-3">
                 <div
                   className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border"
-                  style={{ '--habit-color': habitDraft.color, background: `conic-gradient(${habitDraft.color} 65%, ${isLightTheme ? 'rgba(226,232,240,0.94)' : 'rgba(30,41,59,0.95)'} 65% 100%)` } as CSSProperties}
+                  style={{ '--habit-color': habitDraft.color, '--habit-progress': '65%' } as CSSProperties}
                 >
-                  <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full bg-slate-900/95" />
+                  <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
                   <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
                 </div>
                 <div className="space-y-2">
@@ -2046,12 +2061,15 @@ export default function MiniApp() {
                       aria-label={`Выбрать цвет ${color}`}
                     />
                   ))}
-                  <input
-                    type="color"
-                    value={habitDraft.color}
-                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, color: event.target.value }))}
-                    className="h-9 w-12 rounded-md border border-slate-600 bg-slate-800 p-1"
-                  />
+                  <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-200" aria-label="Выбрать свой цвет">
+                    <Palette size={18} />
+                    <input
+                      type="color"
+                      value={habitDraft.color}
+                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, color: event.target.value }))}
+                      className="sr-only"
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -2063,27 +2081,54 @@ export default function MiniApp() {
                     min={1}
                     max={99}
                     value={habitDraft.targetCount}
-                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, targetCount: Math.max(1, Number(event.target.value) || 1) }))}
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/\D/g, '').slice(0, 2);
+                      setHabitDraft((prev) => ({ ...prev, targetCount: value }));
+                    }}
+                    onBlur={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(parseHabitTargetCount(prev.targetCount)) }))}
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-xs text-slate-300">Уведомление</label>
+                  <label className="block text-xs text-slate-300">Добавить уведомление</label>
                   <input
                     type="time"
                     value={habitDraft.reminderTime}
-                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, reminderTime: event.target.value }))}
+                    onChange={(event) => {
+                      const nextTime = event.target.value;
+                      setHabitDraft((prev) => ({
+                        ...prev,
+                        reminderTime: nextTime,
+                        reminderTimes: nextTime ? normalizeHabitReminderTimes([...prev.reminderTimes, nextTime]) : prev.reminderTimes
+                      }));
+                    }}
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+              <div className="flex flex-wrap gap-2">
+                {habitDraft.reminderTimes.length ? habitDraft.reminderTimes.map((time) => (
+                  <span key={time} className="inline-flex items-center gap-1 rounded-full border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200">
+                    {time}
+                    <button
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, reminderTimes: prev.reminderTimes.filter((item) => item !== time), reminderTime: prev.reminderTimes.filter((item) => item !== time)[0] ?? '' }))}
+                      className="text-slate-400 hover:text-rose-200"
+                      aria-label={`Удалить уведомление ${time}`}
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )) : <span className="text-xs text-slate-400">Уведомления не добавлены</span>}
+              </div>
+
+              <div className="miniapp-habit-recurrence-panel space-y-2 rounded-lg border p-3">
                 <label className="block text-xs text-slate-300">Как часто повторяется</label>
                 <select
                   value={habitDraft.recurrenceType}
                   onChange={(event) => setHabitDraft((prev) => ({ ...prev, recurrenceType: event.target.value as HabitRecurrenceType }))}
-                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                  className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
                 >
                   <option value="DAILY">Каждый день</option>
                   <option value="INTERVAL">Через интервал</option>
@@ -2099,7 +2144,7 @@ export default function MiniApp() {
                       max={365}
                       value={habitDraft.intervalDays}
                       onChange={(event) => setHabitDraft((prev) => ({ ...prev, intervalDays: Math.max(1, Number(event.target.value) || 1) }))}
-                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                      className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
                     />
                   </div>
                 ) : null}
@@ -2116,7 +2161,7 @@ export default function MiniApp() {
                             ...prev,
                             weekdays: isSelected ? prev.weekdays.filter((value) => value !== day.value) : [...prev.weekdays, day.value]
                           }))}
-                          className={`rounded-full border px-3 py-1 text-xs ${isSelected ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-slate-600 bg-slate-900 text-slate-300'}`}
+                          className={`rounded-full border px-3 py-1 text-xs ${isSelected ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'miniapp-habit-weekday-muted'}`}
                         >
                           {day.label}
                         </button>

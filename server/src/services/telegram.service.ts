@@ -299,6 +299,27 @@ const keyboardSnooze = (taskId: string) => ({
   ]
 });
 
+const keyboardHabitReminder = (habitId: string) => ({
+  inline_keyboard: [[
+    { text: '⏳ Перенести', callback_data: `snooze_habit:${habitId}` },
+    { text: '✅ Выполнить', callback_data: `done_habit:${habitId}` }
+  ]]
+});
+
+const keyboardHabitSnooze = (habitId: string) => ({
+  inline_keyboard: [
+    [
+      { text: '🕒 +15 мин', callback_data: `snooze_set_habit:${habitId}:15` },
+      { text: '🕞 +30 мин', callback_data: `snooze_set_habit:${habitId}:30` }
+    ],
+    [
+      { text: '🕐 +1 час', callback_data: `snooze_set_habit:${habitId}:60` },
+      { text: '🕒 +3 часа', callback_data: `snooze_set_habit:${habitId}:180` }
+    ],
+    [{ text: '⬅️ Назад', callback_data: `habit_back:${habitId}` }]
+  ]
+});
+
 const keyboardReplyMain = {
   remove_keyboard: true
 };
@@ -430,6 +451,59 @@ const answerCallback = async (callbackQueryId: string, text?: string) => {
     show_alert: false
   });
 };
+
+
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const normalizeHabitReminderTimes = (value: unknown, fallback?: string | null) => {
+  const source = Array.isArray(value) ? value : (fallback ? [fallback] : []);
+  return Array.from(new Set(source
+    .map((item) => typeof item === 'string' ? item.trim() : '')
+    .filter((item) => TIME_PATTERN.test(item))))
+    .sort((a, b) => a.localeCompare(b));
+};
+
+const dateKeyInTimeZone = (date: Date, timeZone?: string | null) => {
+  const format = (targetTimeZone: string) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: targetTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timeZone || MOSCOW_TIMEZONE);
+  } catch {
+    parts = format(MOSCOW_TIMEZONE);
+  }
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+};
+
+const timeInTimeZone = (date: Date, timeZone?: string | null) => {
+  const format = (targetTimeZone: string) => new Intl.DateTimeFormat('ru-RU', {
+    timeZone: targetTimeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = format(timeZone || MOSCOW_TIMEZONE);
+  } catch {
+    parts = format(MOSCOW_TIMEZONE);
+  }
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '00';
+  return `${get('hour')}:${get('minute')}`;
+};
+
+const getHabitReminderText = (habit: { name: string; icon: string; targetCount: number }, completed: number, label: string) => [
+  '🔔 <b>Напоминание о привычке</b>',
+  '',
+  `${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>`,
+  `⏰ ${escapeHtml(label)}`,
+  `✅ Сегодня: <b>${completed}/${habit.targetCount}</b>`
+].join('\n');
 
 const getTaskNotificationText = async (taskId: string, userId: string) => {
   const task = await prisma.task.findFirst({
@@ -1266,6 +1340,88 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
 
+
+  if (action === 'habit_back') {
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false } });
+    await answerCallback(callback.id);
+    await editMessage(
+      chatId,
+      messageId,
+      habit ? `🔔 <b>Напоминание о привычке</b>
+
+${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <b>Привычка не найдена.</b>',
+      habit ? keyboardHabitReminder(habit.id) : undefined
+    );
+    return;
+  }
+
+  if (action === 'snooze_habit') {
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false }, select: { id: true } });
+    if (!habit) {
+      await answerCallback(callback.id, 'Привычка не найдена');
+      return;
+    }
+    await answerCallback(callback.id);
+    await editMessage(chatId, messageId, '⏳ <b>На сколько перенести привычку?</b>', keyboardHabitSnooze(resolvedTaskId));
+    return;
+  }
+
+  if (action === 'snooze_set_habit') {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes)) {
+      await answerCallback(callback.id, 'Некорректные данные');
+      return;
+    }
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false }, select: { id: true } });
+    if (!habit) {
+      await answerCallback(callback.id, 'Привычка не найдена');
+      return;
+    }
+    const reminderSnoozedUntil = new Date(Date.now() + minutes * 60_000);
+    await prisma.habit.update({
+      where: { id: habit.id },
+      data: { reminderSnoozedUntil, lastReminderNotifiedKey: null }
+    });
+    await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
+    await editMessage(chatId, messageId, `✅ <b>Готово.</b>
+Привычка перенесена на <b>${minutes} мин</b>.`, keyboardHabitReminder(habit.id));
+    return;
+  }
+
+  if (action === 'done_habit') {
+    const habit = await prisma.habit.findFirst({
+      where: { id: resolvedTaskId, userId, isArchived: false },
+      include: { user: { select: { timeZone: true } } }
+    });
+    if (!habit) {
+      await answerCallback(callback.id, 'Привычка не найдена');
+      return;
+    }
+    const dateKey = dateKeyInTimeZone(new Date(), habit.user.timeZone);
+    await prisma.habitCompletion.create({
+      data: {
+        habit: { connect: { id: habit.id } },
+        user: { connect: { id: userId } },
+        amount: 1,
+        dateKey,
+        completedAt: new Date(),
+        targetAtCompletion: habit.targetCount,
+        recurrenceSnapshot: {
+          recurrenceType: habit.recurrenceType,
+          intervalDays: habit.intervalDays,
+          weekdays: habit.weekdays,
+          reminderTime: habit.reminderTime,
+          reminderTimes: normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime)
+        }
+      }
+    });
+    await prisma.habit.update({ where: { id: habit.id }, data: { reminderSnoozedUntil: null } });
+    await answerCallback(callback.id, 'Привычка выполнена');
+    await editMessage(chatId, messageId, `✅ <b>Привычка выполнена.</b>
+${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
+    return;
+  }
+
   if (action === 'done') {
     await prisma.$transaction(async (tx) => {
       const parentTask = await tx.task.findFirst({
@@ -1482,6 +1638,49 @@ export const telegramService = {
       if (!isShining && task.telegramNotifiedAt) {
         await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: null } });
       }
+    }
+
+    const habits = await prisma.habit.findMany({
+      where: {
+        isArchived: false,
+        user: { telegramChatId: { not: null } }
+      },
+      include: { user: { select: { telegramChatId: true, timeZone: true } } }
+    });
+
+    for (const habit of habits) {
+      const chatId = habit.user.telegramChatId;
+      if (!chatId) continue;
+
+      const currentDateKey = dateKeyInTimeZone(now, habit.user.timeZone);
+      const currentTime = timeInTimeZone(now, habit.user.timeZone);
+      const reminderTimes = normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime);
+      let notificationKey: string | null = null;
+      let label: string | null = null;
+
+      if (habit.reminderSnoozedUntil && habit.reminderSnoozedUntil.getTime() <= now.getTime()) {
+        notificationKey = `${currentDateKey}:snooze:${habit.reminderSnoozedUntil.toISOString()}`;
+        label = 'Перенесённое напоминание';
+      } else if (reminderTimes.includes(currentTime)) {
+        notificationKey = `${currentDateKey}:${currentTime}`;
+        label = currentTime;
+      }
+
+      if (!notificationKey || habit.lastReminderNotifiedKey === notificationKey) continue;
+
+      const completion = await prisma.habitCompletion.aggregate({
+        where: { habitId: habit.id, userId: habit.userId, dateKey: currentDateKey },
+        _sum: { amount: true }
+      });
+      const completed = completion._sum.amount ?? 0;
+      await sendMessage(chatId, getHabitReminderText(habit, completed, label ?? '—'), keyboardHabitReminder(habit.id));
+      await prisma.habit.update({
+        where: { id: habit.id },
+        data: {
+          lastReminderNotifiedKey: notificationKey,
+          ...(habit.reminderSnoozedUntil && habit.reminderSnoozedUntil.getTime() <= now.getTime() ? { reminderSnoozedUntil: null } : {})
+        }
+      });
     }
   },
   async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string }) {
