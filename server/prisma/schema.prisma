@@ -31,6 +31,11 @@ enum HabitRecurrenceType {
   WEEKDAYS
 }
 
+enum HabitReminderSource {
+  SCHEDULED
+  SNOOZE
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -57,6 +62,7 @@ model User {
   telegramSessions TelegramSession[]
   habits       Habit[]
   habitCompletions HabitCompletion[]
+  habitReminderDeliveries HabitReminderDelivery[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -179,8 +185,10 @@ model Habit {
   intervalDays   Int?
   weekdays       Json                @default("[]")
   reminderTime   String?
+  reminderTimes  Json                @default("[]")
   isArchived     Boolean             @default(false)
   completions    HabitCompletion[]
+  reminderDeliveries HabitReminderDelivery[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -207,6 +215,26 @@ model HabitCompletion {
   @@index([habitId, dateKey])
   @@index([userId, dateKey])
   @@index([completedAt])
+}
+
+model HabitReminderDelivery {
+  id           String              @id @default(cuid())
+  habitId      String
+  habit        Habit               @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateKey      String
+  reminderTime String
+  source       HabitReminderSource @default(SCHEDULED)
+  scheduledAt  DateTime
+  sentAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([habitId, dateKey, reminderTime, source])
+  @@index([habitId])
+  @@index([userId])
+  @@index([scheduledAt, sentAt])
 }
 
 model TelegramSession {
