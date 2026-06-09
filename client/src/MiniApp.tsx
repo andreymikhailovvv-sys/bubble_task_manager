@@ -1515,6 +1515,38 @@ export default function MiniApp() {
                           <p className="text-xs text-slate-300">{isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
                         </button>
                       );
+                    {timelineToday.scheduledHabits.map((habit) => {
+                      const placement = timelineHabitPlacements.get(habit.id) ?? { top: 4 };
+                      const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
+                      const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
+                      return (
+                        <div
+                          key={`timeline-habit-${habit.id}`}
+                          className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
+                          style={{
+                            top: `${placement.top}px`,
+                            minHeight: `${TIMELINE_CARD_HEIGHT}px`,
+                            left: 'calc(4rem + 2px)',
+                            width: 'calc(100% - 4rem - 8px)',
+                            zIndex: 9,
+                            borderColor: hexToRgba(habit.color, isLightTheme ? 0.55 : 0.72) ?? habit.color,
+                            background: `linear-gradient(135deg, ${hexToRgba(habit.color, isLightTheme ? 0.18 : 0.28) ?? 'rgba(34,197,94,0.18)'}, ${isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.82)'})`,
+                            borderLeftWidth: '4px',
+                            borderLeftColor: habit.color
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base" style={{ background: `conic-gradient(${habit.color} ${progress}%, rgba(100,116,139,0.28) ${progress}% 100%)` }}>
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/95">{habit.icon}</span>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{habit.name}</p>
+                              <p className="text-xs text-emerald-200">Привычка · {habit.reminderTime} · {completed}-{habit.targetCount}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                     })}
                     {timelineToday.scheduledHabits.map(({ habit, time }) => {
                       const placement = timelineHabitPlacements.get(`${habit.id}-${time}`) ?? { top: 4 };
