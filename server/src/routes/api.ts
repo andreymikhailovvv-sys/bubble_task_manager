@@ -556,6 +556,7 @@ apiRouter.get('/habits', requireAuth, habitController.list);
 apiRouter.post('/habits', requireAuth, habitController.create);
 apiRouter.patch('/habits/:id', requireAuth, habitController.update);
 apiRouter.post('/habits/:id/complete', requireAuth, habitController.complete);
+apiRouter.post('/habits/:id/uncomplete', requireAuth, habitController.uncomplete);
 apiRouter.delete('/habits/:id', requireAuth, habitController.remove);
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
 apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);

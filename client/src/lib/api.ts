@@ -118,6 +118,8 @@ export const api = {
   updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   completeHabit: (id: string, payload: { dateKey: string; amount?: number; completedAt?: string }) =>
     request<Habit>(`/api/habits/${id}/complete`, { method: 'POST', body: JSON.stringify(payload) }),
+  uncompleteHabit: (id: string, payload: { dateKey: string; amount?: number }) =>
+    request<Habit>(`/api/habits/${id}/uncomplete`, { method: 'POST', body: JSON.stringify(payload) }),
   deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, { method: 'DELETE' }),
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
   getTaskAttachments: (taskId: string) => request<TaskAttachment[]>(`/api/tasks/${taskId}/attachments`),
