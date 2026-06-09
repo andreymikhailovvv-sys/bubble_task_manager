@@ -15,7 +15,6 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
-const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
 const TELEGRAM_LINK_SECRET = process.env.TELEGRAM_LINK_SECRET?.trim() || BOT_TOKEN || null;
 const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
@@ -135,40 +134,6 @@ const formatDate = (value: Date | null) => {
   if (!value) return 'не указан';
   return value.toLocaleString('ru-RU', { timeZone: MOSCOW_TIMEZONE });
 };
-
-const formatLocalReminderSlot = (date: Date, timeZone: string) => {
-  const format = (targetTimeZone: string) => new Intl.DateTimeFormat('en-CA', {
-    timeZone: targetTimeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  }).formatToParts(date);
-
-  let parts: Intl.DateTimeFormatPart[];
-  try {
-    parts = format(timeZone);
-  } catch {
-    parts = format(MOSCOW_TIMEZONE);
-  }
-
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-  return {
-    dateKey: `${get('year')}-${get('month')}-${get('day')}`,
-    time: `${get('hour')}:${get('minute')}`
-  };
-};
-
-const normalizeHabitReminderTimes = (value: unknown, fallback?: string | null) => {
-  const source = Array.isArray(value) ? value : fallback ? [fallback] : [];
-  return Array.from(new Set(source
-    .map((item) => typeof item === 'string' ? item.trim() : '')
-    .filter((item) => TIME_PATTERN.test(item))))
-    .sort();
-};
-
 
 const sortSubtasksByStatusAndDeadline = <T extends { status: string; dueDate: Date | null }>(subtasks: T[]) => subtasks
   .slice()
@@ -333,28 +298,6 @@ const keyboardSnooze = (taskId: string) => ({
     [{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]
   ]
 });
-
-const keyboardHabitMain = (habitId: string) => ({
-  inline_keyboard: [[
-    { text: '⏳ Перенести', callback_data: `habit_snooze:${habitId}` },
-    { text: '✅ Выполнить', callback_data: `habit_done:${habitId}` }
-  ]]
-});
-
-const keyboardHabitSnooze = (habitId: string) => ({
-  inline_keyboard: [
-    [
-      { text: '🕒 +15 мин', callback_data: `habit_snooze_set:${habitId}:15` },
-      { text: '🕞 +30 мин', callback_data: `habit_snooze_set:${habitId}:30` }
-    ],
-    [
-      { text: '🕐 +1 час', callback_data: `habit_snooze_set:${habitId}:60` },
-      { text: '🕒 +3 часа', callback_data: `habit_snooze_set:${habitId}:180` }
-    ],
-    [{ text: '⬅️ Назад', callback_data: `habit_back:${habitId}` }]
-  ]
-});
-
 
 const keyboardReplyMain = {
   remove_keyboard: true
@@ -522,59 +465,6 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   }
 
   return lines.join('\n');
-};
-
-
-const getHabitCompletionAmount = async (habitId: string, userId: string, dateKey: string) => {
-  const aggregate = await prisma.habitCompletion.aggregate({
-    where: { habitId, userId, dateKey },
-    _sum: { amount: true }
-  });
-  return aggregate._sum.amount ?? 0;
-};
-
-const getHabitNotificationText = async (habitId: string, userId: string, dateKey: string, reminderTime: string) => {
-  const habit = await prisma.habit.findFirst({
-    where: { id: habitId, userId, isArchived: false },
-    select: { id: true, name: true, icon: true, targetCount: true, recurrenceType: true, intervalDays: true, weekdays: true }
-  });
-  if (!habit) return null;
-
-  const completed = await getHabitCompletionAmount(habit.id, userId, dateKey);
-  const lines = [
-    '🔔 <b>Напоминание о привычке</b>',
-    '',
-    `${escapeHtml(habit.icon)} <b>${escapeHtml(habit.name)}</b>`,
-    `☑️ Выполнено: <b>${completed}-${habit.targetCount}</b>`,
-    `⏰ Время: <b>${escapeHtml(reminderTime)}</b>`
-  ];
-  return lines.join('\n');
-};
-
-const completeHabitFromTelegram = async (habitId: string, userId: string, dateKey: string) => {
-  const habit = await prisma.habit.findFirst({ where: { id: habitId, userId, isArchived: false } });
-  if (!habit) return null;
-
-  await prisma.habitCompletion.create({
-    data: {
-      habitId: habit.id,
-      userId,
-      amount: 1,
-      dateKey,
-      completedAt: new Date(),
-      targetAtCompletion: habit.targetCount,
-      recurrenceSnapshot: {
-        recurrenceType: habit.recurrenceType,
-        intervalDays: habit.intervalDays,
-        weekdays: habit.weekdays,
-        reminderTime: habit.reminderTime,
-        reminderTimes: habit.reminderTimes
-      }
-    }
-  });
-
-  const completed = await getHabitCompletionAmount(habit.id, userId, dateKey);
-  return { habit, completed };
 };
 
 const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: number, subtaskPage = 1) => {
@@ -1290,68 +1180,6 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
   const resolvedTaskId = taskId as string;
 
-  if (action === 'habit_done') {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } });
-    const slot = formatLocalReminderSlot(new Date(), user?.timeZone || MOSCOW_TIMEZONE);
-    const result = await completeHabitFromTelegram(resolvedTaskId, userId, slot.dateKey);
-    await answerCallback(callback.id, result ? 'Привычка отмечена' : 'Привычка не найдена');
-    await editMessage(
-      chatId,
-      messageId,
-      result
-        ? `✅ <b>Готово!</b>\n${escapeHtml(result.habit.icon)} <b>${escapeHtml(result.habit.name)}</b>: <b>${result.completed}-${result.habit.targetCount}</b>`
-        : '⚠️ <b>Привычка не найдена.</b>'
-    );
-    return;
-  }
-
-  if (action === 'habit_snooze') {
-    await answerCallback(callback.id);
-    await editMessage(chatId, messageId, '⏳ <b>На сколько перенести напоминание?</b>', keyboardHabitSnooze(resolvedTaskId));
-    return;
-  }
-
-  if (action === 'habit_back') {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } });
-    const slot = formatLocalReminderSlot(new Date(), user?.timeZone || MOSCOW_TIMEZONE);
-    const text = await getHabitNotificationText(resolvedTaskId, userId, slot.dateKey, slot.time);
-    await answerCallback(callback.id);
-    await editMessage(chatId, messageId, text ?? '⚠️ <b>Привычка не найдена.</b>', keyboardHabitMain(resolvedTaskId));
-    return;
-  }
-
-  if (action === 'habit_snooze_set') {
-    const minutes = Number(value);
-    if (!Number.isFinite(minutes)) {
-      await answerCallback(callback.id, 'Некорректные данные');
-      return;
-    }
-
-    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false }, select: { id: true, name: true } });
-    if (!habit) {
-      await answerCallback(callback.id, 'Привычка не найдена');
-      return;
-    }
-
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } });
-    const scheduledAt = new Date(Date.now() + minutes * 60_000);
-    const slot = formatLocalReminderSlot(scheduledAt, user?.timeZone || MOSCOW_TIMEZONE);
-    await prisma.habitReminderDelivery.create({
-      data: {
-        habitId: habit.id,
-        userId,
-        dateKey: slot.dateKey,
-        reminderTime: `${slot.time}:${Date.now().toString(36).slice(-4)}`,
-        source: 'SNOOZE',
-        scheduledAt
-      }
-    });
-
-    await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
-    await editMessage(chatId, messageId, `✅ <b>Готово.</b>\nНапоминание привычки <b>${escapeHtml(habit.name)}</b> перенесено на <b>${minutes} мин</b>.`, keyboardHabitMain(habit.id));
-    return;
-  }
-
   if (action === 'backlist') {
     await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
     const listParts = await buildTaskListTextParts(userId, chatId);
@@ -1589,95 +1417,6 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
 };
 
-
-const notifyHabitReminders = async (now: Date) => {
-  const habits = await prisma.habit.findMany({
-    where: {
-      isArchived: false,
-      user: { telegramChatId: { not: null } }
-    },
-    select: {
-      id: true,
-      userId: true,
-      name: true,
-      reminderTime: true,
-      reminderTimes: true,
-      recurrenceType: true,
-      intervalDays: true,
-      weekdays: true,
-      createdAt: true,
-      user: { select: { telegramChatId: true, timeZone: true } }
-    }
-  });
-
-  for (const habit of habits) {
-    const chatId = habit.user.telegramChatId;
-    if (!chatId) continue;
-
-    const slot = formatLocalReminderSlot(now, habit.user.timeZone || MOSCOW_TIMEZONE);
-    const reminderTimes = normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime);
-    const weekdays = Array.isArray(habit.weekdays) ? habit.weekdays.map((item) => Number(item)) : [];
-    const localDay = new Date(`${slot.dateKey}T00:00:00Z`);
-    const isScheduledDay = habit.recurrenceType === 'WEEKDAYS'
-      ? weekdays.includes(localDay.getUTCDay())
-      : habit.recurrenceType === 'INTERVAL'
-        ? Math.max(0, Math.round((localDay.getTime() - Date.UTC(habit.createdAt.getUTCFullYear(), habit.createdAt.getUTCMonth(), habit.createdAt.getUTCDate())) / 86_400_000)) % Math.max(1, habit.intervalDays ?? 1) === 0
-        : true;
-
-    if (!isScheduledDay || !reminderTimes.includes(slot.time)) continue;
-
-    const claimed = await prisma.habitReminderDelivery.createMany({
-      data: [{
-        habitId: habit.id,
-        userId: habit.userId,
-        dateKey: slot.dateKey,
-        reminderTime: slot.time,
-        source: 'SCHEDULED',
-        scheduledAt: now,
-        sentAt: now
-      }],
-      skipDuplicates: true
-    });
-
-    if (claimed.count === 0) continue;
-
-    const text = await getHabitNotificationText(habit.id, habit.userId, slot.dateKey, slot.time);
-    if (text) await sendMessage(chatId, text, keyboardHabitMain(habit.id));
-  }
-
-  const dueSnoozes = await prisma.habitReminderDelivery.findMany({
-    where: {
-      source: 'SNOOZE',
-      sentAt: null,
-      scheduledAt: { lte: now }
-    },
-    include: {
-      habit: {
-        select: {
-          id: true,
-          userId: true,
-          name: true,
-          isArchived: true,
-          user: { select: { telegramChatId: true, timeZone: true } }
-        }
-      }
-    },
-    take: 100
-  });
-
-  for (const delivery of dueSnoozes) {
-    if (delivery.habit.isArchived || !delivery.habit.user.telegramChatId) {
-      await prisma.habitReminderDelivery.update({ where: { id: delivery.id }, data: { sentAt: now } });
-      continue;
-    }
-
-    const slot = formatLocalReminderSlot(delivery.scheduledAt, delivery.habit.user.timeZone || MOSCOW_TIMEZONE);
-    const text = await getHabitNotificationText(delivery.habit.id, delivery.habit.userId, slot.dateKey, slot.time);
-    if (text) await sendMessage(delivery.habit.user.telegramChatId, text, keyboardHabitMain(delivery.habit.id));
-    await prisma.habitReminderDelivery.update({ where: { id: delivery.id }, data: { sentAt: now } });
-  }
-};
-
 export const telegramService = {
   isEnabled,
   createTelegramLinkToken,
@@ -1744,8 +1483,6 @@ export const telegramService = {
         await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: null } });
       }
     }
-
-    await notifyHabitReminders(now);
   },
   async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string }) {
     if (!BOT_TOKEN) return;
