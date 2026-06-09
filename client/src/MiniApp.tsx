@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -166,6 +166,14 @@ function parseHabitTargetCount(value: string) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 1;
   return Math.min(99, Math.max(1, Math.round(numeric)));
+}
+
+function adjustHabitTargetCount(value: string, delta: number) {
+  return String(Math.min(99, Math.max(1, parseHabitTargetCount(value) + delta)));
+}
+
+function normalizeCustomHabitIcon(value: string) {
+  return Array.from(value.trim()).slice(0, 2).join('');
 }
 
 function normalizeHabitReminderTimes(times: string[]) {
@@ -335,6 +343,9 @@ export default function MiniApp() {
   const [savingHabit, setSavingHabit] = useState(false);
   const [deletingHabitId, setDeletingHabitId] = useState<string | null>(null);
   const [completedHabitPulseId, setCompletedHabitPulseId] = useState<string | null>(null);
+  const [completingHabitIds, setCompletingHabitIds] = useState<string[]>([]);
+  const [isCustomHabitIconOpen, setIsCustomHabitIconOpen] = useState(false);
+  const [customHabitIconDraft, setCustomHabitIconDraft] = useState('');
   const habitLongPressTimerRef = useRef<number | null>(null);
   const habitLongPressTriggeredRef = useRef(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -640,6 +651,18 @@ export default function MiniApp() {
     };
   }, [habits, timelineAnchorDate, timelineFilteredTasks, timelineNow]);
 
+  const sortedHabits = useMemo(() => {
+    const dateKey = toDateKey(new Date());
+    return [...habits].sort((a, b) => {
+      const aCompleted = getHabitCompletedForDate(a, dateKey) >= a.targetCount;
+      const bCompleted = getHabitCompletedForDate(b, dateKey) >= b.targetCount;
+      if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+      const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return aCreated - bCreated;
+    });
+  }, [habits]);
+
   const timelineHabitPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
     const itemsByHour = new Map<number, Habit[]>();
@@ -865,12 +888,16 @@ export default function MiniApp() {
   const openCreateHabitModal = () => {
     setEditingHabitId(null);
     setHabitDraft(createEmptyHabitDraft());
+    setIsCustomHabitIconOpen(false);
+    setCustomHabitIconDraft('');
     setIsHabitModalOpen(true);
   };
 
   const openEditHabitModal = (habit: Habit) => {
     setEditingHabitId(habit.id);
     setHabitDraft(habitToDraft(habit));
+    setIsCustomHabitIconOpen(!HABIT_ICON_OPTIONS.includes(habit.icon || ''));
+    setCustomHabitIconDraft(HABIT_ICON_OPTIONS.includes(habit.icon || '') ? '' : (habit.icon || ''));
     setIsHabitModalOpen(true);
   };
 
@@ -878,6 +905,8 @@ export default function MiniApp() {
     setIsHabitModalOpen(false);
     setEditingHabitId(null);
     setHabitDraft(createEmptyHabitDraft());
+    setIsCustomHabitIconOpen(false);
+    setCustomHabitIconDraft('');
   };
 
   const saveHabit = async () => {
@@ -921,15 +950,35 @@ export default function MiniApp() {
   };
 
   const completeHabit = async (habit: Habit) => {
+    const dateKey = toDateKey(new Date());
+    const completed = getHabitCompletedForDate(habit, dateKey);
+    if (completed >= habit.targetCount || completingHabitIds.includes(habit.id)) return;
+
     setCompletedHabitPulseId(habit.id);
+    setCompletingHabitIds((ids) => ids.includes(habit.id) ? ids : [...ids, habit.id]);
     setError(null);
+    setHabits((currentHabits) => currentHabits.map((currentHabit) => {
+      if (currentHabit.id !== habit.id) return currentHabit;
+      const currentStats = currentHabit.stats ?? [];
+      const stat = currentStats.find((item) => item.dateKey === dateKey);
+      const nextAmount = Math.min(currentHabit.targetCount, (stat?.amount ?? 0) + 1);
+      return {
+        ...currentHabit,
+        stats: stat
+          ? currentStats.map((item) => item.dateKey === dateKey ? { ...item, amount: nextAmount, events: item.events + 1 } : item)
+          : [{ dateKey, amount: 1, events: 1 }, ...currentStats]
+      };
+    }));
     try {
-      await api.completeHabit(habit.id, { dateKey: toDateKey(new Date()), amount: 1, completedAt: new Date().toISOString() });
-      await loadData();
+      const updatedHabit = await api.completeHabit(habit.id, { dateKey, amount: 1, completedAt: new Date().toISOString() });
+      setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
       window.setTimeout(() => setCompletedHabitPulseId((current) => current === habit.id ? null : current), 650);
     } catch (e) {
       setCompletedHabitPulseId(null);
+      setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === habit.id ? habit : currentHabit));
       setError(e instanceof Error ? e.message : 'Не удалось отметить привычку');
+    } finally {
+      setCompletingHabitIds((ids) => ids.filter((id) => id !== habit.id));
     }
   };
 
@@ -1311,18 +1360,19 @@ export default function MiniApp() {
             </div>
           </div>
           <div className="miniapp-habits-strip mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-            {habits.map((habit) => {
+            {sortedHabits.map((habit) => {
               const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
               const cappedCompleted = Math.min(completed, habit.targetCount);
               const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
+              const isCompleted = completed >= habit.targetCount;
               const isPulsing = completedHabitPulseId === habit.id;
               return (
                 <button
                   key={habit.id}
                   type="button"
-                  className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
+                  className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
                   style={{
-                    '--habit-color': habit.color,
+                    '--habit-color': isCompleted ? '#94a3b8' : habit.color,
                     '--habit-progress': `${progress}%`
                   } as CSSProperties}
                   onMouseDown={() => startHabitPress(habit)}
@@ -1331,13 +1381,13 @@ export default function MiniApp() {
                   onTouchStart={() => startHabitPress(habit)}
                   onTouchEnd={() => finishHabitPress(habit)}
                   onTouchCancel={cancelHabitPress}
-                  aria-label={`${habit.name}: ${completed} из ${habit.targetCount}`}
-                  title="Нажмите для редактирования, зажмите для отметки"
+                  aria-label={`${habit.name}: ${cappedCompleted} из ${habit.targetCount}`}
+                  title={isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
                 >
                   <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
                   <span className="relative z-10 flex flex-col items-center leading-none">
                     <span className="text-lg">{habit.icon}</span>
-                    <span className="mt-1 text-[10px] font-semibold">{completed}/{habit.targetCount}</span>
+                    <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
                   </span>
                 </button>
               );
@@ -2029,6 +2079,29 @@ export default function MiniApp() {
                     placeholder="Например, вода или зарядка"
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2">
+                    <span className="text-xs text-slate-300">Повторов: <span className="font-semibold text-slate-100">{parseHabitTargetCount(habitDraft.targetCount)}</span></span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: adjustHabitTargetCount(prev.targetCount, -1) }))}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-600 bg-slate-900 text-slate-100 disabled:opacity-50"
+                        disabled={parseHabitTargetCount(habitDraft.targetCount) <= 1}
+                        aria-label="Уменьшить количество повторов"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: adjustHabitTargetCount(prev.targetCount, 1) }))}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/60 bg-emerald-500/15 text-emerald-200 disabled:opacity-50"
+                        disabled={parseHabitTargetCount(habitDraft.targetCount) >= 99}
+                        aria-label="Увеличить количество повторов"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2039,13 +2112,40 @@ export default function MiniApp() {
                     <button
                       key={icon}
                       type="button"
-                      onClick={() => setHabitDraft((prev) => ({ ...prev, icon }))}
+                      onClick={() => {
+                        setHabitDraft((prev) => ({ ...prev, icon }));
+                        setIsCustomHabitIconOpen(false);
+                        setCustomHabitIconDraft('');
+                      }}
                       className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${habitDraft.icon === icon ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
                     >
                       {icon}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomHabitIconOpen((prev) => !prev)}
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${isCustomHabitIconOpen ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
+                    aria-label="Выбрать свой эмодзи"
+                    title="Выбрать свой эмодзи"
+                  >
+                    <Plus size={17} />
+                  </button>
                 </div>
+                {isCustomHabitIconOpen ? (
+                  <input
+                    value={customHabitIconDraft}
+                    onChange={(event) => {
+                      const icon = normalizeCustomHabitIcon(event.target.value);
+                      setCustomHabitIconDraft(icon);
+                      if (icon) setHabitDraft((prev) => ({ ...prev, icon }));
+                    }}
+                    placeholder="Вставьте свой эмодзи"
+                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                    inputMode="text"
+                    aria-label="Свой эмодзи для привычки"
+                  />
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -2073,24 +2173,8 @@ export default function MiniApp() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="block text-xs text-slate-300">Повторов в день</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={habitDraft.targetCount}
-                    onChange={(event) => {
-                      const value = event.target.value.replace(/\D/g, '').slice(0, 2);
-                      setHabitDraft((prev) => ({ ...prev, targetCount: value }));
-                    }}
-                    onBlur={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(parseHabitTargetCount(prev.targetCount)) }))}
-                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-xs text-slate-300">Добавить уведомление</label>
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Добавить уведомление</label>
                   <input
                     type="time"
                     value={habitDraft.reminderTime}
@@ -2104,7 +2188,6 @@ export default function MiniApp() {
                     }}
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
-                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
