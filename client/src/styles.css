@@ -2002,3 +2002,92 @@ body[data-theme='light'] .notes-editor-list-dropdown {
 body[data-theme='light'] .notes-editor-list-option:hover {
   background: #eff6ff !important;
 }
+
+.miniapp-habits-strip {
+  -webkit-overflow-scrolling: touch;
+}
+
+.miniapp-habit-circle {
+  border-color: color-mix(in srgb, var(--habit-color, #22c55e) 62%, transparent);
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--habit-color, #22c55e) 24%, transparent), 0 10px 24px rgba(2, 6, 23, 0.22);
+  touch-action: manipulation;
+}
+
+.miniapp-habit-circle-core {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--habit-color, #22c55e) 28%, transparent);
+}
+
+.miniapp-habit-add {
+  box-shadow: inset 0 0 14px rgba(34, 197, 94, 0.12);
+}
+
+.miniapp-timeline-habit-card {
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.18), inset 0 0 18px rgba(34, 197, 94, 0.08);
+}
+
+@keyframes miniapp-habit-complete-pop {
+  0% {
+    filter: brightness(1);
+    box-shadow: 0 0 0 rgba(34, 197, 94, 0), inset 0 0 12px color-mix(in srgb, var(--habit-color, #22c55e) 24%, transparent);
+  }
+  45% {
+    filter: brightness(1.35);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--habit-color, #22c55e) 22%, transparent), 0 0 28px color-mix(in srgb, var(--habit-color, #22c55e) 58%, transparent), inset 0 0 18px color-mix(in srgb, var(--habit-color, #22c55e) 44%, transparent);
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 0 0 rgba(34, 197, 94, 0), inset 0 0 12px color-mix(in srgb, var(--habit-color, #22c55e) 24%, transparent);
+  }
+}
+
+.miniapp-habit-complete-pulse {
+  animation: miniapp-habit-complete-pop 640ms ease-out;
+}
+
+.miniapp-light .miniapp-habit-circle-core,
+.miniapp-light .miniapp-timeline-habit-card span span {
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-timeline-habit-card {
+  color: #0f172a;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10), inset 0 0 18px rgba(14, 165, 233, 0.06);
+}
+
+/* Habit polish overrides */
+.miniapp-habit-circle {
+  box-shadow: none;
+  outline: none;
+}
+
+.miniapp-habit-circle::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 9999px;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--habit-color, #22c55e) 42%, transparent);
+}
+
+.miniapp-habit-circle-core {
+  inset: 6px !important;
+}
+
+.miniapp-light .miniapp-habit-frequency-panel {
+  border-color: rgba(203, 213, 225, 0.95) !important;
+  background: rgba(255, 255, 255, 0.88) !important;
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-habit-frequency-panel select,
+.miniapp-light .miniapp-habit-frequency-panel input {
+  border-color: rgba(148, 163, 184, 0.65) !important;
+  background: rgba(248, 250, 252, 0.98) !important;
+  color: #0f172a !important;
+}
+
+.miniapp-light .miniapp-habit-frequency-panel label,
+.miniapp-light .miniapp-habit-frequency-panel p {
+  color: #475569 !important;
+}

@@ -55,3 +55,28 @@ export type TaskAttachment = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type HabitRecurrenceType = 'DAILY' | 'INTERVAL' | 'WEEKDAYS';
+
+export type HabitStat = {
+  dateKey: string;
+  amount: number;
+  events: number;
+};
+
+export type Habit = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  targetCount: number;
+  recurrenceType: HabitRecurrenceType;
+  intervalDays?: number | null;
+  weekdays: number[];
+  reminderTime?: string | null;
+  reminderTimes?: string[];
+  isArchived?: boolean;
+  stats: HabitStat[];
+  createdAt?: string;
+  updatedAt?: string;
+};

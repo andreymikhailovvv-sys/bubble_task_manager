@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 type TelegramWebApp = {
   initData?: string;
@@ -68,6 +68,18 @@ type TaskDraft = {
   dueDate: string;
 };
 
+type HabitDraft = {
+  name: string;
+  icon: string;
+  color: string;
+  targetCount: string;
+  recurrenceType: HabitRecurrenceType;
+  intervalDays: number;
+  weekdays: number[];
+  reminderTimes: string[];
+  newReminderTime: string;
+};
+
 const timeFilterLabel: Record<TimeFilter, string> = {
   all: 'Все сроки',
   today: 'Сегодня',
@@ -75,6 +87,86 @@ const timeFilterLabel: Record<TimeFilter, string> = {
   week: '7 дней',
   month: '30 дней'
 };
+
+
+const HABIT_ICON_OPTIONS = ['💧', '🏃', '📚', '🧘', '💊', '🥗', '📝', '💪', '🎯', '✨'];
+const HABIT_COLOR_OPTIONS = ['#22c55e', '#38bdf8', '#a78bfa', '#f97316', '#f43f5e', '#eab308'];
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: 'Пн' },
+  { value: 2, label: 'Вт' },
+  { value: 3, label: 'Ср' },
+  { value: 4, label: 'Чт' },
+  { value: 5, label: 'Пт' },
+  { value: 6, label: 'Сб' },
+  { value: 0, label: 'Вс' }
+];
+const LONG_PRESS_MS = 520;
+
+function normalizeHabitTargetCount(value: string | number) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(99, Math.max(1, Math.round(numeric)));
+}
+
+function createEmptyHabitDraft(): HabitDraft {
+  return {
+    name: '',
+    icon: '✨',
+    color: '#22c55e',
+    targetCount: '1',
+    recurrenceType: 'DAILY',
+    intervalDays: 2,
+    weekdays: [1, 2, 3, 4, 5],
+    reminderTimes: [],
+    newReminderTime: ''
+  };
+}
+
+function habitToDraft(habit: Habit): HabitDraft {
+  return {
+    name: habit.name,
+    icon: habit.icon || '✨',
+    color: habit.color || '#22c55e',
+    targetCount: String(habit.targetCount || 1),
+    recurrenceType: habit.recurrenceType || 'DAILY',
+    intervalDays: habit.intervalDays || 2,
+    weekdays: habit.weekdays?.length ? habit.weekdays : [1, 2, 3, 4, 5],
+    reminderTimes: habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []),
+    newReminderTime: ''
+  };
+}
+
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getHabitCompletedForDate(habit: Habit, dateKey: string) {
+  return habit.stats.find((item) => item.dateKey === dateKey)?.amount ?? 0;
+}
+
+function isHabitScheduledForDate(habit: Habit, date: Date) {
+  if (habit.recurrenceType === 'WEEKDAYS') return habit.weekdays.includes(date.getDay());
+  if (habit.recurrenceType === 'INTERVAL') {
+    const start = habit.createdAt ? new Date(habit.createdAt) : new Date();
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const currentDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const dayDiff = Math.max(0, Math.round((currentDay - startDay) / 86_400_000));
+    return dayDiff % Math.max(1, habit.intervalDays ?? 1) === 0;
+  }
+  return true;
+}
+
+function formatHabitSchedule(draft: Pick<HabitDraft, 'recurrenceType' | 'intervalDays' | 'weekdays'>) {
+  if (draft.recurrenceType === 'INTERVAL') return `Каждые ${draft.intervalDays || 1} дн.`;
+  if (draft.recurrenceType === 'WEEKDAYS') {
+    const labels = WEEKDAY_OPTIONS.filter((item) => draft.weekdays.includes(item.value)).map((item) => item.label);
+    return labels.length ? labels.join(', ') : 'Дни не выбраны';
+  }
+  return 'Каждый день';
+}
 
 function formatDueDate(value?: string | null) {
   if (!value) return 'Без дедлайна';
@@ -207,6 +299,7 @@ function compareByDueDate(a: Task, b: Task) {
 export default function MiniApp() {
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -231,6 +324,14 @@ export default function MiniApp() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
+  const [habitDraft, setHabitDraft] = useState<HabitDraft>(() => createEmptyHabitDraft());
+  const [savingHabit, setSavingHabit] = useState(false);
+  const [deletingHabitId, setDeletingHabitId] = useState<string | null>(null);
+  const [completedHabitPulseId, setCompletedHabitPulseId] = useState<string | null>(null);
+  const habitLongPressTimerRef = useRef<number | null>(null);
+  const habitLongPressTriggeredRef = useRef(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [createTaskDraft, setCreateTaskDraft] = useState<TaskDraft>({
     title: '',
@@ -256,6 +357,7 @@ export default function MiniApp() {
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const habitCustomColorInputRef = useRef<HTMLInputElement | null>(null);
   const launchParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
@@ -279,10 +381,11 @@ export default function MiniApp() {
         throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
       }
 
-      const [sphereList, taskList] = await Promise.all([api.getSpheres(), api.getTasks()]);
+      const [sphereList, taskList, habitList] = await Promise.all([api.getSpheres(), api.getTasks(), api.getHabits()]);
       setSpheres(sphereList);
       setTasks(taskList);
-      console.info(`[MiniApp] Данные загружены: sectors=${sphereList.length}, tasks=${taskList.length}`);
+      setHabits(habitList);
+      console.info(`[MiniApp] Данные загружены: sectors=${sphereList.length}, tasks=${taskList.length}, habits=${habitList.length}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить мини-приложение');
     } finally {
@@ -473,6 +576,12 @@ export default function MiniApp() {
     const endOfDay = new Date(startOfDay);
     endOfDay.setDate(endOfDay.getDate() + 1);
 
+    const scheduledHabits = habits
+      .flatMap((habit) => (habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []))
+        .map((time) => ({ habit, time })))
+      .filter((item) => item.time && isHabitScheduledForDate(item.habit, startOfDay))
+      .sort((a, b) => a.time.localeCompare(b.time));
+
     const todayTasks = timelineFilteredTasks
       .filter((task) => {
         if (!task.dueDate) return false;
@@ -490,6 +599,10 @@ export default function MiniApp() {
     for (const task of timelineEntries) {
       const due = new Date(task.dueDate as string);
       const hour = due.getHours();
+      if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
+    }
+    for (const item of scheduledHabits) {
+      const hour = Number(item.time.slice(0, 2));
       if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
     }
 
@@ -514,6 +627,8 @@ export default function MiniApp() {
       && now.getDate() === anchor.getDate();
     return {
       timelineEntries,
+      scheduledHabits,
+      dateKey: toDateKey(startOfDay),
       currentTimeTop,
       isTodayVisible: isCurrentDay,
       hourHeights,
@@ -521,7 +636,32 @@ export default function MiniApp() {
       totalHeight,
       anchorLabel: anchor.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })
     };
-  }, [timelineAnchorDate, timelineFilteredTasks, timelineNow]);
+  }, [habits, timelineAnchorDate, timelineFilteredTasks, timelineNow]);
+
+  const timelineHabitPlacements = useMemo(() => {
+    const placements = new Map<string, { top: number }>();
+    const itemsByHour = new Map<number, Array<{ habit: Habit; time: string }>>();
+
+    for (const item of timelineToday.scheduledHabits) {
+      const hour = Number(item.time.slice(0, 2));
+      const bucket = itemsByHour.get(hour) ?? [];
+      bucket.push(item);
+      itemsByHour.set(hour, bucket);
+    }
+
+    for (const [hour, hourHabits] of itemsByHour.entries()) {
+      const taskCount = timelineToday.timelineEntries.filter((task) => {
+        const due = new Date(task.dueDate as string);
+        return due.getHours() === hour;
+      }).length;
+      const sorted = hourHabits.slice().sort((a, b) => a.time.localeCompare(b.time));
+      for (let index = 0; index < sorted.length; index += 1) {
+        placements.set(`${sorted[index].habit.id}-${sorted[index].time}`, { top: timelineToday.hourTops[hour] + ((taskCount + index) * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
+      }
+    }
+
+    return placements;
+  }, [timelineToday.hourTops, timelineToday.scheduledHabits, timelineToday.timelineEntries]);
 
   const timelineTaskPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
@@ -718,6 +858,107 @@ export default function MiniApp() {
     } finally {
       setIsCreatingTask(false);
     }
+  };
+
+  const openCreateHabitModal = () => {
+    setEditingHabitId(null);
+    setHabitDraft(createEmptyHabitDraft());
+    setIsHabitModalOpen(true);
+  };
+
+  const openEditHabitModal = (habit: Habit) => {
+    setEditingHabitId(habit.id);
+    setHabitDraft(habitToDraft(habit));
+    setIsHabitModalOpen(true);
+  };
+
+  const closeHabitModal = () => {
+    setIsHabitModalOpen(false);
+    setEditingHabitId(null);
+    setHabitDraft(createEmptyHabitDraft());
+  };
+
+  const saveHabit = async () => {
+    setSavingHabit(true);
+    setError(null);
+    try {
+      const payload: Partial<Habit> = {
+        name: habitDraft.name.trim() || 'Новая привычка',
+        icon: habitDraft.icon,
+        color: habitDraft.color,
+        targetCount: normalizeHabitTargetCount(habitDraft.targetCount),
+        recurrenceType: habitDraft.recurrenceType,
+        intervalDays: habitDraft.recurrenceType === 'INTERVAL' ? habitDraft.intervalDays : null,
+        weekdays: habitDraft.recurrenceType === 'WEEKDAYS' ? habitDraft.weekdays : [],
+        reminderTime: habitDraft.reminderTimes[0] ?? null,
+        reminderTimes: habitDraft.reminderTimes
+      };
+      if (editingHabitId) await api.updateHabit(editingHabitId, payload);
+      else await api.createHabit(payload);
+      await loadData();
+      closeHabitModal();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить привычку');
+    } finally {
+      setSavingHabit(false);
+    }
+  };
+
+  const deleteHabit = async (habitId: string) => {
+    setDeletingHabitId(habitId);
+    setError(null);
+    try {
+      await api.deleteHabit(habitId);
+      await loadData();
+      closeHabitModal();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось удалить привычку');
+    } finally {
+      setDeletingHabitId(null);
+    }
+  };
+
+  const completeHabit = async (habit: Habit) => {
+    setCompletedHabitPulseId(habit.id);
+    setError(null);
+    try {
+      await api.completeHabit(habit.id, { dateKey: toDateKey(new Date()), amount: 1, completedAt: new Date().toISOString() });
+      await loadData();
+      window.setTimeout(() => setCompletedHabitPulseId((current) => current === habit.id ? null : current), 650);
+    } catch (e) {
+      setCompletedHabitPulseId(null);
+      setError(e instanceof Error ? e.message : 'Не удалось отметить привычку');
+    }
+  };
+
+  const clearHabitLongPressTimer = () => {
+    if (habitLongPressTimerRef.current !== null) {
+      window.clearTimeout(habitLongPressTimerRef.current);
+      habitLongPressTimerRef.current = null;
+    }
+  };
+
+  const startHabitPress = (habit: Habit) => {
+    clearHabitLongPressTimer();
+    habitLongPressTriggeredRef.current = false;
+    habitLongPressTimerRef.current = window.setTimeout(() => {
+      habitLongPressTriggeredRef.current = true;
+      void completeHabit(habit);
+    }, LONG_PRESS_MS);
+  };
+
+  const finishHabitPress = (habit: Habit) => {
+    clearHabitLongPressTimer();
+    if (habitLongPressTriggeredRef.current) {
+      window.setTimeout(() => { habitLongPressTriggeredRef.current = false; }, 0);
+      return;
+    }
+    openEditHabitModal(habit);
+  };
+
+  const cancelHabitPress = () => {
+    clearHabitLongPressTimer();
+    window.setTimeout(() => { habitLongPressTriggeredRef.current = false; }, 0);
   };
 
   const openedTask = openedTaskId
@@ -1067,6 +1308,48 @@ export default function MiniApp() {
               ) : null}
             </div>
           </div>
+          <div className="miniapp-habits-strip mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+            {habits.map((habit) => {
+              const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
+              const cappedCompleted = Math.min(completed, habit.targetCount);
+              const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
+              const isPulsing = completedHabitPulseId === habit.id;
+              return (
+                <button
+                  key={habit.id}
+                  type="button"
+                  className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
+                  style={{
+                    '--habit-color': habit.color,
+                    background: `conic-gradient(${habit.color} ${progress}%, ${isLightTheme ? 'rgba(226,232,240,0.94)' : 'rgba(30,41,59,0.95)'} ${progress}% 100%)`
+                  } as CSSProperties}
+                  onMouseDown={() => startHabitPress(habit)}
+                  onMouseUp={() => finishHabitPress(habit)}
+                  onMouseLeave={cancelHabitPress}
+                  onTouchStart={() => startHabitPress(habit)}
+                  onTouchEnd={() => finishHabitPress(habit)}
+                  onTouchCancel={cancelHabitPress}
+                  aria-label={`${habit.name}: ${completed} из ${habit.targetCount}`}
+                  title="Нажмите для редактирования, зажмите для отметки"
+                >
+                  <span className="miniapp-habit-circle-core absolute inset-[4px] rounded-full bg-slate-900/95" />
+                  <span className="relative z-10 flex flex-col items-center leading-none">
+                    <span className="text-lg">{habit.icon}</span>
+                    <span className="mt-1 text-[10px] font-semibold">{completed}-{habit.targetCount}</span>
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={openCreateHabitModal}
+              className="miniapp-habit-add inline-flex h-[58px] min-w-[58px] shrink-0 items-center justify-center rounded-full border border-dashed border-emerald-400/70 bg-emerald-500/10 text-emerald-300"
+              aria-label="Добавить привычку"
+              title="Добавить привычку"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
         </section>
 
         {error ? (
@@ -1231,6 +1514,38 @@ export default function MiniApp() {
                           <p className="truncate text-sm font-medium">{task.title}</p>
                           <p className="text-xs text-slate-300">{isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
                         </button>
+                      );
+                    })}
+                    {timelineToday.scheduledHabits.map(({ habit, time }) => {
+                      const placement = timelineHabitPlacements.get(`${habit.id}-${time}`) ?? { top: 4 };
+                      const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
+                      const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
+                      return (
+                        <div
+                          key={`timeline-habit-${habit.id}-${time}`}
+                          className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
+                          style={{
+                            top: `${placement.top}px`,
+                            minHeight: `${TIMELINE_CARD_HEIGHT}px`,
+                            left: 'calc(4rem + 2px)',
+                            width: 'calc(100% - 4rem - 8px)',
+                            zIndex: 9,
+                            borderColor: hexToRgba(habit.color, isLightTheme ? 0.55 : 0.72) ?? habit.color,
+                            background: `linear-gradient(135deg, ${hexToRgba(habit.color, isLightTheme ? 0.18 : 0.28) ?? 'rgba(34,197,94,0.18)'}, ${isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.82)'})`,
+                            borderLeftWidth: '4px',
+                            borderLeftColor: habit.color
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base" style={{ background: `conic-gradient(${habit.color} ${progress}%, rgba(100,116,139,0.28) ${progress}% 100%)` }}>
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/95">{habit.icon}</span>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{habit.name}</p>
+                              <p className="text-xs text-emerald-200">Привычка · {time} · {completed}-{habit.targetCount}</p>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -1678,6 +1993,218 @@ export default function MiniApp() {
               >
                 <SendHorizontal size={14} />
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isHabitModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">{editingHabitId ? 'Редактирование привычки' : 'Новая привычка'}</h2>
+                <p className="text-xs text-slate-400">Нажатие на круг — редактирование, зажатие — отметка выполнения.</p>
+              </div>
+              <button type="button" onClick={closeHabitModal} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-[68px_1fr] items-center gap-3">
+                <div
+                  className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border"
+                  style={{ '--habit-color': habitDraft.color, background: `conic-gradient(${habitDraft.color} 65%, ${isLightTheme ? 'rgba(226,232,240,0.94)' : 'rgba(30,41,59,0.95)'} 65% 100%)` } as CSSProperties}
+                >
+                  <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full bg-slate-900/95" />
+                  <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-300">Название привычки</label>
+                  <input
+                    value={habitDraft.name}
+                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder="Например, вода или зарядка"
+                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Иконка</label>
+                <div className="flex flex-wrap gap-2">
+                  {HABIT_ICON_OPTIONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, icon }))}
+                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${habitDraft.icon === icon ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Цвет круга</label>
+                <div className="flex flex-wrap gap-2">
+                  {HABIT_COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, color }))}
+                      className={`h-9 w-9 rounded-full border-2 ${habitDraft.color === color ? 'border-white' : 'border-slate-700'}`}
+                      style={{ backgroundColor: color }}
+                      aria-label={`Выбрать цвет ${color}`}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => habitCustomColorInputRef.current?.click()}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-200"
+                    aria-label="Открыть ручной выбор цвета"
+                    title="Ручной выбор цвета"
+                  >
+                    <Palette size={17} />
+                  </button>
+                  <input
+                    ref={habitCustomColorInputRef}
+                    type="color"
+                    value={habitDraft.color}
+                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, color: event.target.value }))}
+                    className="sr-only"
+                    aria-hidden="true"
+                    tabIndex={-1}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-300">Повторов в день</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={habitDraft.targetCount}
+                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, targetCount: event.target.value.replace(/\D/g, '').slice(0, 2) }))}
+                    onBlur={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(normalizeHabitTargetCount(prev.targetCount)) }))}
+                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-xs text-slate-300">Добавить уведомление</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="time"
+                      value={habitDraft.newReminderTime}
+                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, newReminderTime: event.target.value }))}
+                      className="min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => {
+                        if (!prev.newReminderTime || prev.reminderTimes.includes(prev.newReminderTime)) return prev;
+                        return { ...prev, reminderTimes: [...prev.reminderTimes, prev.newReminderTime].sort(), newReminderTime: '' };
+                      })}
+                      className="rounded-md border border-emerald-500/60 bg-emerald-500/15 px-3 text-sm text-emerald-200"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {habitDraft.reminderTimes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {habitDraft.reminderTimes.map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, reminderTimes: prev.reminderTimes.filter((item) => item !== time) }))}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-400/50 bg-sky-500/15 px-3 py-1 text-xs text-sky-100"
+                      title="Удалить уведомление"
+                    >
+                      {time}
+                      <X size={12} />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">Уведомления выключены. Добавьте одно или несколько времён.</p>
+              )}
+
+              <div className="miniapp-habit-frequency-panel space-y-2 rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                <label className="block text-xs text-slate-300">Как часто повторяется</label>
+                <select
+                  value={habitDraft.recurrenceType}
+                  onChange={(event) => setHabitDraft((prev) => ({ ...prev, recurrenceType: event.target.value as HabitRecurrenceType }))}
+                  className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                >
+                  <option value="DAILY">Каждый день</option>
+                  <option value="INTERVAL">Через интервал</option>
+                  <option value="WEEKDAYS">По конкретным дням</option>
+                </select>
+
+                {habitDraft.recurrenceType === 'INTERVAL' ? (
+                  <div className="space-y-2">
+                    <label className="block text-xs text-slate-300">Каждые N дней</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={habitDraft.intervalDays}
+                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, intervalDays: Math.max(1, Number(event.target.value) || 1) }))}
+                      className="w-full rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm"
+                    />
+                  </div>
+                ) : null}
+
+                {habitDraft.recurrenceType === 'WEEKDAYS' ? (
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const isSelected = habitDraft.weekdays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => setHabitDraft((prev) => ({
+                            ...prev,
+                            weekdays: isSelected ? prev.weekdays.filter((value) => value !== day.value) : [...prev.weekdays, day.value]
+                          }))}
+                          className={`rounded-full border px-3 py-1 text-xs ${isSelected ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'border-slate-600 bg-slate-900 text-slate-300'}`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <p className="text-xs text-slate-400">{formatHabitSchedule(habitDraft)}</p>
+              </div>
+
+              <div className="flex gap-2">
+                {editingHabitId ? (
+                  <button
+                    type="button"
+                    onClick={() => void deleteHabit(editingHabitId)}
+                    disabled={deletingHabitId === editingHabitId}
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-rose-500/60 px-3 py-2 text-sm text-rose-200 disabled:opacity-60"
+                  >
+                    <Trash2 size={14} />
+                    {deletingHabitId === editingHabitId ? 'Удаляем…' : 'Удалить'}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void saveHabit()}
+                  disabled={savingHabit}
+                  className="inline-flex flex-1 items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                >
+                  {savingHabit ? 'Сохраняем…' : editingHabitId ? 'Сохранить привычку' : 'Создать привычку'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
