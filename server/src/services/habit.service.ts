@@ -107,6 +107,7 @@ const serializeHabit = async (habit: Awaited<ReturnType<typeof prisma.habit.find
     where: { habitId: habit.id, userId: habit.userId },
     _sum: { amount: true },
     _count: { _all: true },
+    _max: { completedAt: true },
     orderBy: { dateKey: 'desc' },
     take: 120
   });
@@ -118,7 +119,8 @@ const serializeHabit = async (habit: Awaited<ReturnType<typeof prisma.habit.find
     stats: completionStats.map((item) => ({
       dateKey: item.dateKey,
       amount: item._sum.amount ?? 0,
-      events: item._count._all
+      events: item._count._all,
+      completedAt: item._max.completedAt?.toISOString() ?? null
     }))
   };
 };
