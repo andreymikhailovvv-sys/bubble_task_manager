@@ -25,6 +25,12 @@ enum TelegramSessionMode {
   AI_CHAT
 }
 
+enum HabitRecurrenceType {
+  DAILY
+  INTERVAL
+  WEEKDAYS
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -49,6 +55,8 @@ model User {
   generalAiMessages GeneralAiMessage[]
   taskAttachments TaskAttachment[]
   telegramSessions TelegramSession[]
+  habits       Habit[]
+  habitCompletions HabitCompletion[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -157,6 +165,49 @@ model TaskAttachment {
   @@index([taskId, createdAt])
 }
 
+
+
+model Habit {
+  id             String              @id @default(cuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  icon           String              @default("✨")
+  color          String              @default("#22c55e")
+  targetCount    Int                 @default(1)
+  recurrenceType HabitRecurrenceType @default(DAILY)
+  intervalDays   Int?
+  weekdays       Json                @default("[]")
+  reminderTime   String?
+  isArchived     Boolean             @default(false)
+  completions    HabitCompletion[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([userId, isArchived, createdAt])
+}
+
+model HabitCompletion {
+  id                 String   @id @default(cuid())
+  habitId            String
+  habit              Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateKey            String
+  amount             Int      @default(1)
+  targetAtCompletion Int
+  recurrenceSnapshot Json?
+  completedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([habitId])
+  @@index([userId])
+  @@index([habitId, dateKey])
+  @@index([userId, dateKey])
+  @@index([completedAt])
+}
 
 model TelegramSession {
   chatId       String              @id

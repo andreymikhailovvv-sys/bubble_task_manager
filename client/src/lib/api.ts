@@ -1,4 +1,4 @@
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment } from './types';
 
 type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
@@ -113,6 +113,12 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Partial<Task>) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  getHabits: () => request<Habit[]>('/api/habits'),
+  createHabit: (payload: Partial<Habit>) => request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(payload) }),
+  updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  completeHabit: (id: string, payload: { dateKey: string; amount?: number; completedAt?: string }) =>
+    request<Habit>(`/api/habits/${id}/complete`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, { method: 'DELETE' }),
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
   getTaskAttachments: (taskId: string) => request<TaskAttachment[]>(`/api/tasks/${taskId}/attachments`),
   getTaskAttachmentDownloadUrl: (taskId: string, attachmentId: string) => `/api/tasks/${taskId}/attachments/${attachmentId}/download`,
