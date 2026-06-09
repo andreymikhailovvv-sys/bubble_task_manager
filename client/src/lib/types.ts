@@ -62,6 +62,7 @@ export type HabitStat = {
   dateKey: string;
   amount: number;
   events: number;
+  completedAt?: string | null;
 };
 
 export type Habit = {

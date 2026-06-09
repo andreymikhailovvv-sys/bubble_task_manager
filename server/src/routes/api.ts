@@ -29,13 +29,18 @@ const normalizeTimeZone = (candidate: string): string | null => {
     return null;
   }
 };
-const EFFICIENCY_RESET_AT_ISO = new Date().toISOString();
+const EFFICIENCY_RESET_AT_ISO = '1970-01-01T00:00:00.000Z';
 const EFFICIENCY_RESET_AT = new Date(EFFICIENCY_RESET_AT_ISO);
 const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 0.035;
+const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
+const EFFICIENCY_NIGHT_START_HOUR = 0;
+const EFFICIENCY_NIGHT_END_HOUR = 8;
+const EFFICIENCY_NIGHT_PENALTY_MULTIPLIER = 0.5;
 const EFFICIENCY_AI_CREDIT_BONUS = 0.002;
 const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
   doneSubtask: 0.02,
+  doneHabit: 0.067,
   createdTask: 0.01
 } as const;
 
@@ -77,7 +82,21 @@ const clampEfficiency = (value: number) => Math.max(0, Math.min(1, Number(value.
 
 type EfficiencyScoreEvent = { atMs: number; delta: number };
 
-const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number) => {
+const getLocalHour = (timestampMs: number, timeZone: string) => {
+  try {
+    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', hour12: false }).format(new Date(timestampMs)));
+    return hour === 24 ? 0 : hour;
+  } catch {
+    return new Date(timestampMs).getHours();
+  }
+};
+
+const isNightHour = (timestampMs: number, timeZone: string) => {
+  const hour = getLocalHour(timestampMs, timeZone);
+  return hour >= EFFICIENCY_NIGHT_START_HOUR && hour < EFFICIENCY_NIGHT_END_HOUR;
+};
+
+const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number, timeZone: string) => {
   const sortedEvents = events
     .filter((event) => Number.isFinite(event.atMs) && event.atMs >= resetAtMs && event.atMs <= nowMs && event.delta > 0)
     .sort((a, b) => a.atMs - b.atMs);
@@ -91,7 +110,20 @@ const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number,
       return;
     }
 
-    const penalty = ((nextMs - cursorMs) / (60 * 60 * 1000)) * EFFICIENCY_INACTIVE_PENALTY_PER_HOUR;
+    const hourMs = 60 * 60 * 1000;
+    const inactiveMs = nextMs - cursorMs;
+    const penaltyHours = Math.floor(inactiveMs / hourMs) - EFFICIENCY_INACTIVITY_GRACE_HOURS;
+    if (penaltyHours <= 0) {
+      cursorMs = nextMs;
+      return;
+    }
+
+    let penalty = 0;
+    for (let index = 1; index <= penaltyHours; index += 1) {
+      const penaltyAtMs = cursorMs + (EFFICIENCY_INACTIVITY_GRACE_HOURS + index) * hourMs;
+      const multiplier = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_NIGHT_PENALTY_MULTIPLIER : 1;
+      penalty += EFFICIENCY_INACTIVE_PENALTY_PER_HOUR * multiplier;
+    }
     score = Math.max(0, score - penalty);
     cursorMs = nextMs;
   };
@@ -108,13 +140,15 @@ const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number,
 
 const recalculateAndPersistEfficiency = async (userId: string) => {
   const now = new Date();
-  const [user, tasks] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } }),
-    prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } })
+  const [user, tasks, habitCompletions] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, timeZone: true } }),
+    prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } }),
+    prisma.habitCompletion.findMany({ where: { userId }, select: { amount: true, completedAt: true } })
   ]);
   if (!user) return null;
   const resetAtMs = EFFICIENCY_RESET_AT.getTime();
   const nowMs = now.getTime();
+  const userTimeZone = user.timeZone || DEFAULT_TIMEZONE;
   const isToday = (value: Date) => Number.isFinite(value.getTime())
     && value.getTime() >= resetAtMs
     && value.getFullYear() === now.getFullYear()
@@ -134,12 +168,19 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
     });
   }
 
+  for (const completion of habitCompletions) {
+    if (!isToday(completion.completedAt)) continue;
+    for (let index = 0; index < completion.amount; index += 1) {
+      events.push({ atMs: completion.completedAt.getTime(), delta: EFFICIENCY_BONUSES.doneHabit });
+    }
+  }
+
   const spentCredits = Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
   if (spentCredits > 0) {
     events.push({ atMs: nowMs, delta: spentCredits * EFFICIENCY_AI_CREDIT_BONUS });
   }
 
-  const efficiencyScore = calculateEfficiencyScore(events, nowMs, resetAtMs);
+  const efficiencyScore = calculateEfficiencyScore(events, nowMs, resetAtMs, userTimeZone);
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
   return efficiencyScore;
 };

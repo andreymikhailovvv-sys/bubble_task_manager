@@ -10,7 +10,7 @@ import { TaskEditor } from './components/TaskEditor';
 import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Sphere, Task, TaskAttachment } from './lib/types';
+import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -113,12 +113,18 @@ const OVERDUE_AI_POSTPONE_CREDITS_COST = 2;
 const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
   doneSubtask: 0.02,
+  doneHabit: 0.067,
   createdTask: 0.01,
   aiCreditSpent: 0.002
 } as const;
 
+const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
+const EFFICIENCY_NIGHT_START_HOUR = 0;
+const EFFICIENCY_NIGHT_END_HOUR = 8;
+
 const EFFICIENCY_PENALTIES = {
-  inactivePerHour: 0.035
+  inactivePerHour: 0.035,
+  nightMultiplier: 0.5
 } as const;
 
 type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
@@ -129,7 +135,21 @@ function clampEfficiency(value: number) {
 
 type EfficiencyScoreEvent = { atMs: number; delta: number };
 
-function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number) {
+function getLocalHour(timestampMs: number, timeZone: string) {
+  try {
+    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', hour12: false }).format(new Date(timestampMs)));
+    return hour === 24 ? 0 : hour;
+  } catch {
+    return new Date(timestampMs).getHours();
+  }
+}
+
+function isNightHour(timestampMs: number, timeZone: string) {
+  const hour = getLocalHour(timestampMs, timeZone);
+  return hour >= EFFICIENCY_NIGHT_START_HOUR && hour < EFFICIENCY_NIGHT_END_HOUR;
+}
+
+function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number, timeZone: string) {
   const sortedEvents = events
     .filter((event) => Number.isFinite(event.atMs) && event.atMs >= resetAtMs && event.atMs <= nowMs && event.delta > 0)
     .sort((a, b) => a.atMs - b.atMs);
@@ -144,7 +164,20 @@ function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number,
       return;
     }
 
-    const penalty = ((nextMs - cursorMs) / (60 * 60 * 1000)) * EFFICIENCY_PENALTIES.inactivePerHour;
+    const hourMs = 60 * 60 * 1000;
+    const inactiveMs = nextMs - cursorMs;
+    const penaltyHours = Math.floor(inactiveMs / hourMs) - EFFICIENCY_INACTIVITY_GRACE_HOURS;
+    if (penaltyHours <= 0) {
+      cursorMs = nextMs;
+      return;
+    }
+
+    let penalty = 0;
+    for (let index = 1; index <= penaltyHours; index += 1) {
+      const penaltyAtMs = cursorMs + (EFFICIENCY_INACTIVITY_GRACE_HOURS + index) * hourMs;
+      const multiplier = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_PENALTIES.nightMultiplier : 1;
+      penalty += EFFICIENCY_PENALTIES.inactivePerHour * multiplier;
+    }
     const nextScore = Math.max(0, score - penalty);
     appliedPenalty += score - nextScore;
     score = nextScore;
@@ -175,6 +208,13 @@ function isSameLocalDay(date: Date, target: Date) {
   return date.getFullYear() === target.getFullYear()
     && date.getMonth() === target.getMonth()
     && date.getDate() === target.getDate();
+}
+
+function toLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const DISPLAY_MODE_OPTIONS = [
@@ -572,6 +612,7 @@ export default function App() {
   const [generalAiError, setGeneralAiError] = useState<string | null>(null);
   const [lastGeneralAiUndoOperations, setLastGeneralAiUndoOperations] = useState<GeneralAiUndoOperation[]>([]);
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
@@ -671,12 +712,11 @@ export default function App() {
 
   async function load() {
     const requestId = ++loadRequestIdRef.current;
-    const sphereData = await api.getSpheres();
-    if (requestId !== loadRequestIdRef.current) return;
-    const taskData = await api.getTasks();
+    const [sphereData, taskData, habitData] = await Promise.all([api.getSpheres(), api.getTasks(), api.getHabits()]);
     if (requestId !== loadRequestIdRef.current) return;
     setSpheres(sphereData);
     setTasks(taskData);
+    setHabits(habitData);
   }
 
   const updateUserSettings = async (
@@ -735,6 +775,7 @@ export default function App() {
     setCurrentUser(null);
     setSpheres([]);
     setTasks([]);
+    setHabits([]);
     setEditorState(null);
     setSectorEditorSphere(null);
     setPoppingTaskId(null);
@@ -1726,6 +1767,12 @@ export default function App() {
     const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
     const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
+    const todayDateKey = toLocalDateKey(now);
+    const completedHabitsToday = habits.reduce((total, habit) => (
+      total + habit.stats.reduce((habitTotal, stat) => (
+        stat.dateKey === todayDateKey ? habitTotal + Math.min(stat.amount, habit.targetCount) : habitTotal
+      ), 0)
+    ), 0);
     const spentAiCredits = Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
     const scoreEvents: EfficiencyScoreEvent[] = [
       ...rootTasks.flatMap((task) => {
@@ -1746,19 +1793,29 @@ export default function App() {
           ? [{ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneSubtask }]
           : [];
       }),
+      ...habits.flatMap((habit) => habit.stats.flatMap((stat) => {
+        if (stat.dateKey !== todayDateKey) return [];
+        const completedAt = parseEventDate(stat.completedAt) ?? now;
+        if (completedAt.getTime() < resetAtMs) return [];
+        return Array.from({ length: Math.min(stat.amount, habit.targetCount) }, () => ({
+          atMs: completedAt.getTime(),
+          delta: EFFICIENCY_BONUSES.doneHabit
+        }));
+      })),
       ...(spentAiCredits > 0 ? [{ atMs: nowMs, delta: spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent }] : [])
     ];
-    const { score, appliedPenalty } = calculateEfficiencyScore(scoreEvents, nowMs, resetAtMs);
+    const { score, appliedPenalty } = calculateEfficiencyScore(scoreEvents, nowMs, resetAtMs, userTimeZone);
     return {
       createdTasksToday,
       createdSubtasksToday,
       closedTasksToday,
       closedSubtasksToday,
+      completedHabitsToday,
       spentAiCredits,
       inactivePenaltyToday: appliedPenalty,
       score
     };
-  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, overdueTick, rootTasks, subtasks]);
+  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
 
   const efficiencyScore = useMemo(() => efficiencyTodaySummary.score, [efficiencyTodaySummary.score]);
 
@@ -2961,10 +3018,11 @@ export default function App() {
               <ul className="space-y-1 text-slate-200">
                 <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
                 <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
+                <li>• Закрыто привычек: {efficiencyTodaySummary.completedHabitsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit).toFixed(3)}</span>.</li>
                 <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
                 <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="text-emerald-300">+0.000</span>.</li>
                 <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие (каждый час): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
+                <li>• Штраф за бездействие (после 3 часов, ночью ×0.5): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
               </ul>
             </div>
           ) : null}
