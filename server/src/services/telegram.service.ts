@@ -1342,7 +1342,7 @@ const handleCallback = async (update: TelegramUpdate) => {
 
 
   if (action === 'habit_back') {
-    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false } });
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false } });
     await answerCallback(callback.id);
     await editMessage(
       chatId,
@@ -1356,7 +1356,7 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
   }
 
   if (action === 'snooze_habit') {
-    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false }, select: { id: true } });
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false }, select: { id: true } });
     if (!habit) {
       await answerCallback(callback.id, 'Привычка не найдена');
       return;
@@ -1372,7 +1372,7 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
       await answerCallback(callback.id, 'Некорректные данные');
       return;
     }
-    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false }, select: { id: true } });
+    const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false }, select: { id: true } });
     if (!habit) {
       await answerCallback(callback.id, 'Привычка не найдена');
       return;
@@ -1390,7 +1390,7 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
 
   if (action === 'done_habit') {
     const habit = await prisma.habit.findFirst({
-      where: { id: resolvedTaskId, userId, isArchived: false },
+      where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false },
       include: { user: { select: { timeZone: true } } }
     });
     if (!habit) {
@@ -1411,7 +1411,10 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
           intervalDays: habit.intervalDays,
           weekdays: habit.weekdays,
           reminderTime: habit.reminderTime,
-          reminderTimes: normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime)
+          reminderTimes: normalizeHabitReminderTimes(habit.reminderTimes, habit.reminderTime),
+          durationMode: habit.durationMode,
+          endDate: habit.endDate?.toISOString() ?? null,
+          totalRepeatTarget: habit.totalRepeatTarget
         }
       }
     });
@@ -1643,6 +1646,7 @@ export const telegramService = {
     const habits = await prisma.habit.findMany({
       where: {
         isArchived: false,
+        isAutoCompleted: false,
         user: { telegramChatId: { not: null } }
       },
       include: { user: { select: { telegramChatId: true, timeZone: true } } }

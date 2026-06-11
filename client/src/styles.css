@@ -2122,3 +2122,105 @@ body[data-theme='light'] .notes-editor-list-option:hover {
   background: rgba(255, 255, 255, 0.98);
   color: #475569;
 }
+
+.miniapp-habit-counter-button {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+}
+
+.miniapp-habit-counter-button-positive {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+}
+
+.miniapp-habit-stepper {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.miniapp-habit-reminder-chip {
+  border-color: rgba(71, 85, 105, 0.95);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.86));
+}
+
+.miniapp-habit-add-reminder {
+  border-color: rgba(16, 185, 129, 0.58);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(14, 165, 233, 0.12));
+  color: #bbf7d0;
+  box-shadow: inset 0 0 18px rgba(16, 185, 129, 0.08), 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+.miniapp-light .miniapp-habit-counter-button,
+.miniapp-light .miniapp-habit-counter-button-positive,
+.miniapp-light .miniapp-habit-stepper {
+  border-color: rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-habit-reminder-chip {
+  border-color: rgba(203, 213, 225, 0.95);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 253, 250, 0.92));
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-habit-add-reminder {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: linear-gradient(135deg, rgba(209, 250, 229, 0.96), rgba(224, 242, 254, 0.86));
+  color: #047857;
+}
+
+.miniapp-habit-stepper-button {
+  color: #f8fafc;
+}
+
+.miniapp-habit-stepper-button-minus {
+  border-right: 1px solid rgba(51, 65, 85, 0.95);
+}
+
+.miniapp-habit-stepper-button-plus {
+  border-left: 1px solid rgba(51, 65, 85, 0.95);
+}
+
+.miniapp-habit-stepper-value {
+  color: #f8fafc;
+}
+
+.miniapp-habit-duration-option-active {
+  border-color: rgba(52, 211, 153, 0.86);
+  background: rgba(16, 185, 129, 0.2);
+  color: #ecfdf5;
+}
+
+.miniapp-habit-duration-summary {
+  border-color: rgba(51, 65, 85, 0.95);
+  background: rgba(2, 6, 23, 0.3);
+  color: #cbd5e1;
+}
+
+.miniapp-light .miniapp-habit-stepper-button,
+.miniapp-light .miniapp-habit-stepper-value {
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-habit-stepper-button-minus {
+  border-right-color: rgba(203, 213, 225, 0.95);
+}
+
+.miniapp-light .miniapp-habit-stepper-button-plus {
+  border-left-color: rgba(203, 213, 225, 0.95);
+}
+
+.miniapp-light .miniapp-habit-duration-option-active {
+  border-color: rgba(16, 185, 129, 0.54);
+  background: rgba(209, 250, 229, 0.96);
+  color: #065f46;
+}
+
+.miniapp-light .miniapp-habit-duration-summary {
+  border-color: rgba(203, 213, 225, 0.95);
+  background: rgba(255, 255, 255, 0.82);
+  color: #334155;
+}

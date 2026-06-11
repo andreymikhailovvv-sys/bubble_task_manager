@@ -57,12 +57,14 @@ export type TaskAttachment = {
 };
 
 export type HabitRecurrenceType = 'DAILY' | 'INTERVAL' | 'WEEKDAYS';
+export type HabitDurationMode = 'FOREVER' | 'UNTIL_DATE' | 'REPEAT_COUNT';
 
 export type HabitStat = {
   dateKey: string;
   amount: number;
   events: number;
   completedAt?: string | null;
+  autoCompleted?: boolean;
 };
 
 export type Habit = {
@@ -76,6 +78,13 @@ export type Habit = {
   weekdays: number[];
   reminderTime?: string | null;
   reminderTimes?: string[];
+  durationMode?: HabitDurationMode;
+  endDate?: string | null;
+  totalRepeatTarget?: number | null;
+  isAutoCompleted?: boolean;
+  autoCompletedAt?: string | null;
+  completedTotal?: number;
+  durationRemaining?: number | null;
   isArchived?: boolean;
   stats: HabitStat[];
   createdAt?: string;
