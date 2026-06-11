@@ -2248,17 +2248,17 @@ export default function MiniApp() {
                   <button
                     type="button"
                     onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.max(1, parseHabitTargetCount(prev.targetCount) - 1)) }))}
-                    className="inline-flex h-11 items-center justify-center border-r border-slate-700 text-slate-100 disabled:opacity-50"
+                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
                     disabled={parseHabitTargetCount(habitDraft.targetCount) <= 1}
                     aria-label="Уменьшить количество повторов"
                   >
                     <Minus size={16} />
                   </button>
-                  <div className="text-center text-base font-semibold text-slate-100">{parseHabitTargetCount(habitDraft.targetCount)}</div>
+                  <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTargetCount(habitDraft.targetCount)}</div>
                   <button
                     type="button"
                     onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.min(99, parseHabitTargetCount(prev.targetCount) + 1)) }))}
-                    className="inline-flex h-11 items-center justify-center border-l border-slate-700 text-emerald-200 disabled:opacity-50"
+                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
                     disabled={parseHabitTargetCount(habitDraft.targetCount) >= 99}
                     aria-label="Увеличить количество повторов"
                   >
@@ -2331,7 +2331,7 @@ export default function MiniApp() {
                       key={mode}
                       type="button"
                       onClick={() => setHabitDraft((prev) => ({ ...prev, durationMode: mode }))}
-                      className={`rounded-full border px-2 py-2 ${habitDraft.durationMode === mode ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100' : 'miniapp-habit-weekday-muted'}`}
+                      className={`miniapp-habit-duration-option rounded-full border px-2 py-2 ${habitDraft.durationMode === mode ? 'miniapp-habit-duration-option-active' : 'miniapp-habit-weekday-muted'}`}
                     >
                       {label}
                     </button>
@@ -2350,17 +2350,17 @@ export default function MiniApp() {
                     <button
                       type="button"
                       onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.max(1, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) - 1)) }))}
-                      className="inline-flex h-11 items-center justify-center border-r border-slate-700 text-slate-100 disabled:opacity-50"
+                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
                       disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) <= 1}
                       aria-label="Уменьшить общее количество повторов"
                     >
                       <Minus size={16} />
                     </button>
-                    <div className="text-center text-base font-semibold text-slate-100">{parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget)}</div>
+                    <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget)}</div>
                     <button
                       type="button"
                       onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.min(9999, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) + 1)) }))}
-                      className="inline-flex h-11 items-center justify-center border-l border-slate-700 text-emerald-200 disabled:opacity-50"
+                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
                       disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) >= 9999}
                       aria-label="Увеличить общее количество повторов"
                     >
@@ -2368,7 +2368,7 @@ export default function MiniApp() {
                     </button>
                   </div>
                 ) : null}
-                <p className="rounded-lg border border-slate-700 bg-slate-950/30 px-3 py-2 text-xs text-slate-300">{formatHabitDurationRemaining(habitDraft, editingHabit)}</p>
+                <p className="miniapp-habit-duration-summary rounded-lg border px-3 py-2 text-xs">{formatHabitDurationRemaining(habitDraft, editingHabit)}</p>
               </div>
 
               <div className="miniapp-habit-recurrence-panel space-y-2 rounded-lg border p-3">
