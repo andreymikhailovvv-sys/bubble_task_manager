@@ -1,4 +1,4 @@
-import { Prisma, HabitRecurrenceType } from '@prisma/client';
+import { Prisma, HabitRecurrenceType, HabitDurationMode } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 const DEFAULT_HABIT_COLOR = '#22c55e';
@@ -6,6 +6,7 @@ const DEFAULT_HABIT_ICON = '✨';
 const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ALLOWED_RECURRENCE_TYPES = new Set<string>(['DAILY', 'INTERVAL', 'WEEKDAYS']);
+const ALLOWED_DURATION_MODES = new Set<string>(['FOREVER', 'UNTIL_DATE', 'REPEAT_COUNT']);
 
 type HabitInput = {
   name?: string;
@@ -17,6 +18,9 @@ type HabitInput = {
   weekdays?: number[] | null;
   reminderTime?: string | null;
   reminderTimes?: string[] | null;
+  durationMode?: HabitDurationMode | string;
+  endDate?: string | Date | null;
+  totalRepeatTarget?: number | string | null;
   isArchived?: boolean;
 };
 
@@ -83,6 +87,29 @@ const normalizeRecurrenceType = (value: unknown): HabitRecurrenceType => {
   return ALLOWED_RECURRENCE_TYPES.has(text) ? text as HabitRecurrenceType : 'DAILY';
 };
 
+const normalizeDurationMode = (value: unknown): HabitDurationMode => {
+  const text = typeof value === 'string' ? value.trim().toUpperCase() : '';
+  return ALLOWED_DURATION_MODES.has(text) ? text as HabitDurationMode : 'FOREVER';
+};
+
+const normalizeEndDate = (value: unknown) => {
+  if (value === null) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) return null;
+  const date = new Date(text.includes('T') ? text : `${text}T23:59:59.999Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeTotalRepeatTarget = (value: unknown) => {
+  if (value === null) return null;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.min(9999, Math.max(1, Math.round(numeric)));
+};
+
+const toDateKeyFromDate = (date: Date) => date.toISOString().slice(0, 10);
+
 const normalizeDateKey = (value: unknown) => {
   const text = typeof value === 'string' ? value.trim() : '';
   if (DATE_KEY_PATTERN.test(text)) return text;
@@ -101,26 +128,91 @@ const toCompletedAt = (value: unknown) => {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 };
 
-const serializeHabit = async (habit: Awaited<ReturnType<typeof prisma.habit.findFirstOrThrow>>) => {
-  const completionStats = await prisma.habitCompletion.groupBy({
-    by: ['dateKey'],
-    where: { habitId: habit.id, userId: habit.userId },
-    _sum: { amount: true },
-    _count: { _all: true },
-    _max: { completedAt: true },
-    orderBy: { dateKey: 'desc' },
-    take: 120
-  });
+const ensureHabitDurationCompletion = async (habit: Awaited<ReturnType<typeof prisma.habit.findFirstOrThrow>>) => {
+  if (habit.isAutoCompleted) return habit;
+
+  if (habit.durationMode === 'UNTIL_DATE' && habit.endDate && habit.endDate.getTime() <= Date.now()) {
+    const existingAutoCompletion = await prisma.habitCompletion.findFirst({
+      where: { habitId: habit.id, userId: habit.userId, source: 'AUTO_DURATION' }
+    });
+    if (!existingAutoCompletion) {
+      await prisma.habitCompletion.create({
+        data: {
+          habit: { connect: { id: habit.id } },
+          user: { connect: { id: habit.userId } },
+          amount: habit.targetCount,
+          dateKey: toDateKeyFromDate(habit.endDate),
+          completedAt: habit.endDate,
+          targetAtCompletion: habit.targetCount,
+          source: 'AUTO_DURATION',
+          recurrenceSnapshot: {
+            recurrenceType: habit.recurrenceType,
+            intervalDays: habit.intervalDays,
+            weekdays: habit.weekdays,
+            reminderTime: habit.reminderTime,
+            reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : []),
+            durationMode: habit.durationMode,
+            endDate: habit.endDate.toISOString(),
+            totalRepeatTarget: habit.totalRepeatTarget
+          }
+        }
+      });
+    }
+    return prisma.habit.update({ where: { id: habit.id }, data: { isAutoCompleted: true, autoCompletedAt: new Date() } });
+  }
+
+  if (habit.durationMode === 'REPEAT_COUNT' && habit.totalRepeatTarget) {
+    const total = await prisma.habitCompletion.aggregate({
+      where: { habitId: habit.id, userId: habit.userId },
+      _sum: { amount: true }
+    });
+    if ((total._sum.amount ?? 0) >= habit.totalRepeatTarget) {
+      return prisma.habit.update({ where: { id: habit.id }, data: { isAutoCompleted: true, autoCompletedAt: new Date() } });
+    }
+  }
+
+  return habit;
+};
+
+const serializeHabit = async (rawHabit: Awaited<ReturnType<typeof prisma.habit.findFirstOrThrow>>) => {
+  const habit = await ensureHabitDurationCompletion(rawHabit);
+  const [completionStats, completionTotal, autoCompletionDates] = await Promise.all([
+    prisma.habitCompletion.groupBy({
+      by: ['dateKey'],
+      where: { habitId: habit.id, userId: habit.userId },
+      _sum: { amount: true },
+      _count: { _all: true },
+      _max: { completedAt: true },
+      orderBy: { dateKey: 'desc' },
+      take: 120
+    }),
+    prisma.habitCompletion.aggregate({
+      where: { habitId: habit.id, userId: habit.userId },
+      _sum: { amount: true }
+    }),
+    prisma.habitCompletion.findMany({
+      where: { habitId: habit.id, userId: habit.userId, source: 'AUTO_DURATION' },
+      select: { dateKey: true }
+    })
+  ]);
+  const completedTotal = completionTotal._sum.amount ?? 0;
+  const durationRemaining = habit.durationMode === 'REPEAT_COUNT' && habit.totalRepeatTarget
+    ? Math.max(0, habit.totalRepeatTarget - completedTotal)
+    : null;
+  const autoCompletionDateKeys = new Set(autoCompletionDates.map((item) => item.dateKey));
 
   return {
     ...habit,
     weekdays: Array.isArray(habit.weekdays) ? habit.weekdays : [],
     reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : []),
+    completedTotal,
+    durationRemaining,
     stats: completionStats.map((item) => ({
       dateKey: item.dateKey,
       amount: item._sum.amount ?? 0,
       events: item._count._all,
-      completedAt: item._max.completedAt?.toISOString() ?? null
+      completedAt: item._max.completedAt?.toISOString() ?? null,
+      autoCompleted: autoCompletionDateKeys.has(item.dateKey)
     }))
   };
 };
@@ -136,6 +228,7 @@ export const habitService = {
 
   create: async (userId: string, input: HabitInput) => {
     const recurrenceType = normalizeRecurrenceType(input.recurrenceType);
+    const durationMode = normalizeDurationMode(input.durationMode);
     const habit = await prisma.habit.create({
       data: {
         user: { connect: { id: userId } },
@@ -147,7 +240,10 @@ export const habitService = {
         intervalDays: recurrenceType === 'INTERVAL' ? normalizeIntervalDays(input.intervalDays ?? 2) : null,
         weekdays: recurrenceType === 'WEEKDAYS' ? normalizeWeekdays(input.weekdays) : [],
         reminderTime: normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : [])[0] ?? null,
-        reminderTimes: normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : [])
+        reminderTimes: normalizeReminderTimes(input.reminderTimes, input.reminderTime ? [input.reminderTime] : []),
+        durationMode,
+        endDate: durationMode === 'UNTIL_DATE' ? normalizeEndDate(input.endDate) : null,
+        totalRepeatTarget: durationMode === 'REPEAT_COUNT' ? normalizeTotalRepeatTarget(input.totalRepeatTarget) : null
       }
     });
     return serializeHabit(habit);
@@ -176,6 +272,14 @@ export const habitService = {
       patch.reminderSnoozedUntil = null;
       patch.lastReminderNotifiedKey = null;
     }
+    if (input.durationMode !== undefined || input.endDate !== undefined || input.totalRepeatTarget !== undefined) {
+      const durationMode = input.durationMode !== undefined ? normalizeDurationMode(input.durationMode) : current.durationMode;
+      patch.durationMode = durationMode;
+      patch.endDate = durationMode === 'UNTIL_DATE' ? normalizeEndDate(input.endDate ?? current.endDate) : null;
+      patch.totalRepeatTarget = durationMode === 'REPEAT_COUNT' ? normalizeTotalRepeatTarget(input.totalRepeatTarget ?? current.totalRepeatTarget) : null;
+      patch.isAutoCompleted = false;
+      patch.autoCompletedAt = null;
+    }
     if (input.isArchived !== undefined) patch.isArchived = Boolean(input.isArchived);
 
     const habit = await prisma.habit.update({ where: { id }, data: patch });
@@ -183,7 +287,7 @@ export const habitService = {
   },
 
   complete: async (id: string, userId: string, input: CompleteHabitInput) => {
-    const habit = await prisma.habit.findFirstOrThrow({ where: { id, userId, isArchived: false } });
+    const habit = await prisma.habit.findFirstOrThrow({ where: { id, userId, isArchived: false, isAutoCompleted: false } });
     const dateKey = normalizeDateKey(input.dateKey);
     const completed = await prisma.habitCompletion.aggregate({
       where: { habitId: id, userId, dateKey },
@@ -206,7 +310,10 @@ export const habitService = {
           intervalDays: habit.intervalDays,
           weekdays: habit.weekdays,
           reminderTime: habit.reminderTime,
-          reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : [])
+          reminderTimes: normalizeReminderTimes(habit.reminderTimes, habit.reminderTime ? [habit.reminderTime] : []),
+          durationMode: habit.durationMode,
+          endDate: habit.endDate?.toISOString() ?? null,
+          totalRepeatTarget: habit.totalRepeatTarget
         }
       }
     });
@@ -238,6 +345,11 @@ export const habitService = {
         remainingAmount -= amountToRemove;
       }
     });
+
+    if (habit.durationMode === 'REPEAT_COUNT' && habit.isAutoCompleted) {
+      const refreshedHabit = await prisma.habit.update({ where: { id: habit.id }, data: { isAutoCompleted: false, autoCompletedAt: null } });
+      return serializeHabit(refreshedHabit);
+    }
 
     return serializeHabit(habit);
   },
