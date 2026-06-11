@@ -31,6 +31,17 @@ enum HabitRecurrenceType {
   WEEKDAYS
 }
 
+enum HabitDurationMode {
+  FOREVER
+  UNTIL_DATE
+  REPEAT_COUNT
+}
+
+enum HabitCompletionSource {
+  MANUAL
+  AUTO_DURATION
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String?  @unique
@@ -182,6 +193,11 @@ model Habit {
   reminderTimes  Json                @default("[]")
   reminderSnoozedUntil DateTime?
   lastReminderNotifiedKey String?
+  durationMode   HabitDurationMode   @default(FOREVER)
+  endDate        DateTime?
+  totalRepeatTarget Int?
+  isAutoCompleted Boolean            @default(false)
+  autoCompletedAt DateTime?
   isArchived     Boolean             @default(false)
   completions    HabitCompletion[]
   createdAt      DateTime            @default(now())
@@ -189,6 +205,7 @@ model Habit {
 
   @@index([userId])
   @@index([userId, isArchived, createdAt])
+  @@index([userId, isAutoCompleted])
 }
 
 model HabitCompletion {
@@ -201,6 +218,7 @@ model HabitCompletion {
   amount             Int      @default(1)
   targetAtCompletion Int
   recurrenceSnapshot Json?
+  source             HabitCompletionSource @default(MANUAL)
   completedAt        DateTime @default(now())
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
