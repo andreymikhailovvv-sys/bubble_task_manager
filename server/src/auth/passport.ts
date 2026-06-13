@@ -1,6 +1,7 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { prisma } from '../db/prisma.js';
+import { onboardingService } from '../services/onboarding.service.js';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -51,13 +52,17 @@ if (isGoogleAuthEnabled) {
             return;
           }
 
-          const user = await prisma.user.create({
-            data: {
-              email,
-              googleSub,
-              name: displayName,
-              avatarUrl
-            }
+          const user = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.user.create({
+              data: {
+                email,
+                googleSub,
+                name: displayName,
+                avatarUrl
+              }
+            });
+            await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
+            return createdUser;
           });
 
           done(null, user);
