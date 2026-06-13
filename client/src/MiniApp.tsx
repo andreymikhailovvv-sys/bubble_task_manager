@@ -355,7 +355,7 @@ export default function MiniApp() {
   const [listSortMode, setListSortMode] = useState<ListSortMode>('sector');
   const [miniThemeMode, setMiniThemeMode] = useState<MiniThemeMode>(() => {
     const stored = localStorage.getItem('btm:miniapp-theme-mode');
-    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+    return stored === 'dark' || stored === 'light' ? stored : 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
