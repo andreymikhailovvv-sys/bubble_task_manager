@@ -12,6 +12,7 @@ import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
 import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.service.js';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../db/prisma.js';
+import { onboardingService } from '../services/onboarding.service.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -274,11 +275,15 @@ const ensureDeviceUser = async (req: any, res: any) => {
 
   let user = await prisma.user.findUnique({ where: { deviceId } });
   if (!user) {
-    user = await prisma.user.create({
-      data: {
-        deviceId,
-        name: 'Локальный пользователь'
-      }
+    user = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          deviceId,
+          name: 'Локальный пользователь'
+        }
+      });
+      await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
+      return createdUser;
     });
   }
 
@@ -328,12 +333,16 @@ apiRouter.post('/auth/register', async (req, res) => {
   }
 
   const passwordHash = authService.hashPassword(passwordRaw);
-  const user = await prisma.user.create({
-    data: {
-      username: login,
-      passwordHash,
-      name: nameRaw || login
-    }
+  const user = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
+      data: {
+        username: login,
+        passwordHash,
+        name: nameRaw || login
+      }
+    });
+    await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
+    return createdUser;
   });
 
   setAuthCookies(res, user);
