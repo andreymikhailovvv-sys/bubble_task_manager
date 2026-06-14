@@ -423,10 +423,20 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <div>
           <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue, { trimEnd: false })} onChange={(e) => updateDescription(e.target.value)} />
-          <div className="mt-1 flex justify-end">
+          <div className="mt-1 flex items-center justify-between gap-2">
+            {isSubtask && parentTaskTitle && onOpenParentTask ? (
+              <button
+                type="button"
+                className="main-task-link-button inline-flex min-w-0 rounded-full border px-3 py-1 text-xs font-semibold transition"
+                onClick={onOpenParentTask}
+                title={`Открыть основную задачу: ${parentTaskTitle}`}
+              >
+                <span className="truncate">Основная задача: {parentTaskTitle}</span>
+              </button>
+            ) : <span />}
             <button
               type="button"
-              className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+              className="notes-open-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition"
               onClick={() => setIsNotesEditorOpen(true)}
               title="Открыть заметки"
               aria-label="Открыть заметки"
@@ -436,16 +446,6 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           </div>
         </div>
         {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
-        {isSubtask && parentTaskTitle && onOpenParentTask ? (
-          <button
-            type="button"
-            className="main-task-link-button inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition"
-            onClick={onOpenParentTask}
-            title={`Открыть основную задачу: ${parentTaskTitle}`}
-          >
-            Основная задача: {parentTaskTitle}
-          </button>
-        ) : null}
         {!isSubtask ? (
           <>
             <select className="form-field w-full rounded border p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
@@ -456,11 +456,11 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
             </select>
             <div>
               <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="importance-choice-group grid grid-cols-5 gap-2">
                 {[1, 2, 3, 4, 5].map((level) => (
                   <button
                     key={level}
-                    className={`rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'ring-2 ring-white' : 'opacity-80 hover:opacity-100'}`}
+                    className={`importance-choice-button rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
                     onClick={() => setForm((p) => ({ ...p, importance: level }))}
                   >
                     {level}

@@ -4537,7 +4537,7 @@ export default function App() {
                   </label>
                   <div>
                     <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="importance-choice-group grid grid-cols-5 gap-2">
                       {[1, 2, 3, 4, 5].map((level) => (
                         <button
                           key={level}
