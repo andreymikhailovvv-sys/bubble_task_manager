@@ -3013,16 +3013,16 @@ export default function App() {
             </svg>
           </button>
           {isEfficiencyDetailsOpen ? (
-            <div className="absolute left-1/2 top-[calc(100%+6px)] z-40 w-80 -translate-x-1/2 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3 text-xs shadow-2xl backdrop-blur">
+            <div className="efficiency-details-popover absolute left-1/2 top-[calc(100%+6px)] z-40 w-80 -translate-x-1/2 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3 text-xs shadow-2xl backdrop-blur">
               <p className="mb-2 font-semibold text-primary">Что повлияло на рейтинг сегодня:</p>
-              <ul className="space-y-1 text-slate-200">
-                <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
-                <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
-                <li>• Закрыто привычек: {efficiencyTodaySummary.completedHabitsToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit).toFixed(3)}</span>.</li>
-                <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
-                <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="text-emerald-300">+0.000</span>.</li>
-                <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие (после 3 часов, ночью ×0.5): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="text-emerald-300">0.000</span>}.</li>
+              <ul className="efficiency-details-list space-y-1 text-slate-200">
+                <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
+                <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
+                <li>• Закрыто привычек: {efficiencyTodaySummary.completedHabitsToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit).toFixed(3)}</span>.</li>
+                <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
+                <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="efficiency-rating-positive text-emerald-300">+0.000</span>.</li>
+                <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
+                <li>• Штраф за бездействие (после 3 часов, ночью ×0.5): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="efficiency-rating-negative text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="efficiency-rating-positive text-emerald-300">0.000</span>}.</li>
               </ul>
             </div>
           ) : null}

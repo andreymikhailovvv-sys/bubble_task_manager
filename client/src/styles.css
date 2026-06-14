@@ -2244,3 +2244,22 @@ body[data-theme='light'] .miniapp-shell .miniapp-habit-recurrence-panel .miniapp
   background: rgba(248, 250, 252, 0.98) !important;
   color: #334155 !important;
 }
+
+body[data-theme='light'] .efficiency-details-popover {
+  border-color: rgba(148, 163, 184, 0.32) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  color: #0f172a;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.86) inset !important;
+}
+
+body[data-theme='light'] .efficiency-details-list {
+  color: #334155 !important;
+}
+
+body[data-theme='light'] .efficiency-rating-positive {
+  color: #047857 !important;
+}
+
+body[data-theme='light'] .efficiency-rating-negative {
+  color: #be123c !important;
+}
