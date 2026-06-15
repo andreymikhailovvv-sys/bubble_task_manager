@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { resolveSphereIcon } from '../lib/sphereIcons';
@@ -197,18 +197,26 @@ function getBubbleTitlePreview(title: string, radius: number) {
   const normalized = title.trim();
   if (!normalized) return '';
 
-  const maxWords = radius < 26 ? 2 : radius < 36 ? 3 : radius < 50 ? 5 : radius < 68 ? 8 : 12;
-  const maxChars = Math.max(10, Math.floor(radius * (radius < 36 ? 0.62 : 0.9)));
+  const maxWords = radius < 26 ? 2 : radius < 36 ? 4 : radius < 50 ? 6 : radius < 68 ? 9 : 14;
+  const maxChars = Math.max(12, Math.floor(radius * (radius < 36 ? 0.9 : 1.18)));
   const words = normalized.split(/\s+/);
   let preview = words.slice(0, maxWords).join(' ');
 
   if (preview.length > maxChars) {
-    preview = `${preview.slice(0, Math.max(7, maxChars - 1)).trimEnd()}…`;
+    preview = `${preview.slice(0, Math.max(9, maxChars - 1)).trimEnd()}…`;
   } else if (words.length > maxWords) {
     preview = `${preview}…`;
   }
 
   return preview;
+}
+
+function getBubbleTitleFontSize(title: string, radius: number) {
+  const normalizedLength = title.trim().length;
+  const baseSize = radius / (radius < 34 ? 6.2 : 5.2);
+  const longTitleAdjustment = normalizedLength > 24 ? Math.min(2.8, (normalizedLength - 24) / 12) : 0;
+
+  return Math.max(7, Math.min(18, baseSize - longTitleAdjustment));
 }
 
 
@@ -548,13 +556,16 @@ export function BubbleField({
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
-    const titleFontSize = Math.max(8, Math.min(18, bubble.radius / (bubble.radius < 34 ? 6.2 : 5.2)));
+    const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
-    const bubbleTextStyle = {
+    const bubbleTextStyle: CSSProperties = {
       fontSize: titleFontSize,
       fontWeight: 600,
-      lineHeight: '1.15',
+      lineHeight: '1.08',
       maxHeight: '100%',
+      overflowWrap: 'anywhere',
+      wordBreak: 'break-word',
+      hyphens: 'auto',
       color: isLightTheme ? '#0f172a' : '#f8fafc',
       textShadow: isLightTheme ? '0 1px 0 rgba(255,255,255,0.68)' : '0 2px 10px rgba(2,6,23,0.72)'
     };
@@ -619,9 +630,9 @@ export function BubbleField({
             />
           </>
         ) : null}
-        <foreignObject x={-bubble.radius * 0.74} y={-bubble.radius * 0.74} width={bubble.radius * 1.48} height={bubble.radius * 1.48} pointerEvents="none">
-          <div className="flex h-full flex-col items-center justify-center overflow-hidden break-words px-1.5 text-center" style={bubbleTextStyle}>
-            <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{titlePreview}</span>
+        <foreignObject x={-bubble.radius * 0.8} y={-bubble.radius * 0.8} width={bubble.radius * 1.6} height={bubble.radius * 1.6} pointerEvents="none">
+          <div className="flex h-full flex-col items-center justify-center overflow-hidden px-1 text-center" lang="ru" style={bubbleTextStyle}>
+            <span style={{ display: '-webkit-box', WebkitLineClamp: titleLineClamp, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{titlePreview}</span>
           </div>
         </foreignObject>
         {bubble.task.isRecurring ? (
