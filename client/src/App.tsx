@@ -4615,12 +4615,12 @@ export default function App() {
                         Фильтровать
                       </button>
                       {isSubtaskFilterOpen ? (
-                        <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                        <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
                           {SUBTASK_FILTER_OPTIONS.map((option) => (
                             <button
                               key={option.mode}
                               type="button"
-                              className={`subtask-filter-option block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'subtask-filter-option-active bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
+                              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
                               onClick={() => {
                                 setSubtaskFilterMode(option.mode);
                                 setIsSubtaskFilterOpen(false);
@@ -4694,7 +4694,6 @@ export default function App() {
                       <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
                         <GripVertical size={14} />
                       </button>
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/70 shadow-sm" style={{ backgroundColor: getSubtaskImportanceColor(subtask.importance) }} title="Важность подзадачи" />
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div
                         className={`flex-1 cursor-pointer text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
