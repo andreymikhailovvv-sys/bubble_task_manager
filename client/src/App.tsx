@@ -4615,12 +4615,12 @@ export default function App() {
                         Фильтровать
                       </button>
                       {isSubtaskFilterOpen ? (
-                        <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                        <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
                           {SUBTASK_FILTER_OPTIONS.map((option) => (
                             <button
                               key={option.mode}
                               type="button"
-                              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
+                              className={`subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'subtask-filter-item-active bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
                               onClick={() => {
                                 setSubtaskFilterMode(option.mode);
                                 setIsSubtaskFilterOpen(false);
