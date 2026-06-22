@@ -372,6 +372,39 @@ function getRadiusByRank(
 }
 
 
+function tuneBubbleRadiiToAvailableSpace(bubbles: Bubble[], maxDistance: number, sectorGeometry: SectorGeometry[], mode: 'global' | 'sectors') {
+  const bubblesBySector = new Map<number, Bubble[]>();
+  bubbles.forEach((bubble) => {
+    const sectorBubbles = bubblesBySector.get(bubble.sectorIndex) ?? [];
+    sectorBubbles.push(bubble);
+    bubblesBySector.set(bubble.sectorIndex, sectorBubbles);
+  });
+
+  bubblesBySector.forEach((sectorBubbles, sectorIndex) => {
+    if (sectorBubbles.length === 0) return;
+
+    const geometry = sectorGeometry[sectorIndex] ?? sectorGeometry[0];
+    const sectorArea = (geometry.span / (Math.PI * 2)) * Math.PI * maxDistance * maxDistance;
+    const occupiedArea = sectorBubbles.reduce((sum, bubble) => sum + Math.PI * bubble.radius * bubble.radius, 0);
+    if (occupiedArea <= 0 || sectorArea <= 0) return;
+
+    const crowdingFactor = Math.min(1, Math.max(0, (sectorBubbles.length - 1) / 18));
+    const targetOccupancy = mode === 'global'
+      ? 0.34 + crowdingFactor * 0.11
+      : 0.3 + crowdingFactor * 0.1;
+    const areaScale = Math.sqrt((sectorArea * targetOccupancy) / occupiedArea);
+
+    const minRadius = mode === 'global' ? 16 : 14;
+    const maxRadius = mode === 'global' ? 128 : 116;
+    const scale = Math.min(1.75, Math.max(0.42, areaScale));
+
+    sectorBubbles.forEach((bubble) => {
+      bubble.radius = Math.min(maxRadius, Math.max(minRadius, bubble.radius * scale));
+    });
+  });
+}
+
+
 
 function applyHierarchicalClustering(bubbles: Bubble[], center: number, maxDistance: number, sectorGeometry: SectorGeometry[]) {
   const bySector = new Map<number, Bubble[]>();
@@ -571,6 +604,8 @@ export function buildBubbles(
       });
     });
   });
+
+  tuneBubbleRadiiToAvailableSpace(result, maxDistance, sectorGeometry, mode);
 
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
