@@ -53,6 +53,22 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   4: 'bg-orange-500/70 border-orange-300',
   5: 'bg-rose-500/75 border-rose-300'
 };
+const SUBTASK_IMPORTANCE_COLORS: Record<number, string> = {
+  1: '#38bdf8',
+  2: '#38bdf8',
+  3: '#facc15',
+  4: '#ef4444',
+  5: '#ef4444'
+};
+type SubtaskFilterMode = 'none' | 'urgency' | 'importance';
+const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> = [
+  { mode: 'urgency', label: 'По срочности' },
+  { mode: 'importance', label: 'По важности' },
+  { mode: 'none', label: 'Без фильтра' }
+];
+function getSubtaskImportanceColor(importance?: number | null) {
+  return SUBTASK_IMPORTANCE_COLORS[importance ?? 3] ?? SUBTASK_IMPORTANCE_COLORS[3];
+}
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
@@ -613,7 +629,8 @@ export default function App() {
   const [lastGeneralAiUndoOperations, setLastGeneralAiUndoOperations] = useState<GeneralAiUndoOperation[]>([]);
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [habits, setHabits] = useState<Habit[]>([]);
-  const [isSubtaskFilterActive, setIsSubtaskFilterActive] = useState(false);
+  const [subtaskFilterMode, setSubtaskFilterMode] = useState<SubtaskFilterMode>('urgency');
+  const [isSubtaskFilterOpen, setIsSubtaskFilterOpen] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
@@ -1172,11 +1189,16 @@ export default function App() {
       acc[parentId] = [...items].sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
+        if (subtaskFilterMode === 'none') return 0;
+        if (subtaskFilterMode === 'importance') {
+          const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
+          if (importanceDiff !== 0) return importanceDiff;
+        }
         return toDeadlineTimestamp(a) - toDeadlineTimestamp(b);
       });
       return acc;
     }, {}),
-    [subtaskMap]
+    [subtaskMap, subtaskFilterMode]
   );
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
@@ -2462,6 +2484,7 @@ export default function App() {
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
+          {isSubtaskChip ? <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/70 shadow-sm" style={{ backgroundColor: getSubtaskImportanceColor(task.importance) }} title="Важность подзадачи" /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
@@ -3126,8 +3149,8 @@ export default function App() {
             spheres={visibleSpheres}
             rankingMode="coefficient"
             subtaskMap={displayedSubtaskMap}
-            isSubtaskFilterActive={isSubtaskFilterActive}
-            onToggleSubtaskFilter={() => setIsSubtaskFilterActive((prev) => !prev)}
+            isSubtaskFilterActive={subtaskFilterMode !== 'none'}
+            onToggleSubtaskFilter={() => setSubtaskFilterMode((prev) => (prev === 'none' ? 'urgency' : 'none'))}
             mode={mode}
             poppingTaskId={poppingTaskId}
             hasAiNotification={hasUnreadAiMessage}
@@ -4581,15 +4604,34 @@ export default function App() {
                         {aiSubtasksLoadingTaskId === focusedTask.id ? 'Генерирую…' : 'Сформировать ИИ'}
                       </button>
                     ) : null}
-                    <button
-                      type="button"
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
-                        ? 'border-cyan-300 bg-cyan-600/90 text-white'
-                        : 'secondary-button'}`}
-                      onClick={() => setIsSubtaskFilterActive((prev) => !prev)}
-                    >
-                      Фильтровать
-                    </button>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${subtaskFilterMode !== 'none'
+                          ? 'border-cyan-300 bg-cyan-600/90 text-white'
+                          : 'secondary-button'}`}
+                        onClick={() => setIsSubtaskFilterOpen((prev) => !prev)}
+                      >
+                        Фильтровать
+                      </button>
+                      {isSubtaskFilterOpen ? (
+                        <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                          {SUBTASK_FILTER_OPTIONS.map((option) => (
+                            <button
+                              key={option.mode}
+                              type="button"
+                              className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
+                              onClick={() => {
+                                setSubtaskFilterMode(option.mode);
+                                setIsSubtaskFilterOpen(false);
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 {isAddingFocusedSubtask ? (
@@ -4648,6 +4690,7 @@ export default function App() {
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
                       className={`list-item-surface relative flex items-center gap-2 rounded px-2 py-1 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                     >
+                      <span className="absolute left-1 top-1 h-2 w-2 rounded-full border border-white/70 shadow-sm" style={{ backgroundColor: getSubtaskImportanceColor(subtask.importance) }} title="Важность подзадачи" />
                       <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
                         <GripVertical size={14} />
                       </button>

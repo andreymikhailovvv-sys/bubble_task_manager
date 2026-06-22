@@ -59,6 +59,11 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   4: 'bg-orange-500/70 border-orange-300',
   5: 'bg-rose-500/75 border-rose-300'
 };
+const SUBTASK_IMPORTANCE_OPTIONS = [
+  { level: 1, color: '#38bdf8', label: 'Низкая важность' },
+  { level: 3, color: '#facc15', label: 'Средняя важность' },
+  { level: 5, color: '#ef4444', label: 'Высокая важность' }
+] as const;
 
 type NoteFormat = 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
 
@@ -423,17 +428,34 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
         <div>
           <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue, { trimEnd: false })} onChange={(e) => updateDescription(e.target.value)} />
-          <div className="mt-1 flex items-center justify-between gap-2">
-            {isSubtask && parentTaskTitle && onOpenParentTask ? (
-              <button
-                type="button"
-                className="main-task-link-button inline-flex min-w-0 rounded-full border px-3 py-1 text-xs font-semibold transition"
-                onClick={onOpenParentTask}
-                title={`Открыть основную задачу: ${parentTaskTitle}`}
-              >
-                <span className="truncate">Основная задача: {parentTaskTitle}</span>
-              </button>
-            ) : <span />}
+          <div className="mt-1 flex items-start justify-between gap-2">
+            <div className="min-w-0 space-y-2">
+              {isSubtask && parentTaskTitle && onOpenParentTask ? (
+                <button
+                  type="button"
+                  className="main-task-link-button inline-flex max-w-full min-w-0 rounded-full border px-3 py-1 text-xs font-semibold transition"
+                  onClick={onOpenParentTask}
+                  title={`Открыть основную задачу: ${parentTaskTitle}`}
+                >
+                  <span className="truncate">Основная задача: {parentTaskTitle}</span>
+                </button>
+              ) : <span />}
+              {isSubtask ? (
+                <div className="flex items-center gap-2" aria-label="Важность подзадачи">
+                  {SUBTASK_IMPORTANCE_OPTIONS.map((option) => (
+                    <button
+                      key={option.level}
+                      type="button"
+                      className={`h-5 w-5 rounded-full border transition ${selectedImportance === option.level ? 'scale-110 border-white ring-2 ring-white/70' : 'border-white/50 hover:scale-105'}`}
+                      style={{ backgroundColor: option.color }}
+                      title={option.label}
+                      aria-label={option.label}
+                      onClick={() => setForm((p) => ({ ...p, importance: option.level }))}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               className="notes-open-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition"
