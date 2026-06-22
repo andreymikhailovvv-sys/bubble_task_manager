@@ -446,7 +446,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                     <button
                       key={option.level}
                       type="button"
-                      className={`h-5 w-5 rounded-full border transition ${selectedImportance === option.level ? 'scale-110 border-white ring-2 ring-white/70' : 'border-white/50 hover:scale-105'}`}
+                      className={`subtask-importance-dot h-5 w-5 rounded-full border transition ${selectedImportance === option.level ? 'subtask-importance-dot-active scale-110 border-white ring-2 ring-white/70' : 'border-white/50 hover:scale-105'}`}
                       style={{ backgroundColor: option.color }}
                       title={option.label}
                       aria-label={option.label}

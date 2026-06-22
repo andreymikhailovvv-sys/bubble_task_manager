@@ -145,6 +145,13 @@ export function noteHtmlToPlainText(value: string, options: { trimEnd?: boolean 
   wrapper.querySelectorAll('h1,h2,p,div,li,label').forEach((block) => {
     if (block.nextSibling) block.append(document.createTextNode('\n'));
   });
+  wrapper.querySelectorAll('span,a,b,strong,i,em,u').forEach((inline) => {
+    const nextText = inline.nextSibling?.textContent ?? '';
+    const currentText = inline.textContent ?? '';
+    if (inline.nextSibling && currentText && nextText && !/\s$/.test(currentText) && !/^\s|^[.,!?;:)]/.test(nextText)) {
+      inline.after(document.createTextNode(' '));
+    }
+  });
   const plainText = (wrapper.textContent ?? '').replace(/\n{3,}/g, '\n\n');
   return shouldTrimEnd ? plainText.trimEnd() : plainText;
 }
