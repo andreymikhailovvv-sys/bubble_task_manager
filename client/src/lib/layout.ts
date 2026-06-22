@@ -248,8 +248,9 @@ function keepInSector(bubble: Bubble, center: number, maxDistance: number, secto
   const safeMaxDistance = Math.max(0, maxDistance - bubble.radius - 12);
   const geometry = sectorGeometry[bubble.sectorIndex] ?? sectorGeometry[0];
   const minDistanceBySector = getSectorMinDistance(bubble.radius, geometry?.span ?? Math.PI * 2);
+  const effectiveMinDistance = Math.min(minDistanceBySector, safeMaxDistance);
   let distance = Math.min(Math.hypot(dx, dy), safeMaxDistance);
-  distance = Math.max(minDistanceBySector, distance);
+  distance = Math.max(effectiveMinDistance, distance);
 
   let angle = normalizeAngle(Math.atan2(dy, dx));
   if (sectorGeometry.length > 1) {
