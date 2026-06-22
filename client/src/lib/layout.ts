@@ -323,14 +323,16 @@ function applyGravity(
 }
 
 function getDistanceByRank(index: number, total: number, maxDistance: number, mode: 'global' | 'sectors') {
-  const minDistance = 16;
+  const minDistance = 18;
   if (total <= 1) return minDistance;
-  const compactOuter = mode === 'global'
-    ? Math.min(maxDistance * 0.24, 20 + Math.sqrt(total) * 10)
-    : Math.min(maxDistance * 0.34, 28 + Math.sqrt(total) * 16);
+  const densityFactor = Math.min(1, Math.max(0, (total - 1) / 28));
+  const outerRatio = mode === 'global'
+    ? 0.58 + densityFactor * 0.18
+    : 0.68 + densityFactor * 0.2;
+  const outerDistance = maxDistance * outerRatio;
   const rankRatio = index / (total - 1);
-  const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.48) : Math.pow(rankRatio, 0.72);
-  return minDistance + Math.max(18, compactOuter - minDistance) * easedRatio;
+  const easedRatio = mode === 'global' ? Math.pow(rankRatio, 0.58) : Math.pow(rankRatio, 0.66);
+  return minDistance + Math.max(18, outerDistance - minDistance) * easedRatio;
 }
 
 function getRadiusByRank(
@@ -369,6 +371,39 @@ function getRadiusByRank(
   const tieBonus = tieBoost * 5.5;
   const rawRadius = base + proximityBoost + urgencyBoost + importanceBoost + tieBonus + overdueBoost;
   return Math.max(16, Math.min(maxRadius, rawRadius));
+}
+
+
+function tuneBubbleRadiiToAvailableSpace(bubbles: Bubble[], maxDistance: number, sectorGeometry: SectorGeometry[], mode: 'global' | 'sectors') {
+  const bubblesBySector = new Map<number, Bubble[]>();
+  bubbles.forEach((bubble) => {
+    const sectorBubbles = bubblesBySector.get(bubble.sectorIndex) ?? [];
+    sectorBubbles.push(bubble);
+    bubblesBySector.set(bubble.sectorIndex, sectorBubbles);
+  });
+
+  bubblesBySector.forEach((sectorBubbles, sectorIndex) => {
+    if (sectorBubbles.length === 0) return;
+
+    const geometry = sectorGeometry[sectorIndex] ?? sectorGeometry[0];
+    const sectorArea = (geometry.span / (Math.PI * 2)) * Math.PI * maxDistance * maxDistance;
+    const occupiedArea = sectorBubbles.reduce((sum, bubble) => sum + Math.PI * bubble.radius * bubble.radius, 0);
+    if (occupiedArea <= 0 || sectorArea <= 0) return;
+
+    const crowdingFactor = Math.min(1, Math.max(0, (sectorBubbles.length - 1) / 18));
+    const targetOccupancy = mode === 'global'
+      ? 0.48 + crowdingFactor * 0.14
+      : 0.52 + crowdingFactor * 0.16;
+    const areaScale = Math.sqrt((sectorArea * targetOccupancy) / occupiedArea);
+
+    const minRadius = mode === 'global' ? 16 : 14;
+    const maxRadius = mode === 'global' ? 168 : 156;
+    const scale = Math.min(2.45, Math.max(0.36, areaScale));
+
+    sectorBubbles.forEach((bubble) => {
+      bubble.radius = Math.min(maxRadius, Math.max(minRadius, bubble.radius * scale));
+    });
+  });
 }
 
 
@@ -434,7 +469,7 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
       const normalizedUrgency = Math.min(1, Math.max(0, bubble.task.priorityScore / 5));
       const importanceBoost = Math.min(1, Math.max(0, (bubble.task.importance - 1) / 4));
       const centerBias = 0.2 + (normalizedUrgency * 0.55 + importanceBoost * 0.25);
-      const desiredDistance = 10 + (1 - centerBias) * maxDistance * 0.24;
+      const desiredDistance = 12 + (1 - centerBias) * maxDistance * 0.62;
       const spring = (desiredDistance - currentDistance) * 0.15;
       const nx = dx / currentDistance;
       const ny = dy / currentDistance;
@@ -530,7 +565,7 @@ export function buildBubbles(
       const coefficient = getTaskCoefficient(getSourceTask(task), subtaskMap);
       const radius = getRadiusByRank(i, sorted.length, proximity, urgencyWeight, importanceTieBoost, mode, rankingMode, task.importance, overdueBoost, coefficient, sectorMaxCoefficient);
       const distance = rankingMode === 'coefficient'
-        ? 10 + Math.pow(1 - coefficient, 1.75) * Math.max(14, maxDistance * (mode === 'global' ? 0.22 : 0.3)) + i * 0.18
+        ? 12 + Math.pow(1 - coefficient, 1.45) * Math.max(18, maxDistance * (mode === 'global' ? 0.6 : 0.78)) + i * 0.22
         : getDistanceByRank(i, sorted.length, maxDistance, mode);
       const rankRatio = sorted.length <= 1 ? 0 : i / (sorted.length - 1);
       targetDistanceById[task.id] = distance;
@@ -572,6 +607,8 @@ export function buildBubbles(
     });
   });
 
+  tuneBubbleRadiiToAvailableSpace(result, maxDistance, sectorGeometry, mode);
+
   result.forEach((bubble) => keepInSector(bubble, center, maxDistance, sectorGeometry));
 
   resolveCollisions(result, center, maxDistance, sectorGeometry, 0, 82);
@@ -589,7 +626,7 @@ export function buildBubbles(
       const dy = bubble.y - center;
       const currentDistance = Math.hypot(dx, dy) || 1;
       const targetDistance = rankingMode === 'coefficient'
-        ? 10 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.75) * Math.max(14, maxDistance * (mode === 'global' ? 0.22 : 0.3)) + idx * 0.14
+        ? 12 + Math.pow(1 - getTaskCoefficient(getSourceTask(bubble.task), subtaskMap), 1.45) * Math.max(18, maxDistance * (mode === 'global' ? 0.6 : 0.78)) + idx * 0.18
         : getDistanceByRank(idx, ranked.length, maxDistance, mode);
       const minDistance = idx === 0
         ? Math.max(12, targetDistance - 5)
