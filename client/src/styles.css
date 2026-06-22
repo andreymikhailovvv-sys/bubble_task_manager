@@ -2267,3 +2267,34 @@ body[data-theme='light'] .efficiency-rating-positive {
 body[data-theme='light'] .efficiency-rating-negative {
   color: #be123c !important;
 }
+
+body[data-theme='light'] .subtask-filter-panel {
+  border-color: #dbeafe !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #0f172a !important;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14), 0 6px 16px rgba(14, 116, 144, 0.08) !important;
+}
+
+body[data-theme='light'] .subtask-filter-item {
+  color: #334155 !important;
+}
+
+body[data-theme='light'] .subtask-filter-item:hover {
+  background: #e0f2fe !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .subtask-filter-item-active {
+  background: #cffafe !important;
+  color: #0e7490 !important;
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35) inset;
+}
+
+body[data-theme='light'] .subtask-importance-dot {
+  border-color: rgba(71, 85, 105, 0.72) !important;
+}
+
+body[data-theme='light'] .subtask-importance-dot-active {
+  border-color: #0f172a !important;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.42), 0 0 0 6px rgba(255, 255, 255, 0.92) !important;
+}
