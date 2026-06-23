@@ -71,6 +71,17 @@ const SUBTASK_OVERDUE_GLOW_STYLE =
   '0 0 0 1px rgba(239,68,68,0.28), inset 0 0 12px rgba(239,68,68,0.3)';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const SMART_POSTPONE_CREDITS_COST = 1;
+const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
+const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
+const CONTEXT_MENU_HEIGHT = 188;
+
+function getViewportSafeContextMenuPosition(x: number, y: number) {
+  if (typeof window === 'undefined') return { x, y };
+  return {
+    x: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(x, window.innerWidth - CONTEXT_MENU_WITH_SUBMENU_WIDTH - CONTEXT_MENU_VIEWPORT_MARGIN)),
+    y: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(y, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_VIEWPORT_MARGIN))
+  };
+}
 const POSTPONE_OPTIONS = [
   { value: '15m', label: 'На 15 мин' },
   { value: '30m', label: 'На 30 мин' },
@@ -307,8 +318,7 @@ export function BubbleField({
     event.preventDefault();
     event.stopPropagation();
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      ...getViewportSafeContextMenuPosition(event.clientX, event.clientY),
       task,
       sphere: getSphereAtClientPoint(event.clientX, event.clientY, task)
     });
@@ -1092,6 +1102,19 @@ export function BubbleField({
               }}
             >
               Добавить задачу
+            </button>
+            <button
+              type="button"
+              disabled={!contextMenu.task}
+              className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                if (!contextMenu.task) return;
+                void onQuickCompleteTask(contextMenu.task);
+                setContextMenu(null);
+                setContextPostponeSubmenuOpen(false);
+              }}
+            >
+              Выполнить
             </button>
             <button
               type="button"

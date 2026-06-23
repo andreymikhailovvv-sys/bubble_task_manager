@@ -79,6 +79,20 @@ const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
 const DEFAULT_MORNING_AI_CHECKUP_TIME = '10:00';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
+const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
+const CONTEXT_MENU_WIDTH = 184;
+const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
+const CONTEXT_MENU_HEIGHT = 188;
+
+function getViewportSafeContextMenuPosition(x: number, y: number, options?: { submenu?: boolean; height?: number }) {
+  if (typeof window === 'undefined') return { x, y };
+  const width = options?.submenu ? CONTEXT_MENU_WITH_SUBMENU_WIDTH : CONTEXT_MENU_WIDTH;
+  const height = options?.height ?? CONTEXT_MENU_HEIGHT;
+  return {
+    x: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(x, window.innerWidth - width - CONTEXT_MENU_VIEWPORT_MARGIN)),
+    y: Math.max(CONTEXT_MENU_VIEWPORT_MARGIN, Math.min(y, window.innerHeight - height - CONTEXT_MENU_VIEWPORT_MARGIN))
+  };
+}
 const TIMEZONE_OPTIONS = [
   'Europe/Moscow',
   'Europe/Kaliningrad',
@@ -2475,7 +2489,7 @@ export default function App() {
           event.preventDefault();
           event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
-          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
+          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), date: task.dueDate ? new Date(task.dueDate) : new Date(), hour: null, taskId: task.id });
           setTimelinePostponeSubmenuOpen(false);
         }}
       >
@@ -3167,10 +3181,7 @@ export default function App() {
               await api.updateTask(subtask.id, { dueDate });
               await load();
             }}
-            onQuickCompleteTask={async (task) => {
-              await api.updateTask(task.id, { status: 'DONE' });
-              await load();
-            }}
+            onQuickCompleteTask={completeTask}
             onQuickChangeTaskImportance={async (task, importanceDelta) => {
               const nextImportance = Math.max(1, Math.min(5, task.importance + importanceDelta));
               if (nextImportance === task.importance) return;
@@ -3223,7 +3234,7 @@ export default function App() {
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setListTaskContextMenu({ x: event.clientX, y: event.clientY, taskId: task.id });
+                      setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
                     onClick={() => setFocusedTaskId(task.id)}
@@ -3318,6 +3329,17 @@ export default function App() {
                       }}
                     >
                       Добавить задачу
+                    </button>
+                    <button
+                      type="button"
+                      className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm"
+                      onClick={() => {
+                        setListTaskContextMenu(null);
+                        setListTaskPostponeSubmenuOpen(false);
+                        void completeTask(contextTask);
+                      }}
+                    >
+                      Выполнить
                     </button>
                     <button
                       type="button"
@@ -3522,7 +3544,7 @@ export default function App() {
                         onContextMenu={(event) => {
                           if (!cell.date) return;
                           event.preventDefault();
-                          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: new Date(cell.date), hour: null });
+                          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(cell.date), hour: null });
                         }}
                         onClick={(event) => {
                           if (!cell.date) return;
@@ -3626,7 +3648,7 @@ export default function App() {
                               }}
                               onContextMenu={(event) => {
                                 event.preventDefault();
-                                setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: new Date(day.date), hour });
+                                setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: new Date(day.date), hour });
                               }}
                               onDrop={async (event) => {
                                 event.preventDefault();
@@ -3674,7 +3696,7 @@ export default function App() {
                           event.preventDefault();
                           const dayDate = new Date(timelineAnchorDate);
                           dayDate.setHours(0, 0, 0, 0);
-                          setTimelineCreateMenu({ x: event.clientX, y: event.clientY, date: dayDate, hour: hourGroup.hour });
+                          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: dayDate, hour: hourGroup.hour });
                         }}
                         onDrop={async (event) => {
                           event.preventDefault();
@@ -3720,6 +3742,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
               </button>
               <button
                 type="button"
@@ -3911,6 +3947,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
               </button>
               <button
                 type="button"
@@ -4205,6 +4255,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -4409,6 +4473,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
               </button>
               <button
                 type="button"
@@ -4828,6 +4906,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -5159,6 +5251,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="success-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  const task = taskById.get(timelineCreateMenu.taskId ?? '');
+                  if (!task) return;
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                  void completeTask(task);
+                }}
+              >
+                Выполнить
               </button>
               <button
                 type="button"
