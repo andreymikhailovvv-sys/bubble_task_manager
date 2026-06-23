@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
+import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
@@ -29,6 +29,7 @@ type Props = {
   onToggleSubtaskFilter: () => void;
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
+  onRescheduleTask?: (task: Task) => void;
   themeMode?: 'dark' | 'light';
   className?: string;
 };
@@ -245,6 +246,7 @@ export function BubbleField({
   onQuickPostponeTask,
   onRenameSphere,
   onAddTaskToSphere,
+  onRescheduleTask,
   themeMode = 'dark',
   className
 }: Props) {
@@ -1090,6 +1092,20 @@ export function BubbleField({
               }}
             >
               Добавить задачу
+            </button>
+            <button
+              type="button"
+              disabled={!contextMenu.task || !onRescheduleTask}
+              className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                if (!contextMenu.task || !onRescheduleTask) return;
+                onRescheduleTask(contextMenu.task);
+                setContextMenu(null);
+                setContextPostponeSubmenuOpen(false);
+              }}
+            >
+              <CalendarDays size={14} />
+              Перенести
             </button>
             {contextPostponeSubmenuOpen && contextMenu.task ? (
               <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>

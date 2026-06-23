@@ -3180,6 +3180,7 @@ export default function App() {
             onQuickPostponeTask={async (task, option) => await quickPostponeTask(task, option)}
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
+            onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
             />
           </div>
         ) : displayMode === 'list' ? (
@@ -3317,6 +3318,18 @@ export default function App() {
                       }}
                     >
                       Добавить задачу
+                    </button>
+                    <button
+                      type="button"
+                      className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium"
+                      onClick={() => {
+                        setTimelineReschedulePicker({ taskId: contextTask.id, signal: Date.now() });
+                        setListTaskContextMenu(null);
+                        setListTaskPostponeSubmenuOpen(false);
+                      }}
+                    >
+                      <CalendarDays size={14} />
+                      Перенести
                     </button>
                     {listTaskPostponeSubmenuOpen ? (
                       <div className="surface-popover absolute left-full top-[46px] ml-1 w-56 rounded-md border p-1.5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
@@ -3711,7 +3724,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
@@ -3902,7 +3915,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
@@ -4192,7 +4205,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
@@ -4400,7 +4413,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
@@ -4815,7 +4828,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
@@ -5150,7 +5163,7 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-start gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
                   setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
