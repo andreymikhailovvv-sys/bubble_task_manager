@@ -579,6 +579,7 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
+  const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
   const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
   const [timelinePostponeSubmenuOpen, setTimelinePostponeSubmenuOpen] = useState(false);
@@ -2484,7 +2485,6 @@ export default function App() {
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
-          {isSubtaskChip ? <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/70 shadow-sm" style={{ backgroundColor: getSubtaskImportanceColor(task.importance) }} title="Важность подзадачи" /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
@@ -3711,6 +3711,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
@@ -3884,6 +3898,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
               </button>
               <button
                 type="button"
@@ -4164,6 +4192,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
@@ -4354,6 +4396,20 @@ export default function App() {
                 }}
               >
                 Добавить задачу
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
               </button>
               <button
                 type="button"
@@ -4759,6 +4815,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
@@ -5080,6 +5150,20 @@ export default function App() {
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
+                className="timeline-pick-button mt-1.5 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  if (!timelineCreateMenu.taskId) return;
+                  setTimelineReschedulePicker({ taskId: timelineCreateMenu.taskId, signal: Date.now() });
+                  setTimelineCreateMenu(null);
+                  setTimelinePostponeSubmenuOpen(false);
+                }}
+              >
+                <CalendarDays size={14} />
+                Перенести
+              </button>
+              <button
+                type="button"
+                disabled={!timelineCreateMenu.taskId}
                 className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
@@ -5219,6 +5303,21 @@ export default function App() {
       ) : null}
     
 
+      {timelineReschedulePicker ? (
+        <DateTimePickerWithApply
+          className="hidden"
+          value={taskById.get(timelineReschedulePicker.taskId)?.dueDate ?? null}
+          timelineTasks={timelinePickerTasks}
+          openTimelinePreviewSignal={timelineReschedulePicker.signal}
+          detachedPopup
+          onChange={async (dueDate) => {
+            const taskId = timelineReschedulePicker.taskId;
+            await api.updateTask(taskId, { dueDate });
+            setTimelineReschedulePicker(null);
+            await load();
+          }}
+        />
+      ) : null}
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 </main>
   );

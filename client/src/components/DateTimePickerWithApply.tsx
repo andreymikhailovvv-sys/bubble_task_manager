@@ -14,6 +14,7 @@ type Props = {
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
   timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null }>;
+  openTimelinePreviewSignal?: number;
 };
 
 function toLocalParts(value?: string | null) {
@@ -56,7 +57,8 @@ export function DateTimePickerWithApply({
   detachedOffset = 10,
   onChange,
   onOpenChange,
-  timelineTasks = []
+  timelineTasks = [],
+  openTimelinePreviewSignal
 }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftDate, setDraftDate] = useState('');
@@ -87,6 +89,18 @@ export function DateTimePickerWithApply({
     setDraftDate(parts.date);
     setDraftTime(parts.time);
   }, [isOpen, value]);
+
+  useEffect(() => {
+    if (openTimelinePreviewSignal === undefined) return;
+    const parts = toLocalParts(value);
+    const baseDate = parts.date ? new Date(`${parts.date}T00:00`) : new Date();
+    setDraftDate(parts.date);
+    setDraftTime(parts.time);
+    setSelectedPreviewDate(baseDate);
+    setPreviewMonthDate(baseDate);
+    setPreviewMode('month');
+    setIsTimelinePreviewOpen(true);
+  }, [openTimelinePreviewSignal, value]);
 
   useEffect(() => {
     if (!isOpen) return;
