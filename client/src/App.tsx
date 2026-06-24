@@ -421,7 +421,7 @@ type TimelineViewData = {
   tasksWithoutDate: Task[];
   tasksInRange: Task[];
   dayGroups: Array<{ key: string; date: Date; tasks: Task[] }>;
-  hourGroups: Array<{ hour: number; tasks: Task[] }>;
+  hourGroups: Array<{ hour: number; tasks: Task[]; quarters: Array<{ minute: number; tasks: Task[] }> }>;
   monthCells: Array<{ key: string; date: Date | null; tasks: Task[] }>;
 };
 
@@ -492,12 +492,18 @@ function buildTimelineViewData(
     start.setHours(hour, 0, 0, 0);
     const end = new Date(start);
     end.setHours(hour + 1, 0, 0, 0);
+    const hourTasks = tasksInRange
+      .filter(({ dueDate }) => dueDate >= start && dueDate < end)
+      .sort(sortByDueDateAsc);
     return {
       hour,
-      tasks: tasksInRange
-        .filter(({ dueDate }) => dueDate >= start && dueDate < end)
-        .sort(sortByDueDateAsc)
-        .map(({ task }) => task)
+      tasks: hourTasks.map(({ task }) => task),
+      quarters: [0, 15, 30, 45].map((minute) => ({
+        minute,
+        tasks: hourTasks
+          .filter(({ dueDate }) => dueDate.getMinutes() >= minute && dueDate.getMinutes() < minute + 15)
+          .map(({ task }) => task)
+      }))
     };
   });
 
@@ -590,6 +596,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
+  const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
@@ -600,7 +607,7 @@ export default function App() {
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
-  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; taskId?: string | null } | null>(null);
+  const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
   const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
@@ -610,8 +617,8 @@ export default function App() {
   const [timelineCompletionAnimationIds, setTimelineCompletionAnimationIds] = useState<string[]>([]);
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
-  const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null } | null = null;
-  const setTimelineTaskContextMenu = (_value: { x: number; y: number; taskId?: string | null } | null) => undefined;
+  const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null; minute?: number | null } | null = null;
+  const setTimelineTaskContextMenu = (_value: { x: number; y: number; taskId?: string | null; minute?: number | null } | null) => undefined;
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
@@ -784,10 +791,10 @@ export default function App() {
   };
 
 
-  const openCreateTaskFromTimeline = (date: Date, hour?: number | null) => {
+  const openCreateTaskFromTimeline = (date: Date, hour?: number | null, minute = 0) => {
     const dueDate = new Date(date);
     if (typeof hour === 'number') {
-      dueDate.setHours(hour, 0, 0, 0);
+      dueDate.setHours(hour, minute, 0, 0);
     } else {
       dueDate.setHours(0, 0, 0, 0);
     }
@@ -2477,6 +2484,7 @@ export default function App() {
         }}
         onDragEndCapture={() => {
           setDraggedTimelineTaskId(null);
+          setActiveTimelineDropSlot(null);
           setIsTimelineOverdueModalCollapsedForDrag(false);
         }}
         onMouseEnter={(event) => {
@@ -2721,7 +2729,7 @@ export default function App() {
     } finally { setTimelineOptimizeLoading(false); }
   };
 
-  const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; keepOriginalTime?: boolean }) => {
+  const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; minute?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
     if (!taskId) return;
     const task = tasks.find((item) => item.id === taskId);
@@ -2734,7 +2742,7 @@ export default function App() {
     if (target.keepOriginalTime) {
       nextDueDate.setHours(currentDueDate.getHours(), currentDueDate.getMinutes(), 0, 0);
     } else if (typeof target.hour === 'number') {
-      nextDueDate.setHours(target.hour, currentDueDate.getMinutes(), 0, 0);
+      nextDueDate.setHours(target.hour, typeof target.minute === 'number' ? target.minute : currentDueDate.getMinutes(), 0, 0);
     }
 
     const nextDueDateIso = nextDueDate.toISOString();
@@ -3752,35 +3760,59 @@ export default function App() {
                     return timelineViewData.hourGroups.map((hourGroup) => (
                     <div key={hourGroup.hour} className="timeline-day-row grid grid-cols-[70px_minmax(0,1fr)] border-b last:border-b-0">
                       <div className="timeline-grid-time border-r px-2 py-2 text-xs">{String(hourGroup.hour).padStart(2, '0')}:00</div>
-                      <div
-                        className={`timeline-day-slot relative min-h-11 space-y-2 px-2 py-2 ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = 'move';
-                        }}
-                        onContextMenu={(event) => {
-                          event.preventDefault();
-                          const dayDate = new Date(timelineAnchorDate);
-                          dayDate.setHours(0, 0, 0, 0);
-                          setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: dayDate, hour: hourGroup.hour });
-                        }}
-                        onDrop={async (event) => {
-                          event.preventDefault();
-                          const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
-                          setDraggedTimelineTaskId(taskId || null);
-                          const dayDate = new Date(timelineAnchorDate);
-                          dayDate.setHours(0, 0, 0, 0);
-                          await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour });
-                          setDraggedTimelineTaskId(null);
-                        }}
-                      >
+                      <div className="timeline-day-slot-group relative">
                         {isCurrentDay && hourGroup.hour === lineHour ? (
                           <span
-                            className="pointer-events-none absolute left-0 right-0 border-t border-red-500"
+                            className="pointer-events-none absolute left-0 right-0 z-10 border-t border-red-500"
                             style={{ top: `${lineOffsetPercent}%` }}
                           />
                         ) : null}
-                        {hourGroup.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
+                        {hourGroup.quarters.map((quarter) => (
+                          <div
+                            key={`${hourGroup.hour}-${quarter.minute}`}
+                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
+                            title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            onDragEnter={(event) => {
+                              event.preventDefault();
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDragOver={(event) => {
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = 'move';
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDragLeave={(event) => {
+                              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                              setActiveTimelineDropSlot((current) => (
+                                current?.hour === hourGroup.hour && current.minute === quarter.minute ? null : current
+                              ));
+                            }}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                              const dayDate = new Date(timelineAnchorDate);
+                              dayDate.setHours(0, 0, 0, 0);
+                              setTimelineCreateMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY), date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDrop={async (event) => {
+                              event.preventDefault();
+                              const taskId = draggedTimelineTaskId ?? event.dataTransfer.getData('text/task-id');
+                              setDraggedTimelineTaskId(taskId || null);
+                              const dayDate = new Date(timelineAnchorDate);
+                              dayDate.setHours(0, 0, 0, 0);
+                              await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
+                              setDraggedTimelineTaskId(null);
+                              setActiveTimelineDropSlot(null);
+                            }}
+                          >
+                            <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
+                            {quarter.tasks.length > 0 ? (
+                              <div className="space-y-1.5 pr-9">
+                                {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ));
@@ -3803,7 +3835,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >
@@ -4008,7 +4040,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >
@@ -4312,7 +4344,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >
@@ -4534,7 +4566,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >
@@ -4963,7 +4995,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >
@@ -5312,7 +5344,7 @@ export default function App() {
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
                   setTimelineCreateMenu(null);
                 }}
               >

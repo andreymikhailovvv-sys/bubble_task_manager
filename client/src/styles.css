@@ -2362,3 +2362,62 @@ body[data-theme='light'] .subscription-eyebrow {
   color: #a21caf !important;
   box-shadow: 0 8px 24px rgba(217, 70, 239, 0.12);
 }
+
+@layer components {
+  .timeline-day-slot-group {
+    background: transparent;
+  }
+
+  .timeline-day-quarter-slot {
+    border-color: color-mix(in srgb, var(--timeline-grid-border) 46%, transparent);
+  }
+
+  .timeline-day-quarter-slot:not(:last-child) {
+    border-bottom-width: 1px;
+  }
+
+  .timeline-day-quarter-slot-empty {
+    min-height: 1.35rem;
+    padding-bottom: 0.125rem;
+    padding-top: 0.125rem;
+  }
+
+  .timeline-day-quarter-slot-filled {
+    min-height: 2.75rem;
+  }
+
+  .timeline-day-quarter-slot:hover,
+  .timeline-day-quarter-slot-drag-ready {
+    background: color-mix(in srgb, var(--timeline-today-bg) 48%, transparent);
+  }
+
+  .timeline-day-quarter-slot-drag-ready {
+    outline: 1px dashed color-mix(in srgb, var(--accent) 36%, transparent);
+    outline-offset: -3px;
+  }
+
+  .timeline-day-quarter-slot-drag-ready:hover,
+  .timeline-day-quarter-slot-drag-active {
+    background: color-mix(in srgb, var(--accent-soft) 78%, var(--timeline-today-bg));
+    outline-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  }
+
+  .timeline-day-quarter-slot-drag-active {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 58%, transparent), inset 0 0 22px color-mix(in srgb, var(--accent-soft) 70%, transparent);
+  }
+
+  .timeline-day-quarter-label {
+    color: color-mix(in srgb, var(--timeline-chip-meta) 48%, transparent);
+    opacity: 0.58;
+  }
+
+  .timeline-day-quarter-slot-empty .timeline-day-quarter-label {
+    opacity: 0;
+  }
+
+  .timeline-day-quarter-slot:hover .timeline-day-quarter-label,
+  .timeline-day-quarter-slot-drag-ready .timeline-day-quarter-label,
+  .timeline-day-quarter-slot-drag-active .timeline-day-quarter-label {
+    opacity: 0.76;
+  }
+}
