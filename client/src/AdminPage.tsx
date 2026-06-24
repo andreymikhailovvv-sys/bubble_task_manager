@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { api } from './lib/api';
+import { api, type SubscriptionLinks } from './lib/api';
 
 type AdminUser = {
   id: string;
@@ -19,14 +19,17 @@ export default function AdminPage() {
   const [creditsToAdd, setCreditsToAdd] = useState('10');
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
+  const [subscriptionLinksSaving, setSubscriptionLinksSaving] = useState(false);
 
   async function loadUsers(event?: FormEvent) {
     event?.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const response = await api.adminGetUsers({ password });
+      const [response, linksResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks()]);
       setUsers(response.users);
+      setSubscriptionLinks(linksResponse.links);
       if (response.users.length > 0 && !selectedUserId) {
         setSelectedUserId(response.users[0].id);
       }
@@ -64,6 +67,21 @@ export default function AdminPage() {
     }
   }
 
+
+  async function saveSubscriptionLinks(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setSubscriptionLinksSaving(true);
+    try {
+      const result = await api.adminSaveSubscriptionLinks({ password, links: subscriptionLinks });
+      setSubscriptionLinks(result.links);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось сохранить ссылки подписок');
+    } finally {
+      setSubscriptionLinksSaving(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-5xl space-y-4">
@@ -90,6 +108,39 @@ export default function AdminPage() {
         </form>
 
         {error ? <div className="rounded-md border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-100">{error}</div> : null}
+
+
+        <form onSubmit={saveSubscriptionLinks} className="rounded-xl border border-fuchsia-400/25 bg-gradient-to-br from-slate-900/90 to-fuchsia-950/30 p-4 shadow-xl">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-fuchsia-100">Ссылки на оплату подписок</h2>
+            <p className="text-xs text-slate-400">Настройте отдельную ссылку для кнопки «Купить подписку» в каждом тарифе.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {([
+              ['start', 'Старт'],
+              ['pro', 'Про'],
+              ['max', 'Максимум']
+            ] as const).map(([key, label]) => (
+              <label key={key} className="text-sm text-slate-200">
+                {label}
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={subscriptionLinks[key]}
+                  onChange={(event) => setSubscriptionLinks((prev) => ({ ...prev, [key]: event.target.value }))}
+                  className="mt-1 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm outline-none ring-fuchsia-400 focus:ring-2"
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            type="submit"
+            disabled={subscriptionLinksSaving}
+            className="mt-4 rounded-md bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {subscriptionLinksSaving ? 'Сохранение...' : 'Сохранить ссылки'}
+          </button>
+        </form>
 
         <div className="grid gap-4 md:grid-cols-[320px_1fr]">
           <section className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">
