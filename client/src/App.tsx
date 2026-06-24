@@ -596,6 +596,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
+  const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
   const [isTimelineOptimizeModalOpen, setIsTimelineOptimizeModalOpen] = useState(false);
   const [timelineOptimizeNote, setTimelineOptimizeNote] = useState('');
   const [timelineOptimizeLoading, setTimelineOptimizeLoading] = useState(false);
@@ -2483,6 +2484,7 @@ export default function App() {
         }}
         onDragEndCapture={() => {
           setDraggedTimelineTaskId(null);
+          setActiveTimelineDropSlot(null);
           setIsTimelineOverdueModalCollapsedForDrag(false);
         }}
         onMouseEnter={(event) => {
@@ -3768,12 +3770,23 @@ export default function App() {
                         {hourGroup.quarters.map((quarter) => (
                           <div
                             key={`${hourGroup.hour}-${quarter.minute}`}
-                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''}`}
+                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
                             title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
                             aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            onDragEnter={(event) => {
+                              event.preventDefault();
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
                             onDragOver={(event) => {
                               event.preventDefault();
                               event.dataTransfer.dropEffect = 'move';
+                              if (isTimelineDragging) setActiveTimelineDropSlot({ hour: hourGroup.hour, minute: quarter.minute });
+                            }}
+                            onDragLeave={(event) => {
+                              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                              setActiveTimelineDropSlot((current) => (
+                                current?.hour === hourGroup.hour && current.minute === quarter.minute ? null : current
+                              ));
                             }}
                             onContextMenu={(event) => {
                               event.preventDefault();
@@ -3789,6 +3802,7 @@ export default function App() {
                               dayDate.setHours(0, 0, 0, 0);
                               await handleTimelineTaskDrop({ date: dayDate, hour: hourGroup.hour, minute: quarter.minute });
                               setDraggedTimelineTaskId(null);
+                              setActiveTimelineDropSlot(null);
                             }}
                           >
                             <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
