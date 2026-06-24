@@ -3108,7 +3108,7 @@ export default function App() {
           <div className="subscription-modal dialog-surface w-full max-w-5xl overflow-hidden rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="subscription-hero relative p-5 sm:p-6">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
-              <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-500/10 px-3 py-1 text-xs font-medium text-fuchsia-200"><Sparkles size={14} /> Больше возможностей ИИ</div>
+              <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
               <h2 className="mt-4 max-w-2xl text-2xl font-bold text-primary sm:text-3xl">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted">Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.</p>
             </div>
@@ -3122,7 +3122,7 @@ export default function App() {
                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300">{plan.badge}</div>
                         <h3 className="mt-2 text-xl font-bold text-primary">{plan.name}</h3>
                       </div>
-                      <div className="rounded-2xl bg-gradient-to-br from-fuchsia-500 to-rose-500 px-3 py-2 text-right text-sm font-bold text-white shadow-lg">{plan.price}</div>
+                      <div className="flex h-12 min-w-[92px] items-center justify-center whitespace-nowrap rounded-2xl bg-gradient-to-br from-fuchsia-500 to-rose-500 px-3 text-sm font-bold text-white shadow-lg">{plan.price}</div>
                     </div>
                     <ul className="mt-4 flex-1 space-y-2 text-sm text-secondary">
                       {plan.features.map((feature) => (
