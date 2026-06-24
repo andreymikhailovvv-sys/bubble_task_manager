@@ -81,6 +81,8 @@ export type CurrentUser = {
   efficiencyResetAt?: string;
   efficiencyScore?: number;
 };
+export type SubscriptionLinks = { start: string; pro: string; max: string };
+
 type AdminUser = {
   id: string;
   name?: string | null;
@@ -221,8 +223,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  adminSaveSubscriptionLinks: (payload: { password: string; links: SubscriptionLinks }) =>
+    request<{ links: SubscriptionLinks }>('/api/admin/subscription-links', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),

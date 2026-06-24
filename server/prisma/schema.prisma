@@ -241,3 +241,10 @@ model TelegramSession {
 
   @@index([userId])
 }
+
+model SubscriptionLink {
+  planKey   String   @id
+  url       String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

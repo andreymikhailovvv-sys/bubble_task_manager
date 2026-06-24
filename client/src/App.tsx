@@ -7,7 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
-import { api, setUnauthorizedHandler, type CurrentUser } from './lib/api';
+import { api, setUnauthorizedHandler, type CurrentUser, type SubscriptionLinks } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment } from './lib/types';
@@ -16,6 +16,12 @@ import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
+
+const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
+  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['2000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений', 'Стоимость: 399 рублей.'] },
+  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['5000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
+  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: ['12000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'Доступ ко всем ИИ-функциям', 'Доступ к самым продвинутым моделям'] }
+];
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_AI_FILE_TYPES = new Set([
@@ -558,6 +564,8 @@ export default function App() {
 
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramLinkUrl, setTelegramLinkUrl] = useState<string | null>(null);
@@ -675,6 +683,14 @@ export default function App() {
   const loadedAiHistoryTaskIdsRef = useRef<Set<string>>(new Set());
   const loadRequestIdRef = useRef(0);
   const [overdueTick, setOverdueTick] = useState(0);
+
+  useEffect(() => {
+    api.getSubscriptionLinks()
+      .then((response) => setSubscriptionLinks(response.links))
+      .catch(() => {
+        // Не блокируем приложение, если ссылки временно недоступны.
+      });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY, isAiNotificationsDefaultEnabled ? '1' : '0');
@@ -3066,10 +3082,15 @@ export default function App() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <div className="light-credit-badge flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300">
+          <button
+            type="button"
+            onClick={() => setIsSubscriptionModalOpen(true)}
+            className="light-credit-badge flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300 transition hover:-translate-y-0.5 hover:bg-slate-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
+            title="Посмотреть платные подписки и увеличить ИИ-кредиты"
+          >
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
-          </div>
+          </button>
           <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
@@ -3080,6 +3101,51 @@ export default function App() {
           </button>
         </div>
       </section>
+
+
+      {isSubscriptionModalOpen ? (
+        <div className="modal-backdrop fixed inset-0 z-[130] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
+          <div className="subscription-modal dialog-surface w-full max-w-5xl overflow-hidden rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="subscription-hero relative p-5 sm:p-6">
+              <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
+              <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
+              <h2 className="mt-4 max-w-2xl text-2xl font-bold text-primary sm:text-3xl">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.</p>
+            </div>
+            <div className="grid gap-4 p-4 sm:grid-cols-3 sm:p-6">
+              {SUBSCRIPTION_PLANS.map((plan) => {
+                const link = subscriptionLinks[plan.key]?.trim();
+                return (
+                  <article key={plan.key} className="subscription-plan-card flex min-h-full flex-col rounded-2xl border p-4 shadow-xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300">{plan.badge}</div>
+                        <h3 className="mt-2 text-xl font-bold text-primary">{plan.name}</h3>
+                      </div>
+                      <div className="flex h-12 min-w-[92px] items-center justify-center whitespace-nowrap rounded-2xl bg-gradient-to-br from-fuchsia-500 to-rose-500 px-3 text-sm font-bold text-white shadow-lg">{plan.price}</div>
+                    </div>
+                    <ul className="mt-4 flex-1 space-y-2 text-sm text-secondary">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-2"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
+                      ))}
+                    </ul>
+                    <a
+                      href={link || undefined}
+                      target={link ? '_blank' : undefined}
+                      rel={link ? 'noreferrer' : undefined}
+                      aria-disabled={!link}
+                      onClick={(event) => { if (!link) event.preventDefault(); }}
+                      className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white hover:-translate-y-0.5 hover:shadow-fuchsia-500/25' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}
+                    >
+                      Купить подписку
+                    </a>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {authModalMode ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm">

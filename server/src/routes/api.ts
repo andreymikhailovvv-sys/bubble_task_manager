@@ -16,6 +16,9 @@ import { onboardingService } from '../services/onboarding.service.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
+const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
+type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
+
 
 const sanitizeLogin = (value: string) => value.trim().toLowerCase();
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
@@ -400,6 +403,15 @@ apiRouter.get('/auth/google/callback', (req, res, next) => {
   });
 });
 
+
+apiRouter.get('/subscription-links', async (_req, res) => {
+  const links = await prisma.subscriptionLink.findMany({
+    where: { planKey: { in: [...SUBSCRIPTION_PLAN_KEYS] } },
+    select: { planKey: true, url: true }
+  });
+  res.json({ links: Object.fromEntries(SUBSCRIPTION_PLAN_KEYS.map((key) => [key, links.find((link) => link.planKey === key)?.url ?? ''])) });
+});
+
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
@@ -440,6 +452,30 @@ apiRouter.post('/admin/users', async (req, res) => {
   });
 
   res.json({ users });
+});
+
+
+apiRouter.post('/admin/subscription-links', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+
+  const rawLinks = req.body?.links ?? {};
+  const links: Record<SubscriptionPlanKey, string> = { start: '', pro: '', max: '' };
+  for (const key of SUBSCRIPTION_PLAN_KEYS) {
+    const value = String(rawLinks?.[key] ?? '').trim();
+    if (value && !/^https?:\/\//i.test(value)) {
+      res.status(400).json({ error: `Ссылка для тарифа ${key} должна начинаться с http:// или https://` });
+      return;
+    }
+    links[key] = value;
+  }
+
+  await Promise.all(SUBSCRIPTION_PLAN_KEYS.map((key) => prisma.subscriptionLink.upsert({
+    where: { planKey: key },
+    create: { planKey: key, url: links[key] },
+    update: { url: links[key] }
+  })));
+
+  res.json({ links });
 });
 
 apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
