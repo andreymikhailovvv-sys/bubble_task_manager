@@ -1704,7 +1704,7 @@ export default function MiniApp() {
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Описание</label>
                 <textarea
-                  value={noteHtmlToPlainText(openedTaskDraft.description)}
+                  value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
                   onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
                   className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
@@ -1973,7 +1973,7 @@ export default function MiniApp() {
                 placeholder="Название подзадачи"
               />
               <textarea
-                value={noteHtmlToPlainText(openedSubtaskDraft.description)}
+                value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
                 className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Описание подзадачи"
