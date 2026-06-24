@@ -3768,8 +3768,9 @@ export default function App() {
                         {hourGroup.quarters.map((quarter) => (
                           <div
                             key={`${hourGroup.hour}-${quarter.minute}`}
-                            className={`timeline-day-quarter-slot relative min-h-11 px-2 py-1.5 ${isTimelineDragging ? 'timeline-drop-target transition-colors' : ''}`}
+                            className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''}`}
                             title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
+                            aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
                             onDragOver={(event) => {
                               event.preventDefault();
                               event.dataTransfer.dropEffect = 'move';
@@ -3791,9 +3792,11 @@ export default function App() {
                             }}
                           >
                             <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
-                            <div className="space-y-1.5 pr-9">
-                              {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
-                            </div>
+                            {quarter.tasks.length > 0 ? (
+                              <div className="space-y-1.5 pr-9">
+                                {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>

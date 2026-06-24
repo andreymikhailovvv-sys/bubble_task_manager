@@ -2365,25 +2365,53 @@ body[data-theme='light'] .subscription-eyebrow {
 
 @layer components {
   .timeline-day-slot-group {
-    background:
-      linear-gradient(to bottom, transparent calc(25% - 1px), color-mix(in srgb, var(--timeline-grid-border) 38%, transparent) calc(25% - 1px), color-mix(in srgb, var(--timeline-grid-border) 38%, transparent) 25%, transparent 25%),
-      linear-gradient(to bottom, transparent calc(50% - 1px), color-mix(in srgb, var(--timeline-grid-border) 46%, transparent) calc(50% - 1px), color-mix(in srgb, var(--timeline-grid-border) 46%, transparent) 50%, transparent 50%),
-      linear-gradient(to bottom, transparent calc(75% - 1px), color-mix(in srgb, var(--timeline-grid-border) 38%, transparent) calc(75% - 1px), color-mix(in srgb, var(--timeline-grid-border) 38%, transparent) 75%, transparent 75%);
+    background: transparent;
   }
 
   .timeline-day-quarter-slot {
-    border-color: color-mix(in srgb, var(--timeline-grid-border) 38%, transparent);
+    border-color: color-mix(in srgb, var(--timeline-grid-border) 28%, transparent);
   }
 
   .timeline-day-quarter-slot:not(:last-child) {
     border-bottom-width: 1px;
   }
 
-  .timeline-day-quarter-slot:hover {
-    background: color-mix(in srgb, var(--timeline-today-bg) 50%, transparent);
+  .timeline-day-quarter-slot-empty {
+    min-height: 1.35rem;
+    padding-bottom: 0.125rem;
+    padding-top: 0.125rem;
+  }
+
+  .timeline-day-quarter-slot-filled {
+    min-height: 2.75rem;
+  }
+
+  .timeline-day-quarter-slot:hover,
+  .timeline-day-quarter-slot-drag-ready {
+    background: color-mix(in srgb, var(--timeline-today-bg) 48%, transparent);
+  }
+
+  .timeline-day-quarter-slot-drag-ready {
+    outline: 1px dashed color-mix(in srgb, var(--accent) 36%, transparent);
+    outline-offset: -3px;
+  }
+
+  .timeline-day-quarter-slot-drag-ready:hover {
+    background: color-mix(in srgb, var(--accent-soft) 72%, var(--timeline-today-bg));
+    outline-color: color-mix(in srgb, var(--accent) 68%, transparent);
   }
 
   .timeline-day-quarter-label {
-    color: color-mix(in srgb, var(--timeline-chip-meta) 54%, transparent);
+    color: color-mix(in srgb, var(--timeline-chip-meta) 48%, transparent);
+    opacity: 0.58;
+  }
+
+  .timeline-day-quarter-slot-empty .timeline-day-quarter-label {
+    opacity: 0;
+  }
+
+  .timeline-day-quarter-slot:hover .timeline-day-quarter-label,
+  .timeline-day-quarter-slot-drag-ready .timeline-day-quarter-label {
+    opacity: 0.72;
   }
 }
