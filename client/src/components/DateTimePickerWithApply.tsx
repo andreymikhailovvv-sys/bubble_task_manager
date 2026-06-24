@@ -2,6 +2,8 @@ import { CalendarDays, Check, PanelsTopLeft, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+const DEFAULT_TIMELINE_PREVIEW_SCROLL_HOUR = 10;
+
 type Props = {
   value?: string | null;
   title?: string;
@@ -71,6 +73,7 @@ export function DateTimePickerWithApply({
   const [previewMonthDate, setPreviewMonthDate] = useState(new Date());
   const [selectedPreviewDate, setSelectedPreviewDate] = useState<Date | null>(null);
   const [previewMode, setPreviewMode] = useState<'month' | 'day'>('month');
+  const previewDayScrollRef = useRef<HTMLDivElement | null>(null);
 
   const formattedValue = useMemo(() => formatValue(value), [value]);
 
@@ -173,6 +176,18 @@ export function DateTimePickerWithApply({
       appRoot.classList.remove('app-background-inert');
     };
   }, [isTimelinePreviewOpen]);
+
+
+  useLayoutEffect(() => {
+    if (!isTimelinePreviewOpen || previewMode !== 'day') return;
+    const scrollContainer = previewDayScrollRef.current;
+    if (!scrollContainer) return;
+
+    window.requestAnimationFrame(() => {
+      const targetRow = scrollContainer.children.item(DEFAULT_TIMELINE_PREVIEW_SCROLL_HOUR) as HTMLElement | null;
+      scrollContainer.scrollTop = targetRow?.offsetTop ?? 0;
+    });
+  }, [isTimelinePreviewOpen, previewMode, selectedPreviewDate]);
 
   const popupPositionClass = popupAlign === 'right' ? 'right-0' : 'left-0';
   const today = useMemo(() => new Date(), []);
@@ -371,7 +386,7 @@ export function DateTimePickerWithApply({
                   <button type="button" className="timeline-nav-button rounded border px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
                   <p className="text-xs text-muted">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
-                <div className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+                <div ref={previewDayScrollRef} className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
                   {selectedDayTasksByHour.map(({ hour, quarters }) => (
                     <div key={hour} className="timeline-preview-hour-row flex w-full items-start gap-2 rounded border p-2 text-left">
                       <span className="timeline-today-text w-14 shrink-0 pt-1 text-xs">{`${hour.toString().padStart(2, '0')}:00`}</span>
