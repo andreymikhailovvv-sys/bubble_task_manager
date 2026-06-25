@@ -1777,6 +1777,14 @@ export default function App() {
     setIsFocusSetupOpen(true);
   };
 
+  const handleFocusTimerMinutesChange = (minutes: number) => {
+    setFocusTimerMinutes(minutes);
+    if (!isFocusTimerRunning) {
+      setFocusRemainingSeconds(minutes * 60);
+      setIsFocusSessionFinished(false);
+    }
+  };
+
   const startFocusSession = (ids: string[]) => {
     const selected = ids.slice(0, 3);
     if (selected.length === 0) return;
@@ -3401,12 +3409,12 @@ ${allContext}`,
       {isFocusModeOpen && focusActiveTask ? (
         <div className="modal-backdrop fixed inset-0 z-[134] flex items-center justify-center p-3 backdrop-blur-sm">
           <div className="focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-[1500px] gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[260px_minmax(360px,1fr)_430px]" onClick={(event) => event.stopPropagation()}>
-            <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/60" onClick={() => setIsFocusModeOpen(false)} aria-label="Свернуть"><X size={18} /></button>
+            <button className="absolute right-2 top-2 z-20 rounded-full p-2 text-muted transition hover:bg-white/60" onClick={() => setIsFocusModeOpen(false)} aria-label="Свернуть"><X size={18} /></button>
             <aside className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
               <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
               <div className="flex min-h-0 flex-1 flex-col justify-center">
                 <div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
-                <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => setFocusTimerMinutes(Number(event.target.value))} disabled={isFocusTimerRunning}>
+                <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => handleFocusTimerMinutesChange(Number(event.target.value))} disabled={isFocusTimerRunning}>
                   {FOCUS_TIMER_OPTIONS.map((value) => <option key={value} value={value} className={FOCUS_RECOMMENDED_MINUTES.has(value) ? 'text-emerald-600' : ''}>{value} минут{FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}</option>)}
                 </select>
                 <div className="mt-4 flex justify-center gap-3">
@@ -3424,11 +3432,10 @@ ${allContext}`,
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <h2 className="mt-2 text-3xl font-bold text-primary">{focusActiveTask.title}</h2>
                 <p className="mt-1 text-sm font-medium text-violet-500">{focusActiveTask.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusActiveTask.dueDate)}` : 'Дедлайн не задан'}</p>
-                <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="mt-3 flex min-h-0 items-start justify-between gap-3">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
+                  <button type="button" className="notes-open-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(true); }} title="Открыть заметки" aria-label="Открыть заметки"><FileText size={16} /></button>
                 </div>
-                <button type="button" className="notes-open-button mt-2 inline-flex items-center gap-2 self-end rounded-full border px-3 py-1.5 text-xs font-semibold transition" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(true); }} title="Открыть расширенное описание"><Maximize2 size={15} /> Расширенное описание</button>
-                <div className="mt-5 grid gap-2 sm:grid-cols-3"><span className="focus-metric">Важность {focusActiveTask.importance}/5</span><span className="focus-metric">Срочность {focusActiveTask.urgency}/5</span><span className="focus-metric">Коэф. {getTaskCoefficient(focusActiveTask).toFixed(2)}</span></div>
                 <h3 className="mt-4 font-semibold text-primary">Подзадачи</h3>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
                   {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
@@ -3445,15 +3452,17 @@ ${allContext}`,
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside className="focus-ai-panel flex min-h-0 flex-col rounded-3xl border p-4">
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-2 pr-8">
                 <div><div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div><p className="mt-1 text-xs text-muted">ИИ знает 3 выбранные задачи и текущую карточку: {focusActiveTask.title}</p></div>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
+                <div className="flex items-center gap-1.5">
+                  <div className="surface-muted inline-flex items-center gap-1 rounded-lg border p-1 text-[11px]">
+                    <button type="button" className={`ai-mode-toggle ${focusAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('fast')}><span className="block text-left">Быстрая</span><span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span></button>
+                    <button type="button" className={`ai-mode-toggle ${focusAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('smart')}><span className="block text-left">Умная</span><span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span></button>
+                  </div>
+                  <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
+                </div>
               </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button type="button" className={`ai-mode-toggle ${focusAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('fast')}>Быстрая</button>
-                <button type="button" className={`ai-mode-toggle ${focusAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('smart')}>Умная</button>
-                {!isFocusTimerRunning ? <span className="ml-auto text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
-              </div>
+              {!isFocusTimerRunning ? <span className="mt-2 text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
               <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
                 {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{renderAiMessageContent(message.content)}</div>)}
                 {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
@@ -3461,7 +3470,7 @@ ${allContext}`,
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-              <div className="mt-3 flex gap-2"><textarea className="form-field h-20 flex-1 resize-none rounded-xl border p-2 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Спросить по текущей задаче…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted rounded-xl px-3 disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={18} /></button><button className="rounded-xl bg-violet-600 px-3 text-white disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={18} /> : <SendHorizontal size={18} />}</button></div>
+              <div className="mt-3"><textarea className="form-field h-20 w-full resize-none rounded-xl border p-2 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Спросить по текущей задаче…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><div className="mt-2 flex items-center justify-between gap-2"><button className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={12} /> Прикрепить файл</button><button className="primary-button inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={13} /> : <SendHorizontal size={13} />} Отправить</button></div></div>
             </aside>
           </div>
         </div>
@@ -3475,9 +3484,11 @@ ${allContext}`,
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноразмерный диалог режима концентрации</p>
                 <p className="text-xs text-muted">Текущая задача: {focusActiveTask.title}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className={`ai-mode-toggle ${focusAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('fast')}>Быстрая</button>
-                <button type="button" className={`ai-mode-toggle ${focusAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('smart')}>Умная</button>
+              <div className="flex items-center gap-1.5">
+                <div className="surface-muted inline-flex items-center gap-1 rounded-lg border p-1 text-[11px]">
+                  <button type="button" className={`ai-mode-toggle ${focusAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('fast')}><span className="block text-left">Быстрая</span><span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span></button>
+                  <button type="button" className={`ai-mode-toggle ${focusAiMode === 'smart' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('smart')}><span className="block text-left">Умная</span><span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span></button>
+                </div>
                 <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
@@ -3489,11 +3500,13 @@ ${allContext}`,
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-            <div className="mt-3 flex gap-2">
-              <textarea className="form-field min-h-24 flex-1 resize-none rounded-xl border p-3 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение для ИИ…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
+            <div className="mt-3">
+              <textarea className="form-field min-h-24 w-full resize-none rounded-xl border p-3 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение для ИИ…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
-              <button className="surface-muted rounded-xl px-4 disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={18} /></button>
-              <button className="rounded-xl bg-violet-600 px-4 text-white disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={18} /> : <SendHorizontal size={18} />}</button>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={12} /> Прикрепить файл</button>
+                <button className="primary-button inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={13} /> : <SendHorizontal size={13} />} Отправить</button>
+              </div>
             </div>
           </div>
         </div>
@@ -4743,7 +4756,7 @@ ${allContext}`,
         />
       ) : null}
 
-      {focusedTask && focusedDraft ? (
+      {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
           <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
     
