@@ -2531,3 +2531,31 @@ body[data-theme='light'] .subscription-eyebrow {
   0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 18px 40px rgba(124, 58, 237, 0.34); }
   50% { transform: translateY(-4px) scale(1.04); box-shadow: 0 24px 52px rgba(192, 38, 211, 0.42); }
 }
+
+.focus-mode-shell > * {
+  min-height: 0;
+}
+
+.focus-task-description {
+  max-height: 9rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.focus-subtask-list {
+  max-height: 16rem;
+}
+
+@media (max-height: 760px) {
+  .focus-task-description {
+    max-height: 6.5rem;
+  }
+
+  .focus-subtask-list {
+    max-height: 11rem;
+  }
+
+  .focus-card-peek {
+    padding-block: 0.75rem;
+  }
+}
