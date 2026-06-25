@@ -1513,8 +1513,10 @@ export default function App() {
 
   useEffect(() => {
     if (isFocusTimerRunning) return;
-    setFocusRemainingSeconds(focusTimerMinutes * 60);
-  }, [focusTimerMinutes, isFocusTimerRunning]);
+    if (focusRemainingSeconds <= 0 || focusRemainingSeconds === focusTimerMinutes * 60) {
+      setFocusRemainingSeconds(focusTimerMinutes * 60);
+    }
+  }, [focusRemainingSeconds, focusTimerMinutes, isFocusTimerRunning]);
 
   useEffect(() => {
     if (focusActiveIndex < focusTasks.length) return;
@@ -3292,40 +3294,52 @@ export default function App() {
         <div className="modal-backdrop fixed inset-0 z-[134] flex items-center justify-center p-3 backdrop-blur-sm">
           <div className="focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-7xl gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[260px_minmax(360px,1fr)_340px]" onClick={(event) => event.stopPropagation()}>
             <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/60" onClick={() => setIsFocusModeOpen(false)} aria-label="Свернуть"><X size={18} /></button>
-            <aside className="focus-side-panel min-h-0 overflow-y-auto rounded-3xl border p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
-              <div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
-              <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => setFocusTimerMinutes(Number(event.target.value))} disabled={isFocusTimerRunning}>
-                {FOCUS_TIMER_OPTIONS.map((value) => <option key={value} value={value} className={FOCUS_RECOMMENDED_MINUTES.has(value) ? 'text-emerald-600' : ''}>{value} минут{FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}</option>)}
-              </select>
-              <div className="mt-4 flex justify-center gap-3">
-                <button className="focus-timer-control primary" onClick={() => isFocusTimerRunning ? setIsFocusTimerRunning(false) : startFocusTimer()}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
-                <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
+            <aside className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
+              <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
+              <div className="flex min-h-0 flex-1 flex-col justify-center">
+                <div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
+                <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => setFocusTimerMinutes(Number(event.target.value))} disabled={isFocusTimerRunning}>
+                  {FOCUS_TIMER_OPTIONS.map((value) => <option key={value} value={value} className={FOCUS_RECOMMENDED_MINUTES.has(value) ? 'text-emerald-600' : ''}>{value} минут{FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}</option>)}
+                </select>
+                <div className="mt-4 flex justify-center gap-3">
+                  <button className="focus-timer-control primary" onClick={() => isFocusTimerRunning ? setIsFocusTimerRunning(false) : startFocusTimer()}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
+                  <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
+                </div>
+                <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
               </div>
-              <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
             </aside>
-            <main className="focus-task-stack flex min-h-0 flex-col items-center justify-center gap-2 overflow-hidden">
-              <button className="focus-stack-arrow" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
-              <div className="focus-card-peek -mb-12">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
+            <main className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
+              <div className="focus-card-peek -mb-1">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
+              <button className="focus-stack-arrow absolute top-[5.4rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <h2 className="mt-2 text-3xl font-bold text-primary">{focusActiveTask.title}</h2>
-                <p className="focus-task-description mt-3 whitespace-pre-wrap text-sm leading-6 text-muted">{focusActiveTask.description || 'Описание не заполнено.'}</p>
+                <p className="mt-1 text-sm font-medium text-violet-500">{focusActiveTask.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusActiveTask.dueDate)}` : 'Дедлайн не задан'}</p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
+                </div>
+                <button type="button" className="notes-open-button mt-2 inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-full border transition" onClick={() => setEditorState({ task: focusActiveTask })} title="Открыть заметки" aria-label="Открыть заметки"><Maximize2 size={15} /></button>
                 <div className="mt-5 grid gap-2 sm:grid-cols-3"><span className="focus-metric">Важность {focusActiveTask.importance}/5</span><span className="focus-metric">Срочность {focusActiveTask.urgency}/5</span><span className="focus-metric">Коэф. {getTaskCoefficient(focusActiveTask).toFixed(2)}</span></div>
                 <h3 className="mt-4 font-semibold text-primary">Подзадачи</h3>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
-                  {(subtaskMap[focusActiveTask.id] ?? []).map((subtask) => <li key={subtask.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{subtask.status === 'DONE' ? '✓' : '•'} {subtask.title}</li>)}
-                  {(subtaskMap[focusActiveTask.id] ?? []).length === 0 ? <li className="text-sm text-subtle">Подзадач пока нет.</li> : null}
+                  {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
+                    <li key={subtask.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
+                      <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-violet-700" onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
+                    </li>
+                  ))}
+                  {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}
                 </ul>
               </motion.article>
-              <div className="focus-card-peek -mt-12">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
-              <button className="focus-stack-arrow" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
+              <button className="focus-stack-arrow absolute bottom-[5.4rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
+              <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside className="focus-ai-panel flex min-h-0 flex-col rounded-3xl border p-4">
               <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
               <p className="mt-1 text-xs text-muted">ИИ знает 3 выбранные задачи и текущую карточку: {focusActiveTask.title}</p>
               <div className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
-                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p><LinkifiedText text={message.content} /></div>)}
+                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{renderAiMessageContent(message.content)}</div>)}
                 {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер или задайте вопрос — ИИ предложит первые шаги.</p> : null}
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
@@ -3335,8 +3349,8 @@ export default function App() {
         </div>
       ) : null}
 
-      {isFocusTimerRunning && !isFocusModeOpen ? (
-        <button className="focus-floating-timer fixed bottom-6 right-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
+      {focusRemainingSeconds > 0 && focusRemainingSeconds < focusTimerMinutes * 60 && !isFocusModeOpen ? (
+        <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
           <span className="text-xs">Фокус</span><span className="font-bold tabular-nums">{formatFocusTime(focusRemainingSeconds)}</span>
         </button>
       ) : null}
