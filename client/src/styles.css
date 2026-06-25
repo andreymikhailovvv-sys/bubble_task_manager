@@ -2537,7 +2537,7 @@ body[data-theme='light'] .subscription-eyebrow {
 }
 
 .focus-task-description {
-  max-height: 9rem;
+  max-height: 6rem;
   overflow-y: auto;
   padding-right: 0.25rem;
 }
@@ -2548,7 +2548,7 @@ body[data-theme='light'] .subscription-eyebrow {
 
 @media (max-height: 760px) {
   .focus-task-description {
-    max-height: 6.5rem;
+    max-height: 4rem;
   }
 
   .focus-subtask-list {
