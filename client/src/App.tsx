@@ -584,6 +584,9 @@ export default function App() {
   const [focusAiMessages, setFocusAiMessages] = useState<TaskAiMessage[]>([]);
   const [focusAiLoading, setFocusAiLoading] = useState(false);
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
+  const [focusSphereFilterId, setFocusSphereFilterId] = useState('all');
+  const [focusSessionInitialDoneSubtaskIds, setFocusSessionInitialDoneSubtaskIds] = useState<Set<string>>(new Set());
+  const [focusSessionAiRequestCount, setFocusSessionAiRequestCount] = useState(0);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
@@ -686,6 +689,8 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const focusAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusActiveTaskIdRef = useRef<string | null>(null);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1256,11 +1261,21 @@ export default function App() {
     () => [...activeTasks].sort((a, b) => getTaskCoefficient(b) - getTaskCoefficient(a)),
     [activeTasks]
   );
+  const visibleFocusCandidateTasks = useMemo(
+    () => focusSphereFilterId === 'all'
+      ? focusCandidateTasks
+      : focusCandidateTasks.filter((task) => (task.sphereId ?? '') === focusSphereFilterId),
+    [focusCandidateTasks, focusSphereFilterId]
+  );
   const focusTasks = useMemo(
     () => focusSelectedTaskIds.map((id) => rootTasks.find((task) => task.id === id)).filter((task): task is Task => Boolean(task)),
     [focusSelectedTaskIds, rootTasks]
   );
   const focusActiveTask = focusTasks[focusActiveIndex] ?? focusTasks[0] ?? null;
+  const focusCompletedSubtasksCount = useMemo(
+    () => subtasks.filter((task) => task.status === 'DONE' && !focusSessionInitialDoneSubtaskIds.has(task.id)).length,
+    [focusSessionInitialDoneSubtaskIds, subtasks]
+  );
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
   const completedTasksForPanel = useMemo(() => {
     if (completedFilter === 'all') return completedTasks;
@@ -1513,7 +1528,7 @@ export default function App() {
 
   useEffect(() => {
     if (isFocusTimerRunning) return;
-    if (focusRemainingSeconds <= 0 || focusRemainingSeconds === focusTimerMinutes * 60) {
+    if (focusRemainingSeconds === focusTimerMinutes * 60) {
       setFocusRemainingSeconds(focusTimerMinutes * 60);
     }
   }, [focusRemainingSeconds, focusTimerMinutes, isFocusTimerRunning]);
@@ -1522,6 +1537,25 @@ export default function App() {
     if (focusActiveIndex < focusTasks.length) return;
     setFocusActiveIndex(0);
   }, [focusActiveIndex, focusTasks.length]);
+
+
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      if (focusAiDialogContainerRef.current) {
+        focusAiDialogContainerRef.current.scrollTop = focusAiDialogContainerRef.current.scrollHeight;
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [focusAiMessages, focusAiLoading, isFocusModeOpen]);
+
+  useEffect(() => {
+    if (!isFocusModeOpen || !focusActiveTask) return;
+    const previousTaskId = previousFocusActiveTaskIdRef.current;
+    previousFocusActiveTaskIdRef.current = focusActiveTask.id;
+    if (!previousTaskId || previousTaskId === focusActiveTask.id) return;
+    void sendFocusAiQuestion('Пользователь переключился на эту задачу. Дай ближайшие конкретные действия именно по ней.');
+  }, [focusActiveTask?.id, isFocusModeOpen]);
 
   const sendFocusedAiQuestion = async (options?: {
     questionOverride?: string;
@@ -1728,7 +1762,7 @@ export default function App() {
   };
 
   const openFocusSetup = () => {
-    setFocusSelectedTaskIds((prev) => prev.length === 3 ? prev : focusCandidateTasks.slice(0, 3).map((task) => task.id));
+    setFocusSelectedTaskIds((prev) => prev.length === 3 ? prev : visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
     setIsFocusSetupOpen(true);
   };
 
@@ -1739,6 +1773,9 @@ export default function App() {
     setFocusActiveIndex(0);
     setFocusAiMessages([]);
     setFocusAiError(null);
+    setFocusSessionInitialDoneSubtaskIds(new Set(subtasks.filter((task) => task.status === 'DONE').map((task) => task.id)));
+    setFocusSessionAiRequestCount(0);
+    previousFocusActiveTaskIdRef.current = selected[0] ?? null;
     setIsFocusSetupOpen(false);
     setIsFocusModeOpen(true);
   };
@@ -1776,6 +1813,7 @@ export default function App() {
     setFocusAiDraft('');
     setFocusAiError(null);
     setFocusAiLoading(true);
+    setFocusSessionAiRequestCount((count) => count + 1);
     try {
       const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: question, mode: 'smart' });
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]);
@@ -3266,21 +3304,30 @@ export default function App() {
               <button className="rounded-full p-2 text-muted transition hover:bg-slate-100" onClick={() => setIsFocusSetupOpen(false)} aria-label="Закрыть"><X size={18} /></button>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white" onClick={() => setFocusSelectedTaskIds(focusCandidateTasks.slice(0, 3).map((task) => task.id))}>Подобрать автоматически</button>
+              <button type="button" className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white" onClick={() => setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id))}>Подобрать автоматически</button>
               <span className="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600">Выбрано: {focusSelectedTaskIds.length}/3</span>
+              <label className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                <span>Сектор</span>
+                <select className="bg-transparent text-sm font-semibold outline-none" value={focusSphereFilterId} onChange={(event) => setFocusSphereFilterId(event.target.value)}>
+                  <option value="all">Все</option>
+                  {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
+                </select>
+              </label>
             </div>
-            <div className="mt-4 grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-              {focusCandidateTasks.map((task) => {
+            <div className="mt-4 grid min-h-0 flex-1 gap-3 overflow-y-auto px-1 pt-2 sm:grid-cols-2">
+              {visibleFocusCandidateTasks.map((task) => {
                 const selected = focusSelectedTaskIds.includes(task.id);
+                const sphere = task.sphereId ? spheres.find((item) => item.id === task.sphereId) : null;
                 return (
                   <button key={task.id} type="button" onClick={() => toggleFocusTaskSelection(task.id)} className={`focus-task-pick rounded-2xl border p-4 text-left transition ${selected ? 'selected' : ''}`}>
                     <div className="flex items-start justify-between gap-3"><h3 className="font-semibold text-primary">{task.title}</h3>{selected ? <Check className="text-violet-600" size={18} /> : null}</div>
+                    {sphere ? <span className="mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold text-white shadow-sm" style={{ backgroundColor: sphere.color }}>{sphere.name}</span> : null}
                     <p className="mt-2 line-clamp-2 text-xs text-muted">{task.description || 'Описание не заполнено'}</p>
                     <p className="mt-3 text-xs font-semibold text-violet-600">Коэффициент: {getTaskCoefficient(task).toFixed(2)}</p>
                   </button>
                 );
               })}
-              {focusCandidateTasks.length === 0 ? <p className="text-sm text-muted">Нет активных задач для концентрации.</p> : null}
+              {visibleFocusCandidateTasks.length === 0 ? <p className="text-sm text-muted">Нет активных задач для концентрации в выбранном секторе.</p> : null}
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button className="surface-muted rounded px-4 py-2 text-sm" onClick={() => setIsFocusSetupOpen(false)}>Отмена</button>
@@ -3318,7 +3365,7 @@ export default function App() {
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
-                <button type="button" className="notes-open-button mt-2 inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-full border transition" onClick={() => setEditorState({ task: focusActiveTask })} title="Открыть заметки" aria-label="Открыть заметки"><Maximize2 size={15} /></button>
+                <button type="button" className="notes-open-button mt-2 inline-flex h-8 w-8 shrink-0 items-center justify-center self-end rounded-full border transition" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(true); }} title="Открыть заметки" aria-label="Открыть заметки"><Maximize2 size={15} /></button>
                 <div className="mt-5 grid gap-2 sm:grid-cols-3"><span className="focus-metric">Важность {focusActiveTask.importance}/5</span><span className="focus-metric">Срочность {focusActiveTask.urgency}/5</span><span className="focus-metric">Коэф. {getTaskCoefficient(focusActiveTask).toFixed(2)}</span></div>
                 <h3 className="mt-4 font-semibold text-primary">Подзадачи</h3>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
@@ -3338,12 +3385,13 @@ export default function App() {
             <aside className="focus-ai-panel flex min-h-0 flex-col rounded-3xl border p-4">
               <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
               <p className="mt-1 text-xs text-muted">ИИ знает 3 выбранные задачи и текущую карточку: {focusActiveTask.title}</p>
-              <div className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
+              <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
                 {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{renderAiMessageContent(message.content)}</div>)}
                 {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер или задайте вопрос — ИИ предложит первые шаги.</p> : null}
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
-              <div className="mt-3 flex gap-2"><textarea className="form-field h-20 flex-1 resize-none rounded-xl border p-2 text-sm" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} placeholder="Спросить по текущей задаче…" /><button className="rounded-xl bg-violet-600 px-3 text-white disabled:opacity-50" disabled={focusAiLoading} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={18} /> : <SendHorizontal size={18} />}</button></div>
+              {focusRemainingSeconds <= 0 ? <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p></div> : null}
+              <div className="mt-3 flex gap-2"><textarea className="form-field h-20 flex-1 resize-none rounded-xl border p-2 text-sm" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder="Спросить по текущей задаче…" /><button className="rounded-xl bg-violet-600 px-3 text-white disabled:opacity-50" disabled={focusAiLoading} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={18} /> : <SendHorizontal size={18} />}</button></div>
             </aside>
           </div>
         </div>
@@ -3353,6 +3401,25 @@ export default function App() {
         <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
           <span className="text-xs">Фокус</span><span className="font-bold tabular-nums">{formatFocusTime(focusRemainingSeconds)}</span>
         </button>
+      ) : null}
+
+      {isFocusModeOpen && isFocusedNotesEditorOpen && focusedTask && focusedDraft ? (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setIsFocusedNotesEditorOpen(false)}>
+          <div className="dialog-surface w-full max-w-3xl rounded-3xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Заметки по задаче</p>
+                <h3 className="text-lg font-bold text-primary">{focusedTask.title}</h3>
+              </div>
+              <button className="rounded-full p-2 text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedNotesEditorOpen(false)} aria-label="Закрыть заметки"><X size={18} /></button>
+            </div>
+            <NotesEditor
+              value={focusedDraft.description ?? ''}
+              onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
+              onClose={() => setIsFocusedNotesEditorOpen(false)}
+            />
+          </div>
+        </div>
       ) : null}
 
 
