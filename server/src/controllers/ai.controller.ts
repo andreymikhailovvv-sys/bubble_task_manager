@@ -11,6 +11,17 @@ type ChatAttachment = {
   size: number;
 };
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
+
+const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
+const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
+const sendAiError = (res: Response, error: unknown, fallback = 'Unknown AI error') => {
+  const message = error instanceof Error ? error.message : fallback;
+  if (message === INSUFFICIENT_AI_CREDITS_ERROR) {
+    res.status(402).json({ error: INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE });
+    return;
+  }
+  res.status(500).json({ error: message });
+};
 const normalizeTimeZone = (candidate: string): string | null => {
   const normalized = candidate.trim();
   if (!normalized) return null;
@@ -58,8 +69,7 @@ export const aiController = {
       });
       res.json({ messages });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   askGeneralAssistant: async (req: Request, res: Response) => {
@@ -94,8 +104,7 @@ export const aiController = {
       });
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   parseRecurrence: async (req: Request, res: Response) => {
@@ -110,8 +119,7 @@ export const aiController = {
       const nextDueDate = computeNextRecurringDueDate(result.schedule, new Date());
       res.json({ ...result, nextDueDate: nextDueDate?.toISOString() ?? null });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   undoGeneralAssistantAction: async (req: Request, res: Response) => {
@@ -123,8 +131,7 @@ export const aiController = {
       });
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   getTaskAssistantHistory: async (req: Request, res: Response) => {
@@ -135,8 +142,7 @@ export const aiController = {
       });
       res.json({ messages });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   askTaskAssistant: async (req: Request, res: Response) => {
@@ -212,7 +218,7 @@ export const aiController = {
         error: message,
         stack: error instanceof Error ? error.stack : null
       });
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   appendTaskAssistantMessages: async (req: Request, res: Response) => {
@@ -240,8 +246,7 @@ export const aiController = {
       });
       res.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   generateSubtasks: async (req: Request, res: Response) => {
@@ -256,6 +261,10 @@ export const aiController = {
       res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
+      if (message === INSUFFICIENT_AI_CREDITS_ERROR) {
+        res.status(402).json({ error: INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE });
+        return;
+      }
       const status = message === 'У задачи уже есть подзадачи' ? 409 : 500;
       res.status(status).json({ error: message });
     }
@@ -283,8 +292,7 @@ export const aiController = {
 
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   optimizeTimelineSchedule: async (req: Request, res: Response) => {
@@ -300,8 +308,7 @@ export const aiController = {
       });
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   postponeOverdueWithAi: async (req: Request, res: Response) => {
@@ -310,8 +317,7 @@ export const aiController = {
       const result = await aiAssistantService.postponeOverdueWithAi({ userId: req.user!.id, userTimeZone });
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   applyTimelineOptimization: async (req: Request, res: Response) => {
@@ -320,8 +326,7 @@ export const aiController = {
       const result = await aiAssistantService.applyTimelineOptimization({ userId: req.user!.id, plan });
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   },
   generateTaskFromPrompt: async (req: Request, res: Response) => {
@@ -342,8 +347,7 @@ export const aiController = {
       });
       res.json(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown AI error';
-      res.status(500).json({ error: message });
+      sendAiError(res, error);
     }
   }
 };
