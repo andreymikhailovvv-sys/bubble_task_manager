@@ -5363,7 +5363,7 @@ ${allContext}`,
                       whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
                       className={`list-item-surface relative flex items-center gap-2 rounded px-2 py-1 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                     >
-                      <span className="absolute left-1 top-1 h-2 w-2 rounded-full border border-white/70 shadow-sm" style={{ backgroundColor: getSubtaskImportanceColor(subtask.importance) }} title="Важность подзадачи" />
+                      <span className="subtask-importance-corner" style={{ borderTopColor: getSubtaskImportanceColor(subtask.importance) }} title="Важность подзадачи" />
                       <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
                         <GripVertical size={14} />
                       </button>
