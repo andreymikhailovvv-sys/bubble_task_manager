@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
-import { api } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
@@ -1279,8 +1279,13 @@ export default function MiniApp() {
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ');
-      setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: baseDialog }));
+      const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
+      setError(message);
+      if (message === INSUFFICIENT_AI_CREDITS_MESSAGE) {
+        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: [...nextDialog, { role: 'assistant', content: INSUFFICIENT_AI_CREDITS_MESSAGE }] }));
+      } else {
+        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: baseDialog }));
+      }
     } finally {
       setAiLoadingTaskId(null);
     }

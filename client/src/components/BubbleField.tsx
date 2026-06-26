@@ -1154,7 +1154,6 @@ export function BubbleField({
         </div>,
         document.body
       ) : null}
-      <div className="bubble-zoom-badge pointer-events-none absolute bottom-3 left-3 rounded border px-3 py-1 text-xs">Наведи на пузырь</div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ type UnauthorizedHandler = () => void;
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
+export const INSUFFICIENT_AI_CREDITS_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
 export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
@@ -42,7 +43,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
             ? payload.message
             : null;
         if (candidate?.trim()) {
-          errorMessage = candidate.trim();
+          errorMessage = candidate.trim() === 'Недостаточно AI кредитов' ? INSUFFICIENT_AI_CREDITS_MESSAGE : candidate.trim();
         }
       } else {
         const payload = await response.text();

@@ -7,7 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
-import { api, setUnauthorizedHandler, type CurrentUser, type SubscriptionLinks } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CurrentUser, type SubscriptionLinks } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment } from './lib/types';
@@ -162,7 +162,7 @@ const EFFICIENCY_NIGHT_END_HOUR = 8;
 
 const EFFICIENCY_PENALTIES = {
   inactivePerHour: 0.035,
-  nightMultiplier: 0.5
+  nightMultiplier: 0.25
 } as const;
 
 type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
@@ -217,7 +217,7 @@ function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number,
       penalty += EFFICIENCY_PENALTIES.inactivePerHour * multiplier;
     }
     const nextScore = Math.max(0, score - penalty);
-    appliedPenalty += score - nextScore;
+    appliedPenalty += penalty;
     score = nextScore;
     cursorMs = nextMs;
   };
@@ -1614,14 +1614,14 @@ export default function App() {
       await load();
     } catch (error) {
       const status = typeof (error as { status?: unknown })?.status === 'number' ? Number((error as { status?: number }).status) : null;
-      const message = status === 402 || status === 403
-        ? 'Недостаточно кредитов для отправки сообщения.'
+      const message = status === 402 || (error instanceof Error && error.message === INSUFFICIENT_AI_CREDITS_MESSAGE)
+        ? INSUFFICIENT_AI_CREDITS_MESSAGE
         : 'Ошибка отправки сообщения. Попробуйте ещё раз.';
       console.error('[AI task chat] send failed', error);
       setAiError(message);
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: 'Ошибка отправки сообщения. Попробуйте ещё раз.' }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: message }]
       }));
     } finally {
       setAiLoadingTaskId(null);
@@ -1864,7 +1864,7 @@ ${allContext}`,
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setFocusAiError(message);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: 'Не удалось ответить в режиме концентрации. Попробуйте ещё раз.' }]);
+      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message === INSUFFICIENT_AI_CREDITS_MESSAGE ? INSUFFICIENT_AI_CREDITS_MESSAGE : 'Не удалось ответить в режиме концентрации. Попробуйте ещё раз.' }]);
     } finally {
       setFocusAiLoading(false);
     }
@@ -1930,7 +1930,7 @@ ${allContext}`,
       setGeneralAiError(message);
       setGeneralAiMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: 'Не удалось выполнить запрос. Попробуйте ещё раз.' }
+        { id: crypto.randomUUID(), role: 'assistant', content: message === INSUFFICIENT_AI_CREDITS_MESSAGE ? INSUFFICIENT_AI_CREDITS_MESSAGE : 'Не удалось выполнить запрос. Попробуйте ещё раз.' }
       ]);
     } finally {
       setGeneralAiLoading(false);
@@ -3325,7 +3325,7 @@ ${allContext}`,
                 <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
                 <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="efficiency-rating-positive text-emerald-300">+0.000</span>.</li>
                 <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие (после 3 часов, ночью ×0.5): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="efficiency-rating-negative text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="efficiency-rating-positive text-emerald-300">0.000</span>}.</li>
+                <li>• Штраф за бездействие (после 3 часов, ночью ×0.25): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="efficiency-rating-negative text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="efficiency-rating-positive text-emerald-300">0.000</span>}.</li>
               </ul>
             </div>
           ) : null}

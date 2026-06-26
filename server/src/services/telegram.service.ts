@@ -19,6 +19,9 @@ const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
 const TELEGRAM_LINK_SECRET = process.env.TELEGRAM_LINK_SECRET?.trim() || BOT_TOKEN || null;
 const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
 const TELEGRAM_DEEP_LINK_PREFIX = 'link_';
+const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
+const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
+const normalizeAiErrorMessage = (message: string) => message === INSUFFICIENT_AI_CREDITS_ERROR ? INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE : message;
 
 type TelegramLinkTokenRecord = {
   userId: string;
@@ -882,7 +885,7 @@ const createTaskFromPromptAndNotify = async (
 
     await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.';
+    const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.');
     await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
   }
 };
@@ -1033,7 +1036,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
       return;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось обработать голосовое.';
+      const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать голосовое.');
       await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
       return;
     }
@@ -1082,7 +1085,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
           attachment = loaded;
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Не удалось обработать файл.';
+        const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать файл.');
         await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardBackTask(session.activeTaskId));
         return;
       }
@@ -1109,32 +1112,37 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     const userMessage = attachment
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файл: ${attachment.name}`
       : question;
-    const result = await aiAssistantService.askTaskAssistant({
-      userId: session.userId,
-      taskId: session.activeTaskId,
-      question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файла и ответь по задаче.',
-      history,
-      mode: 'fast',
-      attachments: attachment ? [attachment] : [],
-      userTimeZone: user?.timeZone || MOSCOW_TIMEZONE
-    });
+    try {
+      const result = await aiAssistantService.askTaskAssistant({
+        userId: session.userId,
+        taskId: session.activeTaskId,
+        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файла и ответь по задаче.',
+        history,
+        mode: 'fast',
+        attachments: attachment ? [attachment] : [],
+        userTimeZone: user?.timeZone || MOSCOW_TIMEZONE
+      });
 
-    await aiAssistantService.appendTaskDialogMessages({
-      userId: session.userId,
-      taskId: session.activeTaskId,
-      messages: [
-        { role: 'user', content: userMessage },
-        { role: 'assistant', content: result.answer }
-      ]
-    });
+      await aiAssistantService.appendTaskDialogMessages({
+        userId: session.userId,
+        taskId: session.activeTaskId,
+        messages: [
+          { role: 'user', content: userMessage },
+          { role: 'assistant', content: result.answer }
+        ]
+      });
 
-    pendingAiAttachmentByChatId.delete(chatId);
-    await setSession(chatId, { mode: 'AI_CHAT' });
-    await sendMessage(
-      chatId,
-      `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}\n\n✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.`,
-      keyboardBackTask(session.activeTaskId)
-    );
+      pendingAiAttachmentByChatId.delete(chatId);
+      await setSession(chatId, { mode: 'AI_CHAT' });
+      await sendMessage(
+        chatId,
+        `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}\n\n✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.`,
+        keyboardBackTask(session.activeTaskId)
+      );
+    } catch (error) {
+      const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось получить ответ ИИ.');
+      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardBackTask(session.activeTaskId));
+    }
     return;
   }
 
@@ -1186,7 +1194,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
           attachment = loaded;
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Не удалось обработать файл.';
+        const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать файл.');
         await sendMessage(chatId, `⚠️ ${escapeHtml(message)}`, keyboardReplyMain);
         return;
       }
