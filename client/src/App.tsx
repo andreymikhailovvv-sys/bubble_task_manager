@@ -3474,7 +3474,7 @@ ${allContext}`,
             </aside>
             <main className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
               <div className="focus-card-peek -mb-1">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
-              <button className="focus-stack-arrow absolute top-[7.2rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
+              <button className="focus-stack-arrow absolute top-[4.25rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
@@ -3494,7 +3494,7 @@ ${allContext}`,
                   {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}
                 </ul>
               </motion.article>
-              <button className="focus-stack-arrow absolute bottom-[7.2rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
+              <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside className="focus-ai-panel flex min-h-0 flex-col rounded-3xl border p-4">
