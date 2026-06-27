@@ -2584,3 +2584,42 @@ body[data-theme='light'] .subscription-eyebrow {
     right: 1.5rem;
   }
 }
+
+.focus-sector-dropdown-button {
+  border: 1px solid rgba(196, 181, 253, 0.65);
+  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.1);
+}
+
+.focus-sector-dropdown-menu {
+  border-color: rgba(196, 181, 253, 0.65);
+}
+
+.focus-bonus-message {
+  border-radius: 1rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+  box-shadow: 0 12px 28px rgba(109, 40, 217, 0.12);
+  animation: focus-bonus-pop 0.28s ease-out;
+}
+
+.focus-bonus-ai {
+  background: linear-gradient(135deg, #eef2ff, #f5d0fe);
+  color: #6d28d9;
+}
+
+.focus-bonus-subtask {
+  background: linear-gradient(135deg, #dcfce7, #ccfbf1);
+  color: #047857;
+}
+
+.focus-bonus-task {
+  background: linear-gradient(135deg, #fef3c7, #fed7aa);
+  color: #b45309;
+}
+
+@keyframes focus-bonus-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
