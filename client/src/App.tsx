@@ -1933,6 +1933,7 @@ ${allContext}`,
 
   const startFocusTimer = () => {
     if (focusRemainingSeconds <= 0) setFocusRemainingSeconds(focusTimerMinutes * 60);
+    setIsFocusSessionFinished(false);
     setIsFocusTimerRunning(true);
     if (focusAiMessages.length === 0 && focusActiveTask) {
       void sendFocusAiQuestion({ questionOverride: 'Предложи первые необходимые шаги для старта работы прямо сейчас.', userContentOverride: 'Предложить первые шаги для старта', allowBeforeTimerStateUpdate: true });
@@ -3559,7 +3560,7 @@ ${allContext}`,
       ) : null}
 
 
-      {focusRemainingSeconds > 0 && focusRemainingSeconds < focusTimerMinutes * 60 && !isFocusModeOpen ? (
+      {focusRemainingSeconds > 0 && focusRemainingSeconds < focusTimerMinutes * 60 && !isFocusSessionFinished && !isFocusModeOpen ? (
         <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
           <span className="text-xs">Фокус</span><span className="font-bold tabular-nums">{formatFocusTime(focusRemainingSeconds)}</span>
         </button>
