@@ -3657,22 +3657,22 @@ ${allContext}`,
 
       {isTelegramModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-900/95 p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="telegram-qr-modal w-full max-w-md rounded-2xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-cyan-100">Вход в Telegram-бот</h2>
+              <h2 className="telegram-qr-modal-title text-lg font-semibold">Вход в Telegram-бот</h2>
               <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTelegramModalOpen(false)}>Закрыть</button>
             </div>
-            <p className="mb-3 text-xs text-slate-300">Отсканируйте QR-код камерой Telegram, чтобы привязать аккаунт в один клик.</p>
-            {isTelegramLinkLoading ? <div className="py-10 text-center text-sm text-slate-300">Генерируем ссылку…</div> : null}
-            {telegramLinkError ? <div className="rounded border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{telegramLinkError}</div> : null}
+            <p className="telegram-qr-modal-copy mb-3 text-xs">Отсканируйте QR-код камерой Telegram, чтобы привязать аккаунт в один клик.</p>
+            {isTelegramLinkLoading ? <div className="telegram-qr-modal-copy py-10 text-center text-sm">Генерируем ссылку…</div> : null}
+            {telegramLinkError ? <div className="telegram-qr-modal-error rounded border px-3 py-2 text-xs">{telegramLinkError}</div> : null}
             {telegramLinkUrl && !isTelegramLinkLoading ? (
               <>
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(telegramLinkUrl)}`}
                   alt="QR-код входа в Telegram"
-                  className="mx-auto mb-3 h-64 w-64 rounded-lg border border-slate-700 bg-white p-2"
+                  className="telegram-qr-image mx-auto mb-3 h-64 w-64 rounded-lg border bg-white p-2"
                 />
-                <div className="mb-3 text-center text-xs text-slate-400">Код действует ~{Math.round(telegramLinkExpiresIn / 60)} мин</div>
+                <div className="telegram-qr-modal-expiry mb-3 text-center text-xs">Код действует ~{Math.round(telegramLinkExpiresIn / 60)} мин</div>
                 <a href={telegramLinkUrl} target="_blank" rel="noreferrer" className="block rounded bg-cyan-700 px-3 py-2 text-center text-sm font-medium text-white hover:bg-cyan-600">Открыть в Telegram</a>
               </>
             ) : null}
