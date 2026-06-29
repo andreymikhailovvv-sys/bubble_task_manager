@@ -720,6 +720,7 @@ function formatGeneralTasksContext(tasks: Array<{
         : '    - нет подзадач';
       return [
         `${index + 1}. [${task.id}] ${task.title}`,
+        `   описание=${task.description ?? 'нет'}`,
         `   статус=${task.status}; дедлайн=${formatDueDateForUser(task.dueDate, userTimeZone)}`,
         `   сектор=${effectiveSphereName}`,
         '   подзадачи:',
