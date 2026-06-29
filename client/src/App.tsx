@@ -7,6 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
+import { CustomSelect } from './components/CustomSelect';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CurrentUser, type SubscriptionLinks } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
@@ -3242,20 +3243,17 @@ ${allContext}`,
                 {themeMode === 'light' ? <p className="mt-2 text-[11px] leading-snug text-subtle">В светлой теме используется чистый системный фон, поэтому выбор фонового изображения отключён.</p> : null}
               </div>
               <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
-              <select
-                className="surface-input w-full rounded border px-2 py-1.5 text-sm"
+              <CustomSelect
                 value={userTimeZone}
-                disabled={settingsSavingKey === 'timeZone'}
-                onChange={(event) => {
-                  const nextTimeZone = event.target.value;
+                onChange={(nextTimeZone) => {
                   setUserTimeZone(nextTimeZone);
                   void updateUserSettings({ timeZone: nextTimeZone }, 'timeZone');
                 }}
-              >
-                {[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => (
-                  <option key={timeZone} value={timeZone}>{timeZone}</option>
-                ))}
-              </select>
+                options={[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => ({ value: timeZone, label: timeZone }))}
+                buttonClassName={settingsSavingKey === 'timeZone' ? 'cursor-not-allowed opacity-60' : ''}
+                disabled={settingsSavingKey === 'timeZone'}
+                ariaLabel="Часовой пояс пользователя"
+              />
               <button
                 type="button"
                 className="surface-muted light-dropdown-item mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
@@ -3278,19 +3276,18 @@ ${allContext}`,
                 <p className="mb-2 text-[11px] leading-snug text-subtle">
                   Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
                 </p>
-                <select
-                  className="surface-input light-dropdown-control w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                <CustomSelect
                   value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
-                  disabled={settingsSavingKey === 'checkupEnabled'}
-                  onChange={(event) => {
-                    const enabled = event.target.value === 'enabled';
+                  onChange={(value) => {
+                    const enabled = value === 'enabled';
                     setIsMorningAiCheckupEnabled(enabled);
                     void updateUserSettings({ morningAiCheckupEnabled: enabled }, 'checkupEnabled');
                   }}
-                >
-                  <option value="disabled">Выключен</option>
-                  <option value="enabled">Включен</option>
-                </select>
+                  options={[{ value: 'disabled', label: 'Выключен' }, { value: 'enabled', label: 'Включен' }]}
+                  buttonClassName={settingsSavingKey === 'checkupEnabled' ? 'cursor-not-allowed opacity-60' : ''}
+                  disabled={settingsSavingKey === 'checkupEnabled'}
+                  ariaLabel="Утренний ИИ-чекап"
+                />
                 <label className="mt-2 block text-[11px] text-slate-400">
                   Время чекапа
                   <input
@@ -3317,14 +3314,12 @@ ${allContext}`,
                     ?
                   </span>
                 </div>
-                <select
-                  className="surface-input w-full rounded border px-2 py-1.5 text-sm"
+                <CustomSelect
                   value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
-                  onChange={(event) => setIsAiNotificationsDefaultEnabled(event.target.value === 'enabled')}
-                >
-                  <option value="enabled">Включены для всех задач</option>
-                  <option value="disabled">Выключены для всех задач</option>
-                </select>
+                  onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
+                  options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
+                  ariaLabel="Уведомления от ИИ"
+                />
               </div>
             </div>
           ) : null}
@@ -3368,37 +3363,24 @@ ${allContext}`,
           ) : null}
         </div>
         <div className="w-full min-w-44 flex-1 sm:w-auto sm:flex-none">
-          <select
-            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'}`}
+          <CustomSelect
             value={timeFilter}
+            onChange={(value) => setTimeFilter(value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
+            options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'За сегодня' }, { value: 'tomorrow', label: 'За завтра' }, { value: 'week', label: 'За эту неделю' }, { value: 'month', label: 'За этот месяц' }, { value: 'focus', label: 'Фокус' }]}
+            buttonClassName={isTimelineMode ? 'cursor-not-allowed opacity-60' : ''}
             disabled={isTimelineMode}
-            onChange={(event) => setTimeFilter(event.target.value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
-          >
-            <option value="all">За все время</option>
-            <option value="today">За сегодня</option>
-            <option value="tomorrow">За завтра</option>
-            <option value="week">За эту неделю</option>
-            <option value="month">За этот месяц</option>
-            <option value="focus">Фокус</option>
-          </select>
+            ariaLabel="Фильтр по времени"
+          />
         </div>
         <div className="w-full min-w-52 flex-1 sm:w-auto sm:flex-none">
-          <select
-            className={`w-full rounded p-2 text-sm ${isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : isBubblesMode ? 'cursor-default bg-slate-800/80 text-slate-100' : 'bg-slate-800'}`}
+          <CustomSelect
             value={isBubblesMode ? 'coefficient' : rankingMode}
+            onChange={(value) => setRankingMode(value as BubbleRankingMode)}
+            options={isBubblesMode ? [{ value: 'coefficient', label: 'По коэффициенту' }] : [{ value: 'urgency', label: 'По срочности' }, { value: 'importance', label: 'По важности' }, { value: 'coefficient', label: 'По коэффициенту' }]}
+            buttonClassName={isTimelineMode ? 'cursor-not-allowed opacity-60' : isBubblesMode ? 'cursor-default' : ''}
             disabled={isTimelineMode}
-            onChange={(event) => setRankingMode(event.target.value as BubbleRankingMode)}
-          >
-            {isBubblesMode ? (
-              <option value="coefficient">По коэффициенту</option>
-            ) : (
-              <>
-                <option value="urgency">По срочности</option>
-                <option value="importance">По важности</option>
-                <option value="coefficient">По коэффициенту</option>
-              </>
-            )}
-          </select>
+            ariaLabel="Фильтр важности"
+          />
         </div>
         <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
           <button
@@ -3528,9 +3510,14 @@ ${allContext}`,
               <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
               <div className="flex min-h-0 flex-1 flex-col justify-center">
                 <div className="mb-4 mt-6 space-y-2">{(['time', 'ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
-                <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => handleFocusTimerMinutesChange(Number(event.target.value))} disabled={isFocusTimerRunning}>
-                  {FOCUS_TIMER_OPTIONS.map((value) => <option key={value} value={value} className={FOCUS_RECOMMENDED_MINUTES.has(value) ? 'text-emerald-600' : ''}>{value} минут{FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}</option>)}
-                </select>
+                <CustomSelect
+                  value={String(focusTimerMinutes)}
+                  onChange={(value) => handleFocusTimerMinutesChange(Number(value))}
+                  options={FOCUS_TIMER_OPTIONS.map((value) => ({ value: String(value), label: `${value} минут${FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}` }))}
+                  disabled={isFocusTimerRunning}
+                  buttonClassName={isFocusTimerRunning ? 'cursor-not-allowed opacity-60' : ''}
+                  ariaLabel="Длительность фокус-сессии"
+                />
                 <div className="mt-4 flex justify-center gap-3">
                   <button className="focus-timer-control primary" onClick={() => isFocusTimerRunning ? setIsFocusTimerRunning(false) : startFocusTimer()}>{isFocusTimerRunning ? <Pause size={20} /> : <Play size={20} />}</button>
                   <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
@@ -3755,10 +3742,10 @@ ${allContext}`,
 
       {isTelegramModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
-          <div className="telegram-qr-modal w-full max-w-md rounded-2xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
+          <div className="telegram-qr-modal relative w-full max-w-md rounded-2xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={() => setIsTelegramModalOpen(false)} aria-label="Закрыть окно"><X size={16} /></button>
+            <div className="mb-3 pr-10">
               <h2 className="telegram-qr-modal-title text-lg font-semibold">Вход в Telegram-бот</h2>
-              <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTelegramModalOpen(false)}>Закрыть</button>
             </div>
             <p className="telegram-qr-modal-copy mb-3 text-xs">Отсканируйте QR-код камерой Telegram, чтобы привязать аккаунт в один клик.</p>
             {isTelegramLinkLoading ? <div className="telegram-qr-modal-copy py-10 text-center text-sm">Генерируем ссылку…</div> : null}
@@ -5214,7 +5201,8 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="dialog-surface h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+        <aside className="dialog-surface relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+            <button type="button" className="surface-muted absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
             <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="flex min-h-0 flex-col">
                 <div className="space-y-3 overflow-y-auto pr-1">
@@ -5297,10 +5285,12 @@ ${allContext}`,
                       ))}
                     </div>
                   ) : null}
-                  <select className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.sphereId ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: e.target.value || null }))}>
-                  <option value="">Без сектора</option>
-                  {spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={focusedDraft.sphereId ?? ''}
+                    onChange={(value) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: value || null }))}
+                    options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
+                    ariaLabel="Выбор сектора"
+                  />
                   <div className="flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -5362,19 +5352,16 @@ ${allContext}`,
                     />
                   </label>
                   <label className="block text-xs">Уведомлять за
-                    <select
-                      className="form-field mt-1 w-full rounded border p-2 text-sm"
+                    <CustomSelect
+                      className="mt-1"
                       value={focusedNotifyPreset}
-                      onChange={(e) => {
-                        const value = e.target.value;
+                      onChange={(value) => {
                         setFocusedNotifyPreset(value);
                         setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
                       }}
-                    >
-                      {NOTIFY_PRESETS.map((preset) => (
-                        <option key={preset.value} value={preset.value}>{preset.label}</option>
-                      ))}
-                    </select>
+                      options={NOTIFY_PRESETS}
+                      ariaLabel="Уведомлять за"
+                    />
                   </label>
                   <div>
                     <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
@@ -5391,11 +5378,10 @@ ${allContext}`,
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 flex shrink-0 gap-2">
+                <div className="mt-3 grid shrink-0 grid-cols-3 gap-2">
                   <button className="primary-button rounded px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
                   <button className="success-button rounded px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
                   <button className="danger-button rounded px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
-                  <button className="surface-muted rounded px-3 py-2 text-sm" onClick={() => setFocusedTaskId(null)}>Закрыть</button>
                 </div>
               </div>
               <div className="surface-card flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
