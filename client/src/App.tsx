@@ -147,12 +147,12 @@ type QuickPostponeOption = (typeof QUICK_POSTPONE_OPTIONS)[number]['value'];
 const OVERDUE_AI_POSTPONE_CREDITS_COST = 2;
 const FOCUS_TIMER_OPTIONS = [5, 7, 10, 15, 20, 25, 30, 35, 40] as const;
 const FOCUS_RECOMMENDED_MINUTES = new Set<number>([20, 25, 30]);
-const FOCUS_MIN_TASKS = 2;
+const FOCUS_MIN_TASKS = 1;
 const FOCUS_MAX_TASKS = 5;
-type FocusBonusType = 'ai' | 'subtask' | 'task';
+type FocusBonusType = 'ai' | 'subtask' | 'task' | 'time';
 type FocusBonusEvent = { id: string; type: FocusBonusType; delta: number; totalDelta: number; message: string; atMs: number };
 const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2, ai: 1.5 } as const;
-
+const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
 const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
   doneSubtask: 0.02,
@@ -160,6 +160,7 @@ const EFFICIENCY_BONUSES = {
   createdTask: 0.01,
   aiCreditSpent: 0.002
 } as const;
+const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
 
 const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
 const EFFICIENCY_NIGHT_START_HOUR = 0;
@@ -595,9 +596,10 @@ export default function App() {
   const [isFocusSessionFinished, setIsFocusSessionFinished] = useState(false);
   const [focusSphereFilterId, setFocusSphereFilterId] = useState('all');
   const [isFocusSphereDropdownOpen, setIsFocusSphereDropdownOpen] = useState(false);
-  const [focusBonusEvents, setFocusBonusEvents] = useState<Record<FocusBonusType, FocusBonusEvent | null>>({ ai: null, subtask: null, task: null });
+  const [focusBonusEvents, setFocusBonusEvents] = useState<Record<FocusBonusType, FocusBonusEvent | null>>({ ai: null, subtask: null, task: null, time: null });
   const [focusSessionInitialDoneSubtaskIds, setFocusSessionInitialDoneSubtaskIds] = useState<Set<string>>(new Set());
   const [focusSessionAiRequestCount, setFocusSessionAiRequestCount] = useState(0);
+  const [focusDistractionTaskId, setFocusDistractionTaskId] = useState<string | null>(null);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
@@ -705,6 +707,7 @@ export default function App() {
   const focusAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusAiExpandedFileInputRef = useRef<HTMLInputElement | null>(null);
   const previousFocusActiveTaskIdRef = useRef<string | null>(null);
+  const awardedFocusTimeIntervalsRef = useRef(0);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1530,6 +1533,13 @@ export default function App() {
     if (!isFocusTimerRunning) return;
     const timer = window.setInterval(() => {
       setFocusRemainingSeconds((prev) => {
+        const elapsedSeconds = focusTimerMinutes * 60 - prev + 1;
+        const elapsedIntervals = Math.floor(elapsedSeconds / FOCUS_TIME_BONUS_INTERVAL_SECONDS);
+        if (elapsedIntervals > awardedFocusTimeIntervalsRef.current) {
+          const intervalsToAward = elapsedIntervals - awardedFocusTimeIntervalsRef.current;
+          awardedFocusTimeIntervalsRef.current = elapsedIntervals;
+          pushFocusBonusMessage('time', FOCUS_TIME_BONUS_DELTA * intervalsToAward);
+        }
         if (prev <= 1) {
           setIsFocusTimerRunning(false);
           setIsFocusSessionFinished(true);
@@ -1539,7 +1549,7 @@ export default function App() {
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isFocusTimerRunning]);
+  }, [focusTimerMinutes, isFocusTimerRunning]);
 
   useEffect(() => {
     if (isFocusTimerRunning) return;
@@ -1801,11 +1811,12 @@ export default function App() {
     setFocusAiError(null);
     setFocusSessionInitialDoneSubtaskIds(new Set(subtasks.filter((task) => task.status === 'DONE').map((task) => task.id)));
     setFocusSessionAiRequestCount(0);
-    setFocusBonusEvents({ ai: null, subtask: null, task: null });
+    setFocusBonusEvents({ ai: null, subtask: null, task: null, time: null });
     setIsFocusSessionFinished(false);
     setFocusAiPendingFiles([]);
     setIsFocusAiExpanded(false);
     previousFocusActiveTaskIdRef.current = selected[0] ?? null;
+    awardedFocusTimeIntervalsRef.current = 0;
     setIsFocusSetupOpen(false);
     setIsFocusModeOpen(true);
   };
@@ -1835,27 +1846,53 @@ export default function App() {
 
   const isFocusBonusEligible = (taskId?: string | null) => Boolean(taskId && isFocusModeOpen && isFocusTimerRunning && focusSelectedTaskIds.includes(taskId));
 
+  const shouldWarnAboutFocusDistraction = (task: Task) => {
+    const rootTaskId = task.parentTaskId ?? task.id;
+    return isFocusTimerRunning
+      && !isFocusModeOpen
+      && !isFocusSessionFinished
+      && !focusSelectedTaskIds.includes(rootTaskId);
+  };
+
+  const openTaskWithFocusGuard = (task: Task) => {
+    if (shouldWarnAboutFocusDistraction(task)) {
+      setFocusDistractionTaskId(task.id);
+      return;
+    }
+    if (task.parentTaskId) setEditorState({ task });
+    else setFocusedTaskId(task.id);
+  };
+
   const pushFocusBonusMessage = (type: FocusBonusType, delta: number) => {
-    const variants: Record<FocusBonusType, string[]> = {
+    setFocusBonusEvents((prev) => {
+      const totalDelta = (prev[type]?.totalDelta ?? 0) + delta;
+      const formattedTotal = totalDelta.toFixed(3);
+      const variants: Record<FocusBonusType, string[]> = {
       ai: [
-        `+${delta.toFixed(3)} рейтинга за точный запрос к ИИ — ускоряемся красиво!`,
-        `ИИ подключён к фокусу: +${delta.toFixed(3)} рейтинга. Отличный ход!`,
-        `Умная помощь в работе принесла +${delta.toFixed(3)} рейтинга — держим темп!`
+        `+${formattedTotal} рейтинга за точные запросы к ИИ — ускоряемся красиво!`,
+        `ИИ подключён к фокусу: уже +${formattedTotal} рейтинга. Отличный ход!`,
+        `Умная помощь в работе принесла суммарно +${formattedTotal} рейтинга — держим темп!`
       ],
       subtask: [
-        `Отлично, закрыли подзадачу! +${delta.toFixed(3)} рейтинга. Продолжаем работу.`,
-        `Минус один шаг к цели — плюс ${delta.toFixed(3)} рейтинга за подзадачу!`,
-        `Фокус даёт результат: подзадача выполнена, +${delta.toFixed(3)} рейтинга.`
+        `Отлично, закрываем подзадачи! Уже +${formattedTotal} рейтинга. Продолжаем работу.`,
+        `Минус один шаг к цели — суммарно +${formattedTotal} рейтинга за подзадачи!`,
+        `Фокус даёт результат: подзадачи приносят уже +${formattedTotal} рейтинга.`
       ],
       task: [
-        `Сильное завершение: задача выполнена! +${delta.toFixed(3)} рейтинга в копилку.`,
-        `Большая победа в фокусе — +${delta.toFixed(3)} рейтинга за закрытую задачу!`,
-        `Задача закрыта, прогресс сияет: +${delta.toFixed(3)} рейтинга.`
+        `Сильное завершение: задачи выполнены! Уже +${formattedTotal} рейтинга в копилку.`,
+        `Большая победа в фокусе — суммарно +${formattedTotal} рейтинга за закрытые задачи!`,
+        `Задачи закрываются, прогресс сияет: +${formattedTotal} рейтинга.`
+      ],
+      time: [
+        `Таймер работает на вас: уже +${formattedTotal} рейтинга за время в фокусе.`,
+        `Пять минут глубокой работы засчитаны — суммарно +${formattedTotal} рейтинга за фокус-время!`,
+        `Ритм держится красиво: время концентрации принесло уже +${formattedTotal} рейтинга.`
       ]
-    };
-    const pool = variants[type];
-    const message = pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
-    setFocusBonusEvents((prev) => ({ ...prev, [type]: { id: crypto.randomUUID(), type, delta, totalDelta: (prev[type]?.totalDelta ?? 0) + delta, message, atMs: Date.now() } }));
+      };
+      const pool = variants[type];
+      const message = pool[Math.floor(Math.random() * pool.length)] ?? pool[0];
+      return { ...prev, [type]: { id: crypto.randomUUID(), type, delta, totalDelta, message, atMs: Date.now() } };
+    });
   };
 
   const sendFocusAiQuestion = async (options?: { questionOverride?: string; userContentOverride?: string; allowBeforeTimerStateUpdate?: boolean }) => {
@@ -1879,7 +1916,7 @@ export default function App() {
 📎 Файлы: ${fileNames.join(', ')}` : visibleUserContent;
     const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
     const contextualQuestion = [
-      'Ты работаешь в режиме концентрации. Помогай только по трём выбранным задачам и учитывай, какая задача выбрана сейчас.',
+      'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
       `Текущая выбранная задача: ${currentTask.title}`,
       `Контекст всех задач:
 ${allContext}`,
@@ -2787,8 +2824,7 @@ ${allContext}`,
         }}
         onClick={() => {
           if (options?.disableOpenOnClick) return;
-          if (isSubtaskChip) setEditorState({ task });
-          else setFocusedTaskId(task.id);
+          openTaskWithFocusGuard(task);
         }}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -3406,7 +3442,7 @@ ${allContext}`,
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Bot size={14} /> Режим концентрации</div>
-                <h2 className="mt-3 text-2xl font-bold text-primary">Выберите от 2 до 5 главных задач на сейчас</h2>
+                <h2 className="mt-3 text-2xl font-bold text-primary">Выберите до 5 главных задач на сейчас</h2>
                 <p className="mt-1 text-sm text-muted">Можно выбрать вручную или доверить подбор задачам с максимальным коэффициентом.</p>
               </div>
               <button className="rounded-full p-2 text-muted transition hover:bg-slate-100" onClick={() => setIsFocusSetupOpen(false)} aria-label="Закрыть"><X size={18} /></button>
@@ -3461,7 +3497,7 @@ ${allContext}`,
             <aside className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
               <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
               <div className="flex min-h-0 flex-1 flex-col justify-center">
-                <div className="mb-4 mt-6 space-y-2">{(['ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
+                <div className="mb-4 mt-6 space-y-2">{(['time', 'ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
                 <select className="form-field w-full rounded-xl border p-2 text-sm" value={focusTimerMinutes} onChange={(event) => handleFocusTimerMinutesChange(Number(event.target.value))} disabled={isFocusTimerRunning}>
                   {FOCUS_TIMER_OPTIONS.map((value) => <option key={value} value={value} className={FOCUS_RECOMMENDED_MINUTES.has(value) ? 'text-emerald-600' : ''}>{value} минут{FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}</option>)}
                 </select>
@@ -3500,7 +3536,7 @@ ${allContext}`,
             </main>
             <aside className="focus-ai-panel flex min-h-0 flex-col rounded-3xl border p-4">
               <div className="flex items-start justify-between gap-2 pr-8">
-                <div><div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div><p className="mt-1 text-xs text-muted">ИИ знает 3 выбранные задачи и текущую карточку: {focusActiveTask.title}</p></div>
+                <div><div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div><p className="mt-1 text-xs text-muted">ИИ знает выбранные задачи и текущую карточку: {focusActiveTask.title}</p></div>
                 <div className="flex items-center gap-1.5">
                   <div className="surface-muted inline-flex items-center gap-1 rounded-lg border p-1 text-[11px]">
                     <button type="button" className={`ai-mode-toggle ${focusAiMode === 'fast' ? 'ai-mode-toggle-active' : 'ai-mode-toggle-idle'}`} onClick={() => setFocusAiMode('fast')}><span className="block text-left">Быстрая</span><span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span></button>
@@ -3564,6 +3600,38 @@ ${allContext}`,
         <button className="focus-floating-timer fixed bottom-6 z-[90] flex h-20 w-20 flex-col items-center justify-center rounded-full text-white shadow-2xl" onClick={() => setIsFocusModeOpen(true)}>
           <span className="text-xs">Фокус</span><span className="font-bold tabular-nums">{formatFocusTime(focusRemainingSeconds)}</span>
         </button>
+      ) : null}
+
+      {focusDistractionTaskId ? (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setFocusDistractionTaskId(null)}>
+          <div className="dialog-surface w-full max-w-md rounded-3xl border p-5 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+              <Sparkles size={22} />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-primary">Не отвлекайтесь от фокуса</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Сейчас вы работаете над более важными задачами. Лучше вернуться к ним и не распылять внимание на другие карточки.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-center">
+              <button type="button" className="surface-muted rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => setFocusDistractionTaskId(null)}>
+                вернуться
+              </button>
+              <button
+                type="button"
+                className="primary-button rounded-xl px-4 py-2 text-sm font-semibold"
+                onClick={() => {
+                  const task = taskById.get(focusDistractionTaskId);
+                  setFocusDistractionTaskId(null);
+                  if (!task) return;
+                  if (task.parentTaskId) setEditorState({ task });
+                  else setFocusedTaskId(task.id);
+                }}
+              >
+                Мне это нужно
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isFocusModeOpen && isFocusedNotesEditorOpen && focusedTask && focusedDraft ? (
@@ -3719,7 +3787,7 @@ ${allContext}`,
             hasAiNotification={hasUnreadAiMessage}
             selectedId={editorState?.task?.id}
             onSelect={(task) => {
-              setFocusedTaskId(task.id);
+              openTaskWithFocusGuard(task);
             }}
             onSelectSubtask={(subtask) => setEditorState({ task: subtask })}
             onCreateSubtask={async (parentTask, payload) => {
@@ -3786,7 +3854,7 @@ ${allContext}`,
                       setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
-                    onClick={() => setFocusedTaskId(task.id)}
+                    onClick={() => openTaskWithFocusGuard(task)}
                   >
                     <input
                       type="checkbox"
