@@ -5290,6 +5290,7 @@ ${allContext}`,
                     onChange={(value) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: value || null }))}
                     options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
                     ariaLabel="Выбор сектора"
+                    detachedPopup
                   />
                   <div className="flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-2 text-sm">
@@ -5361,6 +5362,7 @@ ${allContext}`,
                       }}
                       options={NOTIFY_PRESETS}
                       ariaLabel="Уведомлять за"
+                      detachedPopup
                     />
                   </label>
                   <div>
