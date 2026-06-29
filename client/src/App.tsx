@@ -153,6 +153,7 @@ type FocusBonusType = 'ai' | 'subtask' | 'task' | 'time';
 type FocusBonusEvent = { id: string; type: FocusBonusType; delta: number; totalDelta: number; message: string; atMs: number };
 const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2, ai: 1.5 } as const;
 const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
+const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 0.05,
   doneSubtask: 0.02,
@@ -707,6 +708,8 @@ export default function App() {
   const focusAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusAiExpandedFileInputRef = useRef<HTMLInputElement | null>(null);
   const previousFocusActiveTaskIdRef = useRef<string | null>(null);
+  const focusTaskSwitchAiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusAiLoadingRef = useRef(false);
   const awardedFocusTimeIntervalsRef = useRef(0);
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1293,6 +1296,10 @@ export default function App() {
     () => subtasks.filter((task) => task.status === 'DONE' && !focusSessionInitialDoneSubtaskIds.has(task.id)).length,
     [focusSessionInitialDoneSubtaskIds, subtasks]
   );
+  const focusSessionRatingEarned = useMemo(
+    () => (Object.values(focusBonusEvents) as Array<FocusBonusEvent | null>).reduce((total, event) => total + (event?.totalDelta ?? 0), 0),
+    [focusBonusEvents]
+  );
   const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
   const completedTasksForPanel = useMemo(() => {
     if (completedFilter === 'all') return completedTasks;
@@ -1566,6 +1573,10 @@ export default function App() {
 
 
   useEffect(() => {
+    focusAiLoadingRef.current = focusAiLoading;
+  }, [focusAiLoading]);
+
+  useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       if (focusAiDialogContainerRef.current) {
         focusAiDialogContainerRef.current.scrollTop = focusAiDialogContainerRef.current.scrollHeight;
@@ -1578,11 +1589,25 @@ export default function App() {
   }, [focusAiMessages, focusAiLoading, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
+    if (focusTaskSwitchAiTimeoutRef.current) {
+      clearTimeout(focusTaskSwitchAiTimeoutRef.current);
+      focusTaskSwitchAiTimeoutRef.current = null;
+    }
     if (!isFocusModeOpen || !focusActiveTask || !isFocusTimerRunning) return;
     const previousTaskId = previousFocusActiveTaskIdRef.current;
     previousFocusActiveTaskIdRef.current = focusActiveTask.id;
     if (!previousTaskId || previousTaskId === focusActiveTask.id) return;
-    void sendFocusAiQuestion({ questionOverride: 'Пользователь переключился на эту задачу. Дай ближайшие конкретные действия именно по ней.', userContentOverride: 'Подсказать ближайшие действия по новой задаче' });
+    focusTaskSwitchAiTimeoutRef.current = setTimeout(() => {
+      focusTaskSwitchAiTimeoutRef.current = null;
+      if (focusAiLoadingRef.current) return;
+      void sendFocusAiQuestion({ questionOverride: 'Пользователь переключился на эту задачу. Дай ближайшие конкретные действия именно по ней.', userContentOverride: 'Подсказать ближайшие действия по новой задаче' });
+    }, FOCUS_TASK_SWITCH_AI_DELAY_MS);
+    return () => {
+      if (focusTaskSwitchAiTimeoutRef.current) {
+        clearTimeout(focusTaskSwitchAiTimeoutRef.current);
+        focusTaskSwitchAiTimeoutRef.current = null;
+      }
+    };
   }, [focusActiveTask?.id, isFocusModeOpen, isFocusTimerRunning]);
 
   const sendFocusedAiQuestion = async (options?: {
@@ -1817,6 +1842,10 @@ export default function App() {
     setIsFocusAiExpanded(false);
     previousFocusActiveTaskIdRef.current = selected[0] ?? null;
     awardedFocusTimeIntervalsRef.current = 0;
+    if (focusTaskSwitchAiTimeoutRef.current) {
+      clearTimeout(focusTaskSwitchAiTimeoutRef.current);
+      focusTaskSwitchAiTimeoutRef.current = null;
+    }
     setIsFocusSetupOpen(false);
     setIsFocusModeOpen(true);
   };
@@ -1971,6 +2000,7 @@ ${allContext}`,
   const startFocusTimer = () => {
     if (focusRemainingSeconds <= 0) setFocusRemainingSeconds(focusTimerMinutes * 60);
     setIsFocusSessionFinished(false);
+    if (focusActiveTask) previousFocusActiveTaskIdRef.current = focusActiveTask.id;
     setIsFocusTimerRunning(true);
     if (focusAiMessages.length === 0 && focusActiveTask) {
       void sendFocusAiQuestion({ questionOverride: 'Предложи первые необходимые шаги для старта работы прямо сейчас.', userContentOverride: 'Предложить первые шаги для старта', allowBeforeTimerStateUpdate: true });
@@ -3506,7 +3536,7 @@ ${allContext}`,
                   <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
                 </div>
                 <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
-                {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p></div> : null}
+                {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p><p>Заработано рейтинга: +{focusSessionRatingEarned.toFixed(3)}</p></div> : null}
               </div>
             </aside>
             <main className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
