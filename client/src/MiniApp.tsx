@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEv
 import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
+import { CustomSelect } from './components/CustomSelect';
 import { noteHtmlToPlainText } from './lib/notes';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
@@ -1491,24 +1492,22 @@ export default function MiniApp() {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-semibold">Список задач</h2>
               <div className="flex items-center gap-2">
-                <select
+                <CustomSelect
+                  className="min-w-32"
                   value={listSortMode}
-                  onChange={(event) => setListSortMode(event.target.value as ListSortMode)}
-                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
-                >
-                  <option value="sector">По секторам</option>
-                  <option value="importance">По важности</option>
-                </select>
-                <select
+                  onChange={(value) => setListSortMode(value as ListSortMode)}
+                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
+                  buttonClassName="h-8 px-2 py-1 text-xs"
+                  ariaLabel="Сортировка задач"
+                />
+                <CustomSelect
+                  className="min-w-32"
                   value={timeFilter}
-                  onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
-                  className="h-8 rounded-md border border-slate-600 bg-slate-800 px-2 text-xs text-slate-100"
-                >
-                  <option value="all">За все время</option>
-                  <option value="today">Сегодня</option>
-                  <option value="tomorrow">Завтра</option>
-                  <option value="week">Неделя</option>
-                </select>
+                  onChange={(value) => setTimeFilter(value as TimeFilter)}
+                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
+                  buttonClassName="h-8 px-2 py-1 text-xs"
+                  ariaLabel="Фильтр по времени"
+                />
               </div>
             </div>
 
@@ -2378,15 +2377,12 @@ export default function MiniApp() {
 
               <div className="miniapp-habit-recurrence-panel space-y-2 rounded-lg border p-3">
                 <label className="block text-xs text-slate-300">Как часто повторяется</label>
-                <select
+                <CustomSelect
                   value={habitDraft.recurrenceType}
-                  onChange={(event) => setHabitDraft((prev) => ({ ...prev, recurrenceType: event.target.value as HabitRecurrenceType }))}
-                  className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
-                >
-                  <option value="DAILY">Каждый день</option>
-                  <option value="INTERVAL">Через интервал</option>
-                  <option value="WEEKDAYS">По конкретным дням</option>
-                </select>
+                  onChange={(value) => setHabitDraft((prev) => ({ ...prev, recurrenceType: value as HabitRecurrenceType }))}
+                  options={[{ value: 'DAILY', label: 'Каждый день' }, { value: 'INTERVAL', label: 'Через интервал' }, { value: 'WEEKDAYS', label: 'По конкретным дням' }]}
+                  ariaLabel="Повторение привычки"
+                />
 
                 {habitDraft.recurrenceType === 'INTERVAL' ? (
                   <div className="space-y-2">
