@@ -7,6 +7,7 @@ import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
 import { LinkifiedText } from './LinkifiedText';
+import { CustomSelect } from './CustomSelect';
 
 type Props = {
   tasks: Task[];
@@ -896,25 +897,17 @@ export function BubbleField({
                       </button>
                       <div className="ml-auto flex items-center gap-2">
                         <div className="flex items-center">
-                          <select
-                            className="h-7 max-w-[136px] surface-input rounded border px-2 text-[11px] text-primary"
-                            defaultValue=""
-                            onClick={(event) => event.stopPropagation()}
-                            onChange={(event) => {
-                              const value = event.target.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart' | '';
+                          <CustomSelect
+                            className="w-[136px]"
+                            value=""
+                            onChange={(value) => {
                               if (!value) return;
-                              runQuickPostpone(hoveredBubble.task, value);
-                              event.target.value = '';
+                              runQuickPostpone(hoveredBubble.task, value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart');
                             }}
-                          >
-                            <option value="" disabled>Отложить</option>
-                            <option value="15m">На 15 мин</option>
-                            <option value="30m">На 30 мин</option>
-                            <option value="1h">На час</option>
-                            <option value="3h">На 3 часа</option>
-                            <option value="tomorrow">На завтра</option>
-                            <option value="smart">✦ Ближайшее окно (◍ 1)</option>
-                          </select>
+                            options={[{ value: '', label: 'Отложить' }, { value: '15m', label: 'На 15 мин' }, { value: '30m', label: 'На 30 мин' }, { value: '1h', label: 'На час' }, { value: '3h', label: 'На 3 часа' }, { value: 'tomorrow', label: 'На завтра' }, { value: 'smart', label: '✦ Ближайшее окно (◍ 1)' }]}
+                            buttonClassName="h-7 px-2 py-1 text-[11px]"
+                            ariaLabel="Отложить задачу"
+                          />
                         </div>
                         <div className="flex items-center gap-1">
                           <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {

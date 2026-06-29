@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SPHERE_ICON_OPTIONS } from '../lib/sphereIcons';
 import type { Sphere } from '../lib/types';
@@ -23,7 +24,8 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
 
   return (
     <div className="modal-backdrop fixed inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="modal-card w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+      <aside className="modal-card relative w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={onCancel} aria-label="Закрыть окно"><X size={16} /></button>
         <h3 className="text-lg font-semibold text-primary">Настройка сектора</h3>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
         <div>
@@ -54,10 +56,7 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
             ))}
           </div>
         </div>
-        <div className="flex gap-2">
-          <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
-          <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
-        </div>
+        <button className="primary-button w-full rounded px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
       </aside>
     </div>
   );

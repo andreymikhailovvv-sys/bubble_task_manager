@@ -5,6 +5,7 @@ import { DateTimePickerWithApply } from './DateTimePickerWithApply';
 import { api } from '../lib/api';
 import { noteHtmlToPlainText } from '../lib/notes';
 import { NotesEditor as TaskNotesEditor } from './NotesEditor';
+import { CustomSelect } from './CustomSelect';
 
 type Props = {
   task?: Task;
@@ -353,7 +354,8 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
 
   return (
     <div className="modal-backdrop fixed inset-0 z-[150] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="modal-card w-full max-w-xl space-y-3 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+      <aside className="modal-card relative w-full max-w-xl space-y-3 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={onCancel} aria-label="Закрыть окно"><X size={16} /></button>
         <h3 className="text-lg font-semibold text-primary">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
         {canShowAiCreateMode ? (
           <div className="grid grid-cols-2 gap-2">
@@ -409,13 +411,12 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
                 <Plus size={15} />
               </button>
             </div>
-            <select className="form-field w-full rounded border p-2 text-sm" value={aiSphereSelection} onChange={(e) => setAiSphereSelection(e.target.value)}>
-              <option value="auto">Автоматически</option>
-              <option value="none">Без сектора</option>
-              {spheres.map((sphere) => (
-                <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
-              ))}
-            </select>
+            <CustomSelect
+              value={aiSphereSelection}
+              onChange={setAiSphereSelection}
+              options={[{ value: 'auto', label: 'Автоматически' }, { value: 'none', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
+              ariaLabel="Выбор сектора для ИИ"
+            />
             <div className="flex items-center justify-between gap-2">
               <p className="min-h-4 text-xs text-rose-300">{aiError ?? ''}</p>
               <button className="primary-button rounded px-3 py-2 text-sm disabled:opacity-60" onClick={() => void submitAiGenerate()} disabled={isGeneratingByAi}>
@@ -470,12 +471,12 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
         {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
         {!isSubtask ? (
           <>
-            <select className="form-field w-full rounded border p-2 text-sm" value={form.sphereId ?? ''} onChange={(e) => setForm((p) => ({ ...p, sphereId: e.target.value || null }))}>
-              <option value="">Без сектора</option>
-              {spheres.map((sphere) => (
-                <option key={sphere.id} value={sphere.id}>{sphere.name}</option>
-              ))}
-            </select>
+            <CustomSelect
+              value={form.sphereId ?? ''}
+              onChange={(value) => setForm((p) => ({ ...p, sphereId: value || null }))}
+              options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
+              ariaLabel="Выбор сектора"
+            />
             <div>
               <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
               <div className="importance-choice-group grid grid-cols-5 gap-2">
@@ -539,29 +540,21 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
           />
         </label>
         {!isRecurring ? <label className="block text-xs">Уведомлять за
-          <select
-            className="form-field mt-1 w-full rounded border p-2 text-sm"
+          <CustomSelect
+            className="mt-1"
             value={notifyPreset}
-            onChange={(e) => {
-              const value = e.target.value;
+            onChange={(value) => {
               setNotifyPreset(value);
-              if (value === 'null') {
-                setForm((p) => ({ ...p, notifyBeforeMinutes: null }));
-              } else {
-                setForm((p) => ({ ...p, notifyBeforeMinutes: Number(value) }));
-              }
+              setForm((p) => ({ ...p, notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
             }}
-          >
-            {NOTIFY_PRESETS.map((preset) => (
-              <option key={preset.value} value={preset.value}>{preset.label}</option>
-            ))}
-          </select>
+            options={NOTIFY_PRESETS}
+            ariaLabel="Уведомлять за"
+          />
         </label> : null}
 
         <div className="flex gap-2">
           <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
-          {isEditing ? <button className="danger-button rounded px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
-          <button className="secondary-button rounded px-3 py-2 text-sm" onClick={onCancel}>Закрыть</button>
+          {isEditing ? <button className="danger-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
         </div>
         {isEditing ? (
           <button className="success-button w-full rounded px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
