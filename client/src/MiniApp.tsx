@@ -7,7 +7,7 @@ import { noteHtmlToPlainText } from './lib/notes';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
-  doneHabit: 6.7,
+  doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1
 } as const;

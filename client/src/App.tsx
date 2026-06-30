@@ -158,11 +158,11 @@ const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
   doneSubtask: 2,
-  doneHabit: 6.7,
+  doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,
   createdTask: 1,
-  aiCreditSpent: 0.2
+  aiCreditSpent: 0.1
 } as const;
 const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
 
@@ -1992,7 +1992,7 @@ ${allContext}`,
     setFocusAiLoading(true);
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, mode: focusAiMode, attachments: attachmentsPayload });
+      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, mode: focusAiMode, attachments: attachmentsPayload, skipEfficiencyBonus: true });
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]);
       if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (focusAiMode === 'smart' ? 5 : 2) * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
@@ -2657,7 +2657,7 @@ ${allContext}`,
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
+  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) => {
     const result = await api.askTaskAssistant(taskId, payload);
     try {
       const me = await api.getMe();
