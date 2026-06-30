@@ -133,14 +133,15 @@ const currentCreditsPeriod = () => {
 
 const AI_CREDIT_EFFICIENCY_BONUS = 0.1;
 
-async function awardAiCreditEfficiencyBonus(userId: string, cost: number) {
-  if (cost <= 0) return;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { efficiencyScore: true } });
-  if (!user) return;
-  await prisma.user.update({
-    where: { id: userId },
-    data: { efficiencyScore: Math.max(0, Math.min(100, (user.efficiencyScore ?? 0) + cost * AI_CREDIT_EFFICIENCY_BONUS)) }
-  });
+const aiCreditEfficiencyData = (cost: number, options?: { skipEfficiencyBonus?: boolean }) => (
+  options?.skipEfficiencyBonus || cost <= 0
+    ? {}
+    : { efficiencyScore: { increment: cost * AI_CREDIT_EFFICIENCY_BONUS } }
+);
+
+async function clampUserEfficiencyScore(userId: string, score: number) {
+  if (score <= 100) return;
+  await prisma.user.update({ where: { id: userId }, data: { efficiencyScore: 100 } });
 }
 
 async function chargeAiCredits(userId: string, model: string, options?: { skipEfficiencyBonus?: boolean }) {
@@ -152,14 +153,16 @@ async function chargeAiCredits(userId: string, model: string, options?: { skipEf
   if (credits < cost) {
     throw new Error('Недостаточно AI кредитов');
   }
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: {
       aiCredits: credits - cost,
-      aiCreditsPeriod: period
-    }
+      aiCreditsPeriod: period,
+      ...aiCreditEfficiencyData(cost, options)
+    },
+    select: { efficiencyScore: true }
   });
-  if (!options?.skipEfficiencyBonus) await awardAiCreditEfficiencyBonus(userId, cost);
+  await clampUserEfficiencyScore(userId, updated.efficiencyScore);
 }
 
 async function chargeFixedAiCredits(userId: string, cost: number, options?: { skipEfficiencyBonus?: boolean }) {
@@ -168,8 +171,12 @@ async function chargeFixedAiCredits(userId: string, cost: number, options?: { sk
   if (!user) throw new Error('User not found');
   const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
   if (credits < cost) throw new Error('Недостаточно AI кредитов');
-  await prisma.user.update({ where: { id: userId }, data: { aiCredits: credits - cost, aiCreditsPeriod: period } });
-  if (!options?.skipEfficiencyBonus) await awardAiCreditEfficiencyBonus(userId, cost);
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { aiCredits: credits - cost, aiCreditsPeriod: period, ...aiCreditEfficiencyData(cost, options) },
+    select: { efficiencyScore: true }
+  });
+  await clampUserEfficiencyScore(userId, updated.efficiencyScore);
 }
 
 async function chargeSingleAiNotificationCredit(userId: string, options?: { skipEfficiencyBonus?: boolean }) {
@@ -178,14 +185,16 @@ async function chargeSingleAiNotificationCredit(userId: string, options?: { skip
   if (!user) throw new Error('User not found');
   const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
   if (credits < 1) throw new Error('Недостаточно AI кредитов');
-  await prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: {
       aiCredits: credits - 1,
-      aiCreditsPeriod: period
-    }
+      aiCreditsPeriod: period,
+      ...aiCreditEfficiencyData(1, options)
+    },
+    select: { efficiencyScore: true }
   });
-  if (!options?.skipEfficiencyBonus) await awardAiCreditEfficiencyBonus(userId, 1);
+  await clampUserEfficiencyScore(userId, updated.efficiencyScore);
 }
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
