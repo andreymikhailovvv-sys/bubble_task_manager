@@ -2277,6 +2277,7 @@ ${allContext}`,
     + efficiencyTodaySummary.createdHabitsToday * EFFICIENCY_BONUSES.createdHabit
     + efficiencyTodaySummary.completedDurationHabitsToday * EFFICIENCY_BONUSES.completedHabit;
   const efficiencyAiRating = efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
+  const efficiencyFocusRating = (Object.values(focusBonusEvents) as Array<FocusBonusEvent | null>).reduce((total, event) => total + (event?.totalDelta ?? 0), 0);
   const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
 
 
@@ -3468,6 +3469,7 @@ ${allContext}`,
                 <div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div>
                 <div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div>
                 <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div>
+                <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div>
               </div>
             </div>
           ) : null}

@@ -2905,3 +2905,24 @@ body[data-theme='light'] .efficiency-detail-row {
 body[data-theme='light'] .efficiency-detail-row b {
   color: #047857;
 }
+
+.efficiency-detail-row-focus {
+  border-color: rgba(168, 85, 247, 0.34);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.1));
+  color: #ddd6fe;
+}
+
+.efficiency-detail-row-focus b {
+  color: #c4b5fd;
+  text-shadow: 0 0 14px rgba(168, 85, 247, 0.34);
+}
+
+body[data-theme='light'] .efficiency-detail-row-focus {
+  border-color: rgba(124, 58, 237, 0.26);
+  background: linear-gradient(135deg, rgba(237, 233, 254, 0.96), rgba(224, 242, 254, 0.86));
+  color: #5b21b6;
+}
+
+body[data-theme='light'] .efficiency-detail-row-focus b {
+  color: #7c3aed;
+}
