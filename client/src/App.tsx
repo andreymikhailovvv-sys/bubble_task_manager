@@ -1893,7 +1893,18 @@ export default function App() {
     else setFocusedTaskId(task.id);
   };
 
+  const persistEfficiencyBonus = async (delta: number) => {
+    if (!currentUser || delta <= 0) return;
+    try {
+      const result = await api.recordEfficiencyEvent({ delta });
+      setCurrentUser((prev) => prev ? { ...prev, efficiencyScore: result.efficiencyScore } : prev);
+    } catch (error) {
+      console.error('Failed to persist efficiency bonus', error);
+    }
+  };
+
   const pushFocusBonusMessage = (type: FocusBonusType, delta: number) => {
+    void persistEfficiencyBonus(delta);
     setFocusBonusEvents((prev) => {
       const totalDelta = (prev[type]?.totalDelta ?? 0) + delta;
       const formattedTotal = totalDelta.toFixed(3);
@@ -2224,7 +2235,7 @@ ${allContext}`,
     };
   }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, focusBonusEvents, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
 
-  const efficiencyScore = useMemo(() => efficiencyTodaySummary.score, [efficiencyTodaySummary.score]);
+  const efficiencyScore = useMemo(() => Math.max(currentUser?.efficiencyScore ?? 0, efficiencyTodaySummary.score), [currentUser?.efficiencyScore, efficiencyTodaySummary.score]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
@@ -2328,6 +2339,7 @@ ${allContext}`,
       await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
     } else {
       await api.createTask({ ...normalized, priorityScore: score });
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask);
     }
     setEditorState(null);
     await load();
@@ -2409,6 +2421,7 @@ ${allContext}`,
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 320));
     await api.updateTask(task.id, { status: 'DONE' });
+    void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask);
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
     setPoppingTaskId(null);
     setEditorState(null);
@@ -2480,7 +2493,10 @@ ${allContext}`,
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
     await api.updateTask(subtask.id, { status: nextStatus });
-    if (nextStatus === 'DONE' && isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
+    if (nextStatus === 'DONE') {
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask);
+      if (isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
+    }
     if (subtask.parentTaskId) {
       const parentCompleted = await syncParentStatusBySubtasks(subtask.parentTaskId);
       if (parentCompleted) {

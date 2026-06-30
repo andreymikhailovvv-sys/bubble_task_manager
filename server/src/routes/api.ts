@@ -142,6 +142,29 @@ const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number,
   return clampEfficiency(score);
 };
 
+
+const applyEfficiencyDecay = (score: number, fromMs: number, toMs: number, timeZone: string) => calculateEfficiencyScore(
+  [{ atMs: fromMs, delta: clampEfficiency(score) }],
+  toMs,
+  fromMs,
+  timeZone
+);
+
+const persistEfficiencyDelta = async (userId: string, delta: number) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { efficiencyScore: true, updatedAt: true, timeZone: true }
+  });
+  if (!user) return null;
+
+  const nowMs = Date.now();
+  const fromMs = user.updatedAt.getTime();
+  const decayedScore = applyEfficiencyDecay(user.efficiencyScore ?? 0, fromMs, nowMs, user.timeZone || DEFAULT_TIMEZONE);
+  const efficiencyScore = clampEfficiency(decayedScore + Math.max(0, delta));
+  await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
+  return efficiencyScore;
+};
+
 const recalculateAndPersistEfficiency = async (userId: string) => {
   const now = new Date();
   const [user, tasks, habitCompletions] = await Promise.all([
@@ -562,9 +585,26 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
   res.json({ user: toAuthUser(updatedUser) });
 });
 
+
+apiRouter.post('/efficiency/events', requireAuth, async (req, res) => {
+  const delta = Number(req.body?.delta ?? 0);
+  if (!Number.isFinite(delta) || delta <= 0 || delta > 1) {
+    res.status(400).json({ error: 'Некорректное изменение рейтинга' });
+    return;
+  }
+
+  const efficiencyScore = await persistEfficiencyDelta(req.user!.id, delta);
+  if (efficiencyScore === null) {
+    res.status(404).json({ error: 'Пользователь не найден' });
+    return;
+  }
+
+  res.json({ efficiencyScore });
+});
+
 apiRouter.get('/auth/me', async (req, res) => {
   if (req.user?.id) {
-    await recalculateAndPersistEfficiency(req.user.id);
+    await persistEfficiencyDelta(req.user.id, 0);
     const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (freshUser) {
       res.json({ user: toAuthUser(freshUser) });
