@@ -601,6 +601,7 @@ export default function App() {
   const [focusSphereFilterId, setFocusSphereFilterId] = useState('all');
   const [isFocusSphereDropdownOpen, setIsFocusSphereDropdownOpen] = useState(false);
   const [focusBonusEvents, setFocusBonusEvents] = useState<Record<FocusBonusType, FocusBonusEvent | null>>({ ai: null, subtask: null, task: null, time: null });
+  const [focusBonusTotal, setFocusBonusTotal] = useState(0);
   const [focusSessionInitialDoneSubtaskIds, setFocusSessionInitialDoneSubtaskIds] = useState<Set<string>>(new Set());
   const [focusSessionAiRequestCount, setFocusSessionAiRequestCount] = useState(0);
   const [focusDistractionTaskId, setFocusDistractionTaskId] = useState<string | null>(null);
@@ -1907,6 +1908,7 @@ export default function App() {
 
   const pushFocusBonusMessage = (type: FocusBonusType, delta: number) => {
     void persistEfficiencyBonus(delta);
+    setFocusBonusTotal((total) => total + delta);
     setFocusBonusEvents((prev) => {
       const totalDelta = (prev[type]?.totalDelta ?? 0) + delta;
       const formattedTotal = totalDelta.toFixed(1).replace(/\.0$/, '');
@@ -2242,7 +2244,7 @@ ${allContext}`,
         return events;
       }),
       ...(spentAiCredits > 0 ? [{ atMs: nowMs, delta: spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent }] : []),
-      ...Object.values(focusBonusEvents).flatMap((event) => event ? [{ atMs: event.atMs, delta: event.totalDelta }] : [])
+      ...(focusBonusTotal > 0 ? [{ atMs: nowMs, delta: focusBonusTotal }] : [])
     ];
     const { score, appliedPenalty } = calculateEfficiencyScore(scoreEvents, nowMs, resetAtMs, userTimeZone);
     return {
@@ -2257,7 +2259,7 @@ ${allContext}`,
       inactivePenaltyToday: appliedPenalty,
       score
     };
-  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, focusBonusEvents, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
+  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, focusBonusTotal, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
 
   const efficiencyScore = useMemo(() => Math.max(currentUser?.efficiencyScore ?? 0, efficiencyTodaySummary.score), [currentUser?.efficiencyScore, efficiencyTodaySummary.score]);
 
@@ -2277,7 +2279,7 @@ ${allContext}`,
     + efficiencyTodaySummary.createdHabitsToday * EFFICIENCY_BONUSES.createdHabit
     + efficiencyTodaySummary.completedDurationHabitsToday * EFFICIENCY_BONUSES.completedHabit;
   const efficiencyAiRating = efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
-  const efficiencyFocusRating = (Object.values(focusBonusEvents) as Array<FocusBonusEvent | null>).reduce((total, event) => total + (event?.totalDelta ?? 0), 0);
+  const efficiencyFocusRating = focusBonusTotal;
   const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
 
 
