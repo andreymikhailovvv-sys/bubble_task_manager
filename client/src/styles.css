@@ -2824,3 +2824,84 @@ body[data-theme='dark'] .focus-sector-dropdown-menu button:hover {
 .miniapp-light .custom-select-option {
   color: #0f172a;
 }
+
+.efficiency-icon-button {
+  position: relative;
+  overflow: hidden;
+  transition: transform 180ms ease, background 180ms ease, filter 180ms ease;
+}
+
+.efficiency-icon-button:hover {
+  transform: translateY(-1px) scale(1.04);
+  background: rgba(139, 92, 246, 0.12);
+  filter: saturate(1.15);
+}
+
+.efficiency-orb-icon {
+  display: block;
+  filter: drop-shadow(0 0 16px rgba(139, 92, 246, 0.34));
+}
+
+.efficiency-details-popover-modern {
+  border-color: rgba(167, 139, 250, 0.3) !important;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(56, 189, 248, 0.18), transparent 34%),
+    radial-gradient(circle at 86% 12%, rgba(244, 114, 182, 0.18), transparent 32%),
+    rgba(15, 23, 42, 0.92) !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.efficiency-score-hero {
+  background: linear-gradient(100deg, #67e8f9 0%, #c4b5fd 38%, #f9a8d4 72%, #fde68a 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 2.8rem;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.08em;
+  text-shadow: 0 0 28px rgba(167, 139, 250, 0.24);
+  animation: efficiency-score-shimmer 4.5s ease-in-out infinite alternate;
+}
+
+.efficiency-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 1rem;
+  padding: 0.7rem 0.8rem;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.efficiency-detail-row b {
+  color: #86efac;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@keyframes efficiency-score-shimmer {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+
+body[data-theme='light'] .efficiency-details-popover-modern {
+  border-color: rgba(124, 58, 237, 0.18) !important;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.24), transparent 34%),
+    radial-gradient(circle at 86% 12%, rgba(244, 114, 182, 0.22), transparent 32%),
+    rgba(255, 255, 255, 0.94) !important;
+}
+
+body[data-theme='light'] .efficiency-detail-row {
+  border-color: rgba(148, 163, 184, 0.26);
+  background: rgba(248, 250, 252, 0.82);
+  color: #334155;
+}
+
+body[data-theme='light'] .efficiency-detail-row b {
+  color: #047857;
+}
