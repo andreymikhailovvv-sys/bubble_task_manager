@@ -158,11 +158,11 @@ const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
   doneSubtask: 2,
-  doneHabit: 6.7,
+  doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,
   createdTask: 1,
-  aiCreditSpent: 0.2
+  aiCreditSpent: 0.1
 } as const;
 const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
 
@@ -1992,7 +1992,7 @@ ${allContext}`,
     setFocusAiLoading(true);
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, mode: focusAiMode, attachments: attachmentsPayload });
+      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, mode: focusAiMode, attachments: attachmentsPayload, skipEfficiencyBonus: true });
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]);
       if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (focusAiMode === 'smart' ? 5 : 2) * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
@@ -2214,7 +2214,9 @@ ${allContext}`,
         stat.dateKey === todayDateKey ? habitTotal + Math.min(stat.amount, habit.targetCount) : habitTotal
       ), 0)
     ), 0);
-    const spentAiCredits = Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
+    const spentAiCredits = currentUser?.aiEfficiencyCreditsPeriod === currentUser?.aiCreditsPeriod
+      ? Math.max(0, currentUser?.aiEfficiencyCreditsSpent ?? 0)
+      : Math.max(0, 100 - (currentUser?.aiCredits ?? 100));
     const scoreEvents: EfficiencyScoreEvent[] = [
       ...rootTasks.flatMap((task) => {
         const events: EfficiencyScoreEvent[] = [];
@@ -2277,7 +2279,7 @@ ${allContext}`,
       inactivePenaltyToday: appliedPenalty,
       score
     };
-  }, [currentUser?.aiCredits, currentUser?.efficiencyResetAt, focusBonusTotal, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
+  }, [currentUser?.aiCredits, currentUser?.aiCreditsPeriod, currentUser?.aiEfficiencyCreditsPeriod, currentUser?.aiEfficiencyCreditsSpent, currentUser?.efficiencyResetAt, focusBonusTotal, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
 
   const efficiencyScore = useMemo(() => Math.max(currentUser?.efficiencyScore ?? 0, efficiencyTodaySummary.score), [currentUser?.efficiencyScore, efficiencyTodaySummary.score]);
 
@@ -2657,7 +2659,7 @@ ${allContext}`,
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) => {
+  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) => {
     const result = await api.askTaskAssistant(taskId, payload);
     try {
       const me = await api.getMe();
