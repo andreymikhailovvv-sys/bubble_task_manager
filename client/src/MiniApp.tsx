@@ -6,6 +6,12 @@ import { CustomSelect } from './components/CustomSelect';
 import { noteHtmlToPlainText } from './lib/notes';
 import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
+const MINIAPP_EFFICIENCY_BONUSES = {
+  doneHabit: 3,
+  createdHabit: 3.35,
+  completedHabit: 20.1
+} as const;
+
 type TelegramWebApp = {
   initData?: string;
   ready?: () => void;
@@ -943,6 +949,14 @@ export default function MiniApp() {
     setCustomHabitIconDraft('');
   };
 
+  const recordMiniAppEfficiencyBonus = async (delta: number) => {
+    try {
+      await api.recordEfficiencyEvent({ delta });
+    } catch (error) {
+      console.error('Failed to persist mini app efficiency bonus', error);
+    }
+  };
+
   const saveHabit = async () => {
     setSavingHabit(true);
     setError(null);
@@ -962,7 +976,10 @@ export default function MiniApp() {
         totalRepeatTarget: habitDraft.durationMode === 'REPEAT_COUNT' ? parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) : null
       };
       if (editingHabitId) await api.updateHabit(editingHabitId, payload);
-      else await api.createHabit(payload);
+      else {
+        await api.createHabit(payload);
+        void recordMiniAppEfficiencyBonus(MINIAPP_EFFICIENCY_BONUSES.createdHabit);
+      }
       await loadData();
       closeHabitModal();
     } catch (e) {
@@ -1017,6 +1034,10 @@ export default function MiniApp() {
     updateHabitCompletionLocally(habit.id, dateKey, 1);
     try {
       const updatedHabit = await api.completeHabit(habit.id, { dateKey, amount: 1, completedAt: new Date().toISOString() });
+      void recordMiniAppEfficiencyBonus(MINIAPP_EFFICIENCY_BONUSES.doneHabit);
+      if (!habit.isAutoCompleted && updatedHabit.isAutoCompleted) {
+        void recordMiniAppEfficiencyBonus(MINIAPP_EFFICIENCY_BONUSES.completedHabit);
+      }
       setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
       window.setTimeout(() => setCompletedHabitPulseId((current) => current === habit.id ? null : current), 650);
     } catch (e) {

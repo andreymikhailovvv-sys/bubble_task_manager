@@ -76,6 +76,8 @@ export type CurrentUser = {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  aiEfficiencyCreditsSpent?: number;
+  aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
   morningAiCheckupTime?: string;
@@ -116,6 +118,8 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Partial<Task>) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  recordEfficiencyEvent: (payload: { delta: number }) =>
+    request<{ efficiencyScore: number }>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
   getHabits: () => request<Habit[]>('/api/habits'),
   createHabit: (payload: Partial<Habit>) => request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(payload) }),
   updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
@@ -134,7 +138,7 @@ export const api = {
 
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
-  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[] }) =>
+  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) =>
     request<{ answer: string; model: string; actionReports?: string[] }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })

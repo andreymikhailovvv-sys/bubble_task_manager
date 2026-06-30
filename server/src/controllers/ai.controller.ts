@@ -152,6 +152,7 @@ export const aiController = {
         userMessage?: string;
         mode?: 'fast' | 'smart';
         attachments?: ChatAttachment[];
+        skipEfficiencyBonus?: boolean;
       };
 
       if (!question || typeof question !== 'string') {
@@ -181,7 +182,8 @@ export const aiController = {
         history: persistedHistory,
         mode,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        userTimeZone
+        userTimeZone,
+        skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
       });
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
