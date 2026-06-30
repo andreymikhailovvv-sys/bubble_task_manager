@@ -40,11 +40,11 @@ const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
 const EFFICIENCY_NIGHT_START_HOUR = 0;
 const EFFICIENCY_NIGHT_END_HOUR = 8;
 const EFFICIENCY_NIGHT_PENALTY_MULTIPLIER = 0.25;
-const EFFICIENCY_AI_CREDIT_BONUS = 0.2;
+const EFFICIENCY_AI_CREDIT_BONUS = 0.1;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
   doneSubtask: 2,
-  doneHabit: 6.7,
+  doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,
   createdTask: 1
