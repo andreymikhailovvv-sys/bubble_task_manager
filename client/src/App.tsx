@@ -156,11 +156,13 @@ const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2, ai: 1.5 } as const;
 const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
 const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
-  doneTask: 0.05,
-  doneSubtask: 0.02,
-  doneHabit: 0.067,
-  createdTask: 0.01,
-  aiCreditSpent: 0.002
+  doneTask: 5,
+  doneSubtask: 2,
+  doneHabit: 6.7,
+  createdHabit: 3.35,
+  completedHabit: 20.1,
+  createdTask: 1,
+  aiCreditSpent: 0.2
 } as const;
 const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
 
@@ -169,14 +171,14 @@ const EFFICIENCY_NIGHT_START_HOUR = 0;
 const EFFICIENCY_NIGHT_END_HOUR = 8;
 
 const EFFICIENCY_PENALTIES = {
-  inactivePerHour: 0.035,
+  inactivePerHour: 3.5,
   nightMultiplier: 0.25
 } as const;
 
 type EfficiencyGrade = 'средний' | 'хороший' | 'отличный';
 
 function clampEfficiency(value: number) {
-  return Math.max(0, Math.min(1, value));
+  return Math.max(0, Math.min(100, value));
 }
 
 type EfficiencyScoreEvent = { atMs: number; delta: number };
@@ -245,8 +247,8 @@ function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number,
 }
 
 function getEfficiencyGrade(value: number): EfficiencyGrade {
-  if (value < 0.3) return 'средний';
-  if (value < 0.7) return 'хороший';
+  if (value < 30) return 'средний';
+  if (value < 70) return 'хороший';
   return 'отличный';
 }
 
@@ -1907,7 +1909,7 @@ export default function App() {
     void persistEfficiencyBonus(delta);
     setFocusBonusEvents((prev) => {
       const totalDelta = (prev[type]?.totalDelta ?? 0) + delta;
-      const formattedTotal = totalDelta.toFixed(3);
+      const formattedTotal = totalDelta.toFixed(1).replace(/\.0$/, '');
       const variants: Record<FocusBonusType, string[]> = {
       ai: [
         `+${formattedTotal} рейтинга за точные запросы к ИИ — ускоряемся красиво!`,
@@ -2182,6 +2184,8 @@ ${allContext}`,
     };
     const createdTasksToday = rootTasks.filter((task) => isToday(task.createdAt)).length;
     const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
+    const createdHabitsToday = habits.filter((habit) => isToday(habit.createdAt)).length;
+    const completedDurationHabitsToday = habits.filter((habit) => habit.isAutoCompleted && isToday(habit.autoCompletedAt)).length;
     const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
     const todayDateKey = toLocalDateKey(now);
@@ -2205,20 +2209,38 @@ ${allContext}`,
         return events;
       }),
       ...subtasks.flatMap((task) => {
+        const events: EfficiencyScoreEvent[] = [];
+        const createdAt = parseEventDate(task.createdAt);
+        if (createdAt && isSameLocalDay(createdAt, now)) {
+          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
+        }
         const updatedAt = parseEventDate(task.updatedAt);
-        return task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)
-          ? [{ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneSubtask }]
-          : [];
+        if (task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)) {
+          events.push({ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneSubtask });
+        }
+        return events;
       }),
-      ...habits.flatMap((habit) => habit.stats.flatMap((stat) => {
-        if (stat.dateKey !== todayDateKey) return [];
-        const completedAt = parseEventDate(stat.completedAt) ?? now;
-        if (completedAt.getTime() < resetAtMs) return [];
-        return Array.from({ length: Math.min(stat.amount, habit.targetCount) }, () => ({
-          atMs: completedAt.getTime(),
-          delta: EFFICIENCY_BONUSES.doneHabit
-        }));
-      })),
+      ...habits.flatMap((habit) => {
+        const events: EfficiencyScoreEvent[] = [];
+        const createdAt = parseEventDate(habit.createdAt);
+        if (createdAt && isSameLocalDay(createdAt, now)) {
+          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdHabit });
+        }
+        const completedAt = parseEventDate(habit.autoCompletedAt);
+        if (habit.isAutoCompleted && completedAt && isSameLocalDay(completedAt, now)) {
+          events.push({ atMs: completedAt.getTime(), delta: EFFICIENCY_BONUSES.completedHabit });
+        }
+        habit.stats.forEach((stat) => {
+          if (stat.dateKey !== todayDateKey) return;
+          const statCompletedAt = parseEventDate(stat.completedAt) ?? now;
+          if (statCompletedAt.getTime() < resetAtMs) return;
+          events.push(...Array.from({ length: Math.min(stat.amount, habit.targetCount) }, () => ({
+            atMs: statCompletedAt.getTime(),
+            delta: EFFICIENCY_BONUSES.doneHabit
+          })));
+        });
+        return events;
+      }),
       ...(spentAiCredits > 0 ? [{ atMs: nowMs, delta: spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent }] : []),
       ...Object.values(focusBonusEvents).flatMap((event) => event ? [{ atMs: event.atMs, delta: event.totalDelta }] : [])
     ];
@@ -2229,6 +2251,8 @@ ${allContext}`,
       closedTasksToday,
       closedSubtasksToday,
       completedHabitsToday,
+      createdHabitsToday,
+      completedDurationHabitsToday,
       spentAiCredits,
       inactivePenaltyToday: appliedPenalty,
       score
@@ -2238,6 +2262,23 @@ ${allContext}`,
   const efficiencyScore = useMemo(() => Math.max(currentUser?.efficiencyScore ?? 0, efficiencyTodaySummary.score), [currentUser?.efficiencyScore, efficiencyTodaySummary.score]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
+
+  const formattedEfficiencyScore = useMemo(() => efficiencyScore.toFixed(1).replace(/\.0$/, ''), [efficiencyScore]);
+  const efficiencyGradeMessage = useMemo(() => {
+    if (efficiencyScore < 30) return 'Средний рейтинг. Сделайте следующий маленький шаг.';
+    if (efficiencyScore < 70) return 'Хороший рейтинг. Так держать.';
+    return 'Отличный рейтинг! Продолжай в том же духе.';
+  }, [efficiencyScore]);
+  const efficiencyTaskRating = efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask
+    + efficiencyTodaySummary.createdSubtasksToday * EFFICIENCY_BONUSES.createdTask
+    + efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask
+    + efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask;
+  const efficiencyHabitRating = efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit
+    + efficiencyTodaySummary.createdHabitsToday * EFFICIENCY_BONUSES.createdHabit
+    + efficiencyTodaySummary.completedDurationHabitsToday * EFFICIENCY_BONUSES.completedHabit;
+  const efficiencyAiRating = efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
+  const efficiencyFocusRating = (Object.values(focusBonusEvents) as Array<FocusBonusEvent | null>).reduce((total, event) => total + (event?.totalDelta ?? 0), 0);
+  const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
 
 
   useEffect(() => {
@@ -2503,6 +2544,7 @@ ${allContext}`,
         const shouldCloseParent = window.confirm('Все подзадачи закрыты. Закрыть основную задачу тоже?');
         if (shouldCloseParent) {
           await api.updateTask(subtask.parentTaskId, { status: 'DONE' });
+          void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask);
         }
       }
       await maybeSuggestParentDeadlineShift(subtask.parentTaskId);
@@ -2528,6 +2570,7 @@ ${allContext}`,
       const current = prev[parentTask.id] ?? (subtaskMap[parentTask.id] ?? []).map((task) => task.id);
       return { ...prev, [parentTask.id]: [...current, createdSubtask.id] };
     });
+    void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask);
     if (parentTask.status === 'DONE') {
       await api.updateTask(parentTask.id, { status: 'TODO' });
     }
@@ -3401,35 +3444,33 @@ ${allContext}`,
         <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
           <button
             type="button"
-            className="rounded-full p-1.5 hover:bg-slate-800/60"
-            title={`Текущий рейтинг: ${efficiencyScore.toFixed(3)} (${efficiencyGrade})`}
+            className="efficiency-icon-button rounded-full p-1.5"
+            title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`}
             onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}
           >
-            <svg width="66" height="36" viewBox="0 0 170 92" role="img" aria-label="Рейтинг эффективности" className="efficiency-meter drop-shadow-[0_0_10px_rgba(56,189,248,0.16)]">
+            <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon">
               <defs>
-                <linearGradient id="effTrack" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#334155" /><stop offset="100%" stopColor="#475569" /></linearGradient>
-                <linearGradient id="effFillLow" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#b99c5d" /><stop offset="100%" stopColor="#dbc07a" /></linearGradient>
-                <linearGradient id="effFillMid" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#4f72a8" /><stop offset="100%" stopColor="#74a0d8" /></linearGradient>
-                <linearGradient id="effFillHigh" x1="8" y1="84" x2="161" y2="84"><stop offset="0%" stopColor="#418f78" /><stop offset="100%" stopColor="#5fc39f" /></linearGradient>
+                <linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient>
+                <linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient>
               </defs>
-              <path d="M 8 84 A 76 76 0 0 1 161 84" stroke="url(#effTrack)" strokeWidth="8" strokeLinecap="round" fill="none" />
-              <path d="M 8 84 A 76 76 0 0 1 161 84" stroke={efficiencyScore < 0.3 ? 'url(#effFillLow)' : efficiencyScore < 0.7 ? 'url(#effFillMid)' : 'url(#effFillHigh)'} strokeWidth="8" strokeLinecap="round" fill="none" pathLength={1} strokeDasharray={`${efficiencyScore} 1`} />
-              <line x1="84.5" y1="84" x2={84.5 - Math.cos(Math.PI * efficiencyScore) * 56} y2={84 - Math.sin(Math.PI * efficiencyScore) * 56} stroke="#f8fafc" strokeWidth="2.4" strokeLinecap="round" />
-              <circle cx="84.5" cy="84" r="3.2" fill="#f8fafc" />
+              <circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" />
+              <circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" />
+              <circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" />
+              <path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" />
             </svg>
           </button>
           {isEfficiencyDetailsOpen ? (
-            <div className="efficiency-details-popover absolute left-1/2 top-[calc(100%+6px)] z-40 w-80 -translate-x-1/2 rounded-xl border border-slate-700/80 bg-slate-900/95 p-3 text-xs shadow-2xl backdrop-blur">
-              <p className="mb-2 font-semibold text-primary">Что повлияло на рейтинг сегодня:</p>
-              <ul className="efficiency-details-list space-y-1 text-slate-200">
-                <li>• Закрыто задач: {efficiencyTodaySummary.closedTasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask).toFixed(3)}</span>.</li>
-                <li>• Закрыто подзадач: {efficiencyTodaySummary.closedSubtasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask).toFixed(3)}</span>.</li>
-                <li>• Закрыто привычек: {efficiencyTodaySummary.completedHabitsToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit).toFixed(3)}</span>.</li>
-                <li>• Создано задач: {efficiencyTodaySummary.createdTasksToday} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask).toFixed(3)}</span>.</li>
-                <li>• Создано подзадач: {efficiencyTodaySummary.createdSubtasksToday} — <span className="efficiency-rating-positive text-emerald-300">+0.000</span>.</li>
-                <li>• Обращение к ИИ (кредиты): {efficiencyTodaySummary.spentAiCredits} — <span className="efficiency-rating-positive text-emerald-300">+{(efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent).toFixed(3)}</span>.</li>
-                <li>• Штраф за бездействие (после 3 часов, ночью ×0.25): {efficiencyTodaySummary.inactivePenaltyToday > 0 ? <span className="efficiency-rating-negative text-rose-300">-{efficiencyTodaySummary.inactivePenaltyToday.toFixed(3)}</span> : <span className="efficiency-rating-positive text-emerald-300">0.000</span>}.</li>
-              </ul>
+            <div className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur">
+              <div className="text-center">
+                <div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div>
+                <p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p>
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div>
+                <div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div>
+                <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div>
+                <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div>
+              </div>
             </div>
           ) : null}
         </div>
@@ -3539,7 +3580,7 @@ ${allContext}`,
                   <button className="focus-timer-control" onClick={stopFocusTimer}><Square size={18} /></button>
                 </div>
                 <p className="mt-4 text-center text-xs text-muted">После запуска можно закрыть окно — таймер останется в правом нижнем углу.</p>
-                {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p><p>Заработано рейтинга: +{focusSessionRatingEarned.toFixed(3)}</p></div> : null}
+                {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p><p>Заработано рейтинга: +{focusSessionRatingEarned.toFixed(1).replace(/\.0$/, '')}</p></div> : null}
               </div>
             </aside>
             <main className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
