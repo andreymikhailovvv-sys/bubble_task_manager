@@ -602,6 +602,8 @@ export default function App() {
   const [isFocusSphereDropdownOpen, setIsFocusSphereDropdownOpen] = useState(false);
   const [focusBonusEvents, setFocusBonusEvents] = useState<Record<FocusBonusType, FocusBonusEvent | null>>({ ai: null, subtask: null, task: null, time: null });
   const [focusBonusTotal, setFocusBonusTotal] = useState(0);
+  const [loadedFocusBonusStorageKey, setLoadedFocusBonusStorageKey] = useState<string | null>(null);
+  const focusBonusStorageKey = currentUser?.id ? `btm:focus-bonus-total:${currentUser.id}:${currentUser.efficiencyResetAt ?? 'default'}` : null;
   const [focusSessionInitialDoneSubtaskIds, setFocusSessionInitialDoneSubtaskIds] = useState<Set<string>>(new Set());
   const [focusSessionAiRequestCount, setFocusSessionAiRequestCount] = useState(0);
   const [focusDistractionTaskId, setFocusDistractionTaskId] = useState<string | null>(null);
@@ -1830,6 +1832,22 @@ export default function App() {
       setIsFocusSessionFinished(false);
     }
   };
+
+  useEffect(() => {
+    if (!focusBonusStorageKey) {
+      setLoadedFocusBonusStorageKey(null);
+      setFocusBonusTotal(0);
+      return;
+    }
+    const saved = Number(localStorage.getItem(focusBonusStorageKey) ?? 0);
+    setFocusBonusTotal(Number.isFinite(saved) && saved > 0 ? saved : 0);
+    setLoadedFocusBonusStorageKey(focusBonusStorageKey);
+  }, [focusBonusStorageKey]);
+
+  useEffect(() => {
+    if (!focusBonusStorageKey || loadedFocusBonusStorageKey !== focusBonusStorageKey) return;
+    localStorage.setItem(focusBonusStorageKey, String(focusBonusTotal));
+  }, [focusBonusStorageKey, focusBonusTotal, loadedFocusBonusStorageKey]);
 
   const startFocusSession = (ids: string[]) => {
     const selected = ids.slice(0, FOCUS_MAX_TASKS);

@@ -159,10 +159,7 @@ const persistEfficiencyDelta = async (userId: string, delta: number) => {
   });
   if (!user) return null;
 
-  const nowMs = Date.now();
-  const fromMs = user.updatedAt.getTime();
-  const decayedScore = applyEfficiencyDecay(user.efficiencyScore ?? 0, fromMs, nowMs, user.timeZone || DEFAULT_TIMEZONE);
-  const efficiencyScore = clampEfficiency(decayedScore + Math.max(0, delta));
+  const efficiencyScore = clampEfficiency((user.efficiencyScore ?? 0) + Math.max(0, delta));
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
   return efficiencyScore;
 };
