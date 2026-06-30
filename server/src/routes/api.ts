@@ -50,6 +50,11 @@ const EFFICIENCY_BONUSES = {
   createdTask: 1
 } as const;
 
+const currentCreditsPeriod = () => {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
 const toAuthUser = (user: {
   id: string;
   email?: string | null;
@@ -60,6 +65,8 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  aiEfficiencyCreditsSpent?: number;
+  aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
   morningAiCheckupTime?: string;
@@ -75,6 +82,8 @@ const toAuthUser = (user: {
   deviceId: user.deviceId,
   aiCredits: user.aiCredits ?? 100,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
+  aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
+  aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
   morningAiCheckupEnabled: user.morningAiCheckupEnabled ?? false,
   morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
@@ -167,7 +176,7 @@ const persistEfficiencyDelta = async (userId: string, delta: number) => {
 const recalculateAndPersistEfficiency = async (userId: string) => {
   const now = new Date();
   const [user, tasks, habits, habitCompletions] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, timeZone: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsSpent: true, aiEfficiencyCreditsPeriod: true, timeZone: true } }),
     prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } }),
     prisma.habit.findMany({ where: { userId }, select: { createdAt: true, isAutoCompleted: true, autoCompletedAt: true } }),
     prisma.habitCompletion.findMany({ where: { userId }, select: { amount: true, completedAt: true, source: true } })
@@ -211,7 +220,7 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
     }
   }
 
-  const spentCredits = Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
+  const spentCredits = user.aiEfficiencyCreditsPeriod === currentCreditsPeriod() ? Math.max(0, user.aiEfficiencyCreditsSpent) : Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
   if (spentCredits > 0) {
     events.push({ atMs: nowMs, delta: spentCredits * EFFICIENCY_AI_CREDIT_BONUS });
   }
@@ -584,6 +593,8 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       deviceId: true,
       aiCredits: true,
       aiCreditsPeriod: true,
+      aiEfficiencyCreditsSpent: true,
+      aiEfficiencyCreditsPeriod: true,
       timeZone: true,
       morningAiCheckupEnabled: true,
       morningAiCheckupTime: true,

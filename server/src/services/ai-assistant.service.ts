@@ -133,10 +133,14 @@ const currentCreditsPeriod = () => {
 
 const AI_CREDIT_EFFICIENCY_BONUS = 0.1;
 
-const aiCreditEfficiencyData = (cost: number, options?: { skipEfficiencyBonus?: boolean }) => (
+const aiCreditEfficiencyData = (cost: number, period: string, currentPeriod: string | undefined, options?: { skipEfficiencyBonus?: boolean }) => (
   options?.skipEfficiencyBonus || cost <= 0
     ? {}
-    : { efficiencyScore: { increment: cost * AI_CREDIT_EFFICIENCY_BONUS } }
+    : {
+      efficiencyScore: { increment: cost * AI_CREDIT_EFFICIENCY_BONUS },
+      aiEfficiencyCreditsSpent: currentPeriod === period ? { increment: cost } : cost,
+      aiEfficiencyCreditsPeriod: period
+    }
 );
 
 async function clampUserEfficiencyScore(userId: string, score: number) {
@@ -147,7 +151,7 @@ async function clampUserEfficiencyScore(userId: string, score: number) {
 async function chargeAiCredits(userId: string, model: string, options?: { skipEfficiencyBonus?: boolean }) {
   const cost = resolveModelCredits(model);
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
   const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
   if (credits < cost) {
@@ -158,7 +162,7 @@ async function chargeAiCredits(userId: string, model: string, options?: { skipEf
     data: {
       aiCredits: credits - cost,
       aiCreditsPeriod: period,
-      ...aiCreditEfficiencyData(cost, options)
+      ...aiCreditEfficiencyData(cost, period, user.aiEfficiencyCreditsPeriod, options)
     },
     select: { efficiencyScore: true }
   });
@@ -167,13 +171,13 @@ async function chargeAiCredits(userId: string, model: string, options?: { skipEf
 
 async function chargeFixedAiCredits(userId: string, cost: number, options?: { skipEfficiencyBonus?: boolean }) {
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
   const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
   if (credits < cost) throw new Error('Недостаточно AI кредитов');
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: { aiCredits: credits - cost, aiCreditsPeriod: period, ...aiCreditEfficiencyData(cost, options) },
+    data: { aiCredits: credits - cost, aiCreditsPeriod: period, ...aiCreditEfficiencyData(cost, period, user.aiEfficiencyCreditsPeriod, options) },
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
@@ -181,7 +185,7 @@ async function chargeFixedAiCredits(userId: string, cost: number, options?: { sk
 
 async function chargeSingleAiNotificationCredit(userId: string, options?: { skipEfficiencyBonus?: boolean }) {
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
   const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
   if (credits < 1) throw new Error('Недостаточно AI кредитов');
@@ -190,7 +194,7 @@ async function chargeSingleAiNotificationCredit(userId: string, options?: { skip
     data: {
       aiCredits: credits - 1,
       aiCreditsPeriod: period,
-      ...aiCreditEfficiencyData(1, options)
+      ...aiCreditEfficiencyData(1, period, user.aiEfficiencyCreditsPeriod, options)
     },
     select: { efficiencyScore: true }
   });

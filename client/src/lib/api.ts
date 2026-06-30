@@ -76,6 +76,8 @@ export type CurrentUser = {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  aiEfficiencyCreditsSpent?: number;
+  aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
   morningAiCheckupTime?: string;
