@@ -39,7 +39,7 @@ const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 3.5;
 const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
 const EFFICIENCY_NIGHT_START_HOUR = 0;
 const EFFICIENCY_NIGHT_END_HOUR = 8;
-const EFFICIENCY_NIGHT_PENALTY_MULTIPLIER = 0.25;
+const EFFICIENCY_NIGHT_PENALTY_MULTIPLIER = 0.1;
 const EFFICIENCY_AI_CREDIT_BONUS = 0.1;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
@@ -220,7 +220,7 @@ const recalculateAndPersistEfficiency = async (userId: string) => {
     }
   }
 
-  const spentCredits = user.aiEfficiencyCreditsPeriod === currentCreditsPeriod() ? Math.max(0, user.aiEfficiencyCreditsSpent) : Math.max(0, 100 - (user.aiCreditsPeriod ? user.aiCredits : 100));
+  const spentCredits = user.aiEfficiencyCreditsPeriod === currentCreditsPeriod() ? Math.max(0, user.aiEfficiencyCreditsSpent) : 0;
   if (spentCredits > 0) {
     events.push({ atMs: nowMs, delta: spentCredits * EFFICIENCY_AI_CREDIT_BONUS });
   }
