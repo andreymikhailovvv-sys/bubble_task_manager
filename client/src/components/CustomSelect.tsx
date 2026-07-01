@@ -62,7 +62,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
   const menu = shouldRenderMenu ? (
     <div
       ref={menuRef}
-      className={`custom-select-menu ${detachedPopup ? 'custom-select-menu-detached fixed' : 'absolute left-0 top-[calc(100%+6px)] w-full'} z-[170] rounded-xl border p-1.5 shadow-none backdrop-blur ${menuClassName}`}
+      className={`custom-select-menu ${detachedPopup ? 'custom-select-menu-detached fixed' : 'absolute left-0 top-[calc(100%+6px)] w-full'} z-[170] rounded-xl border p-1.5 shadow-2xl backdrop-blur ${menuClassName}`}
       role="listbox"
       style={detachedPopup && menuPosition ? { top: menuPosition.top, left: menuPosition.left, width: menuPosition.width } : undefined}
     >
