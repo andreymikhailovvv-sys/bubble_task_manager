@@ -1914,18 +1914,18 @@ export default function App() {
     else setFocusedTaskId(task.id);
   };
 
-  const persistEfficiencyBonus = async (delta: number) => {
+  const persistEfficiencyBonus = async (delta: number, bucket: 'task' | 'habit' | 'ai' | 'focus') => {
     if (!currentUser || delta <= 0) return;
     try {
-      const result = await api.recordEfficiencyEvent({ delta });
-      setCurrentUser((prev) => prev ? { ...prev, efficiencyScore: result.efficiencyScore } : prev);
+      const result = await api.recordEfficiencyEvent({ delta, bucket });
+      setCurrentUser((prev) => prev ? { ...prev, ...result } : prev);
     } catch (error) {
       console.error('Failed to persist efficiency bonus', error);
     }
   };
 
   const pushFocusBonusMessage = (type: FocusBonusType, delta: number) => {
-    void persistEfficiencyBonus(delta);
+    void persistEfficiencyBonus(delta, 'focus');
     setFocusBonusTotal((total) => total + delta);
     setFocusBonusEvents((prev) => {
       const totalDelta = (prev[type]?.totalDelta ?? 0) + delta;
@@ -2187,101 +2187,7 @@ ${allContext}`,
   const effectiveTimeFilter = isTimelineMode ? 'all' : timeFilter;
   const shouldApplySphereFilter = !isTimelineMode;
 
-  const efficiencyTodaySummary = useMemo(() => {
-    const now = new Date();
-    const nowMs = now.getTime();
-    const resetAt = currentUser?.efficiencyResetAt ? new Date(currentUser.efficiencyResetAt) : null;
-    const resetAtMs = resetAt && Number.isFinite(resetAt.getTime()) ? resetAt.getTime() : 0;
-    const parseEventDate = (raw?: string | null) => {
-      if (!raw) return null;
-      const parsed = new Date(raw);
-      if (Number.isNaN(parsed.getTime())) return null;
-      return parsed;
-    };
-    const isToday = (raw?: string | null) => {
-      const parsed = parseEventDate(raw);
-      return Boolean(parsed && parsed.getTime() >= resetAtMs && isSameLocalDay(parsed, now));
-    };
-    const createdTasksToday = rootTasks.filter((task) => isToday(task.createdAt)).length;
-    const createdSubtasksToday = subtasks.filter((task) => isToday(task.createdAt)).length;
-    const createdHabitsToday = habits.filter((habit) => isToday(habit.createdAt)).length;
-    const completedDurationHabitsToday = habits.filter((habit) => habit.isAutoCompleted && isToday(habit.autoCompletedAt)).length;
-    const closedTasksToday = rootTasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
-    const closedSubtasksToday = subtasks.filter((task) => task.status === 'DONE' && isToday(task.updatedAt)).length;
-    const todayDateKey = toLocalDateKey(now);
-    const completedHabitsToday = habits.reduce((total, habit) => (
-      total + habit.stats.reduce((habitTotal, stat) => (
-        stat.dateKey === todayDateKey ? habitTotal + Math.min(stat.amount, habit.targetCount) : habitTotal
-      ), 0)
-    ), 0);
-    const spentAiCredits = currentUser?.aiEfficiencyCreditsPeriod === currentUser?.aiCreditsPeriod
-      ? Math.max(0, currentUser?.aiEfficiencyCreditsSpent ?? 0)
-      : 0;
-    const scoreEvents: EfficiencyScoreEvent[] = [
-      ...rootTasks.flatMap((task) => {
-        const events: EfficiencyScoreEvent[] = [];
-        const createdAt = parseEventDate(task.createdAt);
-        if (createdAt && isSameLocalDay(createdAt, now)) {
-          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
-        }
-        const updatedAt = parseEventDate(task.updatedAt);
-        if (task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)) {
-          events.push({ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneTask });
-        }
-        return events;
-      }),
-      ...subtasks.flatMap((task) => {
-        const events: EfficiencyScoreEvent[] = [];
-        const createdAt = parseEventDate(task.createdAt);
-        if (createdAt && isSameLocalDay(createdAt, now)) {
-          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
-        }
-        const updatedAt = parseEventDate(task.updatedAt);
-        if (task.status === 'DONE' && updatedAt && isSameLocalDay(updatedAt, now)) {
-          events.push({ atMs: updatedAt.getTime(), delta: EFFICIENCY_BONUSES.doneSubtask });
-        }
-        return events;
-      }),
-      ...habits.flatMap((habit) => {
-        const events: EfficiencyScoreEvent[] = [];
-        const createdAt = parseEventDate(habit.createdAt);
-        if (createdAt && isSameLocalDay(createdAt, now)) {
-          events.push({ atMs: createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdHabit });
-        }
-        const completedAt = parseEventDate(habit.autoCompletedAt);
-        if (habit.isAutoCompleted && completedAt && isSameLocalDay(completedAt, now)) {
-          events.push({ atMs: completedAt.getTime(), delta: EFFICIENCY_BONUSES.completedHabit });
-        }
-        habit.stats.forEach((stat) => {
-          if (stat.dateKey !== todayDateKey) return;
-          const statCompletedAt = parseEventDate(stat.completedAt) ?? now;
-          if (statCompletedAt.getTime() < resetAtMs) return;
-          events.push(...Array.from({ length: Math.min(stat.amount, habit.targetCount) }, () => ({
-            atMs: statCompletedAt.getTime(),
-            delta: EFFICIENCY_BONUSES.doneHabit
-          })));
-        });
-        return events;
-      }),
-      ...(spentAiCredits > 0 ? [{ atMs: nowMs, delta: spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent }] : []),
-      ...(focusBonusTotal > 0 ? [{ atMs: nowMs, delta: focusBonusTotal }] : [])
-    ];
-    const { score, appliedPenalty } = calculateEfficiencyScore(scoreEvents, nowMs, resetAtMs, userTimeZone);
-    return {
-      createdTasksToday,
-      createdSubtasksToday,
-      closedTasksToday,
-      closedSubtasksToday,
-      completedHabitsToday,
-      createdHabitsToday,
-      completedDurationHabitsToday,
-      spentAiCredits,
-      inactivePenaltyToday: appliedPenalty,
-      score
-    };
-  }, [currentUser?.aiCredits, currentUser?.aiCreditsPeriod, currentUser?.aiEfficiencyCreditsPeriod, currentUser?.aiEfficiencyCreditsSpent, currentUser?.efficiencyResetAt, focusBonusTotal, habits, overdueTick, rootTasks, subtasks, userTimeZone]);
-
-  const efficiencyScore = useMemo(() => efficiencyTodaySummary.score, [efficiencyTodaySummary.score]);
+  const efficiencyScore = useMemo(() => currentUser?.efficiencyScore ?? 0, [currentUser?.efficiencyScore]);
 
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
@@ -2291,15 +2197,10 @@ ${allContext}`,
     if (efficiencyScore < 70) return 'Хороший рейтинг. Так держать.';
     return 'Отличный рейтинг! Продолжай в том же духе.';
   }, [efficiencyScore]);
-  const efficiencyTaskRating = efficiencyTodaySummary.createdTasksToday * EFFICIENCY_BONUSES.createdTask
-    + efficiencyTodaySummary.createdSubtasksToday * EFFICIENCY_BONUSES.createdTask
-    + efficiencyTodaySummary.closedTasksToday * EFFICIENCY_BONUSES.doneTask
-    + efficiencyTodaySummary.closedSubtasksToday * EFFICIENCY_BONUSES.doneSubtask;
-  const efficiencyHabitRating = efficiencyTodaySummary.completedHabitsToday * EFFICIENCY_BONUSES.doneHabit
-    + efficiencyTodaySummary.createdHabitsToday * EFFICIENCY_BONUSES.createdHabit
-    + efficiencyTodaySummary.completedDurationHabitsToday * EFFICIENCY_BONUSES.completedHabit;
-  const efficiencyAiRating = efficiencyTodaySummary.spentAiCredits * EFFICIENCY_BONUSES.aiCreditSpent;
-  const efficiencyFocusRating = focusBonusTotal;
+  const efficiencyTaskRating = currentUser?.efficiencyTaskScore ?? 0;
+  const efficiencyHabitRating = currentUser?.efficiencyHabitScore ?? 0;
+  const efficiencyAiRating = currentUser?.efficiencyAiScore ?? 0;
+  const efficiencyFocusRating = currentUser?.efficiencyFocusScore ?? 0;
   const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
 
 
@@ -2402,7 +2303,7 @@ ${allContext}`,
       await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
     } else {
       await api.createTask({ ...normalized, priorityScore: score });
-      void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask);
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask, 'task');
     }
     setEditorState(null);
     await load();
@@ -2484,7 +2385,7 @@ ${allContext}`,
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 320));
     await api.updateTask(task.id, { status: 'DONE' });
-    void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask);
+    void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
     setPoppingTaskId(null);
     setEditorState(null);
@@ -2557,7 +2458,7 @@ ${allContext}`,
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
-      void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask);
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
       if (isFocusBonusEligible(subtask.parentTaskId)) pushFocusBonusMessage('subtask', EFFICIENCY_BONUSES.doneSubtask * (FOCUS_BONUS_MULTIPLIERS.subtask - 1));
     }
     if (subtask.parentTaskId) {
@@ -2566,7 +2467,7 @@ ${allContext}`,
         const shouldCloseParent = window.confirm('Все подзадачи закрыты. Закрыть основную задачу тоже?');
         if (shouldCloseParent) {
           await api.updateTask(subtask.parentTaskId, { status: 'DONE' });
-          void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask);
+          void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
         }
       }
       await maybeSuggestParentDeadlineShift(subtask.parentTaskId);
@@ -2592,7 +2493,7 @@ ${allContext}`,
       const current = prev[parentTask.id] ?? (subtaskMap[parentTask.id] ?? []).map((task) => task.id);
       return { ...prev, [parentTask.id]: [...current, createdSubtask.id] };
     });
-    void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask);
+    void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask, 'task');
     if (parentTask.status === 'DONE') {
       await api.updateTask(parentTask.id, { status: 'TODO' });
     }

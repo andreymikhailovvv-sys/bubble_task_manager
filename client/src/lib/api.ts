@@ -83,6 +83,11 @@ export type CurrentUser = {
   morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
+  efficiencyTaskScore?: number;
+  efficiencyHabitScore?: number;
+  efficiencyAiScore?: number;
+  efficiencyFocusScore?: number;
+  efficiencyLastActivityAt?: string | Date | null;
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
 
@@ -118,8 +123,8 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Partial<Task>) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
-  recordEfficiencyEvent: (payload: { delta: number }) =>
-    request<{ efficiencyScore: number }>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
+  recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
+    request<Pick<CurrentUser, 'efficiencyScore' | 'efficiencyTaskScore' | 'efficiencyHabitScore' | 'efficiencyAiScore' | 'efficiencyFocusScore' | 'efficiencyLastActivityAt'>>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
   getHabits: () => request<Habit[]>('/api/habits'),
   createHabit: (payload: Partial<Habit>) => request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(payload) }),
   updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
