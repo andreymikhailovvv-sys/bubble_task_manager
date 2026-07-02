@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -60,22 +60,12 @@ const IMPORTANCE_STYLES: Record<number, string> = {
   4: 'bg-orange-500/70 border-orange-300',
   5: 'bg-rose-500/75 border-rose-300'
 };
-const SUBTASK_IMPORTANCE_COLORS: Record<number, string> = {
-  1: '#38bdf8',
-  2: '#38bdf8',
-  3: '#facc15',
-  4: '#ef4444',
-  5: '#ef4444'
-};
 type SubtaskFilterMode = 'none' | 'urgency' | 'importance';
 const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> = [
   { mode: 'urgency', label: 'По срочности' },
   { mode: 'importance', label: 'По важности' },
   { mode: 'none', label: 'Без фильтра' }
 ];
-function getSubtaskImportanceColor(importance?: number | null) {
-  return SUBTASK_IMPORTANCE_COLORS[importance ?? 3] ?? SUBTASK_IMPORTANCE_COLORS[3];
-}
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
 const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
@@ -661,6 +651,10 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
+  const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
+  const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
+  const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
+  const [isFocusedSphereDropdownOpen, setIsFocusedSphereDropdownOpen] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
@@ -1389,6 +1383,10 @@ export default function App() {
     if (!focusedTask) {
       setFocusedDraft(null);
       setIsFocusedNotesEditorOpen(false);
+      setIsFocusedSettingsOpen(false);
+      setIsEditingFocusedTitle(false);
+      setFocusedTitleDraft('');
+      setIsFocusedSphereDropdownOpen(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
       setIsAiSubtasksPromptOpen(false);
@@ -1406,6 +1404,10 @@ export default function App() {
       return;
     }
     setIsFocusedNotesEditorOpen(false);
+    setIsFocusedSettingsOpen(false);
+    setIsEditingFocusedTitle(false);
+    setFocusedTitleDraft(focusedTask.title ?? '');
+    setIsFocusedSphereDropdownOpen(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
@@ -4960,8 +4962,17 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(86vh,760px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
-              <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+        <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+              <button
+                type="button"
+                className="absolute right-4 top-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100"
+                onClick={() => setFocusedTaskId(null)}
+                aria-label="Закрыть помощь ИИ"
+                title="Закрыть"
+              >
+                <X size={16} />
+              </button>
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-9">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
@@ -5183,14 +5194,63 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-white/60" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-16 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
-              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
+              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border-0 p-6 shadow-none">
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
-                  <div className="mt-2 flex items-start justify-between gap-3">
-                    <input className="focused-task-title-input min-w-0 flex-1 bg-transparent text-3xl font-bold text-slate-950 outline-none" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                    <button className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
+                  <div className="mt-2 flex items-start gap-3">
+                    <div className="relative min-w-0 flex-1">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <h2 className="focused-task-title-display min-w-0 text-3xl font-bold leading-tight text-slate-950">{focusedDraft.title || 'Без названия'}</h2>
+                        <button
+                          type="button"
+                          className="focused-task-title-edit-button mt-1 h-8 w-8 shrink-0 border"
+                          onClick={() => {
+                            setFocusedTitleDraft(focusedDraft.title ?? '');
+                            setIsEditingFocusedTitle(true);
+                          }}
+                          title="Редактировать название"
+                          aria-label="Редактировать название задачи"
+                        >
+                          <Edit3 size={15} />
+                        </button>
+                      </div>
+                      {isEditingFocusedTitle ? (
+                        <div className="focused-task-title-popover absolute left-0 top-[calc(100%+8px)] z-40 flex w-[min(100%,520px)] items-center gap-2 rounded-2xl border bg-white p-2 shadow-2xl">
+                          <input
+                            className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm font-semibold"
+                            value={focusedTitleDraft}
+                            autoFocus
+                            onChange={(event) => setFocusedTitleDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Escape') setIsEditingFocusedTitle(false);
+                              if (event.key === 'Enter') {
+                                setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
+                                setIsEditingFocusedTitle(false);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="success-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                            onClick={() => {
+                              setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
+                              setIsEditingFocusedTitle(false);
+                            }}
+                            aria-label="Применить название"
+                            title="Применить"
+                          >
+                            <Check size={16} />
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                      <button className="success-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
                     <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
@@ -5280,28 +5340,53 @@ ${allContext}`,
                       ))}
                     </div>
                   ) : null}
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <CustomSelect
-                      value={focusedDraft.sphereId ?? ''}
-                      onChange={(value) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: value || null }))}
-                      options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: `● ${sphere.name}` }))]}
-                      ariaLabel="Выбор сектора"
-                      buttonClassName="focused-task-pill-select"
-                      detachedPopup
-                    />
-                    <label className="block text-xs focused-task-notify">Уведомлять за
-                    <CustomSelect
-                      className="mt-1"
-                      value={focusedNotifyPreset}
-                      onChange={(value) => {
-                        setFocusedNotifyPreset(value);
-                        setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
-                      }}
-                      options={NOTIFY_PRESETS}
-                      ariaLabel="Уведомлять за"
-                      buttonClassName="focused-task-pill-select"
-                      detachedPopup
-                    />
+                  {isFocusedSettingsOpen ? (
+                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
+                        <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
+                      </div>
+                  <div className="mt-4 grid grid-cols-2 items-end gap-3">
+                    <label className="block text-xs font-semibold text-muted">Сектор
+                      <div className="focus-sector-dropdown relative mt-1">
+                        <button type="button" className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600" onClick={() => setIsFocusedSphereDropdownOpen((prev) => !prev)}>
+                          {(() => {
+                            const selectedSphere = spheres.find((sphere) => sphere.id === focusedDraft.sphereId);
+                            return (
+                              <>
+                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selectedSphere?.color ?? '#7c3aed' }} />
+                                <span className="min-w-0 flex-1 truncate text-left font-semibold">{selectedSphere?.name ?? 'Без сектора'}</span>
+                                <ChevronDown size={14} className="shrink-0" />
+                              </>
+                            );
+                          })()}
+                        </button>
+                        {isFocusedSphereDropdownOpen ? (
+                          <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border bg-white p-1 shadow-2xl">
+                            {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
+                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => { setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: sphere.id || null })); setIsFocusedSphereDropdownOpen(false); }}>
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sphere.color }} />
+                                <span className="font-medium">{sphere.name}</span>
+                                {(focusedDraft.sphereId ?? '') === sphere.id ? <Check size={14} className="ml-auto text-violet-600" /> : null}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </label>
+                    <label className="block text-xs font-semibold text-muted focused-task-notify">Уведомлять за
+                      <CustomSelect
+                        className="mt-1"
+                        value={focusedNotifyPreset}
+                        onChange={(value) => {
+                          setFocusedNotifyPreset(value);
+                          setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
+                        }}
+                        options={NOTIFY_PRESETS}
+                        ariaLabel="Уведомлять за"
+                        buttonClassName="focused-task-pill-select"
+                        detachedPopup
+                      />
                     </label>
                   </div>
                   <div className="flex items-center gap-4 text-sm">
@@ -5361,7 +5446,7 @@ ${allContext}`,
                       {[1, 2, 3, 4, 5].map((level) => (
                         <button
                           key={level}
-                          className={`importance-choice-button focused-task-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
+                          className={`importance-choice-button focused-task-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'importance-choice-button-active ring-2 ring-inset' : 'opacity-80 hover:opacity-100'}`}
                           onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}
                         >
                           {level}
@@ -5369,13 +5454,12 @@ ${allContext}`,
                       ))}
                     </div>
                   </div>
-                </div>
-                <div className="mt-3 grid shrink-0 grid-cols-2 gap-2">
-                  <button className="primary-button rounded px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
-                  <button className="danger-button rounded px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+
+                    </div>
+                  ) : null}
                 </div>
               </div>
-              <div className="surface-card focused-task-subtasks mt-4 flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
+              <div className="focused-task-subtasks mt-2 flex min-h-0 flex-col space-y-2 border-t border-violet-100 pt-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
@@ -5482,29 +5566,18 @@ ${allContext}`,
                     <Reorder.Item
                       key={subtask.id}
                       value={subtask}
-                      whileDrag={{ scale: 1.03, boxShadow: '0 18px 38px rgba(2,6,23,0.65)', zIndex: 90 }}
-                      className={`list-item-surface relative flex items-center gap-2 rounded px-2 py-1 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
+                      className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                     >
-                      <span className="subtask-importance-corner" style={{ borderTopColor: getSubtaskImportanceColor(subtask.importance) }} title="Важность подзадачи" />
-                      <button type="button" className="cursor-grab text-slate-400 active:cursor-grabbing" title="Перетащите для смены порядка">
-                        <GripVertical size={14} />
-                      </button>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
-                      <div
-                        className={`flex-1 cursor-pointer text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
+                      <button
+                        type="button"
+                        className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
                         onClick={() => setEditorState({ task: subtask })}
                         title="Открыть доп задачу"
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setEditorState({ task: subtask });
-                          }
-                        }}
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
-                      </div>
+                      </button>
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
