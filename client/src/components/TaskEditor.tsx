@@ -1,4 +1,4 @@
-import { Bold, Coins, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Underline, X } from 'lucide-react';
+import { Bell, Bold, CheckCircle2, Coins, Edit3, Heading1, Heading2, Italic, Loader2, Maximize2, Paperclip, Plus, Trash2, Underline, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
 import type { ChatAttachmentPayload, Sphere, Task } from '../lib/types';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
@@ -9,6 +9,7 @@ import { CustomSelect } from './CustomSelect';
 
 type Props = {
   task?: Task;
+  subtasks?: Task[];
   initialSphereId?: string;
   spheres: Sphere[];
   onSave: (payload: Partial<Task>) => Promise<void>;
@@ -120,6 +121,17 @@ function formatInline(selectedText: string, prefix: string, suffix = prefix, pla
   };
 }
 
+
+function formatDeadlineLeft(date: string) {
+  const diff = new Date(date).getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const days = Math.floor(abs / 86_400_000);
+  const hours = Math.floor((abs % 86_400_000) / 3_600_000);
+  const minutes = Math.max(1, Math.floor((abs % 3_600_000) / 60_000));
+  const parts = days > 0 ? `${days} д ${hours} ч` : hours > 0 ? `${hours} ч ${minutes} мин` : `${minutes} мин`;
+  return diff >= 0 ? parts : `просрочено на ${parts}`;
+}
+
 function NotesEditor({ value, onChange, onClose }: NotesEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -172,7 +184,7 @@ function NotesEditor({ value, onChange, onClose }: NotesEditorProps) {
   );
 }
 
-export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled, timelineTasks = [] }: Props) {
+export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSave, onAutoSave, onGenerateWithAi, onDelete, onCancel, onComplete, parentTaskTitle, onOpenParentTask, defaultAiNotificationsEnabled, timelineTasks = [] }: Props) {
   const isEditing = Boolean(task?.id);
   const [form, setForm] = useState<Partial<Task>>({ importance: 3, sphereId: initialSphereId ?? null });
   const [notifyPreset, setNotifyPreset] = useState<string>('30');
@@ -337,6 +349,9 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
       setIsGeneratingByAi(false);
     }
   };
+  const visibleSubtasks = subtasks.filter((subtask) => subtask.status !== 'DONE').slice(0, 5);
+  const deadlineLabel = form.dueDate ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}` : 'Дедлайн не задан';
+
   const applyRecurrence = async () => {
     if (!isRecurring) return;
     const text = recurrenceText.trim();
@@ -353,216 +368,52 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   };
 
   return (
-    <div className="modal-backdrop fixed inset-0 z-[180] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="modal-card relative w-full max-w-xl space-y-3 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={onCancel} aria-label="Закрыть окно"><X size={16} /></button>
-        <h3 className="text-lg font-semibold text-primary">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
-        {canShowAiCreateMode ? (
-          <div className="grid grid-cols-2 gap-2">
-            <button className={`rounded px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'primary-button' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
-            <button
-              className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai'
-                ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400'
-                : 'secondary-button border-rose-300/70 text-primary hover:brightness-110'}`}
-              onClick={() => setCreateMode('ai')}
-            >
-              Через ИИ
-            </button>
-          </div>
-        ) : null}
-        {createMode === 'ai' && canShowAiCreateMode ? (
-          <>
-            <p className="text-xs text-muted">
-              Опишите задачу в свободной форме — ИИ сам заполнит название, описание, сроки, степень важности, а также сразу даст подсказки по выполнению <span className="inline-flex items-center gap-1 text-rose-300">(стоимость 2 <Coins size={11} />)</span>
-            </p>
-            <textarea
-              className="form-field min-h-28 w-full rounded border p-2 text-sm"
-              placeholder="Например: нужно подготовить презентацию для созвона с клиентом в четверг, собрать метрики, согласовать бюджет…"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-            />
-            <input
-              ref={aiAttachmentInputRef}
-              type="file"
-              accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
-              multiple
-              className="hidden"
-              onChange={handleAiFileSelect}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              {aiPendingFiles.map((file) => (
-                <button
-                  key={`${file.name}:${file.size}`}
-                  type="button"
-                  className="secondary-button inline-flex max-w-[220px] items-center gap-1 rounded-full px-2 py-1 text-[11px]"
-                  onClick={() => setAiPendingFiles((prev) => prev.filter((item) => `${item.name}:${item.size}` !== `${file.name}:${file.size}`))}
-                >
-                  <Paperclip size={11} />
-                  <span className="truncate">{file.name}</span>
-                  <X size={11} />
-                </button>
-              ))}
-              <button
-                type="button"
-                className="secondary-button inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed text-primary hover:brightness-110"
-                onClick={() => aiAttachmentInputRef.current?.click()}
-                title="Добавить файл"
-              >
-                <Plus size={15} />
-              </button>
+    <div className="modal-backdrop fixed inset-0 z-[180] flex items-center justify-center p-3 backdrop-blur-sm" onClick={onCancel}>
+      <aside className="task-edit-shell focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-[1180px] gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[minmax(420px,1fr)_430px]" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="absolute right-3 top-3 z-20 rounded-full p-2 text-muted transition hover:bg-white/60" onClick={onCancel} aria-label="Закрыть окно"><X size={18} /></button>
+        <main className="focus-main-card task-edit-card flex min-h-0 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</p>
+          {canShowAiCreateMode ? (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button className={`rounded-full px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'primary-button' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
+              <button className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400' : 'secondary-button border-rose-300/70 text-primary hover:brightness-110'}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
             </div>
-            <CustomSelect
-              value={aiSphereSelection}
-              onChange={setAiSphereSelection}
-              options={[{ value: 'auto', label: 'Автоматически' }, { value: 'none', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
-              ariaLabel="Выбор сектора для ИИ"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <p className="min-h-4 text-xs text-rose-300">{aiError ?? ''}</p>
-              <button className="primary-button rounded px-3 py-2 text-sm disabled:opacity-60" onClick={() => void submitAiGenerate()} disabled={isGeneratingByAi}>
-                {isGeneratingByAi ? 'Формирую…' : 'Сформировать задачу'}
-              </button>
+          ) : null}
+          {createMode === 'ai' && canShowAiCreateMode ? (
+            <div className="mt-4 flex min-h-0 flex-1 flex-col gap-3">
+              <p className="text-xs text-muted">Опишите задачу в свободной форме — ИИ сам заполнит название, описание, сроки, степень важности и даст подсказки <span className="inline-flex items-center gap-1 text-rose-300">(стоимость 2 <Coins size={11} />)</span></p>
+              <textarea className="form-field min-h-0 flex-1 resize-none rounded-2xl border p-3 text-sm" placeholder="Например: нужно подготовить презентацию…" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} />
+              <input ref={aiAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
+              <div className="flex flex-wrap items-center gap-2">{aiPendingFiles.map((file) => <button key={`${file.name}:${file.size}`} type="button" className="secondary-button inline-flex max-w-[220px] items-center gap-1 rounded-full px-2 py-1 text-[11px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => `${item.name}:${item.size}` !== `${file.name}:${file.size}`))}><Paperclip size={11} /><span className="truncate">{file.name}</span><X size={11} /></button>)}<button type="button" className="secondary-button inline-flex h-9 w-9 items-center justify-center rounded-xl border border-dashed text-primary hover:brightness-110" onClick={() => aiAttachmentInputRef.current?.click()} title="Добавить файл"><Plus size={15} /></button></div>
+              <CustomSelect value={aiSphereSelection} onChange={setAiSphereSelection} options={[{ value: 'auto', label: 'Автоматически' }, { value: 'none', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]} ariaLabel="Выбор сектора для ИИ" />
+              <div className="flex items-center justify-between gap-2"><p className="min-h-4 text-xs text-rose-300">{aiError ?? ''}</p><button className="primary-button rounded-full px-4 py-2 text-sm disabled:opacity-60" onClick={() => void submitAiGenerate()} disabled={isGeneratingByAi}>{isGeneratingByAi ? 'Формирую…' : 'Сформировать задачу'}</button></div>
             </div>
-          </>
-        ) : (
-          <>
-        <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
-        <div>
-          <textarea className="form-field min-h-20 w-full resize-none rounded border p-2 text-sm" placeholder="Описание" value={noteHtmlToPlainText(descriptionValue, { trimEnd: false })} onChange={(e) => updateDescription(e.target.value)} />
-          <div className="mt-1 flex items-start justify-between gap-2">
-            <div className="min-w-0 space-y-2">
-              {isSubtask && parentTaskTitle && onOpenParentTask ? (
-                <button
-                  type="button"
-                  className="main-task-link-button inline-flex max-w-full min-w-0 rounded-full border px-3 py-1 text-xs font-semibold transition"
-                  onClick={onOpenParentTask}
-                  title={`Открыть основную задачу: ${parentTaskTitle}`}
-                >
-                  <span className="truncate">Основная задача: {parentTaskTitle}</span>
-                </button>
-              ) : <span />}
-              {isSubtask ? (
-                <div className="flex items-center gap-2" aria-label="Важность подзадачи">
-                  {SUBTASK_IMPORTANCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.level}
-                      type="button"
-                      className={`subtask-importance-dot h-5 w-5 rounded-full border transition ${selectedImportance === option.level ? 'subtask-importance-dot-active scale-110 border-white ring-2 ring-white/70' : 'border-white/50 hover:scale-105'}`}
-                      style={{ backgroundColor: option.color }}
-                      title={option.label}
-                      aria-label={option.label}
-                      onClick={() => setForm((p) => ({ ...p, importance: option.level }))}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="notes-open-button inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition"
-              onClick={() => setIsNotesEditorOpen(true)}
-              title="Открыть заметки"
-              aria-label="Открыть заметки"
-            >
-              <Maximize2 size={15} />
-            </button>
-          </div>
-        </div>
-        {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
-        {!isSubtask ? (
-          <>
-            <CustomSelect
-              value={form.sphereId ?? ''}
-              onChange={(value) => setForm((p) => ({ ...p, sphereId: value || null }))}
-              options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
-              ariaLabel="Выбор сектора"
-            />
-            <div>
-              <p className="mb-1 text-xs">Важность: {selectedImportance}</p>
-              <div className="importance-choice-group grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <button
-                    key={level}
-                    className={`importance-choice-button rounded border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
-                    onClick={() => setForm((p) => ({ ...p, importance: level }))}
-                  >
-                    {level}
-                  </button>
-                ))}
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <input className="task-edit-title-input min-w-0 flex-1 bg-transparent text-3xl font-bold text-slate-950 outline-none" placeholder="Название" value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
+                {isEditing ? <button type="button" className="success-button inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}><CheckCircle2 size={16} />Выполнить</button> : null}
               </div>
+              <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500"><span>{deadlineLabel}</span><DateTimePickerWithApply value={form.dueDate} onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))} timelineTasks={timelineTasks} iconOnly buttonClassName="task-edit-icon-button" /></div>
+              <div className="mt-3 flex min-h-0 items-start"><p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(descriptionValue, { trimEnd: true }) || 'Описание не заполнено.'}</p></div>
+              <div className="mt-2 flex items-center gap-2"><button type="button" className="task-edit-icon-button" onClick={() => setIsNotesEditorOpen(true)} title="Редактировать описание"><Edit3 size={16} /></button><button type="button" className="task-edit-icon-button" onClick={() => aiAttachmentInputRef.current?.click()} title="Добавить файл"><Paperclip size={16} /></button></div>
+              <input ref={aiAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={handleAiFileSelect} />
+              {isSubtask && parentTaskTitle && onOpenParentTask ? <button type="button" className="main-task-link-button mt-2 inline-flex max-w-full min-w-0 rounded-full border px-3 py-1 text-xs font-semibold transition" onClick={onOpenParentTask}><span className="truncate">Основная задача: {parentTaskTitle}</span></button> : null}
+              {isNotesEditorOpen ? <TaskNotesEditor value={descriptionValue} onChange={updateDescription} onClose={() => setIsNotesEditorOpen(false)} /> : null}
+              {!isSubtask ? <div className="mt-4 grid grid-cols-2 gap-2"><CustomSelect value={form.sphereId ?? ''} onChange={(value) => setForm((p) => ({ ...p, sphereId: value || null }))} options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: `● ${sphere.name}` }))]} ariaLabel="Выбор сектора" buttonClassName="task-edit-pill-select" /><CustomSelect value={notifyPreset} onChange={(value) => { setNotifyPreset(value); setForm((p) => ({ ...p, notifyBeforeMinutes: value === 'null' ? null : Number(value) })); }} options={NOTIFY_PRESETS} ariaLabel="Уведомлять за" disabled={isRecurring} buttonClassName="task-edit-pill-select" /></div> : null}
+              {!isSubtask ? <div className="mt-4"><p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Важность: {selectedImportance}</p><div className="importance-choice-group grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map((level) => <button key={level} className={`importance-choice-button task-edit-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${selectedImportance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`} onClick={() => setForm((p) => ({ ...p, importance: level }))}>{level}</button>)}</div></div> : null}
+              {!isSubtask ? <div className="mt-3 flex flex-wrap gap-3 text-sm"><label className="inline-flex items-center gap-2"><input type="checkbox" checked={isRecurring} onChange={(e) => { const enabled = e.target.checked; setIsRecurring(enabled); setForm((p) => enabled ? ({ ...p, isRecurring: true, recurrenceText: recurrenceText.trim() || p.recurrenceText || null }) : ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null })); if (!enabled) { setRecurrenceSummary(null); setRecurrenceNextDueLabel(null); } }} />повторять</label><label className="inline-flex items-center gap-2"><input type="checkbox" checked={form.aiNotificationsEnabled ?? defaultAiNotificationsEnabled} onChange={(e) => setForm((p) => ({ ...p, aiNotificationsEnabled: e.target.checked }))} />уведомления от ИИ</label></div> : null}
+              {isRecurring ? <div className="surface-card mt-2 rounded-2xl border p-2 text-xs"><p className="mb-1 text-muted">Опишите как должна повторяться задача</p><textarea className="form-field min-h-16 w-full rounded border p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} /><div className="mt-2 flex items-center gap-2"><button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:opacity-70" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button><p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p></div><p className="mt-1 text-[11px] text-muted">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p></div> : null}
+              <div className="mt-4 flex gap-2"><button className="primary-button flex-1 rounded-xl px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>{isEditing ? <button className="danger-button inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm" onClick={() => onDelete?.()}><Trash2 size={15} />Удалить</button> : null}</div>
+              {isEditing && !isSubtask ? <div className="mt-4 min-h-0 flex-1"><div className="flex items-center justify-between"><h3 className="font-semibold text-primary">Подзадачи</h3><button type="button" className="task-edit-icon-button" title="Показать все подзадачи"><Maximize2 size={15} /></button></div><ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">{visibleSubtasks.map((subtask) => <li key={subtask.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"><input type="checkbox" checked={false} readOnly /><span className="min-w-0 flex-1 truncate">{subtask.title}</span></li>)}{visibleSubtasks.length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}</ul></div> : null}
             </div>
-          </>
-        ) : null}
-        {!isSubtask ? (
-          <>
-            <label className="mt-1 flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={isRecurring} onChange={(e) => {
-                const enabled = e.target.checked;
-                setIsRecurring(enabled);
-                if (enabled) {
-                  setForm((p) => ({ ...p, isRecurring: true, recurrenceText: recurrenceText.trim() || p.recurrenceText || null }));
-                }
-                if (!enabled) {
-                  setRecurrenceSummary(null);
-                  setRecurrenceNextDueLabel(null);
-                  setForm((p) => ({ ...p, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null }));
-                }
-              }} />
-              повторять
-            </label>
-            <label className="mt-1 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.aiNotificationsEnabled ?? defaultAiNotificationsEnabled}
-                onChange={(e) => setForm((p) => ({ ...p, aiNotificationsEnabled: e.target.checked }))}
-              />
-              уведомления от ИИ
-            </label>
-            {isRecurring ? (
-              <div className="surface-card rounded border p-2 text-xs">
-                <p className="mb-1 text-muted">Опишите как должна повторяться задача</p>
-                <textarea className="form-field min-h-16 w-full rounded border p-2 text-sm" placeholder="Например: каждый вторник и четверг в 17:00 в течение месяца" value={recurrenceText} onChange={(e) => setRecurrenceText(e.target.value)} />
-                <div className="mt-2 flex items-center gap-2">
-                  <button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-70" onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>{recurrenceLoading ? <Loader2 size={14} className="animate-spin" /> : 'Отправить'}</button>
-                  <p className="text-[11px] text-emerald-300">{recurrenceSummary ?? ''}</p>
-                </div>
-                <p className="mt-1 text-[11px] text-muted">{recurrenceNextDueLabel ? `Ближайший срок: ${recurrenceNextDueLabel}` : ''}</p>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <label className="block text-xs">Срок (дата и время)
-          <DateTimePickerWithApply
-            className="mt-1"
-            value={form.dueDate}
-            onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))}
-            timelineTasks={timelineTasks}
-          />
-        </label>
-        {!isRecurring ? <label className="block text-xs">Уведомлять за
-          <CustomSelect
-            className="mt-1"
-            value={notifyPreset}
-            onChange={(value) => {
-              setNotifyPreset(value);
-              setForm((p) => ({ ...p, notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
-            }}
-            options={NOTIFY_PRESETS}
-            ariaLabel="Уведомлять за"
-          />
-        </label> : null}
-
-        <div className="flex gap-2">
-          <button className="primary-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onSave(form)}>Сохранить</button>
-          {isEditing ? <button className="danger-button flex-1 rounded px-3 py-2 text-sm" onClick={() => onDelete?.()}>Удалить</button> : null}
-        </div>
-        {isEditing ? (
-          <button className="success-button w-full rounded px-3 py-2 text-sm font-semibold" onClick={() => onComplete?.()}>
-            Выполнена
-          </button>
-        ) : null}
-          </>
-        )}
+          )}
+        </main>
+        <aside className="focus-ai-panel task-edit-ai-placeholder hidden min-h-0 flex-col rounded-3xl border p-4 lg:flex">
+          <div className="flex items-center gap-2"><Bell size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">Помощь ИИ</h3></div>
+          <p className="mt-1 text-xs text-muted">Диалог с ИИ остаётся в прежнем окне задачи справа от редактора.</p>
+          <div className="chat-thread mt-4 min-h-0 flex-1 rounded-2xl border p-3 text-sm text-subtle">Выберите задачу в фокусе, чтобы продолжить текущий диалог с ИИ.</div>
+        </aside>
       </aside>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
@@ -247,40 +247,9 @@ function calculateEfficiencyScore(events: EfficiencyScoreEvent[], nowMs: number,
 }
 
 function getEfficiencyGrade(value: number): EfficiencyGrade {
-  if (value < 50) return 'средний';
-  if (value < 80) return 'хороший';
+  if (value < 30) return 'средний';
+  if (value < 70) return 'хороший';
   return 'отличный';
-}
-
-function getEfficiencyTone(value: number) {
-  if (value < 50) {
-    return {
-      name: 'medium',
-      ringStart: '#facc15',
-      ringMiddle: '#f59e0b',
-      ringEnd: '#fef3c7',
-      scoreColor: '#facc15',
-      scoreGlow: 'rgba(250, 204, 21, 0.42)'
-    };
-  }
-  if (value < 80) {
-    return {
-      name: 'good',
-      ringStart: '#22d3ee',
-      ringMiddle: '#a78bfa',
-      ringEnd: '#fb7185',
-      scoreColor: '#67e8f9',
-      scoreGlow: 'rgba(103, 232, 249, 0.38)'
-    };
-  }
-  return {
-    name: 'excellent',
-    ringStart: '#34d399',
-    ringMiddle: '#22c55e',
-    ringEnd: '#bbf7d0',
-    scoreColor: '#86efac',
-    scoreGlow: 'rgba(52, 211, 153, 0.5)'
-  };
 }
 
 function isSameLocalDay(date: Date, target: Date) {
@@ -2223,14 +2192,9 @@ ${allContext}`,
   const efficiencyGrade = useMemo(() => getEfficiencyGrade(efficiencyScore), [efficiencyScore]);
 
   const formattedEfficiencyScore = useMemo(() => efficiencyScore.toFixed(1).replace(/\.0$/, ''), [efficiencyScore]);
-  const efficiencyTone = useMemo(() => getEfficiencyTone(efficiencyScore), [efficiencyScore]);
-  const efficiencyGlowIntensity = useMemo(() => (0.45 + (efficiencyScore / 100) * 0.75).toFixed(2), [efficiencyScore]);
-  const efficiencyGlowDuration = useMemo(() => `${(3.2 - (efficiencyScore / 100) * 1.4).toFixed(2)}s`, [efficiencyScore]);
-  const efficiencyGlowSoftRadius = useMemo(() => `${(10 + (efficiencyScore / 100) * 10).toFixed(1)}px`, [efficiencyScore]);
-  const efficiencyGlowStrongRadius = useMemo(() => `${(18 + (efficiencyScore / 100) * 18).toFixed(1)}px`, [efficiencyScore]);
   const efficiencyGradeMessage = useMemo(() => {
-    if (efficiencyScore < 50) return 'Средний рейтинг. Сделайте следующий маленький шаг.';
-    if (efficiencyScore < 80) return 'Хороший рейтинг. Так держать.';
+    if (efficiencyScore < 30) return 'Средний рейтинг. Сделайте следующий маленький шаг.';
+    if (efficiencyScore < 70) return 'Хороший рейтинг. Так держать.';
     return 'Отличный рейтинг! Продолжай в том же духе.';
   }, [efficiencyScore]);
   const efficiencyTaskRating = currentUser?.efficiencyTaskScore ?? 0;
@@ -3407,44 +3371,21 @@ ${allContext}`,
             title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`}
             onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}
           >
-            <svg
-              width="54"
-              height="54"
-              viewBox="0 0 72 72"
-              role="img"
-              aria-label="Рейтинг эффективности"
-              className={`efficiency-orb-icon efficiency-orb-icon-${efficiencyTone.name}`}
-              style={{
-                '--efficiency-glow-intensity': efficiencyGlowIntensity,
-                '--efficiency-glow-duration': efficiencyGlowDuration,
-                '--efficiency-glow-soft-radius': efficiencyGlowSoftRadius,
-                '--efficiency-glow-strong-radius': efficiencyGlowStrongRadius,
-                '--efficiency-score-color': efficiencyTone.scoreColor,
-                '--efficiency-score-glow': efficiencyTone.scoreGlow
-              } as CSSProperties}
-            >
+            <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon">
               <defs>
                 <linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient>
-                <linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor={efficiencyTone.ringStart} /><stop offset="55%" stopColor={efficiencyTone.ringMiddle} /><stop offset="100%" stopColor={efficiencyTone.ringEnd} /></linearGradient>
+                <linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient>
               </defs>
               <circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" />
               <circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" />
-              <circle className="efficiency-orb-progress" cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" />
+              <circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" />
               <path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" />
             </svg>
           </button>
           {isEfficiencyDetailsOpen ? (
             <div className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur">
               <div className="text-center">
-                <div
-                  className={`efficiency-score-hero efficiency-score-hero-${efficiencyTone.name} tabular-nums`}
-                  style={{
-                    '--efficiency-score-color': efficiencyTone.scoreColor,
-                    '--efficiency-score-glow': efficiencyTone.scoreGlow
-                  } as CSSProperties}
-                >
-                  <span>{formattedEfficiencyScore}</span><small>/100</small>
-                </div>
+                <div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div>
                 <p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p>
               </div>
               <div className="mt-4 space-y-2">
@@ -4906,6 +4847,7 @@ ${allContext}`,
         <TaskEditor
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
+          subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
           initialSphereId={editorState.initialSphereId}
           spheres={spheres}
           defaultAiNotificationsEnabled={isAiNotificationsDefaultEnabled}
