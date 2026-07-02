@@ -135,7 +135,7 @@ function NotesEditor({ value, onChange, onClose }: NotesEditorProps) {
   };
 
   return (
-    <div className="notes-editor-backdrop fixed inset-0 z-[160] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="notes-editor-backdrop fixed inset-0 z-[220] flex items-center justify-center p-4" onClick={onClose}>
       <section className="notes-editor-panel flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="notes-editor-header flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
           <div>
@@ -353,7 +353,7 @@ export function TaskEditor({ task, initialSphereId, spheres, onSave, onAutoSave,
   };
 
   return (
-    <div className="modal-backdrop fixed inset-0 z-[150] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
+    <div className="modal-backdrop fixed inset-0 z-[180] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
       <aside className="modal-card relative w-full max-w-xl space-y-3 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={onCancel} aria-label="Закрыть окно"><X size={16} /></button>
         <h3 className="text-lg font-semibold text-primary">{isEditing ? 'Редактирование задачи' : 'Новая задача'}</h3>
