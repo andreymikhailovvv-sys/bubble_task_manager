@@ -241,7 +241,7 @@ export function DateTimePickerWithApply({
   const popupContent = (
     <div
       ref={popupRef}
-      className={`date-time-popover z-[120] w-72 rounded-xl border p-3 shadow-2xl ${
+      className={`date-time-popover z-[190] w-72 rounded-xl border p-3 shadow-2xl ${
         detachedPopup ? 'fixed' : `absolute ${popupPositionClass} mt-2`
       }`}
       style={detachedPopup && detachedPosition ? { top: detachedPosition.top, left: detachedPosition.left } : undefined}
@@ -331,7 +331,7 @@ export function DateTimePickerWithApply({
         ? (detachedPopup && detachedPosition ? createPortal(popupContent, document.body) : popupContent)
         : null}
       {isTimelinePreviewOpen ? createPortal(
-        <div className="timeline-preview-overlay fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-sm">
+        <div className="timeline-preview-overlay fixed inset-0 z-[210] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="timeline-preview-panel w-full max-w-4xl rounded-2xl border p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="timeline-title text-sm font-semibold">Предпросмотр таймлайна (месяц)</h3>
