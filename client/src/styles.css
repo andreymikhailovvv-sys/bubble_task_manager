@@ -2958,3 +2958,62 @@ body[data-theme='light'] .efficiency-detail-row-focus {
 body[data-theme='light'] .efficiency-detail-row-focus b {
   color: #7c3aed;
 }
+
+.task-edit-shell {
+  background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(245,243,255,0.94) 55%, rgba(237,233,254,0.9));
+  border-color: rgba(167, 139, 250, 0.45);
+}
+
+.task-edit-shell > * { min-height: 0; }
+
+.task-edit-card { max-height: 100%; }
+
+.task-edit-title-input::placeholder { color: rgba(100, 116, 139, 0.58); }
+
+.task-edit-description {
+  max-height: 7.5rem;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.task-edit-icon-button {
+  display: inline-flex;
+  height: 2rem;
+  min-width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid rgba(196, 181, 253, 0.65);
+  background: rgba(255, 255, 255, 0.78);
+  color: #6d28d9;
+  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.1);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.task-edit-icon-button:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(109, 40, 217, 0.16);
+}
+
+.task-edit-pill-select {
+  border-radius: 9999px !important;
+  border-color: rgba(196, 181, 253, 0.65) !important;
+  background: rgba(255,255,255,0.74) !important;
+  color: #5b21b6 !important;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.09);
+}
+
+.task-edit-importance {
+  border-radius: 1rem !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.task-edit-ai-placeholder .chat-thread {
+  background: rgba(255,255,255,0.58);
+}
+
+@media (max-height: 760px) {
+  .task-edit-description { max-height: 5rem; }
+}

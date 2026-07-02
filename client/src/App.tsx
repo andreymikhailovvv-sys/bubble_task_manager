@@ -4906,6 +4906,7 @@ ${allContext}`,
         <TaskEditor
           timelineTasks={timelinePickerTasks}
           task={editorState.task}
+          subtasks={editorState.task?.id ? (subtaskMap[editorState.task.id] ?? []) : []}
           initialSphereId={editorState.initialSphereId}
           spheres={spheres}
           defaultAiNotificationsEnabled={isAiNotificationsDefaultEnabled}
