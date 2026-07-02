@@ -3035,3 +3035,43 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   border-color: rgba(196, 181, 253, 0.55);
   color: #0f172a;
 }
+
+.focused-task-title-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border-color: rgba(196, 181, 253, 0.65);
+  background: rgba(255, 255, 255, 0.9);
+  color: #6d28d9;
+  box-shadow: 0 8px 18px rgba(109, 40, 217, 0.08);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.focused-task-title-edit-button:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(109, 40, 217, 0.14);
+}
+
+.focused-task-title-popover {
+  border-color: rgba(196, 181, 253, 0.58);
+}
+
+.focused-task-sector-button {
+  justify-content: flex-start;
+  min-height: 2.5rem;
+}
+
+.focused-subtask-row {
+  border: 1px solid rgba(226, 232, 240, 0.82);
+  box-shadow: none;
+}
+
+.focused-task-description {
+  max-height: 9rem;
+}
+
+@media (max-height: 760px) {
+  .focused-task-description { max-height: 6.5rem; }
+}
