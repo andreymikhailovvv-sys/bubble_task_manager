@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -661,6 +661,8 @@ export default function App() {
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
+  const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
+  const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
@@ -1389,6 +1391,8 @@ export default function App() {
     if (!focusedTask) {
       setFocusedDraft(null);
       setIsFocusedNotesEditorOpen(false);
+      setIsFocusedSettingsOpen(false);
+      setIsEditingFocusedTitle(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
       setIsAiSubtasksPromptOpen(false);
@@ -1406,6 +1410,8 @@ export default function App() {
       return;
     }
     setIsFocusedNotesEditorOpen(false);
+    setIsFocusedSettingsOpen(false);
+    setIsEditingFocusedTitle(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
@@ -4960,8 +4966,17 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(86vh,760px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
-              <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+        <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+              <button
+                type="button"
+                className="absolute right-4 top-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100"
+                onClick={() => setFocusedTaskId(null)}
+                aria-label="Закрыть помощь ИИ"
+                title="Закрыть"
+              >
+                <X size={16} />
+              </button>
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-9">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
@@ -5183,14 +5198,39 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-white/60" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-16 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
-              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
+              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border-0 p-6 shadow-none">
                 <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
-                  <div className="mt-2 flex items-start justify-between gap-3">
-                    <input className="focused-task-title-input min-w-0 flex-1 bg-transparent text-3xl font-bold text-slate-950 outline-none" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                    <button className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
+                  <div className="mt-2 flex items-start justify-between gap-3 pr-20">
+                    <div className="min-w-0 flex-1">
+                      {isEditingFocusedTitle ? (
+                        <textarea
+                          className="focused-task-title-input min-h-[5.25rem] w-full resize-none bg-transparent text-3xl font-bold leading-tight text-slate-950 outline-none"
+                          value={focusedDraft.title ?? ''}
+                          autoFocus
+                          onBlur={() => setIsEditingFocusedTitle(false)}
+                          onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') setIsEditingFocusedTitle(false);
+                            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) setIsEditingFocusedTitle(false);
+                          }}
+                        />
+                      ) : (
+                        <div className="flex min-w-0 items-start gap-2">
+                          <h2 className="focused-task-title-display min-w-0 text-3xl font-bold leading-tight text-slate-950">{focusedDraft.title || 'Без названия'}</h2>
+                          <button type="button" className="focused-task-icon-button mt-1 h-8 w-8 shrink-0 border" onClick={() => setIsEditingFocusedTitle(true)} title="Редактировать название" aria-label="Редактировать название задачи">
+                            <Edit3 size={15} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                      <button className="success-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
                     <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
@@ -5280,6 +5320,12 @@ ${allContext}`,
                       ))}
                     </div>
                   ) : null}
+                  {isFocusedSettingsOpen ? (
+                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
+                        <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
+                      </div>
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <CustomSelect
                       value={focusedDraft.sphereId ?? ''}
@@ -5369,13 +5415,12 @@ ${allContext}`,
                       ))}
                     </div>
                   </div>
-                </div>
-                <div className="mt-3 grid shrink-0 grid-cols-2 gap-2">
-                  <button className="primary-button rounded px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
-                  <button className="danger-button rounded px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+
+                    </div>
+                  ) : null}
                 </div>
               </div>
-              <div className="surface-card focused-task-subtasks mt-4 flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
+              <div className="focused-task-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t border-violet-100 pt-4">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
