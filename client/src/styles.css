@@ -2994,3 +2994,44 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   .focused-task-description { max-height: 5rem; }
   .focused-task-subtasks { max-height: 12rem; }
 }
+
+/* Clean white focus task window. */
+.focused-task-editor-shell,
+.focused-task-editor-shell .focus-main-card,
+.focused-task-ai-panel {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.focused-task-editor-shell {
+  border-color: rgba(226, 232, 240, 0.95);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.18);
+}
+
+.focused-task-editor-shell .focus-main-card {
+  box-shadow: none;
+}
+
+.focused-task-ai-panel {
+  position: relative;
+  border-color: rgba(226, 232, 240, 0.95);
+}
+
+.focused-task-ai-panel .chat-thread,
+.focused-task-ai-panel .surface-muted {
+  background-color: #ffffff;
+}
+
+.focused-task-title-display {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.focused-task-settings-panel {
+  border-color: rgba(196, 181, 253, 0.55);
+  color: #0f172a;
+}
