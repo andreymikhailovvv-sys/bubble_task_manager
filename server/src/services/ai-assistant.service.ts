@@ -137,11 +137,58 @@ const aiCreditEfficiencyData = (cost: number, period: string, currentPeriod: str
   options?.skipEfficiencyBonus || cost <= 0
     ? {}
     : {
-      efficiencyScore: { increment: cost * AI_CREDIT_EFFICIENCY_BONUS },
       aiEfficiencyCreditsSpent: currentPeriod === period ? { increment: cost } : cost,
       aiEfficiencyCreditsPeriod: period
     }
 );
+
+
+const clampEfficiencyValue = (value: number) => Math.max(0, Math.min(100, Number(value.toFixed(6))));
+const clampEfficiencyBucket = (value: number) => Math.max(0, Number(value.toFixed(6)));
+const efficiencyTotal = (scores: { task: number; habit: number; ai: number; focus: number }) => clampEfficiencyValue(scores.task + scores.habit + scores.ai + scores.focus);
+const localHour = (timestampMs: number, timeZone: string) => {
+  try {
+    const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', hour12: false }).format(new Date(timestampMs)));
+    return hour === 24 ? 0 : hour;
+  } catch {
+    return new Date(timestampMs).getHours();
+  }
+};
+
+async function recordAiEfficiencyBonus(userId: string, delta: number) {
+  if (delta <= 0) return;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { efficiencyTaskScore: true, efficiencyHabitScore: true, efficiencyAiScore: true, efficiencyFocusScore: true, efficiencyLastActivityAt: true, timeZone: true }
+  });
+  if (!user) return;
+  const now = new Date();
+  const scores = { task: Math.max(0, user.efficiencyTaskScore), habit: Math.max(0, user.efficiencyHabitScore), ai: Math.max(0, user.efficiencyAiScore), focus: Math.max(0, user.efficiencyFocusScore) };
+  const fromMs = (user.efficiencyLastActivityAt ?? now).getTime();
+  const hourMs = 60 * 60 * 1000;
+  const penaltyHours = Math.floor((now.getTime() - fromMs) / hourMs) - 3;
+  for (let index = 1; index <= penaltyHours; index += 1) {
+    const penaltyAtMs = fromMs + (3 + index) * hourMs;
+    const hour = localHour(penaltyAtMs, user.timeZone || 'Europe/Moscow');
+    const penalty = hour >= 0 && hour < 8 ? 0.5 : 1;
+    scores.task = clampEfficiencyBucket(scores.task - penalty);
+    scores.habit = clampEfficiencyBucket(scores.habit - penalty);
+    scores.ai = clampEfficiencyBucket(scores.ai - penalty);
+    scores.focus = clampEfficiencyBucket(scores.focus - penalty);
+  }
+  if (efficiencyTotal(scores) < 100) scores.ai = clampEfficiencyBucket(scores.ai + Math.min(delta, 100 - efficiencyTotal(scores)));
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      efficiencyTaskScore: scores.task,
+      efficiencyHabitScore: scores.habit,
+      efficiencyAiScore: scores.ai,
+      efficiencyFocusScore: scores.focus,
+      efficiencyScore: efficiencyTotal(scores),
+      efficiencyLastActivityAt: now
+    }
+  });
+}
 
 async function clampUserEfficiencyScore(userId: string, score: number) {
   if (score <= 100) return;
@@ -167,6 +214,7 @@ async function chargeAiCredits(userId: string, model: string, options?: { skipEf
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, cost * AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 async function chargeFixedAiCredits(userId: string, cost: number, options?: { skipEfficiencyBonus?: boolean }) {
@@ -181,6 +229,7 @@ async function chargeFixedAiCredits(userId: string, cost: number, options?: { sk
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, cost * AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 async function chargeSingleAiNotificationCredit(userId: string, options?: { skipEfficiencyBonus?: boolean }) {
@@ -199,6 +248,7 @@ async function chargeSingleAiNotificationCredit(userId: string, options?: { skip
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
