@@ -72,8 +72,8 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
           type="button"
           className={`custom-select-option block w-full rounded-lg px-2.5 py-2 text-left text-sm transition ${option.value === value ? 'custom-select-option-active' : ''}`}
           onClick={() => {
-            onChange(option.value);
             setOpen(false);
+            onChange(option.value);
           }}
           role="option"
           aria-selected={option.value === value}
