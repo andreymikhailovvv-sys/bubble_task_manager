@@ -2962,14 +2962,14 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   border-color: rgba(196, 181, 253, 0.65);
   background: rgba(255, 255, 255, 0.78);
   color: #6d28d9;
-  box-shadow: 0 10px 24px rgba(109, 40, 217, 0.1);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  box-shadow: none;
+  transition: transform 0.18s ease, background 0.18s ease;
 }
 
 .focused-task-icon-button:hover {
   transform: translateY(-1px);
   background: #fff;
-  box-shadow: 0 14px 30px rgba(109, 40, 217, 0.16);
+  box-shadow: none;
 }
 
 .focused-task-pill-select {
@@ -2987,12 +2987,13 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
 }
 
 .focused-task-subtasks {
-  max-height: 17rem;
+  flex: 1 1 auto;
+  max-height: none;
 }
 
 @media (max-height: 760px) {
   .focused-task-description { max-height: 5rem; }
-  .focused-task-subtasks { max-height: 12rem; }
+  .focused-task-subtasks { max-height: none; }
 }
 
 /* Clean white focus task window. */
@@ -3015,11 +3016,15 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
 .focused-task-ai-panel {
   position: relative;
   border-color: rgba(226, 232, 240, 0.95);
+  background: #ffffff !important;
 }
 
 .focused-task-ai-panel .chat-thread,
-.focused-task-ai-panel .surface-muted {
-  background-color: #ffffff;
+.focused-task-ai-panel .surface-muted,
+.focused-task-ai-panel .surface-input,
+.focused-task-ai-panel .form-field,
+.focused-task-ai-panel textarea {
+  background-color: #ffffff !important;
 }
 
 .focused-task-title-display {
