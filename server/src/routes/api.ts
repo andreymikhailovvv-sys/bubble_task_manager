@@ -34,13 +34,14 @@ const normalizeTimeZone = (candidate: string): string | null => {
   }
 };
 const EFFICIENCY_RESET_AT_ISO = '1970-01-01T00:00:00.000Z';
-const EFFICIENCY_RESET_AT = new Date(EFFICIENCY_RESET_AT_ISO);
-const EFFICIENCY_INACTIVE_PENALTY_PER_HOUR = 3.5;
 const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
 const EFFICIENCY_NIGHT_START_HOUR = 0;
 const EFFICIENCY_NIGHT_END_HOUR = 8;
-const EFFICIENCY_NIGHT_PENALTY_MULTIPLIER = 0.1;
-const EFFICIENCY_AI_CREDIT_BONUS = 0.1;
+const EFFICIENCY_DAY_BUCKET_PENALTY = 1;
+const EFFICIENCY_NIGHT_BUCKET_PENALTY = 0.5;
+const EFFICIENCY_BUCKET_KEYS = ['task', 'habit', 'ai', 'focus'] as const;
+type EfficiencyBucketKey = typeof EFFICIENCY_BUCKET_KEYS[number];
+type EfficiencyBucketScores = Record<EfficiencyBucketKey, number>;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
   doneSubtask: 2,
@@ -72,6 +73,11 @@ const toAuthUser = (user: {
   morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
+  efficiencyTaskScore?: number;
+  efficiencyHabitScore?: number;
+  efficiencyAiScore?: number;
+  efficiencyFocusScore?: number;
+  efficiencyLastActivityAt?: Date | string | null;
 }) => ({
   id: user.id,
   email: user.email,
@@ -88,14 +94,41 @@ const toAuthUser = (user: {
   morningAiCheckupEnabled: user.morningAiCheckupEnabled ?? false,
   morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
   efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
-  efficiencyScore: Math.max(0, Math.min(100, user.efficiencyScore ?? 0))
+  efficiencyScore: Math.max(0, Math.min(100, user.efficiencyScore ?? 0)),
+  efficiencyTaskScore: Math.max(0, user.efficiencyTaskScore ?? 0),
+  efficiencyHabitScore: Math.max(0, user.efficiencyHabitScore ?? 0),
+  efficiencyAiScore: Math.max(0, user.efficiencyAiScore ?? 0),
+  efficiencyFocusScore: Math.max(0, user.efficiencyFocusScore ?? 0),
+  efficiencyLastActivityAt: user.efficiencyLastActivityAt ?? null
 });
 
 
 
-const clampEfficiency = (value: number) => Math.max(0, Math.min(100, Number(value.toFixed(6))));
+const normalizeEfficiencyBucket = (value: unknown): EfficiencyBucketKey | null => (
+  typeof value === 'string' && (EFFICIENCY_BUCKET_KEYS as readonly string[]).includes(value) ? value as EfficiencyBucketKey : null
+);
 
-type EfficiencyScoreEvent = { atMs: number; delta: number };
+const clampEfficiency = (value: number) => Math.max(0, Math.min(100, Number(value.toFixed(6))));
+const clampBucketScore = (value: number) => Math.max(0, Number(value.toFixed(6)));
+const sumEfficiencyBuckets = (scores: EfficiencyBucketScores) => clampEfficiency(
+  scores.task + scores.habit + scores.ai + scores.focus
+);
+
+type EfficiencyUserState = {
+  efficiencyTaskScore: number;
+  efficiencyHabitScore: number;
+  efficiencyAiScore: number;
+  efficiencyFocusScore: number;
+  efficiencyLastActivityAt: Date | null;
+  timeZone: string | null;
+};
+
+const getEfficiencyBuckets = (user: EfficiencyUserState): EfficiencyBucketScores => ({
+  task: Math.max(0, user.efficiencyTaskScore ?? 0),
+  habit: Math.max(0, user.efficiencyHabitScore ?? 0),
+  ai: Math.max(0, user.efficiencyAiScore ?? 0),
+  focus: Math.max(0, user.efficiencyFocusScore ?? 0)
+});
 
 const getLocalHour = (timestampMs: number, timeZone: string) => {
   try {
@@ -111,124 +144,55 @@ const isNightHour = (timestampMs: number, timeZone: string) => {
   return hour >= EFFICIENCY_NIGHT_START_HOUR && hour < EFFICIENCY_NIGHT_END_HOUR;
 };
 
-const calculateEfficiencyScore = (events: EfficiencyScoreEvent[], nowMs: number, resetAtMs: number, timeZone: string) => {
-  const sortedEvents = events
-    .filter((event) => Number.isFinite(event.atMs) && event.atMs >= resetAtMs && event.atMs <= nowMs && event.delta > 0)
-    .sort((a, b) => a.atMs - b.atMs);
-
-  let score = 0;
-  let cursorMs = resetAtMs;
-
-  const applyInactivePenalty = (nextMs: number) => {
-    if (nextMs <= cursorMs || score <= 0) {
-      cursorMs = Math.max(cursorMs, nextMs);
-      return;
+const applyEfficiencyPenalty = (scores: EfficiencyBucketScores, fromMs: number, toMs: number, timeZone: string) => {
+  if (toMs <= fromMs || sumEfficiencyBuckets(scores) <= 0) return scores;
+  const hourMs = 60 * 60 * 1000;
+  const penaltyHours = Math.floor((toMs - fromMs) / hourMs) - EFFICIENCY_INACTIVITY_GRACE_HOURS;
+  if (penaltyHours <= 0) return scores;
+  const next = { ...scores };
+  for (let index = 1; index <= penaltyHours; index += 1) {
+    const penaltyAtMs = fromMs + (EFFICIENCY_INACTIVITY_GRACE_HOURS + index) * hourMs;
+    const penalty = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_NIGHT_BUCKET_PENALTY : EFFICIENCY_DAY_BUCKET_PENALTY;
+    for (const bucket of EFFICIENCY_BUCKET_KEYS) {
+      next[bucket] = clampBucketScore(next[bucket] - penalty);
     }
-
-    const hourMs = 60 * 60 * 1000;
-    const inactiveMs = nextMs - cursorMs;
-    const penaltyHours = Math.floor(inactiveMs / hourMs) - EFFICIENCY_INACTIVITY_GRACE_HOURS;
-    if (penaltyHours <= 0) {
-      cursorMs = nextMs;
-      return;
-    }
-
-    let penalty = 0;
-    for (let index = 1; index <= penaltyHours; index += 1) {
-      const penaltyAtMs = cursorMs + (EFFICIENCY_INACTIVITY_GRACE_HOURS + index) * hourMs;
-      const multiplier = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_NIGHT_PENALTY_MULTIPLIER : 1;
-      penalty += EFFICIENCY_INACTIVE_PENALTY_PER_HOUR * multiplier;
-    }
-    score = Math.max(0, score - penalty);
-    cursorMs = nextMs;
-  };
-
-  for (const event of sortedEvents) {
-    applyInactivePenalty(event.atMs);
-    score = clampEfficiency(score + event.delta);
-    cursorMs = event.atMs;
   }
-
-  applyInactivePenalty(nowMs);
-  return clampEfficiency(score);
+  return next;
 };
 
+const buildEfficiencyUpdateData = (scores: EfficiencyBucketScores, activityAt: Date) => ({
+  efficiencyTaskScore: scores.task,
+  efficiencyHabitScore: scores.habit,
+  efficiencyAiScore: scores.ai,
+  efficiencyFocusScore: scores.focus,
+  efficiencyScore: sumEfficiencyBuckets(scores),
+  efficiencyLastActivityAt: activityAt
+});
 
-const applyEfficiencyDecay = (score: number, fromMs: number, toMs: number, timeZone: string) => calculateEfficiencyScore(
-  [{ atMs: fromMs, delta: clampEfficiency(score) }],
-  toMs,
-  fromMs,
-  timeZone
-);
-
-const persistEfficiencyDelta = async (userId: string, delta: number) => {
+export const persistEfficiencyDelta = async (userId: string, delta: number, bucket: EfficiencyBucketKey = 'task') => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { efficiencyScore: true, updatedAt: true, timeZone: true }
+    select: { efficiencyTaskScore: true, efficiencyHabitScore: true, efficiencyAiScore: true, efficiencyFocusScore: true, efficiencyLastActivityAt: true, timeZone: true }
   });
   if (!user) return null;
 
-  const efficiencyScore = clampEfficiency((user.efficiencyScore ?? 0) + Math.max(0, delta));
-  await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
-  return efficiencyScore;
-};
-
-const recalculateAndPersistEfficiency = async (userId: string) => {
   const now = new Date();
-  const [user, tasks, habits, habitCompletions] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsSpent: true, aiEfficiencyCreditsPeriod: true, timeZone: true } }),
-    prisma.task.findMany({ where: { userId }, select: { parentTaskId: true, status: true, createdAt: true, updatedAt: true } }),
-    prisma.habit.findMany({ where: { userId }, select: { createdAt: true, isAutoCompleted: true, autoCompletedAt: true } }),
-    prisma.habitCompletion.findMany({ where: { userId }, select: { amount: true, completedAt: true, source: true } })
-  ]);
-  if (!user) return null;
-  const resetAtMs = EFFICIENCY_RESET_AT.getTime();
-  const nowMs = now.getTime();
-  const userTimeZone = user.timeZone || DEFAULT_TIMEZONE;
-  const isToday = (value: Date) => Number.isFinite(value.getTime())
-    && value.getTime() >= resetAtMs
-    && value.getFullYear() === now.getFullYear()
-    && value.getMonth() === now.getMonth()
-    && value.getDate() === now.getDate();
-  const events: EfficiencyScoreEvent[] = [];
-
-  for (const task of tasks) {
-    if (isToday(task.createdAt)) {
-      events.push({ atMs: task.createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdTask });
-    }
-
-    if (task.status !== 'DONE' || !isToday(task.updatedAt)) continue;
-    events.push({
-      atMs: task.updatedAt.getTime(),
-      delta: task.parentTaskId ? EFFICIENCY_BONUSES.doneSubtask : EFFICIENCY_BONUSES.doneTask
-    });
+  const lastActivityAt = user.efficiencyLastActivityAt ?? now;
+  const timeZone = user.timeZone ?? DEFAULT_TIMEZONE;
+  const scores = applyEfficiencyPenalty(getEfficiencyBuckets(user), lastActivityAt.getTime(), now.getTime(), timeZone);
+  if (delta > 0 && sumEfficiencyBuckets(scores) < 100) {
+    const available = 100 - sumEfficiencyBuckets(scores);
+    scores[bucket] = clampBucketScore(scores[bucket] + Math.min(delta, available));
   }
 
-  for (const habit of habits) {
-    if (isToday(habit.createdAt)) {
-      events.push({ atMs: habit.createdAt.getTime(), delta: EFFICIENCY_BONUSES.createdHabit });
-    }
-    if (habit.isAutoCompleted && habit.autoCompletedAt && isToday(habit.autoCompletedAt)) {
-      events.push({ atMs: habit.autoCompletedAt.getTime(), delta: EFFICIENCY_BONUSES.completedHabit });
-    }
-  }
-
-  for (const completion of habitCompletions) {
-    if (!isToday(completion.completedAt) || completion.source === 'AUTO_DURATION') continue;
-    for (let index = 0; index < completion.amount; index += 1) {
-      events.push({ atMs: completion.completedAt.getTime(), delta: EFFICIENCY_BONUSES.doneHabit });
-    }
-  }
-
-  const spentCredits = user.aiEfficiencyCreditsPeriod === currentCreditsPeriod() ? Math.max(0, user.aiEfficiencyCreditsSpent) : 0;
-  if (spentCredits > 0) {
-    events.push({ atMs: nowMs, delta: spentCredits * EFFICIENCY_AI_CREDIT_BONUS });
-  }
-
-  const efficiencyScore = calculateEfficiencyScore(events, nowMs, resetAtMs, userTimeZone);
-  await prisma.user.update({ where: { id: userId }, data: { efficiencyScore } });
-  return efficiencyScore;
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: buildEfficiencyUpdateData(scores, now),
+    select: { efficiencyScore: true, efficiencyTaskScore: true, efficiencyHabitScore: true, efficiencyAiScore: true, efficiencyFocusScore: true, efficiencyLastActivityAt: true }
+  });
+  return updated;
 };
+
 const setAuthCookies = (
   res: { cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void },
   user: {
@@ -598,7 +562,12 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       timeZone: true,
       morningAiCheckupEnabled: true,
       morningAiCheckupTime: true,
-      efficiencyScore: true
+      efficiencyScore: true,
+      efficiencyTaskScore: true,
+      efficiencyHabitScore: true,
+      efficiencyAiScore: true,
+      efficiencyFocusScore: true,
+      efficiencyLastActivityAt: true
     }
   });
 
@@ -613,13 +582,19 @@ apiRouter.post('/efficiency/events', requireAuth, async (req, res) => {
     return;
   }
 
-  const efficiencyScore = await persistEfficiencyDelta(req.user!.id, delta);
-  if (efficiencyScore === null) {
+  const bucket = normalizeEfficiencyBucket(req.body?.bucket);
+  if (!bucket) {
+    res.status(400).json({ error: 'Некорректная категория рейтинга' });
+    return;
+  }
+
+  const efficiencyState = await persistEfficiencyDelta(req.user!.id, delta, bucket);
+  if (efficiencyState === null) {
     res.status(404).json({ error: 'Пользователь не найден' });
     return;
   }
 
-  res.json({ efficiencyScore });
+  res.json(efficiencyState);
 });
 
 apiRouter.get('/auth/me', async (req, res) => {

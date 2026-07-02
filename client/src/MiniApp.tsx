@@ -951,7 +951,7 @@ export default function MiniApp() {
 
   const recordMiniAppEfficiencyBonus = async (delta: number) => {
     try {
-      await api.recordEfficiencyEvent({ delta });
+      await api.recordEfficiencyEvent({ delta, bucket: 'habit' });
     } catch (error) {
       console.error('Failed to persist mini app efficiency bonus', error);
     }
