@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, GripVertical, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -4960,7 +4960,7 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="app-side-panel hidden h-[min(86vh,760px)] min-h-0 w-[410px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+        <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(86vh,760px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
               <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
@@ -5182,19 +5182,33 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="dialog-surface relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="surface-muted absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
-            <div className="grid h-full min-h-0 grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="flex min-h-0 flex-col">
-                <div className="space-y-3 overflow-y-auto pr-1">
-                  <h3 className="text-xl font-semibold text-primary">Фокус задачи</h3>
-                  <input className="form-field w-full rounded border p-2 text-sm" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
-                  <div>
-                    <textarea className="form-field min-h-44 w-full resize-none rounded border p-2 text-sm" value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), description: e.target.value }))} />
-                    <div className="mt-1 flex justify-end gap-2">
+        <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-white/60" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
+                  <div className="mt-2 flex items-start justify-between gap-3">
+                    <input className="focused-task-title-input min-w-0 flex-1 bg-transparent text-3xl font-bold text-slate-950 outline-none" value={focusedDraft.title ?? ''} onChange={(e) => setFocusedDraft((p) => ({ ...(p ?? {}), title: e.target.value }))} />
+                    <button className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
+                    <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
+                    <DateTimePickerWithApply
+                      value={focusedDraft.dueDate}
+                      timelineTasks={timelinePickerTasks}
+                      detachedPopup
+                      iconOnly
+                      buttonClassName="focused-task-icon-button"
+                      onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <p className="focus-task-description focused-task-description min-w-0 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
+                    <div className="mt-2 flex justify-start gap-2">
                       <button
                         type="button"
-                        className={`notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                        className={`focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
                         onClick={() => focusedTaskAttachmentInputRef.current?.click()}
                         onDragOver={(event) => {
                           event.preventDefault();
@@ -5217,12 +5231,12 @@ ${allContext}`,
                       </button>
                       <button
                         type="button"
-                        className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                        className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                         onClick={() => setIsFocusedNotesEditorOpen(true)}
                         title="Открыть заметки"
                         aria-label="Открыть заметки"
                       >
-                        <Maximize2 size={15} />
+                        <Edit3 size={15} />
                       </button>
                     </div>
                   </div>
@@ -5266,13 +5280,30 @@ ${allContext}`,
                       ))}
                     </div>
                   ) : null}
-                  <CustomSelect
-                    value={focusedDraft.sphereId ?? ''}
-                    onChange={(value) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: value || null }))}
-                    options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name }))]}
-                    ariaLabel="Выбор сектора"
-                    detachedPopup
-                  />
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <CustomSelect
+                      value={focusedDraft.sphereId ?? ''}
+                      onChange={(value) => setFocusedDraft((p) => ({ ...(p ?? {}), sphereId: value || null }))}
+                      options={[{ value: '', label: 'Без сектора' }, ...spheres.map((sphere) => ({ value: sphere.id, label: `● ${sphere.name}` }))]}
+                      ariaLabel="Выбор сектора"
+                      buttonClassName="focused-task-pill-select"
+                      detachedPopup
+                    />
+                    <label className="block text-xs focused-task-notify">Уведомлять за
+                    <CustomSelect
+                      className="mt-1"
+                      value={focusedNotifyPreset}
+                      onChange={(value) => {
+                        setFocusedNotifyPreset(value);
+                        setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
+                      }}
+                      options={NOTIFY_PRESETS}
+                      ariaLabel="Уведомлять за"
+                      buttonClassName="focused-task-pill-select"
+                      detachedPopup
+                    />
+                    </label>
+                  </div>
                   <div className="flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -5324,35 +5355,13 @@ ${allContext}`,
                       </div>
                     </label>
                   ) : null}
-                  <label className="block text-xs">Срок (дата и время)
-                    <DateTimePickerWithApply
-                      className="mt-1"
-                      value={focusedDraft.dueDate}
-                      timelineTasks={timelinePickerTasks}
-                      detachedPopup
-                      onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
-                    />
-                  </label>
-                  <label className="block text-xs">Уведомлять за
-                    <CustomSelect
-                      className="mt-1"
-                      value={focusedNotifyPreset}
-                      onChange={(value) => {
-                        setFocusedNotifyPreset(value);
-                        setFocusedDraft((p) => ({ ...(p ?? {}), notifyBeforeMinutes: value === 'null' ? null : Number(value) }));
-                      }}
-                      options={NOTIFY_PRESETS}
-                      ariaLabel="Уведомлять за"
-                      detachedPopup
-                    />
-                  </label>
                   <div>
                     <p className="mb-1 text-xs">Важность: {focusedDraft.importance ?? 3}</p>
                     <div className="importance-choice-group grid grid-cols-5 gap-2">
                       {[1, 2, 3, 4, 5].map((level) => (
                         <button
                           key={level}
-                          className={`importance-choice-button rounded border px-2 py-1 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
+                          className={`importance-choice-button focused-task-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${focusedDraft.importance === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
                           onClick={() => setFocusedDraft((p) => ({ ...(p ?? {}), importance: level }))}
                         >
                           {level}
@@ -5361,13 +5370,12 @@ ${allContext}`,
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 grid shrink-0 grid-cols-3 gap-2">
+                <div className="mt-3 grid shrink-0 grid-cols-2 gap-2">
                   <button className="primary-button rounded px-3 py-2 text-sm" onClick={saveFocusedTask}>Сохранить</button>
-                  <button className="success-button rounded px-3 py-2 text-sm" onClick={() => completeTask(focusedTask)}>Выполнена</button>
                   <button className="danger-button rounded px-3 py-2 text-sm" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
                 </div>
               </div>
-              <div className="surface-card flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
+              <div className="surface-card focused-task-subtasks mt-4 flex min-h-0 flex-col space-y-2 rounded-2xl border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
