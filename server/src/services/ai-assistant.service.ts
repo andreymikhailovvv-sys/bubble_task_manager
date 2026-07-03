@@ -62,6 +62,8 @@ type AskGeneralAssistantInput = {
   history: ChatMessage[];
   userTimeZone?: string;
 };
+type AskAiChatInput = AskGeneralAssistantInput & { projectTitle?: string; chatTitle?: string };
+const TASK_INTENT_PATTERN = /(задач|подзадач|дедлайн|срок|расписан|планиров|заплан|перенес|созда(й|ть).*дел|созда(й|ть).*зада|отметь|выполнен|закрой|сектор|привычк|таймлайн|календар)/i;
 type GeneralAssistantUndoOperation = {
   taskId: string;
   previous: {
@@ -912,6 +914,45 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
+  async askAiChat(input: AskAiChatInput) {
+    const question = input.question.trim();
+    if (!question) throw new TypeError('Question is required');
+    if (TASK_INTENT_PATTERN.test(question)) {
+      const delegated = await this.askGeneralAssistant({
+        userId: input.userId,
+        question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${question}`,
+        history: [],
+        userTimeZone: input.userTimeZone
+      });
+      return { ...delegated, delegatedToPlanner: true };
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
+    const model = FAST_MODEL;
+    await chargeAiCredits(input.userId, model);
+    const now = new Date();
+    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+    const history = normalizeGeneralHistory(input.history).slice(-24);
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        input: [
+          { role: 'system', content: 'Ты универсальный ИИ-чат внутри Bubble Task Manager. Отвечай на обычные вопросы на русском языке. Ты не загружаешь полный контекст задач для экономии токенов. Если пользователь просит создать, изменить, найти или обсудить задачи, сроки, расписание, календарь, привычки или планирование — не выдумывай данные задач, а коротко скажи, что подключаешь ИИ-планировщик.' },
+          { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
+          ...history,
+          { role: 'user', content: question }
+        ]
+      })
+    });
+    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+    const answer = extractOutputText(await response.json()).trim();
+    if (!answer) throw new Error('Empty AI response');
+    return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
+  },
+
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
