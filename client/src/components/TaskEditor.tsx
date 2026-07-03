@@ -63,8 +63,8 @@ const IMPORTANCE_STYLES: Record<number, string> = {
 };
 const SUBTASK_IMPORTANCE_OPTIONS = [
   { level: 1, color: '#38bdf8', label: 'Низкая важность' },
-  { level: 3, color: '#facc15', label: 'Средняя важность' },
-  { level: 5, color: '#ef4444', label: 'Высокая важность' }
+  { level: 2, color: '#facc15', label: 'Средняя важность' },
+  { level: 3, color: '#ef4444', label: 'Высокая важность' }
 ] as const;
 
 type NoteFormat = 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
@@ -204,6 +204,7 @@ export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSa
   const [draftSubtasks, setDraftSubtasks] = useState<Array<Pick<Task, 'title' | 'description'>>>([]);
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState('');
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
 
@@ -444,11 +445,11 @@ export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSa
                 <textarea className="task-edit-title-input min-h-[2.6rem] min-w-0 flex-1 resize-none overflow-hidden border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none" placeholder="Введите название" rows={Math.max(1, Math.min(4, (form.title ?? '').split('\n').length))} value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
               </div>
               <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500"><span>{deadlineLabel}</span><DateTimePickerWithApply value={form.dueDate} onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))} timelineTasks={timelineTasks} iconOnly buttonClassName="task-edit-icon-button" /></div>
-              <div className="mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3">
+              <div className="mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3" onClick={() => { if (isSubtask) subtaskDescriptionInputRef.current?.focus(); }}>
                 {isEditing && !isSubtask ? (
                   <p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(descriptionValue, { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 ) : (
-                  <textarea className={isSubtask ? 'subtask-description-inline min-h-0 w-full flex-1 resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400' : 'min-h-0 w-full flex-1 resize-none border-0 bg-transparent text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-400'} placeholder="Введите описание" value={descriptionValue} onChange={(e) => updateDescription(e.target.value)} />
+                  <textarea ref={isSubtask ? subtaskDescriptionInputRef : undefined} className={isSubtask ? 'subtask-description-inline h-full min-h-0 w-full flex-1 resize-none border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400' : 'min-h-0 w-full flex-1 resize-none border-0 bg-transparent text-sm leading-6 text-slate-700 outline-none placeholder:text-slate-400'} placeholder="Введите описание" value={descriptionValue} onChange={(e) => updateDescription(e.target.value)} />
                 )}
               </div>
               <div className="mt-2 flex items-center gap-2"><button type="button" className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition" onClick={() => setIsNotesEditorOpen(true)} title="Редактировать описание"><Edit3 size={15} /></button><button type="button" className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition" onClick={() => aiAttachmentInputRef.current?.click()} title="Добавить файл"><Plus size={15} /></button></div>
