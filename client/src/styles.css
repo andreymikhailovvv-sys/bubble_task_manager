@@ -1895,6 +1895,11 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
   box-shadow: inset 0 0 0 2px var(--tw-ring-color), 0 8px 20px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+
+.subtask-description-inline {
+  color: var(--text-muted);
+}
+
 .subtask-importance-corner {
   position: absolute;
   left: 0;
