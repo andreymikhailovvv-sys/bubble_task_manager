@@ -5512,6 +5512,18 @@ ${allContext}`,
                         </div>
                       ) : null}
                     </div>
+                    <button
+                      type="button"
+                      className="focused-task-add-subtask-button"
+                      onClick={() => {
+                        setFocusedSubtaskTitle('');
+                        setIsAddingFocusedSubtask(true);
+                      }}
+                      title="Добавить подзадачу"
+                      aria-label="Добавить подзадачу"
+                    >
+                      <Plus size={15} />
+                    </button>
                   </div>
                 </div>
                 {isAddingFocusedSubtask ? (
