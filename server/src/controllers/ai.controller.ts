@@ -57,6 +57,25 @@ const resolveUserTimeZone = async (req: Request): Promise<string> => {
 };
 
 export const aiController = {
+  askAiChat: async (req: Request, res: Response) => {
+    try {
+      const question = typeof req.body?.question === 'string' ? req.body.question : '';
+      if (!question.trim()) { res.status(400).json({ error: 'question is required' }); return; }
+      const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
+      const userTimeZone = await resolveUserTimeZone(req);
+      const result = await aiAssistantService.askAiChat({
+        userId: req.user!.id,
+        question,
+        history,
+        userTimeZone,
+        projectTitle: typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined,
+        chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined
+      });
+      res.json(result);
+    } catch (error) {
+      sendAiError(res, error);
+    }
+  },
   getGeneralAssistantHistory: async (req: Request, res: Response) => {
     try {
       const todayUtc = new Date();
