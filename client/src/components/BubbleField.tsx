@@ -843,7 +843,7 @@ export function BubbleField({
                     <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere)}>
                       {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
                       <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
-                    </button>
+                      </button>
                   </div>
                 </foreignObject>
                 <foreignObject x={-12} y={20} width={24} height={24}>
@@ -942,8 +942,8 @@ export function BubbleField({
                   className="bubble-tooltip-card rounded-xl border p-3 text-xs"
                   data-no-field-zoom="true"
                 >
-                  <p className="mb-2 font-semibold text-primary">Подзадачи</p>
-                  <button
+                  <div className="mb-2 flex justify-end">
+                    <button
                     type="button"
                     className={`mb-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
                       ? 'border-cyan-300 bg-cyan-600/90 text-primary'
@@ -954,7 +954,8 @@ export function BubbleField({
                     }}
                   >
                     Фильтровать
-                  </button>
+                    </button>
+                  </div>
                   <ul className="mb-3 max-h-40 space-y-1.5 overflow-y-auto pr-1" data-no-field-zoom="true">
                     {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет подзадач</li> : null}
                     {hoveredSubtasks.map((subtask) => (
