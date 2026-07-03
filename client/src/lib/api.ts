@@ -181,6 +181,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
+  askAiChat: (payload: { question: string; history: ChatMessage[]; projectTitle?: string; chatTitle?: string }) =>
+    request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }> }>('/api/ai-chat', {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
+    }),
   getGeneralAssistantHistory: () =>
     request<{ messages: ChatMessage[] }>(`/api/ai-general-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askGeneralAssistant: (payload: { question: string }) =>
