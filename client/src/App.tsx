@@ -5217,37 +5217,34 @@ ${allContext}`,
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
-                      {isEditingFocusedTitle ? (
-                        <input
-                          className="focused-task-title-input min-w-0 w-full border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
-                          value={focusedTitleDraft}
-                          autoFocus
-                          onChange={(event) => setFocusedTitleDraft(event.target.value)}
-                          onBlur={() => {
+                      <textarea
+                        className="focused-task-title-input invisible-scrollbar min-w-0 w-full resize-none border-0 bg-transparent p-0 text-left text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
+                        value={isEditingFocusedTitle ? focusedTitleDraft : focusedDraft.title || 'Без названия'}
+                        rows={2}
+                        onFocus={() => {
+                          setFocusedTitleDraft(focusedDraft.title ?? '');
+                          setIsEditingFocusedTitle(true);
+                        }}
+                        onChange={(event) => setFocusedTitleDraft(event.target.value)}
+                        onBlur={() => {
+                          setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
+                          setIsEditingFocusedTitle(false);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            setFocusedTitleDraft(focusedDraft.title ?? '');
+                            setIsEditingFocusedTitle(false);
+                            event.currentTarget.blur();
+                          }
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
                             setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
                             setIsEditingFocusedTitle(false);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Escape') setIsEditingFocusedTitle(false);
-                            if (event.key === 'Enter') {
-                              setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
-                              setIsEditingFocusedTitle(false);
-                            }
-                          }}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="focused-task-title-display min-w-0 text-left text-3xl font-bold leading-tight text-slate-950"
-                          onClick={() => {
-                            setFocusedTitleDraft(focusedDraft.title ?? '');
-                            setIsEditingFocusedTitle(true);
-                          }}
-                          title="Редактировать название"
-                        >
-                          {focusedDraft.title || 'Без названия'}
-                        </button>
-                      )}
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        title="Редактировать название"
+                      />
                     </div>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
@@ -5523,18 +5520,6 @@ ${allContext}`,
                         </div>
                       ) : null}
                     </div>
-                    <button
-                      type="button"
-                      className="focused-task-add-subtask-button"
-                      onClick={() => {
-                        setFocusedSubtaskTitle('');
-                        setIsAddingFocusedSubtask(true);
-                      }}
-                      title="Добавить подзадачу"
-                      aria-label="Добавить подзадачу"
-                    >
-                      <Plus size={15} />
-                    </button>
                   </div>
                 </div>
                 {isAddingFocusedSubtask ? (
