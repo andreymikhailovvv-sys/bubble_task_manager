@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 
 type Option = { value: string; label: string; color?: string };
 type MenuPosition = { top: number; left: number; width: number };
+type PopupPlacement = 'bottom' | 'top';
 
 type Props = {
   value: string;
@@ -15,9 +16,10 @@ type Props = {
   ariaLabel?: string;
   disabled?: boolean;
   detachedPopup?: boolean;
+  popupPlacement?: PopupPlacement;
 };
 
-export function CustomSelect({ value, options, onChange, className = '', buttonClassName = '', menuClassName = '', ariaLabel, disabled = false, detachedPopup = false }: Props) {
+export function CustomSelect({ value, options, onChange, className = '', buttonClassName = '', menuClassName = '', ariaLabel, disabled = false, detachedPopup = false, popupPlacement = 'bottom' }: Props) {
   const [open, setOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -42,7 +44,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
       const rect = ref.current?.getBoundingClientRect();
       if (!rect) return;
       setMenuPosition({
-        top: rect.bottom + 6,
+        top: popupPlacement === 'top' ? rect.top - 6 : rect.bottom + 6,
         left: rect.left,
         width: rect.width
       });
@@ -55,7 +57,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [detachedPopup, open]);
+  }, [detachedPopup, open, popupPlacement]);
 
   const shouldRenderMenu = open && !disabled && (!detachedPopup || menuPosition);
 
@@ -64,7 +66,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
       ref={menuRef}
       className={`custom-select-menu ${detachedPopup ? 'custom-select-menu-detached fixed' : 'absolute left-0 top-[calc(100%+6px)] w-full'} z-[170] rounded-xl border p-1.5 shadow-2xl backdrop-blur ${menuClassName}`}
       role="listbox"
-      style={detachedPopup && menuPosition ? { top: menuPosition.top, left: menuPosition.left, width: menuPosition.width } : undefined}
+      style={detachedPopup && menuPosition ? { top: menuPosition.top, left: menuPosition.left, width: menuPosition.width, transform: popupPlacement === 'top' ? 'translateY(-100%)' : undefined } : undefined}
     >
       {options.map((option) => (
         <button

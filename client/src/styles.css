@@ -3229,3 +3229,7 @@ body[data-theme='light'] .focused-task-ai-panel {
   background: #f5f3ff;
   color: #5b21b6;
 }
+
+.focused-task-notify-menu.custom-select-menu-detached {
+  z-index: 240;
+}

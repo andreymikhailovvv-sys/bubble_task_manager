@@ -5384,6 +5384,7 @@ ${allContext}`,
                         options={NOTIFY_PRESETS}
                         ariaLabel="Уведомлять за"
                         buttonClassName="focused-task-pill-select"
+                        menuClassName="task-edit-notify-menu focused-task-notify-menu"
                         detachedPopup
                       />
                     </label>
