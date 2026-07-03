@@ -1896,8 +1896,25 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
 }
 
 
+
+.invisible-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.invisible-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .subtask-description-inline {
   color: var(--text-muted);
+  box-shadow: none;
+}
+
+.subtask-description-inline:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .subtask-importance-corner {

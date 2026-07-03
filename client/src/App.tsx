@@ -5218,7 +5218,7 @@ ${allContext}`,
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <textarea
-                        className="focused-task-title-input min-w-0 w-full resize-none border-0 bg-transparent p-0 text-left text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
+                        className="focused-task-title-input invisible-scrollbar min-w-0 w-full resize-none border-0 bg-transparent p-0 text-left text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
                         value={isEditingFocusedTitle ? focusedTitleDraft : focusedDraft.title || 'Без названия'}
                         rows={2}
                         onFocus={() => {
