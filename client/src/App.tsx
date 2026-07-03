@@ -5191,7 +5191,7 @@ ${allContext}`,
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
                 <div className="min-h-0 flex-1 overflow-y-auto px-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
-                  <div className="mt-2 flex items-start gap-3">
+                  <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <div className="flex min-w-0 items-start gap-2">
                         <h2 className="focused-task-title-display min-w-0 text-3xl font-bold leading-tight text-slate-950">{focusedDraft.title || 'Без названия'}</h2>
@@ -5454,6 +5454,18 @@ ${allContext}`,
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="flex items-center gap-1.5 text-sm font-semibold">
                     Подзадачи
+                    <button
+                      type="button"
+                      className="focused-task-add-subtask-button"
+                      onClick={() => {
+                        setFocusedSubtaskTitle('');
+                        setIsAddingFocusedSubtask(true);
+                      }}
+                      title="Добавить подзадачу"
+                      aria-label="Добавить подзадачу"
+                    >
+                      <Plus size={15} />
+                    </button>
                     <button
                       type="button"
                       className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
