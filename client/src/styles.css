@@ -1909,12 +1909,16 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
 
 .subtask-description-inline {
   color: var(--text-muted);
-  box-shadow: none;
+  border-color: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .subtask-description-inline:focus {
+  border-color: transparent !important;
+  background-color: transparent !important;
   outline: none;
-  box-shadow: none;
+  box-shadow: none !important;
 }
 
 .subtask-importance-corner {
