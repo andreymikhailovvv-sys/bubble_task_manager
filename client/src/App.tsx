@@ -1477,6 +1477,27 @@ export default function App() {
     };
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
+  const closeFocusedTask = async () => {
+    if (!focusedTask || !focusedDraft) {
+      setFocusedTaskId(null);
+      return;
+    }
+    if (focusedAutosaveTimeoutRef.current) {
+      clearTimeout(focusedAutosaveTimeoutRef.current);
+      focusedAutosaveTimeoutRef.current = null;
+    }
+    const normalized = {
+      ...focusedDraft,
+      importance: focusedDraft.importance ?? 3,
+      urgency: focusedDraft.urgency ?? 3,
+      status: focusedDraft.status ?? 'TODO'
+    };
+    const score = calcScore(normalized.importance, normalized.urgency);
+    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
+    setFocusedTaskId(null);
+    await load();
+  };
+
   const applyFocusedRecurrence = async () => {
     if (!focusedDraft?.isRecurring) return;
     const text = (focusedDraft.recurrenceText ?? '').trim();
@@ -2292,7 +2313,7 @@ ${allContext}`,
     });
   };
 
-  const persistTask = async (payload: Partial<Task>) => {
+  const persistTask = async (payload: Partial<Task>, draftSubtasks: Array<Pick<Task, 'title' | 'description'>> = []) => {
     const normalized = {
       ...payload,
       importance: payload.importance ?? 3,
@@ -2304,7 +2325,20 @@ ${allContext}`,
     if (editorState?.task?.id) {
       await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
     } else {
-      await api.createTask({ ...normalized, priorityScore: score });
+      const createdTask = await api.createTask({ ...normalized, priorityScore: score });
+      if (draftSubtasks.length > 0) {
+        await Promise.all(draftSubtasks.map((subtask) => api.createTask({
+          title: subtask.title,
+          description: subtask.description,
+          importance: 3,
+          urgency: 3,
+          priorityScore: 3,
+          status: 'TODO',
+          notifyBeforeMinutes: 30,
+          sphereId: null,
+          parentTaskId: createdTask.id
+        })));
+      }
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask, 'task');
     }
     setEditorState(null);
@@ -2396,17 +2430,7 @@ ${allContext}`,
   };
 
   const saveFocusedTask = async () => {
-    if (!focusedTask || !focusedDraft) return;
-    const normalized = {
-      ...focusedDraft,
-      importance: focusedDraft.importance ?? 3,
-      urgency: focusedDraft.urgency ?? 3,
-      status: focusedDraft.status ?? 'TODO'
-    };
-    const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
-    setFocusedTaskId(null);
-    await load();
+    await closeFocusedTask();
   };
 
   const isOverdue = (task: Task) => {
@@ -5185,7 +5209,7 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
             <button type="button" className="absolute right-16 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
@@ -5193,50 +5217,37 @@ ${allContext}`,
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
-                      <div className="flex min-w-0 items-start gap-2">
-                        <h2 className="focused-task-title-display min-w-0 text-3xl font-bold leading-tight text-slate-950">{focusedDraft.title || 'Без названия'}</h2>
+                      {isEditingFocusedTitle ? (
+                        <input
+                          className="focused-task-title-input min-w-0 w-full border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
+                          value={focusedTitleDraft}
+                          autoFocus
+                          onChange={(event) => setFocusedTitleDraft(event.target.value)}
+                          onBlur={() => {
+                            setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
+                            setIsEditingFocusedTitle(false);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') setIsEditingFocusedTitle(false);
+                            if (event.key === 'Enter') {
+                              setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
+                              setIsEditingFocusedTitle(false);
+                            }
+                          }}
+                        />
+                      ) : (
                         <button
                           type="button"
-                          className="focused-task-title-edit-button mt-1 h-8 w-8 shrink-0 border"
+                          className="focused-task-title-display min-w-0 text-left text-3xl font-bold leading-tight text-slate-950"
                           onClick={() => {
                             setFocusedTitleDraft(focusedDraft.title ?? '');
                             setIsEditingFocusedTitle(true);
                           }}
                           title="Редактировать название"
-                          aria-label="Редактировать название задачи"
                         >
-                          <Edit3 size={15} />
+                          {focusedDraft.title || 'Без названия'}
                         </button>
-                      </div>
-                      {isEditingFocusedTitle ? (
-                        <div className="focused-task-title-popover absolute left-0 top-[calc(100%+8px)] z-40 flex w-[min(100%,520px)] items-center gap-2 rounded-2xl border bg-white p-2 shadow-2xl">
-                          <input
-                            className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm font-semibold"
-                            value={focusedTitleDraft}
-                            autoFocus
-                            onChange={(event) => setFocusedTitleDraft(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Escape') setIsEditingFocusedTitle(false);
-                              if (event.key === 'Enter') {
-                                setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
-                                setIsEditingFocusedTitle(false);
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="success-button inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                            onClick={() => {
-                              setFocusedDraft((prev) => ({ ...(prev ?? {}), title: focusedTitleDraft.trim() || prev?.title || '' }));
-                              setIsEditingFocusedTitle(false);
-                            }}
-                            aria-label="Применить название"
-                            title="Применить"
-                          >
-                            <Check size={16} />
-                          </button>
-                        </div>
-                      ) : null}
+                      )}
                     </div>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
@@ -5775,7 +5786,7 @@ ${allContext}`,
                 <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsAiExpanded(false)} title="Свернуть">
                   <Minimize2 size={14} />
                 </button>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); setFocusedTaskId(null); }} title="Закрыть">
+                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть">
                   <X size={14} />
                 </button>
               </div>
