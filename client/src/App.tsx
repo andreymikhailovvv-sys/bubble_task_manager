@@ -1477,6 +1477,27 @@ export default function App() {
     };
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
+  const closeFocusedTask = async () => {
+    if (!focusedTask || !focusedDraft) {
+      setFocusedTaskId(null);
+      return;
+    }
+    if (focusedAutosaveTimeoutRef.current) {
+      clearTimeout(focusedAutosaveTimeoutRef.current);
+      focusedAutosaveTimeoutRef.current = null;
+    }
+    const normalized = {
+      ...focusedDraft,
+      importance: focusedDraft.importance ?? 3,
+      urgency: focusedDraft.urgency ?? 3,
+      status: focusedDraft.status ?? 'TODO'
+    };
+    const score = calcScore(normalized.importance, normalized.urgency);
+    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
+    setFocusedTaskId(null);
+    await load();
+  };
+
   const applyFocusedRecurrence = async () => {
     if (!focusedDraft?.isRecurring) return;
     const text = (focusedDraft.recurrenceText ?? '').trim();
@@ -2396,17 +2417,7 @@ ${allContext}`,
   };
 
   const saveFocusedTask = async () => {
-    if (!focusedTask || !focusedDraft) return;
-    const normalized = {
-      ...focusedDraft,
-      importance: focusedDraft.importance ?? 3,
-      urgency: focusedDraft.urgency ?? 3,
-      status: focusedDraft.status ?? 'TODO'
-    };
-    const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
-    setFocusedTaskId(null);
-    await load();
+    await closeFocusedTask();
   };
 
   const isOverdue = (task: Task) => {
@@ -5185,7 +5196,7 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
             <button type="button" className="absolute right-16 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
@@ -5775,7 +5786,7 @@ ${allContext}`,
                 <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsAiExpanded(false)} title="Свернуть">
                   <Minimize2 size={14} />
                 </button>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); setFocusedTaskId(null); }} title="Закрыть">
+                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть">
                   <X size={14} />
                 </button>
               </div>
