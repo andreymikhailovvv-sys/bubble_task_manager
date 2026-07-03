@@ -4963,16 +4963,7 @@ ${allContext}`,
         ) : null}
 
         <aside className="app-side-panel focused-task-ai-panel order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
-              <button
-                type="button"
-                className="absolute right-4 top-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100"
-                onClick={() => setFocusedTaskId(null)}
-                aria-label="Закрыть помощь ИИ"
-                title="Закрыть"
-              >
-                <X size={16} />
-              </button>
-              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-9">
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-3">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
@@ -5193,14 +5184,14 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(86vh,760px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-5 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
-            <button type="button" className="absolute right-16 top-5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
+        <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setFocusedTaskId(null)} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-16 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
-              <div className="focus-main-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-[2rem] border-0 p-6 shadow-none">
-                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
+                <div className="min-h-0 flex-1 overflow-y-auto px-1">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
-                  <div className="mt-2 flex items-start gap-3">
+                  <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <div className="flex min-w-0 items-start gap-2">
                         <h2 className="focused-task-title-display min-w-0 text-3xl font-bold leading-tight text-slate-950">{focusedDraft.title || 'Без названия'}</h2>
@@ -5465,6 +5456,18 @@ ${allContext}`,
                     Подзадачи
                     <button
                       type="button"
+                      className="focused-task-add-subtask-button"
+                      onClick={() => {
+                        setFocusedSubtaskTitle('');
+                        setIsAddingFocusedSubtask(true);
+                      }}
+                      title="Добавить подзадачу"
+                      aria-label="Добавить подзадачу"
+                    >
+                      <Plus size={15} />
+                    </button>
+                    <button
+                      type="button"
                       className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
                       onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
                       title={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
@@ -5476,7 +5479,7 @@ ${allContext}`,
                     {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
                       <button
                         type="button"
-                        className="inline-flex items-center rounded-full border border-rose-300 bg-rose-500 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-70"
+                        className="focused-task-action-pill focused-task-action-pill-ai"
                         onClick={() => setIsAiSubtasksPromptOpen(true)}
                         disabled={aiSubtasksLoadingTaskId === focusedTask.id}
                       >
@@ -5486,9 +5489,7 @@ ${allContext}`,
                     <div className="relative">
                       <button
                         type="button"
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${subtaskFilterMode !== 'none'
-                          ? 'border-cyan-300 bg-cyan-600/90 text-white'
-                          : 'secondary-button'}`}
+                        className={`focused-task-action-pill ${subtaskFilterMode !== 'none' ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
                         onClick={() => setIsSubtaskFilterOpen((prev) => !prev)}
                       >
                         Фильтровать
@@ -5543,17 +5544,7 @@ ${allContext}`,
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <button
-                    className="primary-button rounded px-3 py-1 text-xs"
-                    onClick={() => {
-                      setFocusedSubtaskTitle('');
-                      setIsAddingFocusedSubtask(true);
-                    }}
-                  >
-                    + Добавить подзадачу
-                  </button>
-                )}
+                ) : null}
                 <Reorder.Group
                   axis="y"
                   values={hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])}
