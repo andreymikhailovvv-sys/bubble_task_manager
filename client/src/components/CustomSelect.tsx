@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type Option = { value: string; label: string };
+type Option = { value: string; label: string; color?: string };
 type MenuPosition = { top: number; left: number; width: number };
 
 type Props = {
@@ -78,7 +78,10 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
           role="option"
           aria-selected={option.value === value}
         >
-          {option.label}
+          <span className="flex min-w-0 items-center gap-2">
+            {option.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: option.color }} /> : null}
+            <span className="truncate">{option.label}</span>
+          </span>
         </button>
       ))}
     </div>
@@ -95,7 +98,10 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
         aria-label={ariaLabel}
         disabled={disabled}
       >
-        <span className="truncate">{selected?.label}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          {selected?.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} /> : null}
+          <span className="truncate">{selected?.label}</span>
+        </span>
         <ChevronDown size={16} className={`custom-select-chevron shrink-0 transition ${open ? 'rotate-180' : ''}`} />
       </button>
       {detachedPopup && menu ? createPortal(menu, document.body) : menu}

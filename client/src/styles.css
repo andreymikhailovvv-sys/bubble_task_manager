@@ -3180,3 +3180,52 @@ body[data-theme='light'] .focused-task-ai-panel {
 @media (max-height: 760px) {
   .focused-task-description { max-height: 6.5rem; }
 }
+
+.task-edit-title-input,
+.task-edit-title-input:focus {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  appearance: none;
+}
+
+.task-edit-title-input::selection,
+.subtask-description-inline::selection {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.task-edit-notify-menu {
+  border-color: rgba(196, 181, 253, 0.65) !important;
+  background: #ffffff !important;
+}
+
+.task-edit-notify-menu .custom-select-option {
+  color: #334155;
+}
+
+.task-edit-notify-menu .custom-select-option:hover,
+.task-edit-notify-menu .custom-select-option-active {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+
+.task-edit-notify-menu.custom-select-menu-detached,
+.task-edit-sector-menu.custom-select-menu-detached {
+  z-index: 240;
+}
+
+.task-edit-sector-menu {
+  overflow: hidden;
+  border-radius: 1rem !important;
+  border-color: rgba(196, 181, 253, 0.65) !important;
+  background: #ffffff !important;
+}
+
+.task-edit-sector-menu .custom-select-option {
+  color: #334155;
+}
+
+.task-edit-sector-menu .custom-select-option:hover,
+.task-edit-sector-menu .custom-select-option-active {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
