@@ -62,7 +62,8 @@ type AskGeneralAssistantInput = {
   history: ChatMessage[];
   userTimeZone?: string;
 };
-type AskAiChatInput = AskGeneralAssistantInput & { projectTitle?: string; chatTitle?: string };
+type AiChatModel = 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
+type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string };
 const TASK_INTENT_PATTERN = /(задач|подзадач|дедлайн|срок|расписан|планиров|заплан|перенес|созда(й|ть).*дел|созда(й|ть).*зада|отметь|выполнен|закрой|сектор|привычк|таймлайн|календар)/i;
 type GeneralAssistantUndoOperation = {
   taskId: string;
@@ -84,11 +85,19 @@ type ChatAttachment = {
 
 const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-nano';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
+const AI_CHAT_MODEL_NANO = process.env.OPENAI_MODEL_AI_CHAT_NANO?.trim() || 'gpt-5.4-nano';
+const AI_CHAT_MODEL_MINI = process.env.OPENAI_MODEL_AI_CHAT_MINI?.trim() || 'gpt-5.4-mini';
+const AI_CHAT_MODEL_FULL = process.env.OPENAI_MODEL_AI_CHAT_FULL?.trim() || 'gpt-5.4';
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-nano';
 const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
 const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-5.4-nano';
 const OTHER_AI_MODEL = process.env.OPENAI_MODEL_OTHER?.trim() || 'gpt-5-nano';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
+const AI_CHAT_MODEL_BY_OPTION: Record<AiChatModel, string> = {
+  'gpt-5.4-nano': AI_CHAT_MODEL_NANO,
+  'gpt-5.4-mini': AI_CHAT_MODEL_MINI,
+  'gpt-5.4': AI_CHAT_MODEL_FULL
+};
 const SUPPORTED_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -929,7 +938,7 @@ export const aiAssistantService = {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
-    const model = FAST_MODEL;
+    const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
     await chargeAiCredits(input.userId, model);
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
