@@ -1,8 +1,8 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Coins } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type Option = { value: string; label: string; color?: string };
+type Option = { value: string; label: string; color?: string; creditsCost?: number };
 type MenuPosition = { top: number; left: number; width: number };
 type PopupPlacement = 'bottom' | 'top';
 
@@ -83,6 +83,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
           <span className="flex min-w-0 items-center gap-2">
             {option.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: option.color }} /> : null}
             <span className="truncate">{option.label}</span>
+            {typeof option.creditsCost === 'number' ? <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-rose-400"><span>{option.creditsCost}</span><Coins size={12} /></span> : null}
           </span>
         </button>
       ))}
@@ -103,6 +104,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
         <span className="flex min-w-0 items-center gap-2">
           {selected?.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} /> : null}
           <span className="truncate">{selected?.label}</span>
+          {typeof selected?.creditsCost === 'number' ? <span className="inline-flex shrink-0 items-center gap-1 text-rose-400"><span>{selected.creditsCost}</span><Coins size={12} /></span> : null}
         </span>
         <ChevronDown size={16} className={`custom-select-chevron shrink-0 transition ${open ? 'rotate-180' : ''}`} />
       </button>
