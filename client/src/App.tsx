@@ -18,10 +18,16 @@ import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
 
-const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
-  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-5.4', label: 'GPT-5.4' }
+const AI_CHAT_MODEL_CREDITS: Record<AiChatModel, number> = {
+  'gpt-5.4-nano': 2,
+  'gpt-5.4-mini': 5,
+  'gpt-5.4': 8
+};
+
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
+  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4-nano'] },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4-mini'] },
+  { value: 'gpt-5.4', label: 'GPT-5.4', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4'] }
 ];
 
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
@@ -2149,11 +2155,18 @@ ${allContext}`,
     setAiChatLoading(true);
     setAiChatError(null);
     try {
-      const result = await api.askAiChat({ question, history, model: selectedAiChatModel, projectTitle: activeAiChatProject?.title, chatTitle: activeAiChat?.title });
+      const result = await api.askAiChat({
+        question,
+        history,
+        model: quick ? 'gpt-5.4-nano' : selectedAiChatModel,
+        projectTitle: quick ? 'Быстрые вопросы' : activeAiChatProject?.title,
+        chatTitle: quick ? 'Быстрый чат' : activeAiChat?.title
+      });
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
       if (quick) setQuickAiChatMessages((prev) => [...prev, assistantMessage].slice(-20));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();
+      await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setAiChatError(message);

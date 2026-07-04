@@ -134,6 +134,7 @@ const resolveModelCredits = (model: string): number => {
   if (normalized.includes('gpt-5-mini')) return 4;
   if (normalized.includes('gpt-5.4-nano')) return 2;
   if (normalized.includes('gpt-5-nano')) return 1;
+  if (normalized.includes('gpt-5.4')) return 8;
   return 1;
 };
 
