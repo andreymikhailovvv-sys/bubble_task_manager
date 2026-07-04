@@ -18,6 +18,12 @@ import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
 
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
+  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-5.4', label: 'GPT-5.4' }
+];
+
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
   { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['2000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений', 'Стоимость: 399 рублей.'] },
   { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['5000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
@@ -749,6 +755,7 @@ export default function App() {
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const quickAiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2109,6 +2116,12 @@ ${allContext}`,
   useEffect(() => {
     localStorage.setItem('btm:quick-ai-chat', JSON.stringify(quickAiChatMessages.slice(-20)));
   }, [quickAiChatMessages]);
+
+  useEffect(() => {
+    const container = quickAiChatDialogContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [quickAiChatMessages.length, aiChatLoading]);
 
   useEffect(() => {
     aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
@@ -6325,11 +6338,11 @@ ${allContext}`,
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
       <div
-        className="ai-chat-launcher group fixed bottom-6 right-6 z-[95]"
+        className="ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px]"
       >
         <div className="pointer-events-none absolute bottom-14 right-0 w-80 translate-y-2 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
           <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
-            <div className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
+            <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
               {quickAiChatMessages.map((message) => (
                 <div key={message.id} className={`rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'ml-8 bg-violet-600/15 text-primary' : 'mr-8 surface-muted text-muted'}`}>
                   <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {renderInlineAiMarkup(message.content)}
@@ -6377,7 +6390,7 @@ ${allContext}`,
             </aside>
             <section className="flex min-h-0 flex-col p-5">
               <div className="mb-4 flex items-start justify-between gap-3"><div><div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Sparkles size={14} /> Чат с ИИ</div><h2 className="mt-2 text-2xl font-bold text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2><p className="text-sm text-muted">Обычный ИИ-чат. Если запрос касается задач или расписания — ответит ИИ-планировщик.</p></div><button className="rounded-full p-2 text-muted transition hover:-translate-y-0.5 hover:bg-white/60" onClick={() => setIsAiChatOpen(false)}><X size={18} /></button></div>
-              <div className="mb-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Модель чата</p><select className="form-field rounded-full border px-3 py-1.5 text-sm font-semibold" value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)}><option value="gpt-5.4-nano">5.4 Nano</option><option value="gpt-5.4-mini">5.4 Mini</option><option value="gpt-5.4">5.4</option></select></div>
+              <div className="mb-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Модель чата</p><CustomSelect value={selectedAiChatModel} options={AI_CHAT_MODEL_OPTIONS} onChange={(value) => setSelectedAiChatModel(value as AiChatModel)} className="w-52" buttonClassName="rounded-full border-white/50 bg-white/80 px-3 py-1.5 text-sm font-semibold shadow-sm hover:bg-white" menuClassName="bg-white/95 text-slate-800" ariaLabel="Выбрать модель чата" /></div>
               <div ref={aiChatDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
                 {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'rounded-br-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-violet-500/20' : 'rounded-bl-lg border border-white/60 bg-white/85 text-slate-800 shadow-slate-900/10'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'text-violet-100' : 'text-violet-500'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><p className="whitespace-pre-wrap text-sm leading-relaxed">{renderInlineAiMarkup(message.content)}</p></div></div>)}
