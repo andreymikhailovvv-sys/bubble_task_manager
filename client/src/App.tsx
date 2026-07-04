@@ -1730,7 +1730,11 @@ export default function App() {
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]
       }));
-      await load();
+      try {
+        await load();
+      } catch (loadError) {
+        console.error('[AI task chat] refresh after send failed', loadError);
+      }
     } catch (error) {
       const status = typeof (error as { status?: unknown })?.status === 'number' ? Number((error as { status?: number }).status) : null;
       const message = status === 402 || (error instanceof Error && error.message === INSUFFICIENT_AI_CREDITS_MESSAGE)
