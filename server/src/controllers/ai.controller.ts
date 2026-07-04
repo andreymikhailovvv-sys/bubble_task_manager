@@ -62,11 +62,13 @@ export const aiController = {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
       if (!question.trim()) { res.status(400).json({ error: 'question is required' }); return; }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
+      const requestedModel = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'].includes(req.body?.model) ? req.body.model as 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.askAiChat({
         userId: req.user!.id,
         question,
         history,
+        model: requestedModel,
         userTimeZone,
         projectTitle: typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined,
         chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined

@@ -38,6 +38,7 @@ export type ChatMessage = {
 };
 
 export type ChatMode = 'fast' | 'smart';
+export type AiChatModel = 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
 
 export type ChatAttachmentPayload = {
   name: string;
