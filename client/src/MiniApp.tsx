@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
+import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { noteHtmlToPlainText } from './lib/notes';
-import type { ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -68,6 +68,21 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   webp: 'image/webp',
   gif: 'image/gif'
 };
+
+
+type MiniAiChatMessage = ChatMessage & { id: string };
+type MiniAiChatThread = { id: string; title: string; messages: MiniAiChatMessage[] };
+type MiniAiChatProject = { id: string; title: string; color: string; icon: string; chats: MiniAiChatThread[] };
+type MiniAiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
+
+const AI_CHAT_STORAGE_KEY = 'btm:ai-chat-projects';
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
+  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', creditsCost: 2 },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: 5 },
+  { value: 'gpt-5.4', label: 'GPT-5.4', creditsCost: 8 }
+];
+const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
+const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];
 
 type TaskDraft = {
   title: string;
@@ -410,6 +425,36 @@ export default function MiniApp() {
   const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
+  const [aiChatDraft, setAiChatDraft] = useState('');
+  const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
+  const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiChatError, setAiChatError] = useState<string | null>(null);
+  const [aiChatProjectDraft, setAiChatProjectDraft] = useState<MiniAiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
+  const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
+  const [renamingAiChatId, setRenamingAiChatId] = useState<string | null>(null);
+  const [aiChatRenameDraft, setAiChatRenameDraft] = useState('');
+  const [aiChatProjects, setAiChatProjects] = useState<MiniAiChatProject[]>(() => {
+    const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: 'Личный проект', color: '#8b5cf6', icon: '✨', chats: [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }] }];
+    try {
+      const parsed = JSON.parse(localStorage.getItem(AI_CHAT_STORAGE_KEY) || '') as Array<Partial<MiniAiChatProject>>;
+      return parsed.length ? parsed.map((project, index) => ({
+        id: project.id ?? crypto.randomUUID(),
+        title: project.title ?? `Проект ${index + 1}`,
+        color: project.color ?? '#8b5cf6',
+        icon: project.icon ?? '✨',
+        chats: project.chats?.length ? project.chats.map((chat, chatIndex) => ({
+          id: chat.id ?? crypto.randomUUID(),
+          title: chat.title ?? `Чат ${chatIndex + 1}`,
+          messages: (chat.messages ?? []).map((message) => ({ id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content }))
+        })) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]
+      })) : fallback;
+    } catch { return fallback; }
+  });
+  const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
+  const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? '');
+  const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1126,6 +1171,112 @@ export default function MiniApp() {
     : null;
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
   const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
+
+  const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
+  const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+
+  useEffect(() => {
+    localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(aiChatProjects));
+  }, [aiChatProjects]);
+
+  useEffect(() => {
+    aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
+  }, [activeAiChat?.messages.length, aiChatLoading, isAiChatOpen]);
+
+  const updateActiveAiChatMessages = (updater: (messages: MiniAiChatMessage[]) => MiniAiChatMessage[]) => {
+    setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
+      ...project,
+      chats: project.chats.map((chat) => chat.id !== activeAiChat?.id ? chat : { ...chat, messages: updater(chat.messages) })
+    }));
+  };
+
+  const sendAiChatQuestion = async () => {
+    const question = aiChatDraft.trim();
+    if (!question || aiChatLoading) return;
+    const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: question };
+    const history = activeAiChat?.messages ?? [];
+    updateActiveAiChatMessages((messages) => [...messages, userMessage]);
+    setAiChatDraft('');
+    setAiChatLoading(true);
+    setAiChatError(null);
+    try {
+      const result = await api.askAiChat({
+        question,
+        history,
+        model: selectedAiChatModel,
+        projectTitle: activeAiChatProject?.title,
+        chatTitle: activeAiChat?.title
+      });
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
+      updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      if (result.delegatedToPlanner) await loadData();
+    } catch (e) {
+      setAiChatError(e instanceof Error ? e.message : 'Не удалось получить ответ ИИ');
+    } finally {
+      setAiChatLoading(false);
+    }
+  };
+
+  const openAiChatProjectDialog = (projectId?: string) => {
+    const project = projectId ? aiChatProjects.find((item) => item.id === projectId) : null;
+    setAiChatProjectDraft(project
+      ? { mode: 'edit', projectId: project.id, title: project.title, color: project.color, icon: project.icon }
+      : { mode: 'create', title: `Проект ${aiChatProjects.length + 1}`, color: '#8b5cf6', icon: '✨' });
+    setIsAiChatProjectDialogOpen(true);
+  };
+
+  const saveAiChatProject = () => {
+    const title = aiChatProjectDraft.title.trim() || (aiChatProjectDraft.mode === 'create' ? `Проект ${aiChatProjects.length + 1}` : 'Проект');
+    if (aiChatProjectDraft.mode === 'edit' && aiChatProjectDraft.projectId) {
+      setAiChatProjects((prev) => prev.map((project) => project.id === aiChatProjectDraft.projectId ? { ...project, title, color: aiChatProjectDraft.color, icon: aiChatProjectDraft.icon } : project));
+      setAiChatProjectDraft({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
+      setIsAiChatProjectDialogOpen(false);
+      return;
+    }
+    const chat: MiniAiChatThread = { id: crypto.randomUUID(), title: 'Новый чат', messages: [] };
+    const project: MiniAiChatProject = { id: crypto.randomUUID(), title, color: aiChatProjectDraft.color, icon: aiChatProjectDraft.icon, chats: [chat] };
+    setAiChatProjects((prev) => [...prev, project]);
+    setActiveAiChatProjectId(project.id);
+    setActiveAiChatId(chat.id);
+    setAiChatProjectDraft({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
+    setIsAiChatProjectDialogOpen(false);
+  };
+
+  const createAiChatThread = () => {
+    if (!activeAiChatProject) return;
+    const chat: MiniAiChatThread = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length + 1}`, messages: [] };
+    setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: [chat, ...project.chats] } : project));
+    setActiveAiChatId(chat.id);
+  };
+
+  const saveAiChatRename = () => {
+    if (!renamingAiChatId || !activeAiChatProject) return;
+    const title = aiChatRenameDraft.trim() || 'Новый чат';
+    setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: project.chats.map((chat) => chat.id === renamingAiChatId ? { ...chat, title } : chat) } : project));
+    setRenamingAiChatId(null);
+  };
+
+  const deleteAiChatProject = (projectId: string) => {
+    setAiChatProjects((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((project) => project.id !== projectId);
+      if (activeAiChatProjectId === projectId) {
+        setActiveAiChatProjectId(next[0]?.id ?? '');
+        setActiveAiChatId(next[0]?.chats[0]?.id ?? '');
+      }
+      return next;
+    });
+  };
+
+  const deleteAiChatThread = (chatId: string) => {
+    if (!activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
+    setAiChatProjects((prev) => prev.map((project) => {
+      if (project.id !== activeAiChatProject.id) return project;
+      const nextChats = project.chats.filter((chat) => chat.id !== chatId);
+      if (activeAiChatId === chatId) setActiveAiChatId(nextChats[0]?.id ?? '');
+      return { ...project, chats: nextChats };
+    }));
+  };
 
   useEffect(() => {
     setIsSubtaskNotesEditorOpen(false);
@@ -2140,6 +2291,117 @@ export default function MiniApp() {
                 <SendHorizontal size={14} />
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => { setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
+        className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-xl text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95"
+        aria-label="Открыть чат с ИИ"
+      >✦</button>
+
+      {isAiChatOpen ? (
+        <div className="fixed inset-0 z-[70] bg-slate-950/92 p-3">
+          <div className="mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+            <div className="flex items-start justify-between gap-2 border-b border-slate-800 p-3">
+              <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">Чат с ИИ</p>
+                <h2 className="truncate text-base font-semibold">{activeAiChat?.title ?? 'Новый чат'}</h2>
+                <p className="truncate text-xs text-slate-400">{activeAiChatProject?.icon} {activeAiChatProject?.title ?? 'Проект'}</p>
+              </div>
+              <button type="button" onClick={() => setIsAiChatOpen(false)} className="rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
+            </div>
+            <div className="border-b border-slate-800 p-3">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Модель</label>
+              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm">
+                {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label} · {option.creditsCost} кредитов</option>)}
+              </select>
+            </div>
+            <div ref={aiChatDialogContainerRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+              {(activeAiChat?.messages ?? []).length === 0 ? <p className="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-400">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
+              {(activeAiChat?.messages ?? []).map((message) => (
+                <div key={message.id} className={`max-w-[88%] rounded-2xl border px-3 py-2 ${message.role === 'user' ? 'ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50' : 'mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50'}`}>
+                  <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
+                </div>
+              ))}
+              {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+              {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
+            </div>
+            <div className="flex items-end gap-2 border-t border-slate-800 p-3">
+              <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:outline-none" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
+              <button type="button" onClick={() => void sendAiChatQuestion()} disabled={aiChatLoading || !aiChatDraft.trim()} className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-50" aria-label="Отправить сообщение"><SendHorizontal size={17} /></button>
+            </div>
+          </div>
+          <div
+            className={`absolute inset-0 z-[75] bg-slate-950/70 transition-opacity duration-300 ease-out ${isAiChatMenuOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}
+            onClick={() => setIsAiChatMenuOpen(false)}
+            aria-hidden={!isAiChatMenuOpen}
+          >
+            <aside
+              className={`h-full w-[86vw] max-w-sm overflow-y-auto border-r border-slate-800 bg-slate-900 p-3 shadow-2xl transition-transform duration-300 ease-out ${isAiChatMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="font-semibold">Проекты и чаты</h3>
+                <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">Проекты</p><button type="button" className="rounded-md bg-violet-600 p-1.5" onClick={() => openAiChatProjectDialog()}><Plus size={14} /></button></div>
+                {aiChatProjects.map((project) => (
+                  <div key={project.id} className={`rounded-xl border p-2 ${project.id === activeAiChatProject?.id ? 'border-violet-400 bg-violet-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
+                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-medium">{project.title}</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} className="inline" /> Настроить</button><button type="button" disabled={aiChatProjects.length <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} className="inline" /> Удалить</button></div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Чаты</p><button type="button" className="rounded-md bg-cyan-600 p-1.5" onClick={createAiChatThread}><Plus size={14} /></button></div>
+                {(activeAiChatProject?.chats ?? []).map((chat) => (
+                  <div key={chat.id} className={`rounded-xl border p-2 ${chat.id === activeAiChat?.id ? 'border-cyan-400 bg-cyan-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
+                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-medium">{chat.title}</span><span className="text-[11px] text-slate-400">{chat.messages.length} сообщ.</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={(activeAiChatProject?.chats.length ?? 0) <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </div>
+      ) : null}
+
+      {isAiChatProjectDialogOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4" onClick={() => setIsAiChatProjectDialogOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">{aiChatProjectDraft.mode === 'edit' ? 'Настройка проекта' : 'Новый проект'}</p>
+                <h3 className="mt-1 text-lg font-semibold">Проект чата</h3>
+              </div>
+              <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => setIsAiChatProjectDialogOpen(false)}><X size={16} /></button>
+            </div>
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Название</label>
+            <input value={aiChatProjectDraft.title} onChange={(event) => setAiChatProjectDraft((prev) => ({ ...prev, title: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Название проекта" autoFocus />
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Цвет</label>
+            <div className="mt-2 flex flex-wrap gap-1.5">{MINI_AI_PROJECT_COLORS.map((color) => <button key={color} type="button" className={`h-8 w-8 rounded-full border-2 ${aiChatProjectDraft.color === color ? 'border-white' : 'border-transparent'}`} style={{ backgroundColor: color }} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, color }))} />)}</div>
+            <label className="mt-4 block text-xs font-semibold text-slate-400">Иконка</label>
+            <div className="mt-2 grid grid-cols-6 gap-1.5">{MINI_AI_PROJECT_ICONS.map((icon) => <button key={icon} type="button" className={`rounded-lg border py-1.5 text-lg ${aiChatProjectDraft.icon === icon ? 'border-violet-400 bg-violet-500/20' : 'border-slate-700 bg-slate-950'}`} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, icon }))}>{icon}</button>)}</div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => setIsAiChatProjectDialogOpen(false)}>Отмена</button>
+              <button type="button" className="rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatProject}>{aiChatProjectDraft.mode === 'edit' ? 'Сохранить' : 'Создать'}</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {renamingAiChatId ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
+            <h3 className="font-semibold">Переименовать чат</h3>
+            <input value={aiChatRenameDraft} onChange={(event) => setAiChatRenameDraft(event.target.value)} className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" autoFocus />
+            <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => setRenamingAiChatId(null)}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatRename}>Сохранить</button></div>
           </div>
         </div>
       ) : null}
