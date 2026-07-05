@@ -433,6 +433,7 @@ export default function MiniApp() {
   const [aiChatError, setAiChatError] = useState<string | null>(null);
   const [aiChatProjectDraft, setAiChatProjectDraft] = useState<MiniAiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
+  const [closingMiniWindow, setClosingMiniWindow] = useState<string | null>(null);
   const [renamingAiChatId, setRenamingAiChatId] = useState<string | null>(null);
   const [aiChatRenameDraft, setAiChatRenameDraft] = useState('');
   const [aiChatProjects, setAiChatProjects] = useState<MiniAiChatProject[]>(() => {
@@ -797,6 +798,14 @@ export default function MiniApp() {
   }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
 
   const isLightTheme = miniThemeMode === 'light';
+  const getMiniWindowMotionClass = (windowName: string) => closingMiniWindow === windowName ? 'miniapp-window-closing' : 'miniapp-window-opening';
+  const closeMiniWindowWithMotion = (windowName: string, close: () => void) => {
+    setClosingMiniWindow(windowName);
+    window.setTimeout(() => {
+      close();
+      setClosingMiniWindow((current) => (current === windowName ? null : current));
+    }, 220);
+  };
 
   const selectedSphereName = sphereFilter === 'all'
     ? 'Все секторы'
@@ -827,6 +836,7 @@ export default function MiniApp() {
         }
       }));
     }
+    setClosingMiniWindow(null);
     setOpenedTaskId(task.id);
   };
 
@@ -947,6 +957,7 @@ export default function MiniApp() {
 
   const openCreateTaskModal = () => {
     setCreateTaskDraft({ title: '', description: '', dueDate: '' });
+    setClosingMiniWindow(null);
     setIsCreateTaskModalOpen(true);
   };
 
@@ -975,6 +986,7 @@ export default function MiniApp() {
     setHabitDraft(createEmptyHabitDraft());
     setIsCustomHabitIconOpen(false);
     setCustomHabitIconDraft('');
+    setClosingMiniWindow(null);
     setIsHabitModalOpen(true);
   };
 
@@ -1222,6 +1234,7 @@ export default function MiniApp() {
     setAiChatProjectDraft(project
       ? { mode: 'edit', projectId: project.id, title: project.title, color: project.color, icon: project.icon }
       : { mode: 'create', title: `Проект ${aiChatProjects.length + 1}`, color: '#8b5cf6', icon: '✨' });
+    setClosingMiniWindow(null);
     setIsAiChatProjectDialogOpen(true);
   };
 
@@ -1854,13 +1867,13 @@ export default function MiniApp() {
       </div>
 
       {openedTask && openedTaskDraft ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('task')}`}>
+          <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold">Задача</h2>
               <button
                 type="button"
-                onClick={closeTaskModal}
+                onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)}
                 className="rounded-md border border-slate-600 p-1 text-slate-300"
                 aria-label="Закрыть окно"
               >
@@ -2133,11 +2146,11 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4" onClick={() => setOpenedSubtaskId(null)}>
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
+          <div className="miniapp-slide-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Редактирование подзадачи</h3>
-              <button type="button" onClick={() => setOpenedSubtaskId(null)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно подзадачи">
+              <button type="button" onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно подзадачи">
                 <X size={16} />
               </button>
             </div>
@@ -2197,8 +2210,8 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedTask && isAiDialogOpen ? (
-        <div className="miniapp-ai-fullscreen-backdrop fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6">
-          <div className="miniapp-ai-dialog mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
+        <div className={`miniapp-ai-fullscreen-backdrop miniapp-slide-backdrop fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6 ${getMiniWindowMotionClass('task-ai')}`}>
+          <div className="miniapp-ai-dialog miniapp-slide-panel mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h3 className="miniapp-ai-title text-base font-semibold text-violet-100">Диалог с ИИ</h3>
@@ -2225,7 +2238,7 @@ export default function MiniApp() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsAiDialogOpen(false)}
+                  onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))}
                   className="rounded-md border border-slate-600 p-1 text-slate-300"
                   aria-label="Закрыть диалог с ИИ"
                 >
@@ -2297,14 +2310,14 @@ export default function MiniApp() {
 
       <button
         type="button"
-        onClick={() => { setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
+        onClick={() => { setClosingMiniWindow(null); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
         className="miniapp-ai-chat-launcher fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-xl text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95"
         aria-label="Открыть чат с ИИ"
       >✦</button>
 
       {isAiChatOpen ? (
-        <div className="miniapp-ai-chat-backdrop fixed inset-0 z-[70] bg-slate-950/92 p-3">
-          <div className="miniapp-ai-chat-panel mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/92 p-3 ${getMiniWindowMotionClass('ai-chat')}`}>
+          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
@@ -2312,7 +2325,7 @@ export default function MiniApp() {
                 <h2 className="truncate text-base font-semibold">{activeAiChat?.title ?? 'Новый чат'}</h2>
                 <p className="truncate text-xs text-slate-400">{activeAiChatProject?.icon} {activeAiChatProject?.title ?? 'Проект'}</p>
               </div>
-              <button type="button" onClick={() => setIsAiChatOpen(false)} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
+              <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
             </div>
             <div className="miniapp-ai-chat-model border-b border-slate-800 p-3">
               <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Модель</label>
@@ -2373,14 +2386,14 @@ export default function MiniApp() {
       ) : null}
 
       {isAiChatProjectDialogOpen ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4" onClick={() => setIsAiChatProjectDialogOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-project')}`} onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>
+          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">{aiChatProjectDraft.mode === 'edit' ? 'Настройка проекта' : 'Новый проект'}</p>
                 <h3 className="mt-1 text-lg font-semibold">Проект чата</h3>
               </div>
-              <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => setIsAiChatProjectDialogOpen(false)}><X size={16} /></button>
+              <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}><X size={16} /></button>
             </div>
             <label className="mt-4 block text-xs font-semibold text-slate-400">Название</label>
             <input value={aiChatProjectDraft.title} onChange={(event) => setAiChatProjectDraft((prev) => ({ ...prev, title: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" placeholder="Название проекта" autoFocus />
@@ -2389,7 +2402,7 @@ export default function MiniApp() {
             <label className="mt-4 block text-xs font-semibold text-slate-400">Иконка</label>
             <div className="mt-2 grid grid-cols-6 gap-1.5">{MINI_AI_PROJECT_ICONS.map((icon) => <button key={icon} type="button" className={`rounded-lg border py-1.5 text-lg ${aiChatProjectDraft.icon === icon ? 'border-violet-400 bg-violet-500/20' : 'border-slate-700 bg-slate-950'}`} onClick={() => setAiChatProjectDraft((prev) => ({ ...prev, icon }))}>{icon}</button>)}</div>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => setIsAiChatProjectDialogOpen(false)}>Отмена</button>
+              <button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>Отмена</button>
               <button type="button" className="rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatProject}>{aiChatProjectDraft.mode === 'edit' ? 'Сохранить' : 'Создать'}</button>
             </div>
           </div>
@@ -2397,24 +2410,24 @@ export default function MiniApp() {
       ) : null}
 
       {renamingAiChatId ? (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-rename')}`}>
+          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
             <h3 className="font-semibold">Переименовать чат</h3>
             <input value={aiChatRenameDraft} onChange={(event) => setAiChatRenameDraft(event.target.value)} className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" autoFocus />
-            <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => setRenamingAiChatId(null)}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatRename}>Сохранить</button></div>
+            <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-rename', () => setRenamingAiChatId(null))}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold" onClick={saveAiChatRename}>Сохранить</button></div>
           </div>
         </div>
       ) : null}
 
       {isHabitModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('habit')}`}>
+          <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">{editingHabitId ? 'Редактирование привычки' : 'Новая привычка'}</h2>
                 <p className="text-xs text-slate-400">Нажатие на круг — редактирование, зажатие — отметка выполнения.</p>
               </div>
-              <button type="button" onClick={closeHabitModal} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
+              <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
                 <X size={16} />
               </button>
             </div>
@@ -2731,11 +2744,11 @@ export default function MiniApp() {
       ) : null}
 
       {isCreateTaskModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center">
-          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('create-task')}`}>
+          <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold">Новая задача</h2>
-              <button type="button" onClick={() => setIsCreateTaskModalOpen(false)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
+              <button type="button" onClick={() => closeMiniWindowWithMotion('create-task', () => setIsCreateTaskModalOpen(false))} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
                 <X size={16} />
               </button>
             </div>

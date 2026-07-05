@@ -3380,3 +3380,123 @@ body[data-theme='light'] .focused-task-ai-panel {
 .focused-task-notify-menu.custom-select-menu-detached {
   z-index: 240;
 }
+
+@keyframes miniapp-window-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes miniapp-window-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes miniapp-window-slide-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0) scale(0.985);
+  }
+  65% {
+    opacity: 1;
+    transform: translate3d(0, -3px, 0) scale(1.004);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes miniapp-window-slide-out {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) scale(0.985);
+  }
+}
+
+@keyframes miniapp-window-content-pop {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.miniapp-slide-backdrop,
+.notes-editor-backdrop,
+.modal-backdrop {
+  animation: miniapp-window-backdrop-in 220ms ease-out both;
+}
+
+.miniapp-slide-panel,
+.notes-editor-panel,
+.modal-backdrop > * {
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+  animation: miniapp-window-slide-in 280ms cubic-bezier(0.2, 0.9, 0.2, 1.08) both;
+}
+
+.miniapp-window-closing {
+  pointer-events: none;
+  animation: miniapp-window-backdrop-out 220ms ease-in both;
+}
+
+.miniapp-window-closing .miniapp-slide-panel,
+.miniapp-window-closing.notes-editor-backdrop .notes-editor-panel,
+.miniapp-window-closing.modal-backdrop > * {
+  animation: miniapp-window-slide-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.miniapp-ai-dialog,
+.miniapp-habit-recurrence-panel,
+.miniapp-ai-chat-menu,
+.miniapp-ai-chat-thread,
+.miniapp-task-list-card {
+  will-change: transform, opacity;
+}
+
+.miniapp-window-opening .miniapp-ai-dialog,
+.miniapp-window-opening .miniapp-habit-recurrence-panel,
+.miniapp-window-opening .miniapp-ai-chat-thread {
+  animation: miniapp-window-content-pop 240ms ease-out both;
+}
+
+.miniapp-task-list-card,
+.miniapp-timeline-habit-card,
+.miniapp-ai-chat-launcher {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.miniapp-task-list-card:active,
+.miniapp-timeline-habit-card:active,
+.miniapp-ai-chat-launcher:active {
+  transform: scale(0.985);
+}
+
+@media (min-width: 640px) {
+  .miniapp-slide-panel,
+  .notes-editor-panel,
+  .modal-backdrop > * {
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-slide-backdrop,
+  .miniapp-slide-panel,
+  .notes-editor-backdrop,
+  .notes-editor-panel,
+  .modal-backdrop,
+  .modal-backdrop > *,
+  .miniapp-window-opening .miniapp-ai-dialog,
+  .miniapp-window-opening .miniapp-habit-recurrence-panel,
+  .miniapp-window-opening .miniapp-ai-chat-thread {
+    animation: none !important;
+  }
+
+  .miniapp-task-list-card,
+  .miniapp-timeline-habit-card,
+  .miniapp-ai-chat-launcher {
+    transition: none !important;
+  }
+}
