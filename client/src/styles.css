@@ -1900,6 +1900,121 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
   color: #64748b !important;
 }
 
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-launcher,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-launcher {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 48%, #6d28d9 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 18px 42px rgba(124, 58, 237, 0.32), 0 6px 16px rgba(15, 23, 42, 0.1) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-backdrop {
+  background: rgba(241, 245, 249, 0.94) !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel {
+  border-color: rgba(167, 139, 250, 0.34) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  color: #0f172a !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-header,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-composer,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-header,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-model,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-composer {
+  border-color: rgba(203, 213, 225, 0.9) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-icon-button,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-select,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-input,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message button,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-icon-button,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-select,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-input,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message button {
+  border-color: rgba(203, 213, 225, 0.92) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel .text-violet-300,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel .text-violet-300 {
+  color: #6d28d9 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel .text-slate-400,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel .text-cyan-200,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel .text-rose-300,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel .text-slate-400,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel .text-cyan-200,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel .text-rose-300 {
+  color: #64748b !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-thread,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-thread {
+  background: linear-gradient(180deg, #f8fafc, #eef2ff) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-empty,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-empty {
+  border-color: rgba(203, 213, 225, 0.82) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: #64748b !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-assistant,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-assistant {
+  border-color: rgba(124, 58, 237, 0.26) !important;
+  background: #ede9fe !important;
+  color: #3b0764 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user {
+  border-color: rgba(14, 165, 233, 0.34) !important;
+  background: #e0f2fe !important;
+  color: #0c4a6e !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu-backdrop,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu-backdrop {
+  background: rgba(15, 23, 42, 0.18) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu {
+  border-color: rgba(203, 213, 225, 0.92) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu [class*='border-slate'],
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu [class*='bg-slate'],
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu [class*='border-slate'],
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu [class*='bg-slate'] {
+  border-color: rgba(203, 213, 225, 0.86) !important;
+  background-color: rgba(248, 250, 252, 0.96) !important;
+  color: #0f172a !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu .text-cyan-300,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu .text-cyan-300 {
+  color: #0891b2 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu .text-rose-200,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-menu .text-rose-200 {
+  color: #be123c !important;
+}
+
 .bubble-layout-toggle {
   border-color: color-mix(in srgb, var(--badge-border) 78%, var(--accent) 22%);
   background: color-mix(in srgb, var(--badge-bg) 86%, transparent);
