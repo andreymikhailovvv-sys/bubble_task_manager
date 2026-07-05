@@ -1887,7 +1887,7 @@ export default function MiniApp() {
                 <input
                   value={openedTaskDraft.title}
                   onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
               </div>
               <div className="space-y-2">
@@ -1895,7 +1895,7 @@ export default function MiniApp() {
                 <textarea
                   value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
                   onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
-                  className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field min-h-20 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
                 <div className="flex justify-end gap-2">
                   <button
@@ -1978,7 +1978,7 @@ export default function MiniApp() {
                   type="datetime-local"
                   value={openedTaskDraft.dueDate}
                   onChange={(event) => onChangeDraft(openedTask.id, { dueDate: event.target.value })}
-                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -2158,13 +2158,13 @@ export default function MiniApp() {
               <input
                 value={openedSubtaskDraft.title}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
-                className="w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Название подзадачи"
               />
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
-                className="min-h-16 w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="miniapp-task-text-field min-h-16 w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Описание подзадачи"
               />
               <div className="flex justify-end">
@@ -2189,7 +2189,7 @@ export default function MiniApp() {
                 type="datetime-local"
                 value={openedSubtaskDraft.dueDate}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { dueDate: event.target.value })}
-                className="w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
@@ -2758,7 +2758,7 @@ export default function MiniApp() {
                 <input
                   value={createTaskDraft.title}
                   onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
-                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
               </div>
               <div className="space-y-2">
@@ -2766,7 +2766,7 @@ export default function MiniApp() {
                 <textarea
                   value={createTaskDraft.description}
                   onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, description: event.target.value }))}
-                  className="min-h-20 w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field min-h-20 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
               </div>
               <div className="space-y-2">
@@ -2775,7 +2775,7 @@ export default function MiniApp() {
                   type="datetime-local"
                   value={createTaskDraft.dueDate}
                   onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: event.target.value }))}
-                  className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                 />
               </div>
               <button
