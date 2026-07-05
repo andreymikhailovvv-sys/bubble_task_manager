@@ -466,8 +466,8 @@ export default function MiniApp() {
     return { taskId, openAi };
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
+    if (options.showInitialLoader ?? false) setLoading(true);
     setError(null);
     try {
       const tgWindow = window as TelegramWindow;
@@ -495,7 +495,7 @@ export default function MiniApp() {
   };
 
   useEffect(() => {
-    void loadData();
+    void loadData({ showInitialLoader: true });
   }, []);
 
   useEffect(() => {
@@ -1986,7 +1986,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void saveTask(openedTask.id)}
                   disabled={savingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Save size={14} />
                   {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить задачу'}
@@ -1995,7 +1995,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void completeTask(openedTask.id)}
                   disabled={completingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <CheckCircle2 size={14} />
                   {completingId === openedTask.id ? 'Завершаем…' : 'Выполнить'}
@@ -2004,7 +2004,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void deleteTask(openedTask.id)}
                   disabled={deletingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60"
+                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60"
                 >
                   <Trash2 size={14} />
                   {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
@@ -2012,7 +2012,7 @@ export default function MiniApp() {
                 <button
                   type="button"
                   onClick={() => setIsAiDialogOpen(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-violet-600 px-3 text-sm font-medium text-white"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-medium text-white"
                 >
                   <Bot size={14} />
                   Диалог с ИИ
@@ -2025,7 +2025,7 @@ export default function MiniApp() {
                 <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
                   <button
                     type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
                   >
                     <span className="block text-left">Быстрая</span>
@@ -2033,7 +2033,7 @@ export default function MiniApp() {
                   </button>
                   <button
                     type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
                   >
                     <span className="block text-left">Умная</span>
@@ -2092,7 +2092,7 @@ export default function MiniApp() {
                     type="button"
                     onClick={() => void sendAiMessage()}
                     disabled={aiLoadingTaskId === openedTask.id}
-                    className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                    className="rounded-xl bg-violet-600 px-3 py-2 disabled:opacity-60"
                     title="Отправить"
                   >
                     <SendHorizontal size={14} />
@@ -2108,7 +2108,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void addSubtask(openedTask)}
                   disabled={creatingSubtaskForId === openedTask.id}
-                  className="rounded-md bg-sky-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
+                  className="rounded-xl bg-sky-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
                 >
                   {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить подзадачу'}
                 </button>
@@ -2192,15 +2192,15 @@ export default function MiniApp() {
                 className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
+                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Save size={14} />
                   {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
                 </button>
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <CheckCircle2 size={14} />
                   {completingId === openedSubtask.id ? 'Завершаем…' : 'Выполнить'}
                 </button>
-                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60">
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60">
                   <Trash2 size={14} />
                   {deletingId === openedSubtask.id ? 'Удаляем…' : 'Удалить'}
                 </button>
@@ -2221,7 +2221,7 @@ export default function MiniApp() {
                 <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
                   <button
                     type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
                   >
                     <span className="block text-left">Быстрая</span>
@@ -2229,7 +2229,7 @@ export default function MiniApp() {
                   </button>
                   <button
                     type="button"
-                    className={`rounded px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
+                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
                     onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
                   >
                     <span className="block text-left">Умная</span>
@@ -2298,7 +2298,7 @@ export default function MiniApp() {
                 type="button"
                 onClick={() => void sendAiMessage()}
                 disabled={aiLoadingTaskId === openedTask.id}
-                className="rounded-md bg-violet-600 px-3 py-2 disabled:opacity-60"
+                className="rounded-xl bg-violet-600 px-3 py-2 disabled:opacity-60"
                 title="Отправить"
               >
                 <SendHorizontal size={14} />
@@ -2723,7 +2723,7 @@ export default function MiniApp() {
                     type="button"
                     onClick={() => void deleteHabit(editingHabitId)}
                     disabled={deletingHabitId === editingHabitId}
-                    className="inline-flex items-center justify-center gap-2 rounded-md border border-rose-500/60 px-3 py-2 text-sm text-rose-200 disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/60 px-3 py-2 text-sm text-rose-200 disabled:opacity-60"
                   >
                     <Trash2 size={14} />
                     {deletingHabitId === editingHabitId ? 'Удаляем…' : 'Удалить'}
@@ -2733,7 +2733,7 @@ export default function MiniApp() {
                   type="button"
                   onClick={() => void saveHabit()}
                   disabled={savingHabit}
-                  className="inline-flex flex-1 items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
                 >
                   {savingHabit ? 'Сохраняем…' : editingHabitId ? 'Сохранить привычку' : 'Создать привычку'}
                 </button>
@@ -2782,7 +2782,7 @@ export default function MiniApp() {
                 type="button"
                 onClick={() => void createTask()}
                 disabled={isCreatingTask}
-                className="inline-flex w-full items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
               >
                 {isCreatingTask ? 'Создаём…' : 'Создать задачу'}
               </button>
