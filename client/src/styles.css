@@ -3467,6 +3467,10 @@ body[data-theme='light'] .focused-task-ai-panel {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
 }
 
+.miniapp-task-text-field {
+  border-radius: 1rem;
+}
+
 .miniapp-task-list-card:active,
 .miniapp-timeline-habit-card:active,
 .miniapp-ai-chat-launcher:active {
