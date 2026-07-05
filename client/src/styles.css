@@ -1902,9 +1902,9 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-input::placeholder {
 
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-launcher,
 .miniapp-shell.miniapp-light .miniapp-ai-chat-launcher {
-  background: linear-gradient(135deg, #ffffff 0%, #ede9fe 42%, #dbeafe 100%) !important;
-  color: #6d28d9 !important;
-  box-shadow: 0 18px 42px rgba(124, 58, 237, 0.24), 0 6px 16px rgba(15, 23, 42, 0.08) !important;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 48%, #6d28d9 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 18px 42px rgba(124, 58, 237, 0.32), 0 6px 16px rgba(15, 23, 42, 0.1) !important;
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop,
