@@ -1731,7 +1731,7 @@ export default function MiniApp() {
               return (
                 <article
                   key={task.id}
-                  className="miniapp-task-list-card rounded-lg border border-slate-700 bg-slate-800/80 p-3"
+                  className="miniapp-task-list-card rounded-xl border border-slate-700 bg-slate-800/80 p-3"
                   style={taskCardStyle}
                 >
                   <button
@@ -1800,7 +1800,7 @@ export default function MiniApp() {
                         <button
                           type="button"
                           key={task.id}
-                          className="absolute rounded-md border px-2 py-1 text-left"
+                          className="absolute rounded-xl border px-2 py-1 text-left"
                           style={{
                             top: `${placement.top}px`,
                             minHeight: `${TIMELINE_CARD_HEIGHT}px`,
@@ -2101,7 +2101,7 @@ export default function MiniApp() {
               </div>
             ) : null}
 
-            <div className="mt-4 space-y-2 rounded-md border border-slate-700 bg-slate-800/70 p-3">
+            <div className="mt-4 space-y-2 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">Подзадачи</h3>
                 <button
@@ -2120,7 +2120,7 @@ export default function MiniApp() {
                 return (
                   <article
                     key={subtask.id}
-                    className="rounded-md border border-slate-700 bg-slate-900 p-2"
+                    className="rounded-xl border border-slate-700 bg-slate-900 p-2"
                     style={hasOverdueSubtaskState
                       ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)' }
                       : hasReminderSubtaskState
@@ -2147,7 +2147,7 @@ export default function MiniApp() {
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
-          <div className="miniapp-slide-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="miniapp-slide-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Редактирование подзадачи</h3>
               <button type="button" onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно подзадачи">
@@ -2158,13 +2158,13 @@ export default function MiniApp() {
               <input
                 value={openedSubtaskDraft.title}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
-                className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Название подзадачи"
               />
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
-                className="min-h-16 w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="min-h-16 w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
                 placeholder="Описание подзадачи"
               />
               <div className="flex justify-end">
@@ -2189,7 +2189,7 @@ export default function MiniApp() {
                 type="datetime-local"
                 value={openedSubtaskDraft.dueDate}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { dueDate: event.target.value })}
-                className="w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
