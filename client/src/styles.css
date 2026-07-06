@@ -3687,3 +3687,20 @@ body[data-theme='dark'] .focus-sector-dropdown-menu button:hover {
   background: rgba(124, 58, 237, 0.32) !important;
   color: #ede9fe !important;
 }
+
+/* Keep a subtle description surface in dark task windows. */
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-surface {
+  border: 1px solid rgba(71, 85, 105, 0.36) !important;
+  background: rgba(30, 41, 59, 0.46) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-surface .focus-task-description,
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-surface .task-edit-description,
+body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-surface .subtask-description-inline {
+  background: transparent !important;
+}
+
+.focused-task-description-surface {
+  background: rgba(248, 250, 252, 0.72);
+}

@@ -5471,16 +5471,8 @@ ${allContext}`,
                       onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
                     />
                   </div>
-                  <div className="mt-3">
-                    <div className="focused-task-description-shell mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3" onClick={() => focusedTaskDescriptionInputRef.current?.focus()}>
-                      <textarea
-                        ref={focusedTaskDescriptionInputRef}
-                        className="subtask-description-inline focused-task-description invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400 [overflow-wrap:anywhere]"
-                        placeholder="Введите описание"
-                        value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
-                        onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
-                      />
-                    </div>
+                  <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
+                    <p className="focus-task-description focused-task-description min-w-0 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                     <div className="mt-2 flex justify-start gap-2">
                       <button
                         type="button"
