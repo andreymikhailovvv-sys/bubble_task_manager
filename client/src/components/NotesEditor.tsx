@@ -1,5 +1,6 @@
 import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Underline, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
 type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
@@ -386,8 +387,8 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     onChange(nextHtml);
   };
 
-  return (
-    <div className="notes-editor-backdrop fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={onClose}>
+  return createPortal((
+    <div className="notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4" onClick={onClose}>
       <section className="notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="notes-editor-close absolute right-3 top-3 rounded-full p-2" onClick={onClose} title="Закрыть заметки" aria-label="Закрыть заметки">
           <X size={18} />
@@ -475,5 +476,6 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
         />
       </section>
     </div>
-  );
+  ), document.body);
 }
+

@@ -771,6 +771,7 @@ export default function App() {
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const focusedTaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
   const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2132,10 +2133,19 @@ ${allContext}`,
     localStorage.setItem('btm:quick-ai-chat', JSON.stringify(quickAiChatMessages.slice(-20)));
   }, [quickAiChatMessages]);
 
-  useEffect(() => {
+  const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
+  };
+
+  const scheduleQuickAiChatScrollToBottom = () => {
+    window.requestAnimationFrame(scrollQuickAiChatToBottom);
+  };
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
+    return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, aiChatLoading]);
 
   useEffect(() => {
@@ -3104,7 +3114,7 @@ ${allContext}`,
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-primary">{task.title}</p>
-          <p className="mt-1 whitespace-pre-wrap text-muted"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-muted">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           {isSubtaskChip ? (
@@ -5462,7 +5472,15 @@ ${allContext}`,
                     />
                   </div>
                   <div className="mt-3">
-                    <p className="focus-task-description focused-task-description min-w-0 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
+                    <div className="focused-task-description-shell mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3" onClick={() => focusedTaskDescriptionInputRef.current?.focus()}>
+                      <textarea
+                        ref={focusedTaskDescriptionInputRef}
+                        className="subtask-description-inline focused-task-description invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400 [overflow-wrap:anywhere]"
+                        placeholder="Введите описание"
+                        value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
+                        onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
+                      />
+                    </div>
                     <div className="mt-2 flex justify-start gap-2">
                       <button
                         type="button"
@@ -6361,6 +6379,8 @@ ${allContext}`,
 
       <div
         className="ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px]"
+        onMouseEnter={scheduleQuickAiChatScrollToBottom}
+        onFocus={scheduleQuickAiChatScrollToBottom}
       >
         <div className="pointer-events-none absolute bottom-14 right-0 w-80 translate-y-2 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
           <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">

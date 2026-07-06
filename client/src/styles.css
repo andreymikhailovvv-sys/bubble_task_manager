@@ -1024,6 +1024,22 @@ body[data-theme='light'] .backdrop-blur-sm {
   .timeline-hover-card-section {
     border-color: var(--timeline-grid-border);
   }
+.timeline-hover-card,
+.timeline-hover-card * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.timeline-hover-card a,
+.focus-task-description a,
+.focused-task-description a,
+.task-edit-description a {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 
   .timeline-more-button {
     border-color: color-mix(in srgb, var(--accent) 42%, var(--timeline-grid-border));
@@ -2727,7 +2743,9 @@ body[data-theme='light'] .subscription-eyebrow {
 .focus-task-description {
   max-height: 6rem;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 0.25rem;
+  overflow-wrap: anywhere;
 }
 
 .focus-subtask-list {
@@ -3122,7 +3140,9 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
 .focused-task-description {
   max-height: 7.25rem;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 0.35rem;
+  overflow-wrap: anywhere;
 }
 
 .focused-task-icon-button {
