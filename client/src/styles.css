@@ -447,7 +447,8 @@ body[data-theme='light'] .backdrop-blur-sm {
   .light-search-input,
   .light-dropdown,
   .light-dropdown-panel,
-  .light-menu-trigger,
+  .surface-topbar button,
+.light-menu-trigger,
   .light-icon-button,
   .light-primary-action,
   .light-secondary-action,
@@ -1225,7 +1226,8 @@ body[data-theme='light'] .light-secondary-action:hover {
   background: #e0e7ff !important;
 }
 
-body[data-theme='light'] .light-menu-trigger,
+body[data-theme='light'] .surface-topbar button,
+.light-menu-trigger,
 body[data-theme='light'] .light-dropdown {
   border-color: #dbeafe !important;
   background: rgba(255, 255, 255, 0.96) !important;
@@ -3703,4 +3705,52 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-task-description-sur
 
 .focused-task-description-surface {
   background: rgba(248, 250, 252, 0.72);
+}
+
+/* Softer home-screen controls and task cards. */
+.surface-topbar button,
+.light-menu-trigger,
+.light-icon-button,
+.light-primary-action,
+.light-secondary-action,
+.light-add-sector-button,
+.light-credit-badge,
+.focus-mode-button,
+.light-sector-filter-trigger,
+.custom-select-trigger,
+.primary-button,
+.secondary-button,
+.success-button,
+.danger-button,
+.timeline-nav-button,
+.timeline-mode-switch,
+.timeline-toolbar button,
+.timeline-overdue-panel button,
+.timeline-pick-button,
+.list-item-surface,
+.list-task-item,
+.timeline-task-chip,
+.timeline-preview-task-pill,
+.timeline-preview-subtask-pill {
+  border-radius: 0.75rem !important;
+}
+
+.light-dropdown-item,
+.light-dropdown-icon,
+.light-sector-filter-item,
+.light-completed-toggle-button,
+.timeline-mode-button-active,
+.timeline-mode-button-idle,
+.timeline-more-button,
+.timeline-task-count-badge,
+.timeline-hover-card li {
+  border-radius: 0.625rem !important;
+}
+
+.bubble-subtask-preview,
+.subtask-compact-reminder-static,
+.subtask-compact-overdue-static,
+.list-item-surface.subtask-compact-reminder-static,
+.list-item-surface.subtask-compact-overdue-static {
+  border-radius: 0.875rem !important;
 }
