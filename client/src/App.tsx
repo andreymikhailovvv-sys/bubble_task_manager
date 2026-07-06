@@ -5472,41 +5472,46 @@ ${allContext}`,
                     />
                   </div>
                   <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
-                    <p className="focus-task-description focused-task-description min-w-0 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
-                    <div className="mt-2 flex justify-start gap-2">
-                      <button
-                        type="button"
-                        className={`focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
-                        onClick={() => focusedTaskAttachmentInputRef.current?.click()}
-                        onDragOver={(event) => {
-                          event.preventDefault();
-                          setIsTaskAttachmentDragActive(true);
-                        }}
-                        onDragLeave={(event) => {
-                          event.preventDefault();
-                          setIsTaskAttachmentDragActive(false);
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          const files = Array.from(event.dataTransfer.files ?? []);
-                          void uploadFocusedTaskFiles(files);
-                        }}
-                        disabled={isUploadingTaskAttachment}
-                        title="Добавить файлы к задаче"
-                        aria-label="Добавить файлы к задаче"
-                      >
-                        <Plus size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
-                        onClick={() => setIsFocusedNotesEditorOpen(true)}
-                        title="Открыть заметки"
-                        aria-label="Открыть заметки"
-                      >
-                        <Edit3 size={15} />
-                      </button>
-                    </div>
+                    <textarea
+                      className="subtask-description-inline invisible-scrollbar min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
+                      placeholder="Введите описание"
+                      value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true })}
+                      onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-start gap-2">
+                    <button
+                      type="button"
+                      className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                      onClick={() => setIsFocusedNotesEditorOpen(true)}
+                      title="Открыть заметки"
+                      aria-label="Открыть заметки"
+                    >
+                      <Edit3 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                      onClick={() => focusedTaskAttachmentInputRef.current?.click()}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setIsTaskAttachmentDragActive(true);
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault();
+                        setIsTaskAttachmentDragActive(false);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const files = Array.from(event.dataTransfer.files ?? []);
+                        void uploadFocusedTaskFiles(files);
+                      }}
+                      disabled={isUploadingTaskAttachment}
+                      title="Добавить файлы к задаче"
+                      aria-label="Добавить файлы к задаче"
+                    >
+                      <Plus size={15} />
+                    </button>
                   </div>
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
