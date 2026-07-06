@@ -430,7 +430,7 @@ export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSa
           {canShowAiCreateMode ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button className={`rounded-full px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'primary-button' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
-              <button className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400' : 'secondary-button border-rose-300/70 text-primary hover:brightness-110'}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
+              <button className={`ai-create-mode-button rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'ai-create-mode-button-active' : ''}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
             </div>
           ) : null}
           {createMode === 'ai' && canShowAiCreateMode ? (
@@ -448,7 +448,7 @@ export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSa
                 <textarea className="task-edit-title-input invisible-scrollbar min-h-[2.6rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none" placeholder="Введите название" rows={isSubtask ? 2 : Math.max(1, Math.min(4, (form.title ?? '').split('\n').length))} value={form.title ?? ''} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
               </div>
               <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500"><span>{deadlineLabel}</span><DateTimePickerWithApply value={form.dueDate} onChange={(nextValue) => setForm((p) => ({ ...p, dueDate: nextValue }))} timelineTasks={timelineTasks} iconOnly detachedPopup buttonClassName="focused-task-icon-button" /></div>
-              <div className="mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3" onClick={() => subtaskDescriptionInputRef.current?.focus()}>
+              <div className="focused-task-description-surface mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3" onClick={() => subtaskDescriptionInputRef.current?.focus()}>
                 {isEditing && !isSubtask ? (
                   <p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(descriptionValue, { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 ) : (
