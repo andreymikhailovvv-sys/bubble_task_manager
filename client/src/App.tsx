@@ -2133,10 +2133,19 @@ ${allContext}`,
     localStorage.setItem('btm:quick-ai-chat', JSON.stringify(quickAiChatMessages.slice(-20)));
   }, [quickAiChatMessages]);
 
-  useEffect(() => {
+  const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
+  };
+
+  const scheduleQuickAiChatScrollToBottom = () => {
+    window.requestAnimationFrame(scrollQuickAiChatToBottom);
+  };
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
+    return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, aiChatLoading]);
 
   useEffect(() => {
@@ -6370,6 +6379,8 @@ ${allContext}`,
 
       <div
         className="ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px]"
+        onMouseEnter={scheduleQuickAiChatScrollToBottom}
+        onFocus={scheduleQuickAiChatScrollToBottom}
       >
         <div className="pointer-events-none absolute bottom-14 right-0 w-80 translate-y-2 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
           <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
