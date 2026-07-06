@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
@@ -92,6 +92,11 @@ const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WIDTH = 184;
 const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
 const CONTEXT_MENU_HEIGHT = 188;
+
+
+function shouldSendAiMessageOnEnter(event: ReactKeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) {
+  return event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing;
+}
 
 function getViewportSafeContextMenuPosition(x: number, y: number, options?: { submenu?: boolean; height?: number }) {
   if (typeof window === 'undefined') return { x, y };
@@ -3770,7 +3775,7 @@ ${allContext}`,
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-              <div className="mt-3"><textarea className="form-field h-20 w-full resize-none rounded-xl border p-2 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Спросить по текущей задаче…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><div className="mt-2 flex items-center justify-between gap-2"><button className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={12} /> Прикрепить файл</button><button className="primary-button inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={13} /> : <SendHorizontal size={13} />} Отправить</button></div></div>
+              <div className="mt-3"><textarea className="form-field h-20 w-full resize-none rounded-xl border p-2 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Спросить по текущей задаче…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><div className="mt-2 flex items-center justify-between gap-2"><button className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={12} /> Прикрепить файл</button><button className="primary-button inline-flex items-center gap-1 rounded px-3 py-1.5 text-xs disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={13} /> : <SendHorizontal size={13} />} Отправить</button></div></div>
             </aside>
           </div>
         </div>
@@ -3801,7 +3806,7 @@ ${allContext}`,
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
             <div className="mt-3">
-              <textarea className="form-field min-h-24 w-full resize-none rounded-xl border p-3 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение для ИИ…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
+              <textarea className="form-field min-h-24 w-full resize-none rounded-xl border p-3 text-sm disabled:opacity-60" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение для ИИ…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
               <div className="mt-2 flex items-center justify-between gap-2">
                 <button className="secondary-button inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] disabled:opacity-50" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={12} /> Прикрепить файл</button>
@@ -4730,7 +4735,7 @@ ${allContext}`,
               value={generalAiDraft}
               onChange={(event) => setGeneralAiDraft(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                if (shouldSendAiMessageOnEnter(event)) {
                   event.preventDefault();
                   void sendGeneralAiQuestion();
                 }
@@ -6001,7 +6006,7 @@ ${allContext}`,
               value={aiDraft}
               onChange={(event) => setAiDraft(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                if (shouldSendAiMessageOnEnter(event)) {
                   event.preventDefault();
                   void sendFocusedAiQuestion();
                 }
@@ -6118,7 +6123,7 @@ ${allContext}`,
               value={generalAiDraft}
               onChange={(event) => setGeneralAiDraft(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                if (shouldSendAiMessageOnEnter(event)) {
                   event.preventDefault();
                   void sendGeneralAiQuestion();
                 }
@@ -6368,7 +6373,7 @@ ${allContext}`,
               {quickAiChatMessages.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
             </div>
             <div className="flex gap-2">
-              <input className="form-field min-w-0 flex-1 rounded-full border px-3 py-2 text-sm transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void sendAiChatQuestion(true); }} placeholder="Спросить быстро…" />
+              <input className="form-field min-w-0 flex-1 rounded-full border px-3 py-2 text-sm transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
               <button className="rounded-full bg-violet-600 p-2 text-white shadow-lg transition hover:bg-violet-500 hover:shadow-violet-500/30 disabled:opacity-50" disabled={aiChatLoading || !quickAiChatDraft.trim()} onClick={() => void sendAiChatQuestion(true)}><SendHorizontal size={16} /></button>
             </div>
           </div>
@@ -6414,7 +6419,7 @@ ${allContext}`,
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
               </div>
-              <div className="mt-4 flex items-end gap-2 rounded-3xl border border-white/30 bg-white/70 p-2 shadow-lg backdrop-blur"><textarea className="form-field min-h-12 flex-1 resize-none rounded-2xl border-0 bg-transparent p-3 text-sm transition focus:ring-0" value={aiChatDraft} onChange={(e) => setAiChatDraft(e.target.value)} onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void sendAiChatQuestion(false); }} placeholder="Напишите сообщение…" /><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 hover:shadow-violet-500/30 active:scale-95 disabled:opacity-50" title="Отправить" disabled={aiChatLoading || !aiChatDraft.trim()} onClick={() => void sendAiChatQuestion(false)}><SendHorizontal size={18} /></button></div>
+              <div className="mt-4 flex items-end gap-2 rounded-3xl border border-white/30 bg-white/70 p-2 shadow-lg backdrop-blur"><textarea className="form-field min-h-12 flex-1 resize-none rounded-2xl border-0 bg-transparent p-3 text-sm transition focus:ring-0" value={aiChatDraft} onChange={(e) => setAiChatDraft(e.target.value)} onKeyDown={(e) => { if (shouldSendAiMessageOnEnter(e)) { e.preventDefault(); void sendAiChatQuestion(false); } }} placeholder="Напишите сообщение…" /><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 hover:shadow-violet-500/30 active:scale-95 disabled:opacity-50" title="Отправить" disabled={aiChatLoading || !aiChatDraft.trim()} onClick={() => void sendAiChatQuestion(false)}><SendHorizontal size={18} /></button></div>
             </section>
           </div>
         </div>
