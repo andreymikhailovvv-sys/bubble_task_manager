@@ -430,7 +430,7 @@ export function TaskEditor({ task, subtasks = [], initialSphereId, spheres, onSa
           {canShowAiCreateMode ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button className={`rounded-full px-3 py-2 text-sm font-semibold ${createMode === 'manual' ? 'primary-button' : 'secondary-button'}`} onClick={() => setCreateMode('manual')}>Вручную</button>
-              <button className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'border-rose-300 bg-rose-500 text-white hover:bg-rose-400' : 'secondary-button border-rose-300/70 text-primary hover:brightness-110'}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
+              <button className={`ai-create-mode-button rounded-full border px-3 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'ai-create-mode-button-active' : ''}`} onClick={() => setCreateMode('ai')}>Через ИИ</button>
             </div>
           ) : null}
           {createMode === 'ai' && canShowAiCreateMode ? (
