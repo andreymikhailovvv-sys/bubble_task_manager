@@ -3476,7 +3476,7 @@ ${allContext}`,
               <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
                   <span>Утренний ИИ-чекап</span>
-                  <span className="morning-checkup-cost-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
                     2 <Coins size={11} /> за чекап
                   </span>
                 </div>
