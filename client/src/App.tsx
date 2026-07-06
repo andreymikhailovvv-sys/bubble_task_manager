@@ -5468,7 +5468,7 @@ ${allContext}`,
                         ref={focusedTaskDescriptionInputRef}
                         className="subtask-description-inline focused-task-description invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400 [overflow-wrap:anywhere]"
                         placeholder="Введите описание"
-                        value={focusedDraft.description ?? ''}
+                        value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
                         onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
                       />
                     </div>
