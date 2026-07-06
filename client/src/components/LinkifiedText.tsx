@@ -24,7 +24,7 @@ const createLinkedTextParts = (value: string, onClick: (event: MouseEvent<HTMLAn
         href={normalizeNoteHref(part)}
         target="_blank"
         rel="noreferrer noopener"
-        className="underline decoration-cyan-300/80 underline-offset-2 hover:text-cyan-200"
+        className="break-words [overflow-wrap:anywhere] underline decoration-cyan-300/80 underline-offset-2 hover:text-cyan-200"
         onClick={onClick}
       >
         {part}
@@ -78,7 +78,7 @@ const createFormattedNoteNode = (node: ChildNode, onClick: (event: MouseEvent<HT
     case 'A': {
       const href = element.getAttribute('href') ?? '';
       return (
-        <a key={key} href={href} target="_blank" rel="noreferrer noopener" className="underline decoration-cyan-300/80 underline-offset-2 hover:text-cyan-200" onClick={onClick}>
+        <a key={key} href={href} target="_blank" rel="noreferrer noopener" className="break-words [overflow-wrap:anywhere] underline decoration-cyan-300/80 underline-offset-2 hover:text-cyan-200" onClick={onClick}>
           {children}
         </a>
       );
@@ -112,5 +112,5 @@ export const LinkifiedText = ({ text, className, fallback = '', stopPropagationO
     ? createFormattedNoteParts(value, handleLinkClick)
     : createLinkedTextParts(value, handleLinkClick, 'plain');
 
-  return <span className={className}>{content}</span>;
+  return <span className={`min-w-0 max-w-full break-words [overflow-wrap:anywhere] ${className ?? ''}`}>{content}</span>;
 };
