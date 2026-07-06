@@ -5476,7 +5476,7 @@ ${allContext}`,
                     <textarea
                       className="subtask-description-inline invisible-scrollbar min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
-                      value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: true })}
+                      value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
                       onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
                     />
                   </div>
