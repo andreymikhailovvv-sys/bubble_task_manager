@@ -357,29 +357,40 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
     }
   };
 
+  const renderTaskButton = (reference: AiTaskReference, key: string) => {
+    const matchedTask = taskById.get(reference.taskId);
+    const buttonLabel = matchedTask?.title || reference.label;
+    return (
+      <button
+        key={key}
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        onClick={() => openTask(reference.taskId, matchedTask)}
+        title={`Открыть задачу: ${buttonLabel}`}
+      >
+        <ArrowUpRight size={12} />
+        <span className="max-w-40 truncate">{buttonLabel}</span>
+      </button>
+    );
+  };
+
   return (
     <>
       {lines.map((line, lineIndex) => {
         const chunks = parseTaskReferencesInLine(line);
         if (chunks.length === 0) return <div key={`line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
+        const taskReferences = chunks.filter((chunk): chunk is { type: 'taskRef'; reference: AiTaskReference } => chunk.type === 'taskRef').map((chunk) => chunk.reference);
         return (
           <div key={`line-${lineIndex}`} className="whitespace-pre-wrap">
             {chunks.map((chunk, chunkIndex) => {
-              if (chunk.type === 'text') return <span key={`chunk-text-${lineIndex}-${chunkIndex}`}>{renderInlineAiMarkup(chunk.value)}</span>;
-              const matchedTask = taskById.get(chunk.reference.taskId);
-              const buttonLabel = matchedTask?.title || chunk.reference.label;
-              return (
-                <button
-                  key={`chunk-task-${lineIndex}-${chunkIndex}-${chunk.reference.taskId}`}
-                  type="button"
-                  className="ml-1 inline-flex h-5 w-5 items-center justify-center rounded bg-cyan-600/90 text-white hover:bg-cyan-500"
-                  onClick={() => openTask(chunk.reference.taskId, matchedTask)}
-                  title={`Открыть задачу: ${buttonLabel}`}
-                >
-                  <ArrowUpRight size={12} />
-                </button>
-              );
+              if (chunk.type === 'taskRef') return null;
+              return <span key={`chunk-text-${lineIndex}-${chunkIndex}`}>{renderInlineAiMarkup(chunk.value)}</span>;
             })}
+            {taskReferences.length ? (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {taskReferences.map((reference, referenceIndex) => renderTaskButton(reference, `explicit-task-${lineIndex}-${reference.taskId}-${referenceIndex}`))}
+              </div>
+            ) : null}
           </div>
         );
       })}
