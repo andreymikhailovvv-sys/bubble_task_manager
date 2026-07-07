@@ -338,12 +338,14 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   content,
   tasks,
   onOpenTask,
+  showTaskReferenceButtons = false,
   closeGeneralAiFullscreenOnOpen,
   setGeneralAiFullscreen
 }: {
   content: string;
   tasks: Task[];
-  onOpenTask: (taskId: string) => void;
+  onOpenTask?: (taskId: string) => void;
+  showTaskReferenceButtons?: boolean;
   closeGeneralAiFullscreenOnOpen?: boolean;
   setGeneralAiFullscreen?: (value: boolean) => void;
 }) {
@@ -351,7 +353,7 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   const lines = useMemo(() => content.split(/\r?\n/), [content]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
-    onOpenTask(matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId);
+    onOpenTask?.(matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId);
     if (closeGeneralAiFullscreenOnOpen && setGeneralAiFullscreen) {
       setGeneralAiFullscreen(false);
     }
@@ -379,7 +381,9 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
       {lines.map((line, lineIndex) => {
         const chunks = parseTaskReferencesInLine(line);
         if (chunks.length === 0) return <div key={`line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
-        const taskReferences = chunks.filter((chunk): chunk is { type: 'taskRef'; reference: AiTaskReference } => chunk.type === 'taskRef').map((chunk) => chunk.reference);
+        const taskReferences = showTaskReferenceButtons
+          ? chunks.filter((chunk): chunk is { type: 'taskRef'; reference: AiTaskReference } => chunk.type === 'taskRef').map((chunk) => chunk.reference)
+          : [];
         return (
           <div key={`line-${lineIndex}`} className="whitespace-pre-wrap">
             {chunks.map((chunk, chunkIndex) => {
@@ -6427,7 +6431,7 @@ ${allContext}`,
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
               {quickAiChatMessages.map((message) => (
                 <div key={message.id} className={`rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'ml-8 bg-violet-600/15 text-primary' : 'mr-8 surface-muted text-muted'}`}>
-                  <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderInlineAiMarkup(message.content)}
+                  <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}
                 </div>
               ))}
               {quickAiChatMessages.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
@@ -6475,7 +6479,7 @@ ${allContext}`,
               <div className="mb-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Модель чата</p><CustomSelect value={selectedAiChatModel} options={AI_CHAT_MODEL_OPTIONS} onChange={(value) => setSelectedAiChatModel(value as AiChatModel)} className="w-52" buttonClassName="rounded-full border-[color:var(--field-border)] bg-[color:var(--input-bg)] px-3 py-1.5 text-sm font-semibold text-primary shadow-sm hover:brightness-105" menuClassName="surface-popover text-primary" ariaLabel="Выбрать модель чата" /></div>
               <div ref={aiChatDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'rounded-br-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-violet-500/20' : 'rounded-bl-lg border border-white/60 bg-white/85 text-slate-800 shadow-slate-900/10'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'text-violet-100' : 'text-violet-500'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderInlineAiMarkup(message.content)}</div></div></div>)}
+                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'rounded-br-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-violet-500/20' : 'rounded-bl-lg border border-white/60 bg-white/85 text-slate-800 shadow-slate-900/10'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'text-violet-100' : 'text-violet-500'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
               </div>
