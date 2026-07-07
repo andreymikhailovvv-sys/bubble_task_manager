@@ -3770,7 +3770,9 @@ ${allContext}`,
                   onChange={(value) => handleFocusTimerMinutesChange(Number(value))}
                   options={FOCUS_TIMER_OPTIONS.map((value) => ({ value: String(value), label: `${value} минут${FOCUS_RECOMMENDED_MINUTES.has(value) ? ' · рекомендовано' : ''}` }))}
                   disabled={isFocusTimerRunning}
-                  buttonClassName={isFocusTimerRunning ? 'cursor-not-allowed opacity-60' : ''}
+                  buttonClassName={`focus-timer-select-trigger ${isFocusTimerRunning ? 'cursor-not-allowed opacity-60' : ''}`}
+                  menuClassName="task-edit-notify-menu focus-timer-select-menu"
+                  detachedPopup
                   ariaLabel="Длительность фокус-сессии"
                 />
                 <div className="mt-4 flex justify-center gap-3">
