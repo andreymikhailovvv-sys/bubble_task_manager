@@ -303,8 +303,7 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getImplicitAiTaskReferences(content: string, tasks: Task[]): AiTaskReference[] {
-  const normalizedContent = content.toLocaleLowerCase('ru-RU');
+function getExplicitTaskReferenceIds(content: string): Set<string> {
   const explicitTaskIds = new Set<string>();
   TASK_REF_PATTERN.lastIndex = 0;
   let explicitMatch: RegExpExecArray | null;
@@ -313,18 +312,40 @@ function getImplicitAiTaskReferences(content: string, tasks: Task[]): AiTaskRefe
     if (taskId) explicitTaskIds.add(taskId);
   }
   TASK_REF_PATTERN.lastIndex = 0;
+  return explicitTaskIds;
+}
 
+function createTaskTitlePattern(title: string) {
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(title.toLocaleLowerCase('ru-RU'))}([^\\p{L}\\p{N}]|$)`, 'u');
+}
+
+function findImplicitAiTaskReferencePlacements(content: string, tasks: Task[]): Array<{ lineIndex: number; reference: AiTaskReference }> {
+  const lines = content.split(/\r?\n/);
+  const normalizedLines = lines.map((line) => line.toLocaleLowerCase('ru-RU'));
+  const explicitTaskIds = getExplicitTaskReferenceIds(content);
   const uniqueTasks = Array.from(new Map(tasks.map((task) => [task.id, task])).values());
+
   return uniqueTasks
-    .filter((task) => {
+    .map((task) => {
       const title = task.title.trim();
-      if (explicitTaskIds.has(task.id) || title.length < 3) return false;
-      const normalizedTitle = title.toLocaleLowerCase('ru-RU');
-      return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(normalizedTitle)}([^\\p{L}\\p{N}]|$)`, 'u').test(normalizedContent);
+      if (explicitTaskIds.has(task.id) || title.length < 3) return null;
+      const titlePattern = createTaskTitlePattern(title);
+      const matchedLineIndex = normalizedLines.findIndex((line) => titlePattern.test(line));
+      if (matchedLineIndex < 0) return null;
+      let lineIndex = matchedLineIndex;
+      while (lineIndex + 1 < lines.length && /^\s+[-*•]/.test(lines[lineIndex + 1])) {
+        lineIndex += 1;
+      }
+      return {
+        lineIndex,
+        titleLength: title.length,
+        reference: { taskId: task.id, label: task.title }
+      };
     })
-    .sort((a, b) => b.title.length - a.title.length)
+    .filter((placement): placement is { lineIndex: number; titleLength: number; reference: AiTaskReference } => Boolean(placement))
+    .sort((a, b) => a.lineIndex - b.lineIndex || b.titleLength - a.titleLength)
     .slice(0, 5)
-    .map((task) => ({ taskId: task.id, label: task.title }));
+    .map(({ lineIndex, reference }) => ({ lineIndex, reference }));
 }
 
 function parseTaskReferencesInLine(content: string): Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: AiTaskReference }> {
@@ -371,7 +392,28 @@ function renderAiMessageContentWithTaskRefs(
       options.setGeneralAiFullscreen(false);
     }
   };
-  const implicitReferences = getImplicitAiTaskReferences(content, options.tasks);
+  const implicitReferencePlacements = findImplicitAiTaskReferencePlacements(content, options.tasks);
+  const referencesByLineIndex = implicitReferencePlacements.reduce<Record<number, AiTaskReference[]>>((acc, placement) => {
+    (acc[placement.lineIndex] ??= []).push(placement.reference);
+    return acc;
+  }, {});
+
+  const renderTaskButton = (reference: AiTaskReference, key: string) => {
+    const matchedTask = options.tasks.find((task) => task.id === reference.taskId);
+    const buttonLabel = matchedTask?.title || reference.label;
+    return (
+      <button
+        key={key}
+        type="button"
+        className="inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        onClick={() => openTask(reference.taskId, matchedTask)}
+        title={`Открыть задачу: ${buttonLabel}`}
+      >
+        <ArrowUpRight size={12} />
+        <span className="max-w-40 truncate">{buttonLabel}</span>
+      </button>
+    );
+  };
 
   return (
     <>
@@ -396,29 +438,14 @@ function renderAiMessageContentWithTaskRefs(
                 </button>
               );
             })}
+            {referencesByLineIndex[lineIndex]?.length ? (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {referencesByLineIndex[lineIndex].map((reference) => renderTaskButton(reference, `implicit-task-${lineIndex}-${reference.taskId}`))}
+              </div>
+            ) : null}
           </div>
         );
       })}
-      {implicitReferences.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {implicitReferences.map((reference) => {
-            const matchedTask = options.tasks.find((task) => task.id === reference.taskId);
-            const buttonLabel = matchedTask?.title || reference.label;
-            return (
-              <button
-                key={`implicit-task-${reference.taskId}`}
-                type="button"
-                className="inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
-                onClick={() => openTask(reference.taskId, matchedTask)}
-                title={`Открыть задачу: ${buttonLabel}`}
-              >
-                <ArrowUpRight size={12} />
-                <span className="max-w-40 truncate">{buttonLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
     </>
   );
 }
