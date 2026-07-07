@@ -304,54 +304,6 @@ type AiTaskReference = {
 
 const TASK_REF_PATTERN = /\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function getExplicitTaskReferenceIds(content: string): Set<string> {
-  const explicitTaskIds = new Set<string>();
-  TASK_REF_PATTERN.lastIndex = 0;
-  let explicitMatch: RegExpExecArray | null;
-  while ((explicitMatch = TASK_REF_PATTERN.exec(content)) !== null) {
-    const taskId = (explicitMatch[1] || explicitMatch[2] || '').trim();
-    if (taskId) explicitTaskIds.add(taskId);
-  }
-  TASK_REF_PATTERN.lastIndex = 0;
-  return explicitTaskIds;
-}
-
-function createTaskTitlePattern(title: string) {
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(title.toLocaleLowerCase('ru-RU'))}([^\\p{L}\\p{N}]|$)`, 'u');
-}
-
-function findImplicitAiTaskReferencePlacements(content: string, tasks: Task[]): Array<{ lineIndex: number; reference: AiTaskReference }> {
-  const lines = content.split(/\r?\n/);
-  const normalizedLines = lines.map((line) => line.toLocaleLowerCase('ru-RU'));
-  const explicitTaskIds = getExplicitTaskReferenceIds(content);
-  const uniqueTasks = Array.from(new Map(tasks.map((task) => [task.id, task])).values());
-
-  return uniqueTasks
-    .map((task) => {
-      const title = task.title.trim();
-      if (explicitTaskIds.has(task.id) || title.length < 3) return null;
-      const titlePattern = createTaskTitlePattern(title);
-      const matchedLineIndex = normalizedLines.findIndex((line) => titlePattern.test(line));
-      if (matchedLineIndex < 0) return null;
-      let lineIndex = matchedLineIndex;
-      while (lineIndex + 1 < lines.length && /^\s+[-*•]/.test(lines[lineIndex + 1])) {
-        lineIndex += 1;
-      }
-      return {
-        lineIndex,
-        titleLength: title.length,
-        reference: { taskId: task.id, label: task.title }
-      };
-    })
-    .filter((placement): placement is { lineIndex: number; titleLength: number; reference: AiTaskReference } => Boolean(placement))
-    .sort((a, b) => a.lineIndex - b.lineIndex || b.titleLength - a.titleLength)
-    .slice(0, 5)
-    .map(({ lineIndex, reference }) => ({ lineIndex, reference }));
-}
 
 function parseTaskReferencesInLine(content: string): Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: AiTaskReference }> {
   const chunks: Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: AiTaskReference }> = [];
@@ -396,11 +348,6 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   setGeneralAiFullscreen?: (value: boolean) => void;
 }) {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
-  const implicitReferencePlacements = useMemo(() => findImplicitAiTaskReferencePlacements(content, tasks), [content, tasks]);
-  const referencesByLineIndex = useMemo(() => implicitReferencePlacements.reduce<Record<number, AiTaskReference[]>>((acc, placement) => {
-    (acc[placement.lineIndex] ??= []).push(placement.reference);
-    return acc;
-  }, {}), [implicitReferencePlacements]);
   const lines = useMemo(() => content.split(/\r?\n/), [content]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
@@ -408,23 +355,6 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
     if (closeGeneralAiFullscreenOnOpen && setGeneralAiFullscreen) {
       setGeneralAiFullscreen(false);
     }
-  };
-
-  const renderTaskButton = (reference: AiTaskReference, key: string) => {
-    const matchedTask = taskById.get(reference.taskId);
-    const buttonLabel = matchedTask?.title || reference.label;
-    return (
-      <button
-        key={key}
-        type="button"
-        className="inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
-        onClick={() => openTask(reference.taskId, matchedTask)}
-        title={`Открыть задачу: ${buttonLabel}`}
-      >
-        <ArrowUpRight size={12} />
-        <span className="max-w-40 truncate">{buttonLabel}</span>
-      </button>
-    );
   };
 
   return (
@@ -450,11 +380,6 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
                 </button>
               );
             })}
-            {referencesByLineIndex[lineIndex]?.length ? (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {referencesByLineIndex[lineIndex].map((reference) => renderTaskButton(reference, `implicit-task-${lineIndex}-${reference.taskId}`))}
-              </div>
-            ) : null}
           </div>
         );
       })}
@@ -1995,10 +1920,10 @@ export default function App() {
   const buildFocusTaskContext = (task: Task) => {
     const children = subtaskMap[task.id] ?? [];
     return [
-      `Задача: ${task.title}`,
+      `Задача: [${task.id}] ${task.title}`,
       `Описание: ${task.description?.trim() || 'нет описания'}`,
       `Срочность: ${task.urgency ?? 3}/5, важность: ${task.importance ?? 3}/5, коэффициент: ${getTaskCoefficient(task).toFixed(2)}`,
-      `Подзадачи: ${children.length > 0 ? children.map((item) => `${item.status === 'DONE' ? '✓' : '•'} ${item.title}`).join('; ') : 'нет'}`
+      `Подзадачи: ${children.length > 0 ? children.map((item) => `${item.status === 'DONE' ? '✓' : '•'} [${item.id}] ${item.title}`).join('; ') : 'нет'}`
     ].join('\n');
   };
 
@@ -2162,7 +2087,9 @@ export default function App() {
     const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
     const contextualQuestion = [
       'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
-      `Текущая выбранная задача: ${currentTask.title}`,
+      'Если в ответе говоришь о конкретной задаче или подзадаче, сразу после её названия добавляй служебную метку [[task_ref=ID]] из контекста. Не придумывай ID.',
+      'Не пиши технические ID как обычный текст — только внутри метки [[task_ref=...]].',
+      `Текущая выбранная задача: [${currentTask.id}] ${currentTask.title}`,
       `Контекст всех задач:
 ${allContext}`,
       `Запрос пользователя: ${question || visibleUserContent}`
@@ -3881,7 +3808,7 @@ ${allContext}`,
               </div>
               {!isFocusTimerRunning ? <span className="mt-2 text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
               <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
-                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{renderAiMessageContent(message.content)}</div>)}
+                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
                 {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
                 {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
               </div>
@@ -3911,7 +3838,7 @@ ${allContext}`,
             </div>
             {!isFocusTimerRunning ? <p className="mb-2 rounded-xl border border-amber-300/50 bg-amber-100/30 px-3 py-2 text-xs text-amber-700">Запустите таймер, чтобы отправлять сообщения и файлы ИИ.</p> : null}
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-4">
-              {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{renderAiMessageContent(message.content)}</div>)}
+              {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
               {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
               {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
             </div>
