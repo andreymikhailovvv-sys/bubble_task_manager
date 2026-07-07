@@ -2680,6 +2680,34 @@ body[data-theme='light'] .subscription-eyebrow {
   color: #fff;
 }
 
+.focus-timer-select-trigger {
+  min-height: 2.75rem;
+  border-radius: 9999px !important;
+  border-color: rgba(196, 181, 253, 0.72) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #4c1d95 !important;
+  font-weight: 700;
+  box-shadow: 0 12px 26px rgba(109, 40, 217, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+.focus-timer-select-trigger:hover,
+.focus-timer-select-trigger[aria-expanded='true'] {
+  border-color: rgba(139, 92, 246, 0.82) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2), 0 16px 34px rgba(109, 40, 217, 0.18) !important;
+}
+
+.focus-timer-select-menu {
+  border-radius: 1.25rem !important;
+  padding: 0.35rem !important;
+  box-shadow: 0 24px 54px rgba(76, 29, 149, 0.2), 0 8px 18px rgba(15, 23, 42, 0.08) !important;
+}
+
+.focus-timer-select-menu .custom-select-option {
+  border-radius: 0.95rem;
+  font-weight: 600;
+}
+
 .focus-task-stack {
   perspective: 1400px;
 }
@@ -2938,6 +2966,34 @@ body[data-theme='dark'] .focus-timer-control {
 body[data-theme='dark'] .focus-timer-control.primary {
   background: linear-gradient(135deg, #7c3aed, #c026d3);
   color: #fff;
+}
+
+body[data-theme='dark'] .focus-timer-select-trigger {
+  border-color: rgba(139, 92, 246, 0.52) !important;
+  background: rgba(30, 41, 59, 0.96) !important;
+  color: #ddd6fe !important;
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+body[data-theme='dark'] .focus-timer-select-trigger:hover,
+body[data-theme='dark'] .focus-timer-select-trigger[aria-expanded='true'] {
+  background: rgba(51, 65, 85, 0.98) !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.22), 0 16px 34px rgba(2, 6, 23, 0.54) !important;
+}
+
+body[data-theme='dark'] .focus-timer-select-menu {
+  border-color: rgba(139, 92, 246, 0.48) !important;
+  background: rgba(15, 23, 42, 0.98) !important;
+}
+
+body[data-theme='dark'] .focus-timer-select-menu .custom-select-option {
+  color: #e2e8f0;
+}
+
+body[data-theme='dark'] .focus-timer-select-menu .custom-select-option:hover,
+body[data-theme='dark'] .focus-timer-select-menu .custom-select-option-active {
+  background: rgba(76, 29, 149, 0.4);
+  color: #f5f3ff;
 }
 
 body[data-theme='dark'] .focus-sector-dropdown-menu {
