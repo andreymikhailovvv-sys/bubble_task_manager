@@ -5526,7 +5526,7 @@ ${allContext}`,
                       onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
                     />
                   </div>
-                  <div className="mt-2 flex justify-start gap-2">
+                  <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
                     <button
                       type="button"
                       className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
@@ -5559,6 +5559,27 @@ ${allContext}`,
                     >
                       <Plus size={15} />
                     </button>
+                    {focusedTaskAttachments.map((attachment) => (
+                      <div key={attachment.id} className="task-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
+                        <button
+                          type="button"
+                          title={`${attachment.name} • скачать`}
+                          onClick={() => downloadTaskAttachment(attachment)}
+                          className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5"
+                        >
+                          <FileText size={12} className="shrink-0" />
+                          <span className="truncate">{attachment.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="Удалить файл"
+                          onClick={() => void removeTaskAttachment(attachment.id)}
+                          className="task-attachment-remove rounded-md p-0.5"
+                        >
+                          <X size={11} className="shrink-0" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                   {isFocusedNotesEditorOpen ? (
                     <NotesEditor
@@ -5575,31 +5596,6 @@ ${allContext}`,
                     className="hidden"
                     onChange={handleTaskAttachmentFileSelect}
                   />
-                  {focusedTaskAttachments.length > 0 ? (
-                    <div className="flex flex-wrap items-start gap-2">
-                      {focusedTaskAttachments.map((attachment) => (
-                        <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
-                          <button
-                            type="button"
-                            title={`${attachment.name} • скачать`}
-                            onClick={() => downloadTaskAttachment(attachment)}
-                            className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
-                          >
-                            <FileText size={12} className="shrink-0 text-cyan-300" />
-                            <span className="truncate">{attachment.name}</span>
-                          </button>
-                          <button
-                            type="button"
-                            title="Удалить файл"
-                            onClick={() => void removeTaskAttachment(attachment.id)}
-                            className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
-                          >
-                            <X size={11} className="shrink-0" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                   {isFocusedSettingsOpen ? (
                     <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                       <div className="flex items-center justify-between gap-2">
@@ -6430,7 +6426,7 @@ ${allContext}`,
           <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
               {quickAiChatMessages.map((message) => (
-                <div key={message.id} className={`rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'ml-8 bg-violet-600/15 text-primary' : 'mr-8 surface-muted text-muted'}`}>
+                <div key={message.id} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
                   <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}
                 </div>
               ))}
@@ -6444,7 +6440,7 @@ ${allContext}`,
         </div>
         <button
           type="button"
-          className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl ring-2 ring-white/50 transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
+          className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
           title="Чат с ИИ"
           onClick={() => setIsAiChatOpen(true)}
         >✦</button>
@@ -6479,7 +6475,7 @@ ${allContext}`,
               <div className="mb-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Модель чата</p><CustomSelect value={selectedAiChatModel} options={AI_CHAT_MODEL_OPTIONS} onChange={(value) => setSelectedAiChatModel(value as AiChatModel)} className="w-52" buttonClassName="rounded-full border-[color:var(--field-border)] bg-[color:var(--input-bg)] px-3 py-1.5 text-sm font-semibold text-primary shadow-sm hover:brightness-105" menuClassName="surface-popover text-primary" ariaLabel="Выбрать модель чата" /></div>
               <div ref={aiChatDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'rounded-br-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-violet-500/20' : 'rounded-bl-lg border border-white/60 bg-white/85 text-slate-800 shadow-slate-900/10'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'text-violet-100' : 'text-violet-500'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}</div></div></div>)}
+                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
               </div>
