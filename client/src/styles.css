@@ -3304,6 +3304,25 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   transform: translateY(-1px);
 }
 
+.focused-task-inline-subtask-button {
+  display: inline-flex;
+  width: 1.875rem;
+  height: 1.875rem;
+  min-width: 1.875rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(196, 181, 253, 0.65);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #6d28d9;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.focused-task-inline-subtask-button:hover {
+  background: #f5f3ff;
+  transform: translateY(-1px);
+}
+
 @media (max-height: 760px) {
   .focused-task-description { max-height: 5rem; }
   .focused-task-subtasks { max-height: none; }
