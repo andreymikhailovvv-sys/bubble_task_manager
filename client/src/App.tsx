@@ -291,6 +291,34 @@ type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: 
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
 type TaskAiMessage = ChatMessage & { id: string };
 
+const QUICK_AI_CHAT_TITLE = 'Быстрые запросы';
+const QUICK_AI_CHAT_PROJECT_TITLE = 'Личный проект';
+const QUICK_AI_CHAT_STORAGE_KEY = 'btm:quick-ai-chat';
+const QUICK_AI_CHAT_ID = 'quick-ai-requests';
+
+function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | null | undefined, quickMessages: AiChatMessage[] = []): AiChatProject[] {
+  const quickChat: AiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-20) };
+  const fallback: AiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
+  const source = rawProjects?.length ? rawProjects : fallback;
+  const normalized = source.map((project, index) => ({
+    id: project.id ?? crypto.randomUUID(),
+    title: project.title ?? `Проект ${index + 1}`,
+    color: project.color ?? '#8b5cf6',
+    icon: project.icon ?? '✨',
+    chats: (project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
+      id: chat.id ?? crypto.randomUUID(),
+      title: chat.title ?? 'Новый чат',
+      messages: chat.messages ?? []
+    }))
+  }));
+  const defaultProject = normalized[0] ?? fallback[0];
+  const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
+  const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: existingQuickChat?.messages?.length ? existingQuickChat.messages : quickChat.messages };
+  normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
+  return normalized;
+}
+
 
 function areTaskAiMessagesEqual(a: TaskAiMessage[], b: TaskAiMessage[]) {
   if (a.length !== b.length) return false;
@@ -752,23 +780,14 @@ export default function App() {
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatError, setAiChatError] = useState<string | null>(null);
   const [aiChatProjects, setAiChatProjects] = useState<AiChatProject[]>(() => {
-    const fallback: AiChatProject[] = [{ id: crypto.randomUUID(), title: 'Личный проект', color: '#8b5cf6', icon: '✨', chats: [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }] }];
     try {
-      const parsed = JSON.parse(localStorage.getItem('btm:ai-chat-projects') || '') as Array<Partial<AiChatProject>>;
-      return parsed.length ? parsed.map((project, index) => ({
-        id: project.id ?? crypto.randomUUID(),
-        title: project.title ?? `Проект ${index + 1}`,
-        color: project.color ?? '#8b5cf6',
-        icon: project.icon ?? '✨',
-        chats: project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]
-      })) : fallback;
-    } catch { return fallback; }
+      const parsedProjects = JSON.parse(localStorage.getItem('btm:ai-chat-projects') || '[]') as Array<Partial<AiChatProject>>;
+      const quickMessages = JSON.parse(localStorage.getItem(QUICK_AI_CHAT_STORAGE_KEY) || '[]') as AiChatMessage[];
+      return normalizeAiChatProjects(parsedProjects, quickMessages);
+    } catch { return normalizeAiChatProjects(null); }
   });
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
-  const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? '');
-  const [quickAiChatMessages, setQuickAiChatMessages] = useState<AiChatMessage[]>(() => {
-    try { return (JSON.parse(localStorage.getItem('btm:quick-ai-chat') || '[]') as AiChatMessage[]).slice(-20); } catch { return []; }
-  });
+  const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? QUICK_AI_CHAT_ID);
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
   const [aiChatProjectDraft, setAiChatProjectDraft] = useState<AiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
   const [aiChatContextMenu, setAiChatContextMenu] = useState<AiChatContextMenu | null>(null);
@@ -2168,14 +2187,13 @@ ${allContext}`,
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+  const quickAiChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
 
   useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
+    const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
+    localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
   }, [aiChatProjects]);
-
-  useEffect(() => {
-    localStorage.setItem('btm:quick-ai-chat', JSON.stringify(quickAiChatMessages.slice(-20)));
-  }, [quickAiChatMessages]);
 
   const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
@@ -2209,7 +2227,7 @@ ${allContext}`,
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: question };
     const history = quick ? quickAiChatMessages : (activeAiChat?.messages ?? []);
     if (quick) {
-      setQuickAiChatMessages((prev) => [...prev, userMessage].slice(-20));
+      setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, userMessage].slice(-20) } : chat) } : project));
       setQuickAiChatDraft('');
     } else {
       updateActiveAiChatMessages((messages) => [...messages, userMessage]);
@@ -2222,11 +2240,11 @@ ${allContext}`,
         question,
         history,
         model: quick ? 'gpt-5.4-nano' : selectedAiChatModel,
-        projectTitle: quick ? 'Быстрые вопросы' : activeAiChatProject?.title,
-        chatTitle: quick ? 'Быстрый чат' : activeAiChat?.title
+        projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
+        chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
       });
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
-      if (quick) setQuickAiChatMessages((prev) => [...prev, assistantMessage].slice(-20));
+      if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();
       await refreshAiCredits();
@@ -2268,6 +2286,7 @@ ${allContext}`,
   };
 
   const openAiChatRenameDialog = (chatId: string) => {
+    if (chatId === QUICK_AI_CHAT_ID) return;
     const chat = activeAiChatProject?.chats.find((item) => item.id === chatId);
     if (!chat) return;
     setRenamingAiChatId(chatId);
@@ -2302,13 +2321,13 @@ ${allContext}`,
 
   const createAiChatThread = () => {
     if (!activeAiChatProject) return;
-    const chat = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length + 1}`, messages: [] };
+    const chat = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length}`, messages: [] };
     setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: [chat, ...project.chats] } : project));
     setActiveAiChatId(chat.id);
   };
 
   const deleteAiChatThread = (chatId: string) => {
-    if (!activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
+    if (chatId === QUICK_AI_CHAT_ID || !activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
     setAiChatProjects((prev) => prev.map((project) => {
       if (project.id !== activeAiChatProject.id) return project;
       const nextChats = project.chats.filter((chat) => chat.id !== chatId);
@@ -2963,7 +2982,8 @@ ${allContext}`,
       return date.toLocaleString('ru-RU', { timeZone: userTz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
     const appendSystemGeneralAiMessage = (text: string) => {
-      setGeneralAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` }]);
+      const systemMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` };
+      setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, systemMessage].slice(-20) } : chat) } : project));
     };
     const focusMovedTaskOnTimeline = (taskId: string) => {
       requestAnimationFrame(() => {
@@ -4742,82 +4762,6 @@ ${allContext}`,
         >
           <section className="app-card rounded-2xl border p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Общий чат с ИИ</h3>
-              <div className="flex items-center gap-1.5">
-                <button
-                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
-                  onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
-                  title="Поиск по диалогу"
-                >
-                  <Search size={14} />
-                </button>
-                <button
-                  className="surface-muted rounded p-1.5 text-muted hover:brightness-110"
-                  onClick={() => setIsGeneralAiFullscreen(true)}
-                  title="Развернуть общий чат"
-                >
-                  <Maximize2 size={14} />
-                </button>
-              </div>
-            </div>
-            <div ref={generalAiDialogContainerRef} className="chat-thread mb-2 h-[220px] overflow-y-auto rounded-xl p-2 text-xs">
-              {isGeneralAiSearchOpen ? (
-                <label className="surface-input sticky top-0 z-10 mb-2 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
-                  <Search size={12} />
-                  <input
-                    className="w-full bg-transparent text-[11px] text-primary placeholder:text-slate-400 focus:outline-none"
-                    placeholder="Поиск по сообщениям"
-                    value={generalAiSearchQuery}
-                    onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
-                  />
-                </label>
-              ) : null}
-              {filteredGeneralAiMessages.length === 0 ? <p className="text-subtle">{generalAiMessages.length === 0 ? 'Задайте вопрос по любым задачам или попросите изменить расписание.' : 'Сообщения не найдены.'}</p> : null}
-              <div className="space-y-2">
-                {filteredGeneralAiMessages.map((message, index) => (
-                  <div
-                    key={message.id}
-                    className={`chat-message max-w-[92%] rounded-lg px-2.5 py-2 whitespace-pre-line ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
-                  >
-                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`general-${index}`, message.content)} title="Копировать" className="chat-message-copy transition">{copiedAiMessageKey === `general-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>
-                  </div>
-                ))}
-              </div>
-              {generalAiLoading ? <p className="mt-2 text-[11px] text-cyan-200">ИИ обрабатывает запрос…</p> : null}
-            </div>
-            {generalAiError ? <p className="mb-2 text-[11px] text-rose-300">{generalAiError}</p> : null}
-            <textarea
-              className="form-field mb-2 min-h-16 w-full resize-none rounded-lg border px-2 py-1.5 text-xs"
-              placeholder="Например: сколько задач осталось на этой неделе?"
-              value={generalAiDraft}
-              onChange={(event) => setGeneralAiDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (shouldSendAiMessageOnEnter(event)) {
-                  event.preventDefault();
-                  void sendGeneralAiQuestion();
-                }
-              }}
-            />
-            <div className="flex items-center gap-2">
-              <button
-                className="primary-button inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs disabled:opacity-50"
-                onClick={() => void sendGeneralAiQuestion()}
-                disabled={generalAiLoading || !generalAiDraft.trim()}
-              >
-                <SendHorizontal size={12} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Coins size={10} /></span>
-              </button>
-              <button
-                className="secondary-button inline-flex items-center gap-1 rounded px-2.5 py-1 text-xs disabled:opacity-50"
-                onClick={() => void undoGeneralAiAction()}
-                disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
-              >
-                <RotateCcw size={12} /> Отменить
-              </button>
-            </div>
-          </section>
-          <section className="app-card rounded-2xl border p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
               <button
                 type="button"
@@ -6143,85 +6087,6 @@ ${allContext}`,
         </div>
       ) : null}
 
-      {isGeneralAiFullscreen ? (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsGeneralAiFullscreen(false)}>
-          <div className="app-card w-full max-w-4xl rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Общий чат с ИИ</p>
-                <p className="text-xs text-muted">Справка по задачам и команды для управления задачами.</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  className={`rounded p-1.5 ${isGeneralAiSearchOpen ? 'bg-cyan-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
-                  onClick={() => setIsGeneralAiSearchOpen((prev) => !prev)}
-                  title="Поиск по диалогу"
-                >
-                  <Search size={14} />
-                </button>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsGeneralAiFullscreen(false)} title="Свернуть">
-                  <Minimize2 size={14} />
-                </button>
-              </div>
-            </div>
-            <div ref={generalAiFullscreenDialogContainerRef} className="chat-thread mb-3 h-[60vh] space-y-3 overflow-y-auto rounded-2xl p-4">
-              {isGeneralAiSearchOpen ? (
-                <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-muted">
-                  <Search size={12} />
-                  <input
-                    className="w-full bg-transparent text-xs text-primary placeholder:text-subtle focus:outline-none"
-                    placeholder="Поиск по сообщениям"
-                    value={generalAiSearchQuery}
-                    onChange={(event) => setGeneralAiSearchQuery(event.target.value)}
-                  />
-                </label>
-              ) : null}
-              {filteredGeneralAiMessages.length === 0 ? <p className="text-sm text-subtle">{generalAiMessages.length === 0 ? 'История чата очищается каждый день в 00:00.' : 'Сообщения не найдены.'}</p> : null}
-              {filteredGeneralAiMessages.map((message, index) => (
-                <div
-                  key={`general-full-${message.id}`}
-                  className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm whitespace-pre-line ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
-                >
-                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
-                  <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} closeGeneralAiFullscreenOnOpen setGeneralAiFullscreen={setIsGeneralAiFullscreen} /> : renderAiMessageContent(message.content)}</div>
-                </div>
-              ))}
-              {generalAiLoading ? <p className="text-sm text-muted">ИИ обрабатывает запрос…</p> : null}
-            </div>
-            <textarea
-              className="form-field mb-2 min-h-24 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-relaxed"
-              placeholder="Например: перенеси задачу «Подготовить отчёт» на завтра 18:00"
-              value={generalAiDraft}
-              onChange={(event) => setGeneralAiDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (shouldSendAiMessageOnEnter(event)) {
-                  event.preventDefault();
-                  void sendGeneralAiQuestion();
-                }
-              }}
-            />
-            <div className="flex items-center justify-between">
-              <p className="min-h-5 text-xs text-rose-300">{generalAiError ?? ''}</p>
-              <div className="flex items-center gap-2">
-                <button
-                  className="secondary-button inline-flex items-center gap-1 rounded px-3 py-2 text-sm disabled:opacity-50"
-                  disabled={generalAiLoading || lastGeneralAiUndoOperations.length === 0}
-                  onClick={() => void undoGeneralAiAction()}
-                >
-                  <RotateCcw size={14} /> Отменить
-                </button>
-                <button
-                  className="primary-button inline-flex items-center gap-1 rounded px-3 py-2 text-sm disabled:opacity-50"
-                  disabled={generalAiLoading || !generalAiDraft.trim()}
-                  onClick={() => void sendGeneralAiQuestion()}
-                >
-                  <SendHorizontal size={14} /> Отправить <span className="inline-flex items-center gap-1 text-rose-300"><span>2</span><Coins size={10} /></span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {isUpcomingSubtasksModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
   
@@ -6455,7 +6320,7 @@ ${allContext}`,
           type="button"
           className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
           title="Чат с ИИ"
-          onClick={() => setIsAiChatOpen(true)}
+          onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
         >✦</button>
       </div>
 
@@ -6481,10 +6346,10 @@ ${allContext}`,
               <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Проекты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-violet-100" onClick={openAiChatProjectDialog}><Plus size={14} /></button></div>
               <div className="space-y-2 overflow-y-auto pr-1">{aiChatProjects.map((project) => <div key={project.id} onContextMenu={(event) => openAiChatItemContextMenu(event, 'project', project.id)} className={`group/project flex w-full items-center gap-2 rounded-2xl border px-2.5 py-2 text-left text-sm shadow-sm transition hover:bg-violet-500/10 ${project.id === activeAiChatProject?.id ? 'border-white/50 text-white' : 'surface-muted text-primary hover:shadow-lg'}`} style={project.id === activeAiChatProject?.id ? { background: `linear-gradient(135deg, ${project.color}, #7c3aed)` } : undefined}><button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-base">{project.icon}</span><span className="min-w-0 flex-1 truncate font-semibold">{project.title}</span></button><button className="rounded-full p-1 opacity-60 transition hover:bg-rose-500/15 hover:text-rose-300 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={aiChatProjects.length <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatProject(project.id); }} title="Удалить проект"><Trash2 size={13} /></button></div>)}</div>
               <div className="mt-2 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Чаты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-cyan-100" onClick={createAiChatThread}><Plus size={14} /></button></div>
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{activeAiChatProject?.chats.map((chat) => <div key={chat.id} onContextMenu={(event) => openAiChatItemContextMenu(event, 'chat', chat.id)} className={`group/chat flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm shadow-sm transition hover:bg-cyan-500/10 ${chat.id === activeAiChat?.id ? 'border-cyan-300 bg-cyan-500/20 text-primary' : 'surface-muted text-muted hover:text-primary'}`}><button className="min-w-0 flex-1 text-left" onClick={() => setActiveAiChatId(chat.id)}><span className="block truncate font-medium">{chat.title}</span><span className="block truncate text-[11px] text-subtle">{chat.messages.length} сообщ.</span></button><button className="rounded-full p-1 opacity-50 transition hover:bg-rose-500/15 hover:text-rose-400 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={(activeAiChatProject?.chats.length ?? 0) <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatThread(chat.id); }} title="Удалить чат"><Trash2 size={13} /></button></div>)}</div>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{activeAiChatProject?.chats.map((chat) => <div key={chat.id} onContextMenu={(event) => { if (chat.id !== QUICK_AI_CHAT_ID) openAiChatItemContextMenu(event, 'chat', chat.id); }} className={`group/chat flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm shadow-sm transition hover:bg-cyan-500/10 ${chat.id === activeAiChat?.id ? 'border-cyan-300 bg-cyan-500/20 text-primary' : 'surface-muted text-muted hover:text-primary'}`}><button className="min-w-0 flex-1 text-left" onClick={() => setActiveAiChatId(chat.id)}><span className="block truncate font-medium">{chat.title}</span><span className="block truncate text-[11px] text-subtle">{chat.id === QUICK_AI_CHAT_ID ? 'Чат по умолчанию' : `${chat.messages.length} сообщ.`}</span></button><button className="rounded-full p-1 opacity-50 transition hover:bg-rose-500/15 hover:text-rose-400 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatThread(chat.id); }} title="Удалить чат"><Trash2 size={13} /></button></div>)}</div>
             </aside>
             <section className="flex min-h-0 flex-col p-5">
-              <div className="mb-4 flex items-start justify-between gap-3"><div><div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Sparkles size={14} /> Чат с ИИ</div><h2 className="mt-2 text-2xl font-bold text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2><p className="text-sm text-muted">Обычный ИИ-чат. Если запрос касается задач или расписания — ответит ИИ-планировщик.</p></div><button className="rounded-full p-2 text-muted transition hover:-translate-y-0.5 hover:bg-white/60" onClick={() => setIsAiChatOpen(false)}><X size={18} /></button></div>
+              <div className="mb-4 flex items-start justify-between gap-3"><div><div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Sparkles size={14} /> Чат с ИИ</div><h2 className="mt-2 text-2xl font-bold text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2><p className="text-sm text-muted">{activeAiChat?.id === QUICK_AI_CHAT_ID ? 'Развернутая версия быстрых запросов к ИИ. Этот чат открыт по умолчанию и не редактируется.' : 'Обычный ИИ-чат. Если запрос касается задач или расписания — ответит ИИ-планировщик.'}</p></div><button className="rounded-full p-2 text-muted transition hover:-translate-y-0.5 hover:bg-white/60" onClick={() => setIsAiChatOpen(false)}><X size={18} /></button></div>
               <div className="mb-3 flex items-center justify-between gap-3 border-t border-white/20 pt-3"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Модель чата</p><CustomSelect value={selectedAiChatModel} options={AI_CHAT_MODEL_OPTIONS} onChange={(value) => setSelectedAiChatModel(value as AiChatModel)} className="w-52" buttonClassName="rounded-full border-[color:var(--field-border)] bg-[color:var(--input-bg)] px-3 py-1.5 text-sm font-semibold text-primary shadow-sm hover:brightness-105" menuClassName="surface-popover text-primary" ariaLabel="Выбрать модель чата" /></div>
               <div ref={aiChatDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
@@ -6506,7 +6371,7 @@ ${allContext}`,
               onClick={() => aiChatContextMenu.type === 'project' ? openAiChatProjectSettings(aiChatContextMenu.id) : openAiChatRenameDialog(aiChatContextMenu.id)}
             >
               <Settings size={14} />
-              Настроить
+              {aiChatContextMenu.type === 'project' ? 'Настроить' : 'Переименовать'}
             </button>
           </div>
         </div>
