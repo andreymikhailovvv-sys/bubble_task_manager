@@ -3158,7 +3158,7 @@ ${allContext}`,
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
         >
           <p className="font-semibold text-primary">{task.title}</p>
-          <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={task.description && task.description.length > 240 ? `${task.description.slice(0, 240)}...` : task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+          <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={(() => { const plain = noteHtmlToPlainText(task.description ?? '', { trimEnd: true }); return plain.length > 240 ? `${plain.slice(0, 240)}...` : plain; })()} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-muted">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
           {isSubtaskChip ? (
@@ -4154,7 +4154,7 @@ ${allContext}`,
                       </div>
                       {task.description?.trim() ? (
                         <p className="mt-1 truncate text-xs text-muted">
-                          <LinkifiedText text={task.description} stopPropagationOnLinkClick />
+                          <LinkifiedText text={noteHtmlToPlainText(task.description ?? '', { trimEnd: true })} stopPropagationOnLinkClick />
                         </p>
                       ) : null}
                       <p className={`mt-1 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
@@ -4975,7 +4975,7 @@ ${allContext}`,
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
                         <p className="mt-1 text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
@@ -6350,7 +6350,7 @@ ${allContext}`,
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-primary [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted [overflow-wrap:anywhere]"><LinkifiedText text={subtask.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted [overflow-wrap:anywhere]"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
                     <p className="mt-1 text-[11px] text-subtle">
                       Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </p>

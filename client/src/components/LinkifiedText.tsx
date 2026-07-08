@@ -9,7 +9,7 @@ type Props = {
 };
 
 const LINK_PATTERN = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
-const SUPPORTED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
+const SUPPORTED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'DEL', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
 
 const createLinkedTextParts = (value: string, onClick: (event: MouseEvent<HTMLAnchorElement>) => void, keyPrefix: string): ReactNode[] => (
   value.split(LINK_PATTERN).map((part, index) => {
@@ -56,6 +56,9 @@ const createFormattedNoteNode = (node: ChildNode, onClick: (event: MouseEvent<HT
       return <em key={key}>{children}</em>;
     case 'U':
       return <u key={key}>{children}</u>;
+    case 'S':
+    case 'DEL':
+      return <s key={key}>{children}</s>;
     case 'H1':
       return <span key={key} className="note-formatted-h1">{children}</span>;
     case 'H2':

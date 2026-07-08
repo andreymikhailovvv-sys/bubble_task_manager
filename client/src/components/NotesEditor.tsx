@@ -1,9 +1,9 @@
-import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Underline, X } from 'lucide-react';
+import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Strikethrough, Underline, X } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
-type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic';
+type NoteFormat = 'plain' | 'h1' | 'h2' | 'bold' | 'underline' | 'italic' | 'strike';
 type NoteListFormat = 'ordered' | 'unordered';
 
 type Props = {
@@ -17,7 +17,7 @@ type FormatButton = {
   title: string;
   menuLabel: string;
   icon: typeof Bold;
-  tagName?: 'h1' | 'h2' | 'strong' | 'u' | 'em';
+  tagName?: 'h1' | 'h2' | 'strong' | 'u' | 'em' | 's';
 };
 
 type SelectionMenuPosition = {
@@ -31,7 +31,8 @@ const NOTE_FORMAT_BUTTONS: FormatButton[] = [
   { format: 'h2', title: 'Заголовок второго порядка', menuLabel: 'Заголовок 2', icon: Heading2, tagName: 'h2' },
   { format: 'bold', title: 'Жирный', menuLabel: 'Жирный', icon: Bold, tagName: 'strong' },
   { format: 'underline', title: 'Подчёркнутый', menuLabel: 'Подчёркнутый', icon: Underline, tagName: 'u' },
-  { format: 'italic', title: 'Курсив', menuLabel: 'Курсив', icon: Italic, tagName: 'em' }
+  { format: 'italic', title: 'Курсив', menuLabel: 'Курсив', icon: Italic, tagName: 'em' },
+  { format: 'strike', title: 'Зачёркнутый', menuLabel: 'Зачёркнутый', icon: Strikethrough, tagName: 's' }
 ];
 
 const NOTE_LIST_BUTTONS: Array<{ format: NoteListFormat; title: string; icon: typeof ListIcon }> = [

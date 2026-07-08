@@ -1,5 +1,5 @@
-const ALLOWED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
-const NOTE_HTML_PATTERN = /<(?:a|b|strong|i|em|u|h1|h2|p|div|br|ul|ol|li|label|input|span)(?:\s[^>]*)?>/i;
+const ALLOWED_NOTE_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'DEL', 'H1', 'H2', 'P', 'DIV', 'BR', 'UL', 'OL', 'LI', 'LABEL', 'INPUT', 'SPAN']);
+const NOTE_HTML_PATTERN = /<(?:a|b|strong|i|em|u|s|del|h1|h2|p|div|br|ul|ol|li|label|input|span)(?:\s[^>]*)?>/i;
 const LINK_PATTERN = /((?:https?:\/\/|www\.)[^\s<]+)/gi;
 
 export function isFormattedNoteHtml(value?: string | null) {
@@ -145,7 +145,7 @@ export function noteHtmlToPlainText(value: string, options: { trimEnd?: boolean 
   wrapper.querySelectorAll('h1,h2,p,div,li,label').forEach((block) => {
     if (block.nextSibling) block.append(document.createTextNode('\n'));
   });
-  wrapper.querySelectorAll('span,a,b,strong,i,em,u').forEach((inline) => {
+  wrapper.querySelectorAll('span,a,b,strong,i,em,u,s,del').forEach((inline) => {
     const nextText = inline.nextSibling?.textContent ?? '';
     const currentText = inline.textContent ?? '';
     if (inline.nextSibling && currentText && nextText && !/\s$/.test(currentText) && !/^\s|^[.,!?;:)]/.test(nextText)) {
