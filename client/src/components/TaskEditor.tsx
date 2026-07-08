@@ -324,10 +324,46 @@ export function TaskEditor({
   >([]);
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [isAddingDraftSubtask, setIsAddingDraftSubtask] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const query = (form.location ?? "").trim();
+    if (!isEventEditor || query.length < 3) {
+      setPlaceSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        format: "jsonv2",
+        limit: "5",
+        q: query,
+      });
+      fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then((response) => (response.ok ? response.json() : []))
+        .then((items: Array<{ display_name?: string }>) => {
+          setPlaceSuggestions(
+            items
+              .map((item) => item.display_name)
+              .filter((value): value is string => Boolean(value))
+              .slice(0, 5),
+          );
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setPlaceSuggestions([]);
+        });
+    }, 350);
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [form.location, isEventEditor]);
 
   useEffect(() => {
     const nextForm: Partial<Task> = task ?? {
@@ -641,7 +677,7 @@ export function TaskEditor({
       onClick={() => void closeEditor()}
     >
       <aside
-        className={`task-edit-shell focused-task-editor-shell relative ${isSubtask ? "h-[min(560px,calc(100vh-24px))]" : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
+        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? "h-[min(560px,calc(100vh-24px))]" : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -787,14 +823,26 @@ export function TaskEditor({
                 />
               </div>
               {isEventEditor ? (
-                <input
-                  className="form-field mt-2 w-full rounded-2xl border px-3 py-2 text-sm"
-                  placeholder="Место события"
-                  value={form.location ?? ""}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, location: e.target.value }))
-                  }
-                />
+                <div className="mt-2">
+                  <input
+                    className="form-field w-full rounded-2xl border px-3 py-2 text-sm"
+                    placeholder="Место события"
+                    value={form.location ?? ""}
+                    list="event-place-suggestions"
+                    autoComplete="street-address"
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, location: e.target.value }))
+                    }
+                  />
+                  <datalist id="event-place-suggestions">
+                    {placeSuggestions.map((place) => (
+                      <option key={place} value={place} />
+                    ))}
+                  </datalist>
+                  <p className="mt-1 text-[11px] text-subtle">
+                    Подсказки ищутся через OpenStreetMap.
+                  </p>
+                </div>
               ) : null}
               <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
                 <span>{deadlineLabel}</span>
@@ -1159,7 +1207,7 @@ export function TaskEditor({
               ) : (
                 <button
                   type="button"
-                  className="primary-button mt-4 rounded-xl px-3 py-2 text-sm font-semibold"
+                  className={`primary-button rounded-xl px-3 py-2 text-sm font-semibold ${isEventEditor ? "mt-auto" : "mt-4"}`}
                   onClick={() => void onSave(form, draftSubtasks)}
                 >
                   {isEventEditor ? "Сохранить событие" : "Сформировать задачу"}

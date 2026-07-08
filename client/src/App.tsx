@@ -2056,7 +2056,7 @@ export default function App() {
       setFocusDistractionTaskId(task.id);
       return;
     }
-    if (task.parentTaskId) setEditorState({ task });
+    if (task.taskType === 'EVENT' || task.parentTaskId) setEditorState({ task });
     else setFocusedTaskId(task.id);
   };
 
@@ -3730,7 +3730,7 @@ ${allContext}`,
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </button>
-          <div className="relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-[calc(100%+6px)] z-40 w-40 rounded-xl border p-2 shadow-2xl"><button className="light-dropdown-item w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>Задача</button><button className="light-dropdown-item mt-1 w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}>Событие</button></div> : null}</div>
+          <div className="relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-[calc(100%+6px)] z-40 w-40 rounded-xl border p-2 shadow-2xl"><button className="primary-button w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>Задача</button><button className="timeline-event-menu-button mt-1 w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}>Событие</button></div> : null}</div>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
