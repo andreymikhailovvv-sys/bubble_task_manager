@@ -574,7 +574,7 @@ export default function MiniApp() {
       }
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
-      const text = [task.title, task.description ?? ''].join(' ').toLowerCase();
+      const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
       return text.includes(query);
     };
 
@@ -620,7 +620,7 @@ export default function MiniApp() {
       }
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
-      const text = [task.title, task.description ?? ''].join(' ').toLowerCase();
+      const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
       return text.includes(query);
     });
   }, [sphereFilter, taskSearch, tasks, timeFilter]);

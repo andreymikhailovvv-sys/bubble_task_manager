@@ -3,6 +3,7 @@ import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, S
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
+import { noteHtmlToPlainText } from '../lib/notes';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
 import { InlineDateTimePickerIcon } from './InlineDateTimePickerIcon';
@@ -754,7 +755,7 @@ export function BubbleField({
                   <div className="surface-card rounded-2xl border p-3">
                     <p className="text-sm uppercase tracking-[0.18em] text-subtle">Описание</p>
                     <div className="mt-2 max-h-44 overflow-hidden break-words text-lg leading-relaxed text-muted">
-                      <LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick />
+                      <LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-base">
@@ -867,7 +868,7 @@ export function BubbleField({
               >
                 <div className="bubble-tooltip-card rounded-xl border p-3 text-xs">
                   <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
-                  <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={hoveredBubble.task.description} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                  <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
                   <p className="text-muted">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
                   <p className="inline-flex items-center gap-1 text-muted">
                     {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
