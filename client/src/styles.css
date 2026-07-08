@@ -3879,3 +3879,26 @@ body[data-theme='light'] .ai-chat-message-assistant {
 body[data-theme='light'] .ai-chat-launcher-button {
   box-shadow: 0 25px 50px -12px rgba(124, 58, 237, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.55);
 }
+
+.timeline-event-chip {
+  color: #92400e;
+  background-image: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(249, 115, 22, 0.12));
+  border-style: dashed;
+}
+
+.timeline-event-menu-button {
+  border: 1px solid rgba(245, 158, 11, 0.55);
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
+}
+
+[data-theme='dark'] .timeline-event-chip,
+.theme-dark .timeline-event-chip {
+  color: #fde68a;
+}
+
+[data-theme='dark'] .timeline-event-menu-button,
+.theme-dark .timeline-event-menu-button {
+  background: rgba(146, 64, 14, 0.38);
+  color: #fde68a;
+}
