@@ -718,6 +718,7 @@ export default function App() {
   const [hideClosedFocusedSubtasks, setHideClosedFocusedSubtasks] = useState(true);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
+  const [focusedSubtaskDueDate, setFocusedSubtaskDueDate] = useState<string | null>(null);
   const [focusedAiSearchQuery, setFocusedAiSearchQuery] = useState('');
   const [isFocusedAiSearchOpen, setIsFocusedAiSearchOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState('');
@@ -2783,8 +2784,9 @@ ${allContext}`,
   const addFocusedSubtask = async () => {
     if (!focusedTask) return;
     const title = focusedSubtaskTitle.trim() || 'Новая доп задача';
-    await createSubtaskForParent(focusedTask, { title, notifyBeforeMinutes: 30 });
+    await createSubtaskForParent(focusedTask, { title, dueDate: focusedSubtaskDueDate, notifyBeforeMinutes: 30 });
     setFocusedSubtaskTitle('');
+    setFocusedSubtaskDueDate(null);
     setIsAddingFocusedSubtask(false);
   };
 
@@ -5725,6 +5727,7 @@ ${allContext}`,
                       className="focused-task-add-subtask-button"
                       onClick={() => {
                         setFocusedSubtaskTitle('');
+                        setFocusedSubtaskDueDate(null);
                         setIsAddingFocusedSubtask(true);
                       }}
                       title="Добавить подзадачу"
@@ -5781,10 +5784,10 @@ ${allContext}`,
                   </div>
                 </div>
                 {isAddingFocusedSubtask ? (
-                  <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <input
                       ref={focusedSubtaskTitleInputRef}
-                      className="form-field w-full rounded border px-2 py-1.5 text-xs"
+                      className="form-field min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs"
                       placeholder="Название доп задачи"
                       value={focusedSubtaskTitle}
                       onChange={(event) => setFocusedSubtaskTitle(event.target.value)}
@@ -5795,20 +5798,30 @@ ${allContext}`,
                         }
                       }}
                     />
-                    <div className="flex gap-2">
-                      <button className="primary-button flex-1 rounded px-2 py-1.5 text-xs font-semibold" onClick={() => void addFocusedSubtask()}>
-                        Сохранить
-                      </button>
-                      <button
-                        className="secondary-button rounded px-2 py-1.5 text-xs font-semibold"
-                        onClick={() => {
-                          setIsAddingFocusedSubtask(false);
-                          setFocusedSubtaskTitle('');
-                        }}
-                      >
-                        Отмена
-                      </button>
-                    </div>
+                    <button type="button" className="primary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold" onClick={() => void addFocusedSubtask()}>
+                      Добавить
+                    </button>
+                    <DateTimePickerWithApply
+                      value={focusedSubtaskDueDate}
+                      title="Выбрать дату и время подзадачи"
+                      detachedPopup
+                      iconOnly
+                      popupAlign="right"
+                      timelineTasks={timelinePickerTasks}
+                      buttonClassName="focused-task-inline-subtask-button"
+                      onChange={(dueDate) => setFocusedSubtaskDueDate(dueDate)}
+                    />
+                    <button
+                      type="button"
+                      className="secondary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                      onClick={() => {
+                        setIsAddingFocusedSubtask(false);
+                        setFocusedSubtaskTitle('');
+                        setFocusedSubtaskDueDate(null);
+                      }}
+                    >
+                      Отмена
+                    </button>
                   </div>
                 ) : null}
                 <Reorder.Group
