@@ -1219,7 +1219,7 @@ export const aiAssistantService = {
         lines.push(`— ${escapeHtml(task.title)}: ${suggestTaskHelp(task.title)}`);
       });
     }
-    lines.push('', '💬 Чтобы ответить ИИ или попросить его о чём-то, нажмите кнопку «Общий чат с ИИ».');
+    lines.push('', '💬 Чтобы ответить ИИ или попросить его о чём-то, нажмите кнопку «Чат с ИИ».');
     return lines.join('\n');
   },
   transcribeAudio: async (input: TranscribeAudioInput) => {
