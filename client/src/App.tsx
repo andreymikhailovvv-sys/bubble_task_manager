@@ -3730,7 +3730,7 @@ ${allContext}`,
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </button>
-          <div className="relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-[calc(100%+6px)] z-40 w-40 rounded-xl border p-2 shadow-2xl"><button className="primary-button w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>Задача</button><button className="timeline-event-menu-button mt-1 w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}>Событие</button></div> : null}</div>
+          <div className="relative pb-2" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-full z-40 w-44 rounded-xl border p-2 shadow-2xl"><button className="primary-button flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Задача</button><button className="timeline-event-menu-button mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Событие</button></div> : null}</div>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
@@ -4697,7 +4697,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4712,7 +4722,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4727,7 +4736,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4829,7 +4837,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4844,7 +4862,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4859,7 +4876,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5138,7 +5154,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5153,7 +5179,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5168,7 +5193,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5364,7 +5388,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5379,7 +5413,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5394,7 +5427,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5864,7 +5896,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5879,7 +5921,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5894,7 +5935,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -6137,7 +6177,17 @@ ${allContext}`,
               >
                 Добавить задачу
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
+              <button
+                type="button"
+                className="timeline-event-menu-button mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold"
+                onClick={() => {
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT');
+                  setTimelineCreateMenu(null);
+                }}
+              >
+                <CalendarDays size={14} />
+                Добавить событие
+              </button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -6152,7 +6202,6 @@ ${allContext}`,
               >
                 Выполнить
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -6167,7 +6216,6 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
-              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
