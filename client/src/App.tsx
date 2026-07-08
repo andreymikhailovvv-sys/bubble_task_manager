@@ -657,6 +657,7 @@ export default function App() {
 
   const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [isFocusSetupOpen, setIsFocusSetupOpen] = useState(false);
   const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
@@ -938,7 +939,7 @@ export default function App() {
   };
 
 
-  const openCreateTaskFromTimeline = (date: Date, hour?: number | null, minute = 0) => {
+  const openCreateTaskFromTimeline = (date: Date, hour?: number | null, minute = 0, taskType: 'TASK' | 'EVENT' = 'TASK') => {
     const dueDate = new Date(date);
     if (typeof hour === 'number') {
       dueDate.setHours(hour, minute, 0, 0);
@@ -950,6 +951,8 @@ export default function App() {
         id: '',
         title: '',
         description: '',
+        taskType,
+        location: taskType === 'EVENT' ? '' : null,
         status: 'TODO',
         importance: 3,
         urgency: 3,
@@ -958,6 +961,7 @@ export default function App() {
         parentTaskId: null,
         createdAt: new Date().toISOString(),
         notifyBeforeMinutes: 30,
+        aiNotificationsEnabled: taskType === 'EVENT' ? false : isAiNotificationsDefaultEnabled,
         isRecurring: false,
         recurrenceText: null,
         recurrenceJson: null,
@@ -2545,6 +2549,7 @@ ${allContext}`,
           return date >= start && date < end;
         };
 
+        if (!isTimelineMode && task.taskType === 'EVENT') return false;
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
@@ -2564,7 +2569,7 @@ ${allContext}`,
         }
         return true;
       }),
-    [activeTasks, effectiveTimeFilter, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
+    [activeTasks, effectiveTimeFilter, isTimelineMode, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
   );
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
@@ -2592,13 +2597,14 @@ ${allContext}`,
       urgency: payload.urgency ?? 3,
       status: payload.status ?? 'TODO'
     };
+    const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
     const score = calcScore(normalized.importance, normalized.urgency);
 
     if (editorState?.task?.id) {
-      await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
+      await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
     } else {
-      const createdTask = await api.createTask({ ...normalized, priorityScore: score });
-      if (draftSubtasks.length > 0) {
+      const createdTask = await api.createTask({ ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+      if (!isEventPayload && draftSubtasks.length > 0) {
         await Promise.all(draftSubtasks.map((subtask) => api.createTask({
           title: subtask.title,
           description: subtask.description,
@@ -2625,8 +2631,9 @@ ${allContext}`,
       urgency: payload.urgency ?? 3,
       status: payload.status ?? 'TODO'
     };
+    const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
     const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(editorState.task.id, { ...normalized, priorityScore: score });
+    await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
@@ -3065,6 +3072,7 @@ ${allContext}`,
   };
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
+    const isEventChip = task.taskType === 'EVENT';
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
     const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
     const parentSphereColor = parentSphere?.color ?? '#64748b';
@@ -3090,14 +3098,16 @@ ${allContext}`,
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`timeline-task-chip relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
+        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
-          borderColor: isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
-          backgroundColor: isSubtaskChip
-            ? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
+          borderColor: isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
+          backgroundColor: isEventChip
+            ? (themeMode === 'light' ? 'rgba(254,243,199,0.95)' : 'rgba(146,64,14,0.38)')
+            : isSubtaskChip
+              ? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
             : hasOverdueState
               ? (themeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
               : hexToRgba(sphereColor, themeMode === 'light' ? 0.16 : 0.34) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
@@ -3153,19 +3163,21 @@ ${allContext}`,
             <Check size={13} className="timeline-task-chip-success shrink-0" />
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
+          {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
-          {hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
+          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
             </span>
           ) : null}
-          {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
+          {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
+          {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
-        {!isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
+        {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -3183,7 +3195,8 @@ ${allContext}`,
           <p className="mt-1 min-w-0 max-w-full whitespace-pre-wrap break-words text-muted [overflow-wrap:anywhere]"><LinkifiedText text={(() => { const plain = noteHtmlToPlainText(task.description ?? '', { trimEnd: true }); return plain.length > 240 ? `${plain.slice(0, 240)}...` : plain; })()} fallback="Без описания" stopPropagationOnLinkClick /></p>
           {isSubtaskChip && options?.parentTaskTitle ? <p className="mt-1 text-muted">Основная задача: {options.parentTaskTitle}</p> : null}
           <p className="mt-1 text-muted">Дедлайн: {formatTaskDueDate(task.dueDate)} · {formatDeadlineLeft(task.dueDate)}</p>
-          {isSubtaskChip ? (
+          {isEventChip ? <p className="mt-1 text-muted">Место: {task.location?.trim() || 'Не указано'}</p> : null}
+          {isEventChip ? null : isSubtaskChip ? (
             <div className="timeline-hover-card-section mt-2 border-t pt-2">
               <p className="text-[10px] uppercase tracking-wide text-subtle">Основная задача</p>
               <span
@@ -3717,7 +3730,7 @@ ${allContext}`,
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </button>
-          <button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setEditorState({ initialSphereId: spheres[0]?.id })}><Plus size={16} /> Задача</button>
+          <div className="relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-[calc(100%+6px)] z-40 w-40 rounded-xl border p-2 shadow-2xl"><button className="light-dropdown-item w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}>Задача</button><button className="light-dropdown-item mt-1 w-full rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}>Событие</button></div> : null}</div>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
@@ -4678,12 +4691,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4698,6 +4712,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4712,10 +4727,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -4807,12 +4823,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4827,6 +4844,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -4841,10 +4859,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -5081,6 +5100,7 @@ ${allContext}`,
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
+          editorType={editorState.task?.taskType === 'EVENT' ? 'event' : 'task'}
           onGenerateWithAi={createTaskFromAi}
           parentTaskTitle={editorState.task?.parentTaskId ? (taskById.get(editorState.task.parentTaskId)?.title ?? null) : null}
           onOpenParentTask={editorState.task?.parentTaskId ? () => {
@@ -5112,12 +5132,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5132,6 +5153,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5146,10 +5168,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -5335,12 +5358,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5355,6 +5379,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5369,10 +5394,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -5832,12 +5858,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5852,6 +5879,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -5866,10 +5894,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;
@@ -6102,12 +6131,13 @@ ${allContext}`,
                 type="button"
                 className="primary-button w-full rounded-lg px-3 py-2 text-left text-sm"
                 onClick={() => {
-                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0);
+                  openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'TASK');
                   setTimelineCreateMenu(null);
                 }}
               >
                 Добавить задачу
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -6122,6 +6152,7 @@ ${allContext}`,
               >
                 Выполнить
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
@@ -6136,10 +6167,11 @@ ${allContext}`,
                 <CalendarDays size={14} />
                 Перенести
               </button>
+              <button type="button" className="timeline-event-menu-button mt-1.5 w-full rounded-lg px-3 py-2 text-left text-sm font-semibold" onClick={() => { openCreateTaskFromTimeline(timelineCreateMenu.date, timelineCreateMenu.hour, timelineCreateMenu.minute ?? 0, 'EVENT'); setTimelineCreateMenu(null); }}>Добавить событие</button>
               <button
                 type="button"
                 disabled={!timelineCreateMenu.taskId}
-                className="surface-muted mt-1.5 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:text-slate-500"
+                className="hidden"
                 onMouseEnter={() => timelineCreateMenu.taskId && setTimelinePostponeSubmenuOpen(true)}
                 onClick={() => {
                   if (!timelineCreateMenu.taskId) return;

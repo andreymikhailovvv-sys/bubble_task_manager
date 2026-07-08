@@ -17,6 +17,8 @@ interface TaskInput {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | Date | null;
   aiNotificationsEnabled?: boolean;
+  taskType?: 'TASK' | 'EVENT';
+  location?: string | null;
 }
 
 const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined): PrismaTypes.InputJsonValue | PrismaTypes.NullableJsonNullValueInput | undefined => {
@@ -139,6 +141,7 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
 export const taskService = {
   list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
   create: async (userId: string, input: CreateTaskInput) => {
+    const isEvent = input.taskType === 'EVENT';
     const isSubtask = Boolean(input.parentTaskId);
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
@@ -157,7 +160,9 @@ export const taskService = {
         user: { connect: { id: userId } },
         description: input.description,
         sphere: input.sphereId ? { connect: { id: input.sphereId } } : undefined,
-        parentTask: input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
+        parentTask: !isEvent && input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
+        taskType: isEvent ? 'EVENT' : 'TASK',
+        location: isEvent ? (input.location ?? null) : null,
         importance,
         urgency,
         priorityScore: calcScore(importance, urgency),
@@ -170,7 +175,7 @@ export const taskService = {
         recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
-        aiNotificationsEnabled: input.aiNotificationsEnabled ?? true
+        aiNotificationsEnabled: isEvent ? false : (input.aiNotificationsEnabled ?? true)
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -187,6 +192,9 @@ export const taskService = {
     }
     if (input.description !== undefined) {
       patch.description = input.description;
+    }
+    if (input.location !== undefined) {
+      patch.location = input.location;
     }
     if (input.sphereId !== undefined) {
       patch.sphere = input.sphereId ? { connect: { id: input.sphereId } } : { disconnect: true };
@@ -227,7 +235,10 @@ export const taskService = {
     if (shouldResetTelegramNotification) {
       patch.telegramNotifiedAt = null;
     }
-    if (input.aiNotificationsEnabled !== undefined) {
+    if (currentTask.taskType === 'EVENT') {
+      patch.aiNotificationsEnabled = false;
+      patch.parentTask = { disconnect: true };
+    } else if (input.aiNotificationsEnabled !== undefined) {
       patch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
     }
 

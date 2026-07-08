@@ -13,6 +13,11 @@ enum TaskStatus {
   DONE
 }
 
+enum TaskType {
+  TASK
+  EVENT
+}
+
 enum AiMessageRole {
   user
   assistant
@@ -105,6 +110,8 @@ model Task {
   sphereId            String?
   sphere              Sphere?    @relation(fields: [sphereId], references: [id], onDelete: SetNull)
   parentTaskId        String?
+  taskType            TaskType   @default(TASK)
+  location            String?
   parentTask          Task?      @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks            Task[]     @relation("TaskSubtasks")
   importance          Int        @default(3)
