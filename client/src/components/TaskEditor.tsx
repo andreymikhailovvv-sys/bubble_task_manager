@@ -342,9 +342,15 @@ export function TaskEditor({
         format: "jsonv2",
         limit: "5",
         q: query,
+        addressdetails: "1",
+        namedetails: "1",
       });
       fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
         signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+          "Accept-Language": navigator.language || "ru",
+        },
       })
         .then((response) => (response.ok ? response.json() : []))
         .then((items: Array<{ display_name?: string }>) => {
@@ -799,7 +805,7 @@ export function TaskEditor({
               </div>
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="invisible-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
               <div className="mt-2 flex items-start justify-between gap-3">
                 <textarea
                   className="task-edit-title-input invisible-scrollbar min-h-[2.6rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
@@ -1064,7 +1070,7 @@ export function TaskEditor({
               {isRecurring ? (
                 <div className="surface-card mt-2 rounded-2xl border p-2 text-xs">
                   <p className="mb-1 text-muted">
-                    Опишите как должна повторяться задача
+                    Опишите как должно повторяться {isEventEditor ? "событие" : "задача"}
                   </p>
                   <textarea
                     className="form-field min-h-16 w-full rounded border p-2 text-sm"
