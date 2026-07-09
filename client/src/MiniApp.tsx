@@ -2756,6 +2756,7 @@ export default function MiniApp() {
               <div className="space-y-2">
                 <label className="block text-xs text-slate-300">Название задачи</label>
                 <input
+                  autoFocus
                   value={createTaskDraft.title}
                   onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
                   className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
