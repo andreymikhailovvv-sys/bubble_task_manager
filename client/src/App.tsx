@@ -3114,7 +3114,7 @@ ${allContext}`,
               : hexToRgba(sphereColor, themeMode === 'light' ? 0.16 : 0.34) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
           boxShadow: disableEffects
             ? undefined
-            : hasOverdueState
+            : (!isEventChip && hasOverdueState)
               ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
               : undefined,
         }}
@@ -3731,7 +3731,7 @@ ${allContext}`,
             <Coins size={15} />
             <span>{currentUser?.aiCredits ?? 100}</span>
           </button>
-          <div className="relative pb-2" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="flex items-center gap-1 rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="surface-popover absolute right-0 top-full z-40 w-44 rounded-xl border p-2 shadow-2xl"><button className="primary-button flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Задача</button><button className="timeline-event-menu-button mt-1 flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Событие</button></div> : null}</div>
+          <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="add-menu-popover absolute right-0 top-[calc(100%+0.5rem)] z-40 w-48 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Событие</button></div> : null}</div>
           <button
             className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             disabled={spheres.length >= MAX_SPHERES}
@@ -5607,7 +5607,7 @@ ${allContext}`,
                         <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
                         <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
                       </div>
-                  <div className="mt-4 grid grid-cols-2 items-end gap-3">
+                  <div className="task-edit-compact-grid mt-4 grid grid-cols-2 items-end gap-3">
                     <label className="block text-xs font-semibold text-muted">Сектор
                       <div className="focus-sector-dropdown relative mt-1">
                         <button type="button" className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600" onClick={() => setIsFocusedSphereDropdownOpen((prev) => !prev)}>
@@ -5651,7 +5651,7 @@ ${allContext}`,
                       />
                     </label>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
+                  <div className="task-edit-checkbox-row flex items-center gap-4 text-sm">
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"

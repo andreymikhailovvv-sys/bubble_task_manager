@@ -636,6 +636,7 @@ export function TaskEditor({
         ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color })),
       ]}
       ariaLabel="Выбрать сектор"
+      className="min-w-0"
       buttonClassName="focus-sector-dropdown-button focused-task-sector-button rounded-full bg-slate-100 text-slate-600"
       menuClassName="task-edit-sector-menu"
       detachedPopup
@@ -833,7 +834,7 @@ export function TaskEditor({
                 className="focused-task-description-surface mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3"
                 onClick={() => subtaskDescriptionInputRef.current?.focus()}
               >
-                {isEditing && !isSubtask ? (
+                {isEditing && !isSubtask && !isEventEditor ? (
                   <p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">
                     {noteHtmlToPlainText(descriptionValue, { trimEnd: true }) ||
                       "Описание не заполнено."}
@@ -915,7 +916,7 @@ export function TaskEditor({
                 />
               ) : null}
               {!isSubtask ? (
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="task-edit-compact-grid mt-4 grid grid-cols-2 gap-2">
                   {renderSphereDropdown()}
                   <CustomSelect
                     value={notifyPreset}
@@ -978,7 +979,7 @@ export function TaskEditor({
                 </div>
               ) : null}
               {!isSubtask ? (
-                <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                <div className="task-edit-checkbox-row mt-3 flex flex-wrap gap-3 text-sm">
                   <label className="inline-flex items-center gap-2">
                     <input
                       type="checkbox"

@@ -101,7 +101,7 @@ export function CustomSelect({ value, options, onChange, className = '', buttonC
         aria-label={ariaLabel}
         disabled={disabled}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           {selected?.color ? <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selected.color }} /> : null}
           <span className="truncate">{selected?.label}</span>
           {typeof selected?.creditsCost === 'number' ? <span className="inline-flex shrink-0 items-center gap-1 text-rose-400"><span>{selected.creditsCost}</span><Coins size={12} /></span> : null}
