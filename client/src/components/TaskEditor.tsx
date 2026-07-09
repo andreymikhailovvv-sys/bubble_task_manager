@@ -1,8 +1,6 @@
 import {
   Bold,
-  Check,
   CheckCircle2,
-  ChevronDown,
   Coins,
   Edit3,
   Heading1,
@@ -318,7 +316,6 @@ export function TaskEditor({
     string | null
   >(null);
   const [isNotesEditorOpen, setIsNotesEditorOpen] = useState(false);
-  const [isSphereDropdownOpen, setIsSphereDropdownOpen] = useState(false);
   const [draftSubtasks, setDraftSubtasks] = useState<
     Array<Pick<Task, "title" | "description">>
   >([]);
@@ -326,6 +323,7 @@ export function TaskEditor({
   const [isAddingDraftSubtask, setIsAddingDraftSubtask] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
@@ -407,10 +405,13 @@ export function TaskEditor({
         : null,
     );
     setIsNotesEditorOpen(false);
-    setIsSphereDropdownOpen(false);
     setDraftSubtasks([]);
     setDraftSubtaskTitle("");
     setIsAddingDraftSubtask(false);
+    window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
     autosaveSignatureRef.current = task
       ? JSON.stringify({
           title: task.title ?? "",
@@ -626,56 +627,20 @@ export function TaskEditor({
     setIsAddingDraftSubtask(false);
   };
 
-  const renderSphereDropdown = () => {
-    const selectedSphere = spheres.find(
-      (sphere) => sphere.id === form.sphereId,
-    );
-    return (
-      <div className="focus-sector-dropdown relative">
-        <button
-          type="button"
-          className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600"
-          onClick={() => setIsSphereDropdownOpen((prev) => !prev)}
-        >
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: selectedSphere?.color ?? "#7c3aed" }}
-          />
-          <span className="min-w-0 flex-1 truncate text-left font-semibold">
-            {selectedSphere?.name ?? "Без сектора"}
-          </span>
-          <ChevronDown size={14} className="shrink-0" />
-        </button>
-        {isSphereDropdownOpen ? (
-          <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border bg-white p-1 shadow-2xl">
-            {[
-              { id: "", name: "Без сектора", color: "#7c3aed" },
-              ...spheres,
-            ].map((sphere) => (
-              <button
-                key={sphere.id || "none"}
-                type="button"
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50"
-                onClick={() => {
-                  setForm((prev) => ({ ...prev, sphereId: sphere.id || null }));
-                  setIsSphereDropdownOpen(false);
-                }}
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: sphere.color }}
-                />
-                <span className="font-medium">{sphere.name}</span>
-                {(form.sphereId ?? "") === sphere.id ? (
-                  <Check size={14} className="ml-auto text-violet-600" />
-                ) : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
-  };
+  const renderSphereDropdown = () => (
+    <CustomSelect
+      value={form.sphereId ?? ""}
+      onChange={(value) => setForm((prev) => ({ ...prev, sphereId: value || null }))}
+      options={[
+        { value: "", label: "Без сектора", color: "#7c3aed" },
+        ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color })),
+      ]}
+      ariaLabel="Выбрать сектор"
+      buttonClassName="focus-sector-dropdown-button focused-task-sector-button rounded-full bg-slate-100 text-slate-600"
+      menuClassName="task-edit-sector-menu"
+      detachedPopup
+    />
+  );
 
   return (
     <div
@@ -808,6 +773,7 @@ export function TaskEditor({
             <div className="invisible-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
               <div className="mt-2 flex items-start justify-between gap-3">
                 <textarea
+                  ref={titleInputRef}
                   className="task-edit-title-input invisible-scrollbar min-h-[2.6rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
                   placeholder={
                     isEventEditor
@@ -831,7 +797,7 @@ export function TaskEditor({
               {isEventEditor ? (
                 <div className="mt-2">
                   <input
-                    className="form-field w-full rounded-2xl border px-3 py-2 text-sm"
+                    className="form-field w-full rounded-2xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:ring-inset"
                     placeholder="Место события"
                     value={form.location ?? ""}
                     list="event-place-suggestions"

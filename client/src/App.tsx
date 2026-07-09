@@ -1957,12 +1957,12 @@ export default function App() {
   };
 
   const buildFocusTaskContext = (task: Task) => {
-    const children = subtaskMap[task.id] ?? [];
+    const children = (subtaskMap[task.id] ?? []).filter((subtask) => subtask.status !== 'DONE');
     return [
       `Задача: [${task.id}] ${task.title}`,
       `Описание: ${task.description?.trim() || 'нет описания'}`,
       `Срочность: ${task.urgency ?? 3}/5, важность: ${task.importance ?? 3}/5, коэффициент: ${getTaskCoefficient(task).toFixed(2)}`,
-      `Подзадачи: ${children.length > 0 ? children.map((item) => `${item.status === 'DONE' ? '✓' : '•'} [${item.id}] ${item.title}`).join('; ') : 'нет'}`
+      `Активные подзадачи: ${children.length > 0 ? children.map((item) => `• [${item.id}] ${item.title}`).join('; ') : 'нет'}`
     ].join('\n');
   };
 
@@ -2126,6 +2126,7 @@ export default function App() {
     const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
     const contextualQuestion = [
       'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
+      'Закрытые подзадачи намеренно не включены в контекст. Не планируй работу по закрытым подзадачам и не восстанавливай их по истории диалога.',
       'Если в ответе говоришь о конкретной задаче или подзадаче, сразу после её названия добавляй служебную метку [[task_ref=ID]] из контекста. Не придумывай ID.',
       'Не пиши технические ID как обычный текст — только внутри метки [[task_ref=...]].',
       `Текущая выбранная задача: [${currentTask.id}] ${currentTask.title}`,
