@@ -352,6 +352,29 @@ function parseTaskReferencesInLine(content: string): Array<{ type: 'text'; value
   TASK_REF_PATTERN.lastIndex = 0;
   return chunks;
 }
+function normalizeAiMessageContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{') || !trimmed.includes('"answer"')) return content;
+
+  try {
+    const parsed = JSON.parse(trimmed) as { answer?: unknown };
+    if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+  } catch {
+    const answerMatch = trimmed.match(/"answer"\s*:\s*"([\s\S]*?)"\s*,\s*"actions"\s*:/);
+    if (answerMatch?.[1]) {
+      return answerMatch[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        .trim();
+    }
+  }
+
+  return content;
+}
+
 function renderInlineAiMarkup(content: string): ReactNode {
   return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
     if (!part) return null;
@@ -378,7 +401,8 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   setGeneralAiFullscreen?: (value: boolean) => void;
 }) {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
-  const lines = useMemo(() => content.split(/\r?\n/), [content]);
+  const normalizedContent = useMemo(() => normalizeAiMessageContent(content), [content]);
+  const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
     onOpenTask?.(matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId);
@@ -431,12 +455,14 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
 });
 
 function renderAiMessageContent(content: string): ReactNode {
+  const normalizedContent = normalizeAiMessageContent(content);
   const blocks: ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = CODE_BLOCK_PATTERN.exec(content)) !== null) {
+  CODE_BLOCK_PATTERN.lastIndex = 0;
+  while ((match = CODE_BLOCK_PATTERN.exec(normalizedContent)) !== null) {
     const [full, language, code] = match;
-    const before = content.slice(lastIndex, match.index);
+    const before = normalizedContent.slice(lastIndex, match.index);
     if (before) {
       blocks.push(<div key={`text-${lastIndex}`} className="whitespace-pre-wrap">{renderInlineAiMarkup(before)}</div>);
     }
@@ -459,9 +485,10 @@ function renderAiMessageContent(content: string): ReactNode {
     );
     lastIndex = match.index + full.length;
   }
-  const tail = content.slice(lastIndex);
+  const tail = normalizedContent.slice(lastIndex);
   if (tail) blocks.push(<div key="text-tail" className="whitespace-pre-wrap">{renderInlineAiMarkup(tail)}</div>);
-  return blocks.length > 0 ? blocks : <span>{renderInlineAiMarkup(content)}</span>;
+  CODE_BLOCK_PATTERN.lastIndex = 0;
+  return blocks.length > 0 ? blocks : <span>{renderInlineAiMarkup(normalizedContent)}</span>;
 }
 
 function resolveAttachmentMimeType(file: File): string {
@@ -2248,7 +2275,7 @@ ${allContext}`,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
       });
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}` };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();

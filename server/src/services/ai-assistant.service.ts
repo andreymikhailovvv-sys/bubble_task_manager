@@ -612,11 +612,26 @@ type GeneralAssistantAction =
   | { type: 'delete_subtask'; subtaskId: string }
   | { type: 'change_task_sphere'; taskId: string; sphereId: string | null };
 
+
+function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | null {
+  const answerMatch = rawAnswer.match(/"answer"\s*:\s*"([\s\S]*?)"\s*,\s*"actions"\s*:/);
+  if (!answerMatch?.[1]) return null;
+
+  return answerMatch[1]
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .trim()
+    .slice(0, 6000);
+}
+
 function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   const parsed = extractJsonObjectFromText(rawAnswer);
   if (parsed === null) {
     return {
-      answer: rawAnswer.trim(),
+      answer: extractAnswerFromMalformedGeneralPayload(rawAnswer) ?? rawAnswer.trim(),
       actions: []
     };
   }
