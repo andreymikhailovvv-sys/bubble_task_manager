@@ -3986,7 +3986,12 @@ body[data-theme='light'] .ai-chat-launcher-button {
 
 /* Focus task compact one-line title layout and calendar-like controls. */
 .focused-task-single-line-title .task-edit-title-input {
+  height: 2.15rem !important;
   min-height: 2.15rem !important;
+}
+
+.focused-task-single-line-title .focused-task-deadline-row {
+  margin-top: -0.15rem !important;
 }
 
 .focused-task-single-line-title .focused-task-description-surface {
@@ -3998,14 +4003,19 @@ body[data-theme='light'] .ai-chat-launcher-button {
 .focused-task-calendar-like-button {
   border-color: var(--panel-border) !important;
   background: var(--input-bg) !important;
-  color: var(--text-primary) !important;
+  color: color-mix(in srgb, var(--accent) 88%, var(--text-primary)) !important;
   box-shadow: none !important;
+}
+
+.focused-task-calendar-like-button svg {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text-primary)) !important;
+  stroke: currentColor !important;
 }
 
 .focused-task-calendar-like-button:hover {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--panel-border)) !important;
   background: color-mix(in srgb, var(--input-bg) 86%, var(--accent-soft)) !important;
-  color: var(--text-primary) !important;
+  color: color-mix(in srgb, var(--accent) 88%, var(--text-primary)) !important;
 }
 
 .focused-subtask-row {
@@ -4015,8 +4025,11 @@ body[data-theme='light'] .ai-chat-launcher-button {
 .focused-subtask-row:hover {
   border-color: color-mix(in srgb, var(--accent) 22%, rgba(226, 232, 240, 0.82));
   background-color: color-mix(in srgb, #f8fafc 88%, var(--accent-soft)) !important;
-  color: #334155;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.focused-subtask-row:hover span {
+  color: inherit !important;
 }
 
 body[data-theme='dark'] .focused-subtask-row:hover,

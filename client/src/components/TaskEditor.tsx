@@ -486,6 +486,8 @@ export function TaskEditor({
   useLayoutEffect(() => {
     const textarea = titleInputRef.current;
     if (!textarea) return;
+    const previousRows = textarea.rows;
+    textarea.rows = 1;
     const computedStyle = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computedStyle.lineHeight);
     const verticalPadding =
@@ -493,7 +495,9 @@ export function TaskEditor({
       Number.parseFloat(computedStyle.paddingBottom);
     const singleLineHeight =
       (Number.isFinite(lineHeight) ? lineHeight : 36) + verticalPadding;
-    setIsTitleSingleLine(textarea.scrollHeight <= singleLineHeight + 4);
+    const nextIsSingleLine = textarea.scrollHeight <= singleLineHeight + 4;
+    textarea.rows = previousRows;
+    setIsTitleSingleLine(nextIsSingleLine);
   }, [form.title, isSubtask, isEventEditor]);
 
   const resolveAttachmentMimeType = (file: File): string => {
@@ -800,14 +804,7 @@ export function TaskEditor({
                       ? "Введите название события"
                       : "Введите название"
                   }
-                  rows={
-                    isSubtask
-                      ? 2
-                      : Math.max(
-                          1,
-                          Math.min(4, (form.title ?? "").split("\n").length),
-                        )
-                  }
+                  rows={isSubtask ? 2 : isTitleSingleLine ? 1 : 2}
                   value={form.title ?? ""}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, title: e.target.value }))
@@ -836,7 +833,7 @@ export function TaskEditor({
                   </p>
                 </div>
               ) : null}
-              <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
+              <div className="focused-task-deadline-row mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
                 <span>{deadlineLabel}</span>
                 <DateTimePickerWithApply
                   value={form.dueDate}
