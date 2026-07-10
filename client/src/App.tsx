@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
@@ -767,6 +767,7 @@ export default function App() {
   const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
+  const [isFocusedTitleSingleLine, setIsFocusedTitleSingleLine] = useState(true);
   const [isFocusedSphereDropdownOpen, setIsFocusedSphereDropdownOpen] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
@@ -835,6 +836,7 @@ export default function App() {
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const focusAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1515,6 +1517,25 @@ export default function App() {
     if (!query) return focusedAiDialog;
     return focusedAiDialog.filter((message) => message.content.toLowerCase().includes(query));
   }, [focusedAiDialog, focusedAiSearchQuery, isFocusedAiSearchOpen]);
+
+  useLayoutEffect(() => {
+    if (!focusedTask) return;
+    const textarea = focusedTaskTitleInputRef.current;
+    if (!textarea) return;
+    const previousRows = textarea.rows;
+    textarea.rows = 1;
+    const computedStyle = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computedStyle.lineHeight);
+    const verticalPadding =
+      Number.parseFloat(computedStyle.paddingTop) +
+      Number.parseFloat(computedStyle.paddingBottom);
+    const singleLineHeight =
+      (Number.isFinite(lineHeight) ? lineHeight : 36) + verticalPadding;
+    const nextIsSingleLine = textarea.scrollHeight <= singleLineHeight + 4;
+    textarea.rows = previousRows;
+    setIsFocusedTitleSingleLine(nextIsSingleLine);
+  }, [focusedTask?.id, focusedDraft?.title, focusedTitleDraft, isEditingFocusedTitle]);
+
   const filteredGeneralAiMessages = useMemo(() => {
     if (!isGeneralAiSearchOpen) return generalAiMessages;
     const query = generalAiSearchQuery.trim().toLowerCase();
@@ -1532,6 +1553,7 @@ export default function App() {
       setIsFocusedSettingsOpen(false);
       setIsEditingFocusedTitle(false);
       setFocusedTitleDraft('');
+      setIsFocusedTitleSingleLine(true);
       setIsFocusedSphereDropdownOpen(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
@@ -1553,6 +1575,7 @@ export default function App() {
     setIsFocusedSettingsOpen(false);
     setIsEditingFocusedTitle(false);
     setFocusedTitleDraft(focusedTask.title ?? '');
+    setIsFocusedTitleSingleLine(true);
     setIsFocusedSphereDropdownOpen(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
@@ -5501,14 +5524,19 @@ ${allContext}`,
             <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
-                <div className="min-h-0 flex-1 overflow-y-auto px-1">
+                <div
+                  className={`min-h-0 flex-1 overflow-y-auto px-1 ${
+                    isFocusedTitleSingleLine ? 'focused-task-single-line-title' : ''
+                  }`}
+                >
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <textarea
+                        ref={focusedTaskTitleInputRef}
                         className="focused-task-title-input invisible-scrollbar min-w-0 w-full resize-none border-0 bg-transparent p-0 text-left text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
                         value={isEditingFocusedTitle ? focusedTitleDraft : focusedDraft.title || 'Без названия'}
-                        rows={2}
+                        rows={isFocusedTitleSingleLine ? 1 : 2}
                         onFocus={() => {
                           setFocusedTitleDraft(focusedDraft.title ?? '');
                           setIsEditingFocusedTitle(true);
@@ -5539,7 +5567,7 @@ ${allContext}`,
                       <button className="success-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
+                  <div className="focused-task-deadline-row mt-3 flex items-center gap-2 text-sm font-medium text-violet-500">
                     <span>{focusedDraft.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusedDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                     <DateTimePickerWithApply
                       value={focusedDraft.dueDate}
@@ -5552,7 +5580,7 @@ ${allContext}`,
                   </div>
                   <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
                     <textarea
-                      className="subtask-description-inline invisible-scrollbar min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
+                      className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
                       value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
                       onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
@@ -5561,7 +5589,7 @@ ${allContext}`,
                   <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
                     <button
                       type="button"
-                      className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                      className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                       onClick={() => setIsFocusedNotesEditorOpen(true)}
                       title="Открыть заметки"
                       aria-label="Открыть заметки"
@@ -5570,7 +5598,7 @@ ${allContext}`,
                     </button>
                     <button
                       type="button"
-                      className={`focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                      className={`focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
                       onClick={() => focusedTaskAttachmentInputRef.current?.click()}
                       onDragOver={(event) => {
                         event.preventDefault();
@@ -5754,7 +5782,7 @@ ${allContext}`,
                     Подзадачи
                     <button
                       type="button"
-                      className="focused-task-add-subtask-button"
+                      className="focused-task-add-subtask-button focused-task-calendar-like-button"
                       onClick={() => {
                         setFocusedSubtaskTitle('');
                         setFocusedSubtaskDueDate(null);
@@ -5872,7 +5900,7 @@ ${allContext}`,
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <button
                         type="button"
-                        className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
+                        className={`min-w-0 flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
                         onClick={() => setEditorState({ task: subtask })}
                         title="Открыть доп задачу"
                       >
