@@ -2642,8 +2642,12 @@ ${allContext}`,
   };
 
   const persistTask = async (payload: Partial<Task>, draftSubtasks: Array<Pick<Task, 'title' | 'description'>> = []) => {
+    if (!editorState?.task?.id && !(payload.title ?? '').trim()) {
+      throw new Error('Необходимо ввести название');
+    }
     const normalized = {
       ...payload,
+      title: (payload.title ?? '').trim(),
       importance: payload.importance ?? 3,
       urgency: payload.urgency ?? 3,
       status: payload.status ?? 'TODO'
