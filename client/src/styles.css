@@ -3985,7 +3985,8 @@ body[data-theme='light'] .ai-chat-launcher-button {
 }
 
 /* Focus task compact one-line title layout and calendar-like controls. */
-.focused-task-single-line-title .task-edit-title-input {
+.focused-task-single-line-title .task-edit-title-input,
+.focused-task-single-line-title .focused-task-title-input {
   height: 2.15rem !important;
   min-height: 2.15rem !important;
 }
