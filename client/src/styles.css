@@ -1070,6 +1070,17 @@ body[data-theme='light'] .backdrop-blur-sm {
     color: var(--text-primary);
   }
 
+  .timeline-preview-event-pill {
+    border: 1px dashed rgba(245, 158, 11, 0.72);
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.24), rgba(249, 115, 22, 0.16));
+    color: #92400e;
+  }
+
+  [data-theme='dark'] .timeline-preview-event-pill,
+  .theme-dark .timeline-preview-event-pill {
+    color: #fde68a;
+  }
+
   .timeline-preview-slot:hover {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
   }
@@ -3557,6 +3568,7 @@ body[data-theme='light'] .focused-task-ai-panel {
 
 .miniapp-task-list-card,
 .miniapp-timeline-habit-card,
+.miniapp-timeline-event-card,
 .miniapp-ai-chat-launcher {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
 }
@@ -3565,8 +3577,21 @@ body[data-theme='light'] .focused-task-ai-panel {
   border-radius: 1rem;
 }
 
+.miniapp-task-list-event-card,
+.miniapp-timeline-event-card {
+  border-style: dashed;
+  color: #92400e;
+  background-image: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(249, 115, 22, 0.12));
+}
+
+.miniapp-dark .miniapp-task-list-event-card,
+.miniapp-dark .miniapp-timeline-event-card {
+  color: #fde68a;
+}
+
 .miniapp-task-list-card:active,
 .miniapp-timeline-habit-card:active,
+.miniapp-timeline-event-card:active,
 .miniapp-ai-chat-launcher:active {
   transform: scale(0.985);
 }

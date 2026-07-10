@@ -3334,7 +3334,7 @@ ${allContext}`,
     return [subtask.title, subtask.description ?? '', parentTitle].some((value) => value.toLowerCase().includes(query));
   });
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
-    .filter((task) => isOverdue(task))
+    .filter((task) => task.taskType !== 'EVENT' && isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
 
   const postponeAllOverdueByOneDay = async () => {
@@ -3370,6 +3370,7 @@ ${allContext}`,
     title: task.title,
     dueDate: task.dueDate,
     isSubtask: Boolean(task.parentTaskId),
+    taskType: task.taskType,
     sphereColor: (() => {
       if (task.parentTaskId) {
         const parentTask = taskById.get(task.parentTaskId);

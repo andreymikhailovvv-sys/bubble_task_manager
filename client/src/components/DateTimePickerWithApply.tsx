@@ -1,4 +1,4 @@
-import { CalendarDays, Check, PanelsTopLeft, X } from 'lucide-react';
+import { CalendarDays, Check, PanelsTopLeft, Ticket, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -15,7 +15,7 @@ type Props = {
   detachedOffset?: number;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
-  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null }>;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' }>;
   openTimelinePreviewSignal?: number;
 };
 
@@ -368,12 +368,15 @@ export function DateTimePickerWithApply({
                     }}>
                       {date ? <p className="absolute left-1 top-1">{date.getDate()}</p> : null}
                       <div className="mt-5 space-y-1">
-                        {dayTasks.slice(0, 3).map((task) => (
-                          <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
-                            {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
-                            {task.title}
-                          </div>
-                        ))}
+                        {dayTasks.slice(0, 3).map((task) => {
+                          const isEvent = task.taskType === 'EVENT';
+                          return (
+                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                              {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
+                              {task.title}
+                            </div>
+                          );
+                        })}
                       </div>
                     </button>
                   );
@@ -410,12 +413,15 @@ export function DateTimePickerWithApply({
                           >
                             <span className="timeline-today-text w-10 shrink-0 text-[11px] font-medium">{`:${minute.toString().padStart(2, '0')}`}</span>
                             <div className="min-h-4 flex-1 space-y-1">
-                              {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => (
-                                <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
-                                  {task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
-                                  {task.title}
-                                </div>
-                              ))}
+                              {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => {
+                                const isEvent = task.taskType === 'EVENT';
+                                return (
+                                  <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                                    {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
+                                    {task.title}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </button>
                         ))}
