@@ -307,6 +307,7 @@ export function TaskEditor({
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [isGeneratingByAi, setIsGeneratingByAi] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceText, setRecurrenceText] = useState("");
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
@@ -398,6 +399,7 @@ export function TaskEditor({
     setAiPendingFiles([]);
     setIsGeneratingByAi(false);
     setAiError(null);
+    setTitleError(null);
     setIsRecurring(Boolean(nextForm.isRecurring));
     setRecurrenceText(nextForm.recurrenceText ?? "");
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
@@ -623,19 +625,25 @@ export function TaskEditor({
       clearTimeout(autosaveTimeoutRef.current);
       autosaveTimeoutRef.current = null;
     }
-    const hasMeaningfulManualDraft = Boolean(
-      (form.title ?? "").trim() ||
-      noteHtmlToPlainText(form.description ?? "", { trimEnd: true }).trim() ||
-      form.dueDate,
-    );
-    if (
-      isEditing ||
-      (!isEditing && createMode === "manual" && hasMeaningfulManualDraft)
-    ) {
+    if (isEditing) {
       await onSave(form, draftSubtasks);
       return;
     }
     onCancel();
+  };
+
+  const submitManualSave = async () => {
+    if (!(form.title ?? "").trim()) {
+      setTitleError(
+        isEventEditor
+          ? "Необходимо ввести название события."
+          : "Необходимо ввести название задачи.",
+      );
+      titleInputRef.current?.focus();
+      return;
+    }
+    setTitleError(null);
+    await onSave(form, draftSubtasks);
   };
 
   const addDraftSubtask = () => {
@@ -806,11 +814,18 @@ export function TaskEditor({
                   }
                   rows={isSubtask ? 2 : isTitleSingleLine ? 1 : 2}
                   value={form.title ?? ""}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, title: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    setTitleError(null);
+                    setForm((p) => ({ ...p, title: e.target.value }));
+                  }}
+                  aria-invalid={Boolean(titleError)}
                 />
               </div>
+              {titleError ? (
+                <p className="mt-1 text-sm font-semibold text-rose-500">
+                  {titleError}
+                </p>
+              ) : null}
               {isEventEditor ? (
                 <div className="mt-2">
                   <input
@@ -1195,7 +1210,7 @@ export function TaskEditor({
                 <button
                   type="button"
                   className={`primary-button rounded-xl px-3 py-2 text-sm font-semibold ${isEventEditor ? "mt-auto" : "mt-4"}`}
-                  onClick={() => void onSave(form, draftSubtasks)}
+                  onClick={() => void submitManualSave()}
                 >
                   {isEventEditor ? "Сохранить событие" : "Сформировать задачу"}
                 </button>
