@@ -4041,3 +4041,12 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   background-color: color-mix(in srgb, rgba(30, 41, 59, 0.78) 88%, var(--accent-soft)) !important;
   color: var(--text-primary) !important;
 }
+
+.focus-mode-shell .focused-task-description-surface {
+  display: flex;
+  align-items: stretch;
+}
+
+.focus-mode-shell .focused-task-description-input {
+  height: 100%;
+}

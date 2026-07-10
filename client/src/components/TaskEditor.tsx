@@ -1108,9 +1108,9 @@ export function TaskEditor({
                     </span>
                   </div>
                   {isAddingDraftSubtask ? (
-                    <div className="space-y-2">
+                    <div className="flex items-center gap-2">
                       <input
-                        className="form-field w-full rounded border px-2 py-1.5 text-xs"
+                        className="form-field min-w-0 flex-1 rounded-lg border px-2 py-1.5 text-xs"
                         placeholder="Название доп задачи"
                         value={draftSubtaskTitle}
                         onChange={(e) => setDraftSubtaskTitle(e.target.value)}
@@ -1121,25 +1121,23 @@ export function TaskEditor({
                           }
                         }}
                       />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="primary-button flex-1 rounded px-2 py-1.5 text-xs font-semibold"
-                          onClick={addDraftSubtask}
-                        >
-                          Сохранить
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary-button rounded px-2 py-1.5 text-xs font-semibold"
-                          onClick={() => {
-                            setIsAddingDraftSubtask(false);
-                            setDraftSubtaskTitle("");
-                          }}
-                        >
-                          Отмена
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="primary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                        onClick={addDraftSubtask}
+                      >
+                        Сохранить
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+                        onClick={() => {
+                          setIsAddingDraftSubtask(false);
+                          setDraftSubtaskTitle("");
+                        }}
+                      >
+                        Отмена
+                      </button>
                     </div>
                   ) : null}
                   {draftSubtasks.length > 0 ? (

@@ -5580,7 +5580,7 @@ ${allContext}`,
                   </div>
                   <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
                     <textarea
-                      className="subtask-description-inline invisible-scrollbar min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
+                      className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
                       value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
                       onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
