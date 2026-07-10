@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -322,6 +323,7 @@ export function TaskEditor({
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [isAddingDraftSubtask, setIsAddingDraftSubtask] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
+  const [isTitleSingleLine, setIsTitleSingleLine] = useState(true);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -480,6 +482,23 @@ export function TaskEditor({
   const descriptionValue = form.description ?? "";
   const updateDescription = (description: string) =>
     setForm((previous) => ({ ...previous, description }));
+
+  useLayoutEffect(() => {
+    const textarea = titleInputRef.current;
+    if (!textarea) return;
+    const previousRows = textarea.rows;
+    textarea.rows = 1;
+    const computedStyle = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computedStyle.lineHeight);
+    const verticalPadding =
+      Number.parseFloat(computedStyle.paddingTop) +
+      Number.parseFloat(computedStyle.paddingBottom);
+    const singleLineHeight =
+      (Number.isFinite(lineHeight) ? lineHeight : 36) + verticalPadding;
+    const nextIsSingleLine = textarea.scrollHeight <= singleLineHeight + 4;
+    textarea.rows = previousRows;
+    setIsTitleSingleLine(nextIsSingleLine);
+  }, [form.title, isSubtask, isEventEditor]);
 
   const resolveAttachmentMimeType = (file: File): string => {
     const fromBrowser = file.type?.trim();
@@ -771,7 +790,11 @@ export function TaskEditor({
               </div>
             </div>
           ) : (
-            <div className="invisible-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-1">
+            <div
+              className={`invisible-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-1 ${
+                isTitleSingleLine ? "focused-task-single-line-title" : ""
+              }`}
+            >
               <div className="mt-2 flex items-start justify-between gap-3">
                 <textarea
                   ref={titleInputRef}
@@ -781,14 +804,7 @@ export function TaskEditor({
                       ? "Введите название события"
                       : "Введите название"
                   }
-                  rows={
-                    isSubtask
-                      ? 2
-                      : Math.max(
-                          1,
-                          Math.min(4, (form.title ?? "").split("\n").length),
-                        )
-                  }
+                  rows={isSubtask ? 2 : isTitleSingleLine ? 1 : 2}
                   value={form.title ?? ""}
                   onChange={(e) =>
                     setForm((p) => ({ ...p, title: e.target.value }))
@@ -817,7 +833,7 @@ export function TaskEditor({
                   </p>
                 </div>
               ) : null}
-              <div className="mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
+              <div className="focused-task-deadline-row mt-1 flex items-center gap-2 text-sm font-medium text-violet-500">
                 <span>{deadlineLabel}</span>
                 <DateTimePickerWithApply
                   value={form.dueDate}
@@ -854,7 +870,7 @@ export function TaskEditor({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                   onClick={() => setIsNotesEditorOpen(true)}
                   title="Редактировать описание"
                 >
@@ -862,7 +878,7 @@ export function TaskEditor({
                 </button>
                 <button
                   type="button"
-                  className="focused-task-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
+                  className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
                   onClick={() => aiAttachmentInputRef.current?.click()}
                   title="Добавить файл"
                 >
@@ -1076,7 +1092,7 @@ export function TaskEditor({
                       Подзадачи
                       <button
                         type="button"
-                        className="focused-task-add-subtask-button"
+                        className="focused-task-add-subtask-button focused-task-calendar-like-button"
                         onClick={() => {
                           setDraftSubtaskTitle("");
                           setIsAddingDraftSubtask(true);
@@ -1202,7 +1218,7 @@ export function TaskEditor({
                     {visibleSubtasks.map((subtask) => (
                       <li
                         key={subtask.id}
-                        className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"
+                        className="focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"
                       >
                         <input type="checkbox" checked={false} readOnly />
                         <span className="min-w-0 flex-1 truncate">
