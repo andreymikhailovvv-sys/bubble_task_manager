@@ -63,8 +63,16 @@ type AskGeneralAssistantInput = {
   userTimeZone?: string;
 };
 type AiChatModel = 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
-type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string };
-const TASK_INTENT_PATTERN = /(задач|подзадач|дедлайн|срок|расписан|планиров|заплан|перенес|созда(й|ть).*дел|созда(й|ть).*зада|отметь|выполнен|закрой|сектор|привычк|таймлайн|календар)/i;
+type AiChatLocation = 'quick_chat' | 'project_chat' | 'task_chat';
+type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string; location?: AiChatLocation; taskId?: string; taskTitle?: string };
+type AiDispatcherRoute = 'continue' | 'planner' | 'task_planner' | 'image';
+type AiDispatcherTag = null | 'ИИ-планировщик' | 'ИИ-изображения';
+type AiDispatcherResult = {
+  route: AiDispatcherRoute;
+  tag: AiDispatcherTag;
+  plannerPrompt?: string;
+  imagePrompt?: string;
+};
 type GeneralAssistantUndoOperation = {
   taskId: string;
   previous: {
@@ -91,6 +99,7 @@ const AI_CHAT_MODEL_FULL = process.env.OPENAI_MODEL_AI_CHAT_FULL?.trim() || 'gpt
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5.4-nano';
 const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
 const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-5.4-nano';
+const DISPATCHER_MODEL = process.env.OPENAI_MODEL_DISPATCHER?.trim() || 'gpt-5.4-nano';
 const OTHER_AI_MODEL = process.env.OPENAI_MODEL_OTHER?.trim() || 'gpt-5-nano';
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const AI_CHAT_MODEL_BY_OPTION: Record<AiChatModel, string> = {
@@ -273,6 +282,28 @@ function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
 
 function normalizeGeneralHistory(history: ChatMessage[]): ChatMessage[] {
   return normalizeHistory(history).slice(-12);
+}
+
+function normalizeDispatcherHistory(history: ChatMessage[]): ChatMessage[] {
+  return normalizeHistory(history).slice(-10);
+}
+
+function normalizeDispatcherRoute(value: unknown): AiDispatcherRoute {
+  return value === 'planner' || value === 'task_planner' || value === 'image' ? value : 'continue';
+}
+
+function parseDispatcherPayload(rawAnswer: string, question: string): AiDispatcherResult {
+  const parsed = JSON.parse(rawAnswer) as Record<string, unknown>;
+  const route = normalizeDispatcherRoute(parsed.route);
+  const tag: AiDispatcherTag = route === 'image' ? 'ИИ-изображения' : route === 'planner' || route === 'task_planner' ? 'ИИ-планировщик' : null;
+  const plannerPrompt = typeof parsed.plannerPrompt === 'string' && parsed.plannerPrompt.trim() ? parsed.plannerPrompt.trim() : question;
+  const imagePrompt = typeof parsed.imagePrompt === 'string' && parsed.imagePrompt.trim() ? parsed.imagePrompt.trim() : question;
+  return {
+    route,
+    tag,
+    ...(route === 'planner' || route === 'task_planner' ? { plannerPrompt } : {}),
+    ...(route === 'image' ? { imagePrompt } : {})
+  };
 }
 
 function normalizeGeneralPersistedHistory(history: ChatMessage[]): ChatMessage[] {
@@ -939,17 +970,114 @@ function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachme
 }
 
 export const aiAssistantService = {
+  async dispatchAiChat(input: {
+    userId: string;
+    question: string;
+    history: ChatMessage[];
+    location: AiChatLocation;
+    projectTitle?: string;
+    chatTitle?: string;
+    taskId?: string;
+    taskTitle?: string;
+  }): Promise<AiDispatcherResult> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
+    const question = input.question.trim();
+    if (!question) throw new TypeError('Question is required');
+    const history = normalizeDispatcherHistory(input.history);
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: DISPATCHER_MODEL,
+        input: [
+          {
+            role: 'system',
+            content: [
+              'Ты быстрый диспетчер маршрутизации Bubble Task Manager. Не отвечай пользователю напрямую.',
+              'Верни строго JSON без markdown: {"route":"continue|planner|task_planner|image","tag":null|"ИИ-планировщик"|"ИИ-изображения","plannerPrompt":"...","imagePrompt":"..."}.',
+              'continue: обычные вопросы, объяснения, справка и диалог без действий с задачами/изображениями.',
+              'planner: создание, изменение, поиск, перенос, закрытие, планирование задач, подзадач, дедлайнов, календаря, привычек или расписания.',
+              'task_planner: то же, но когда действие относится к текущей задаче в task_chat.',
+              'image: пользователь просит нарисовать, сгенерировать, создать картинку/изображение/иллюстрацию/аватар.',
+              'Для planner/task_planner переформулируй запрос в plannerPrompt с учётом метаданных. Для image переформулируй в imagePrompt. Для continue дополнительные prompt-поля не нужны.'
+            ].join(' ')
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              userId: input.userId,
+              currentText: question,
+              recentMessages: history,
+              location: input.location,
+              metadata: {
+                projectTitle: input.projectTitle ?? null,
+                chatTitle: input.chatTitle ?? null,
+                taskId: input.taskId ?? null,
+                taskTitle: input.taskTitle ?? null
+              }
+            })
+          }
+        ],
+        ...(supportsReasoningEffort(DISPATCHER_MODEL) ? { reasoning: { effort: 'low' } } : {})
+      })
+    });
+    if (!response.ok) throw new Error(`OpenAI dispatcher request failed: ${response.status}`);
+    const raw = extractOutputText(await response.json());
+    if (!raw) throw new Error('Empty AI dispatcher response');
+    return parseDispatcherPayload(raw, question);
+  },
+
   async askAiChat(input: AskAiChatInput) {
     const question = input.question.trim();
     if (!question) throw new TypeError('Question is required');
-    if (TASK_INTENT_PATTERN.test(question)) {
+
+    const route = await this.dispatchAiChat({
+      userId: input.userId,
+      question,
+      history: input.history,
+      location: input.location ?? 'quick_chat',
+      projectTitle: input.projectTitle,
+      chatTitle: input.chatTitle,
+      taskId: input.taskId,
+      taskTitle: input.taskTitle
+    });
+
+    if (route.route === 'planner' || route.route === 'task_planner') {
       const delegated = await this.askGeneralAssistant({
         userId: input.userId,
-        question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${question}`,
+        question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${route.plannerPrompt ?? question}`,
         history: [],
         userTimeZone: input.userTimeZone
       });
-      return { ...delegated, delegatedToPlanner: true };
+      return {
+        ...delegated,
+        route: route.route,
+        tag: route.tag,
+        delegatedToPlanner: true,
+        delegatedToImage: false,
+        actionReports: delegated.actionReports ?? [],
+        undoOperations: delegated.undoOperations ?? []
+      };
+    }
+
+    if (route.route === 'image') {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
+      const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
+      await chargeAiCredits(input.userId, model);
+      const imagePrompt = route.imagePrompt ?? question;
+      return {
+        answer: `Подключаю ИИ-изображения. Подготовленный промпт: ${imagePrompt}`,
+        model,
+        route: route.route,
+        tag: route.tag,
+        imagePrompt,
+        actionReports: [],
+        undoOperations: [],
+        delegatedToPlanner: false,
+        delegatedToImage: true
+      };
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -975,7 +1103,7 @@ export const aiAssistantService = {
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const answer = extractOutputText(await response.json()).trim();
     if (!answer) throw new Error('Empty AI response');
-    return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
+    return { answer, model, route: route.route, tag: route.tag, actionReports: [], undoOperations: [], delegatedToPlanner: false, delegatedToImage: false };
   },
 
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
