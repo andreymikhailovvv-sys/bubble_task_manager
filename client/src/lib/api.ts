@@ -181,8 +181,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
-  askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string }) =>
-    request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }> }>('/api/ai-chat', {
+  askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; location?: 'quick_chat' | 'project_chat' | 'task_chat'; taskId?: string; taskTitle?: string }) =>
+    request<{ answer: string; model: string; route: 'continue' | 'planner' | 'task_planner' | 'image'; tag: null | 'ИИ-планировщик' | 'ИИ-изображения'; delegatedToPlanner: boolean; delegatedToImage: boolean; imagePrompt?: string; actionReports: string[]; undoOperations: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }> }>('/api/ai-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
