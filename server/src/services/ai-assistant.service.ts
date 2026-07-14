@@ -64,7 +64,7 @@ type AskGeneralAssistantInput = {
 };
 type AiChatModel = 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
 type AiChatLocation = 'quick_chat' | 'project_chat' | 'task_chat';
-type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string; location?: AiChatLocation; taskId?: string; taskTitle?: string; skipDispatcher?: boolean };
+type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string; location?: AiChatLocation; taskId?: string; taskTitle?: string };
 type AiDispatcherRoute = 'continue' | 'planner' | 'task_planner' | 'image';
 type AiDispatcherTag = null | 'ИИ-планировщик' | 'ИИ-изображения';
 type AiDispatcherResult = {
@@ -1032,7 +1032,7 @@ export const aiAssistantService = {
     const question = input.question.trim();
     if (!question) throw new TypeError('Question is required');
 
-    const route = input.skipDispatcher ? { route: 'continue' as const, tag: null } : await this.dispatchAiChat({
+    const route = await this.dispatchAiChat({
       userId: input.userId,
       question,
       history: input.history,

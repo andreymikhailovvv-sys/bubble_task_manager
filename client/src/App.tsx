@@ -1849,7 +1849,7 @@ export default function App() {
       });
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.tag ? `${result.tag === 'ИИ-изображения' ? '🎨' : '🧭'} ${result.tag}\n` : ''}${result.answer}` }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]
       }));
       try {
         await load();
@@ -2192,8 +2192,7 @@ ${allContext}`,
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
       const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, mode: focusAiMode, attachments: attachmentsPayload, skipEfficiencyBonus: true });
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `${result.tag ? `${result.tag === 'ИИ-изображения' ? '🎨' : '🧭'} ${result.tag}\n` : ''}${result.answer}` }]);
-      if (result.delegatedToPlanner) await load();
+      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]);
       if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (focusAiMode === 'smart' ? 5 : 2) * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
     } catch (error) {
