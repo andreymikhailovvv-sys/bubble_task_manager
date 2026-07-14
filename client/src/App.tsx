@@ -405,7 +405,7 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
-    onOpenTask?.(matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId);
+    onOpenTask?.(showTaskReferenceButtons ? (matchedTask?.id ?? taskId) : (matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId));
     if (closeGeneralAiFullscreenOnOpen && setGeneralAiFullscreen) {
       setGeneralAiFullscreen(false);
     }
@@ -3013,12 +3013,9 @@ ${allContext}`,
     const totalMinutes = Math.floor(Math.abs(diffMs) / 60_000);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    if (diffMs < 0) {
-      if (hours < 1) return `${Math.max(1, minutes)} мин назад`;
-      return `${hours} ч ${minutes} мин назад`;
-    }
-    if (hours < 1) return `через ${Math.max(1, minutes)} минут`;
-    return `через ${hours} часов ${minutes} минут`;
+    const suffix = diffMs < 0 ? ' назад' : '';
+    if (hours < 1) return `${Math.max(1, minutes)} мин${suffix}`;
+    return `${hours} ч${suffix}`;
   };
   const getActiveSubtasks = (taskId: string) => (displayedSubtaskMap[taskId] ?? []).filter((subtask) => subtask.status !== 'DONE');
   const getNearestActiveSubtaskDueDate = (taskId: string) => {
@@ -3884,20 +3881,49 @@ ${allContext}`,
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Текущая задача</p>
                 <div className="mt-2 flex items-start justify-between gap-3"><button type="button" className="text-left text-3xl font-bold text-slate-950 hover:underline" onClick={() => { setFocusedTaskId(focusActiveTask.id); setIsFocusedNotesEditorOpen(false); }}>{focusActiveTask.title}</button><button type="button" className="success-button shrink-0 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => void completeTask(focusActiveTask)}>Выполнить</button></div>
-                <p className="mt-1 text-sm font-medium text-violet-500">{focusActiveTask.dueDate ? `До дедлайна: ${formatDeadlineLeft(focusActiveTask.dueDate)}` : 'Дедлайн не задан'}</p>
+                <p className="mt-1 text-sm font-medium text-violet-500">{focusActiveTask.dueDate ? `До дедлайна: ${formatSubtaskRelativeDeadline(focusActiveTask.dueDate)}` : 'Дедлайн не задан'}</p>
                 <div className="mt-3 flex min-h-0 items-start">
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
-                <h3 className="mt-4 font-semibold text-primary">Подзадачи</h3>
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <h3 className="font-semibold text-primary">Подзадачи</h3>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className={`focused-task-action-pill ${subtaskFilterMode !== 'none' ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
+                      onClick={() => setIsSubtaskFilterOpen((prev) => !prev)}
+                    >
+                      Фильтровать
+                    </button>
+                    {isSubtaskFilterOpen ? (
+                      <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                        {SUBTASK_FILTER_OPTIONS.map((option) => (
+                          <button
+                            key={option.mode}
+                            type="button"
+                            className={`subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'subtask-filter-item-active bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
+                            onClick={() => {
+                              setSubtaskFilterMode(option.mode);
+                              setIsSubtaskFilterOpen(false);
+                            }}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
-                  {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
+                  {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
                     <li key={subtask.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
                       <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-violet-700" onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
                   ))}
-                  {(subtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}
+                  {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}
                 </ul>
               </motion.article>
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
@@ -3916,7 +3942,7 @@ ${allContext}`,
               </div>
               {!isFocusTimerRunning ? <span className="mt-2 text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
               <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3">
-                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><p className="mb-1 text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
+                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
                 {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
                 {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
               </div>
@@ -5911,6 +5937,7 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
+                      {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
