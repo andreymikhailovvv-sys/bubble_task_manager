@@ -71,10 +71,7 @@ export const aiController = {
         model: requestedModel,
         userTimeZone,
         projectTitle: typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined,
-        chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined,
-        location: req.body?.location === 'project_chat' || req.body?.location === 'task_chat' || req.body?.location === 'quick_chat' ? req.body.location : undefined,
-        taskId: typeof req.body?.taskId === 'string' ? req.body.taskId : undefined,
-        taskTitle: typeof req.body?.taskTitle === 'string' ? req.body.taskTitle : undefined
+        chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined
       });
       res.json(result);
     } catch (error) {
