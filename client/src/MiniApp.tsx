@@ -1219,7 +1219,7 @@ export default function MiniApp() {
         projectTitle: activeAiChatProject?.title,
         chatTitle: activeAiChat?.title
       });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.tag ? `${result.tag === 'ИИ-изображения' ? '🎨' : '🧭'} ${result.tag}\n` : ''}${result.answer}` };
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await loadData();
     } catch (e) {
