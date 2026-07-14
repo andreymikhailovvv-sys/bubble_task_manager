@@ -12,6 +12,19 @@ type ChatAttachment = {
 };
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
+const IMAGE_STUB_MODEL = 'image-stub';
+const buildImageStubResponse = (imagePrompt: string, route: 'image' = 'image') => ({
+  answer: `Подключаю ИИ-изображения. Подготовленный промпт: ${imagePrompt}`,
+  model: IMAGE_STUB_MODEL,
+  route,
+  tag: 'ИИ-изображения' as const,
+  imagePrompt,
+  actionReports: [] as string[],
+  undoOperations: [] as Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>,
+  delegatedToPlanner: false,
+  delegatedToImage: true
+});
+
 const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
 const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
 const sendAiError = (res: Response, error: unknown, fallback = 'Unknown AI error') => {
@@ -64,6 +77,34 @@ export const aiController = {
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
       const requestedModel = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'].includes(req.body?.model) ? req.body.model as 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
+      const location = req.body?.location === 'project_chat' || req.body?.location === 'task_chat' || req.body?.location === 'quick_chat' ? req.body.location : 'quick_chat';
+      const route = await aiAssistantService.dispatchAiChat({
+        userId: req.user!.id,
+        question,
+        history,
+        location,
+        projectTitle: typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined,
+        chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined,
+        taskId: typeof req.body?.taskId === 'string' ? req.body.taskId : undefined,
+        taskTitle: typeof req.body?.taskTitle === 'string' ? req.body.taskTitle : undefined
+      });
+
+      if (route.route === 'planner' || route.route === 'task_planner') {
+        const delegated = await aiAssistantService.askGeneralAssistant({
+          userId: req.user!.id,
+          question: `[Запрос перенаправлен из обычного ИИ-чата. Ответ верни как обычный ответ пользователю в этом чате.] ${route.plannerPrompt ?? question}`,
+          history: [],
+          userTimeZone
+        });
+        res.json({ ...delegated, route: route.route, tag: route.tag, delegatedToPlanner: true, delegatedToImage: false, actionReports: delegated.actionReports ?? [], undoOperations: delegated.undoOperations ?? [] });
+        return;
+      }
+
+      if (route.route === 'image') {
+        res.json(buildImageStubResponse(route.imagePrompt ?? question));
+        return;
+      }
+
       const result = await aiAssistantService.askAiChat({
         userId: req.user!.id,
         question,
@@ -72,11 +113,10 @@ export const aiController = {
         userTimeZone,
         projectTitle: typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined,
         chatTitle: typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined,
-        location: req.body?.location === 'project_chat' || req.body?.location === 'task_chat' || req.body?.location === 'quick_chat' ? req.body.location : undefined,
-        taskId: typeof req.body?.taskId === 'string' ? req.body.taskId : undefined,
-        taskTitle: typeof req.body?.taskTitle === 'string' ? req.body.taskTitle : undefined
+        location,
+        skipDispatcher: true
       });
-      res.json(result);
+      res.json({ ...result, route: 'continue', tag: null, delegatedToPlanner: false, delegatedToImage: false });
     } catch (error) {
       sendAiError(res, error);
     }
@@ -199,16 +239,44 @@ export const aiController = {
       });
 
       const userTimeZone = await resolveUserTimeZone(req);
-      const result = await aiAssistantService.askTaskAssistant({
+      const route = await aiAssistantService.dispatchAiChat({
         userId: req.user!.id,
-        taskId: req.params.id,
         question,
         history: persistedHistory,
-        mode,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        userTimeZone,
-        skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
+        location: 'task_chat',
+        taskId: req.params.id,
+        taskTitle: typeof req.body?.taskTitle === 'string' ? req.body.taskTitle : undefined
       });
+
+      let result: Awaited<ReturnType<typeof aiAssistantService.askTaskAssistant>> & {
+        route?: 'continue' | 'planner' | 'task_planner' | 'image';
+        tag?: null | 'ИИ-планировщик' | 'ИИ-изображения';
+        delegatedToPlanner?: boolean;
+        delegatedToImage?: boolean;
+        imagePrompt?: string;
+      };
+      if (route.route === 'image') {
+        result = buildImageStubResponse(route.imagePrompt ?? question) as typeof result;
+      } else {
+        const useTaskPlanner = route.route === 'task_planner' || route.route === 'planner';
+        const assistantResult = await aiAssistantService.askTaskAssistant({
+          userId: req.user!.id,
+          taskId: req.params.id,
+          question: useTaskPlanner ? (route.plannerPrompt ?? question) : question,
+          history: useTaskPlanner ? [] : persistedHistory,
+          mode,
+          attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+          userTimeZone,
+          skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
+        });
+        result = {
+          ...assistantResult,
+          route: useTaskPlanner ? 'task_planner' : 'continue',
+          tag: useTaskPlanner ? 'ИИ-планировщик' : null,
+          delegatedToPlanner: useTaskPlanner,
+          delegatedToImage: false
+        };
+      }
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
       await aiAssistantService.appendTaskDialogMessages({
