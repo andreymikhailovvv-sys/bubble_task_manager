@@ -1462,8 +1462,9 @@ export default function MiniApp() {
       });
       setAiDialogByTask((prev) => ({
         ...prev,
-        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${result.tag ? `${result.tag === 'ИИ-изображения' ? '🎨' : '🧭'} ${result.tag}\n` : ''}${result.answer}` }]
       }));
+      if (result.delegatedToPlanner) await loadData();
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
