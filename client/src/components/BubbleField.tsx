@@ -565,8 +565,8 @@ export function BubbleField({
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
-    const aiBadgeX = bubble.radius * 0.66;
-    const aiBadgeY = -bubble.radius * 0.66;
+    const aiBadgeX = -bubble.radius * 0.78;
+    const aiBadgeY = -bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;

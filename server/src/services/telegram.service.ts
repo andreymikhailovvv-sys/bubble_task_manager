@@ -117,7 +117,7 @@ const buildMiniAppTaskAiUrl = (taskId: string) => {
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
   const diffMs = dueDate.getTime() - Date.now();
-  if (diffMs <= 0) return '🚨 Дедлайн уже наступил';
+  if (diffMs <= 0) return '🚨 <b>Просрочена</b>';
 
   const totalMinutes = Math.ceil(diffMs / 60_000);
   const days = Math.floor(totalMinutes / (60 * 24));
@@ -130,7 +130,7 @@ const formatDeadlineLeft = (dueDate: Date | null) => {
   if (minutes) chunks.push(`${minutes} мин`);
   if (chunks.length === 0) chunks.push('меньше минуты');
 
-  return `⏰ До дедлайна: <b>${chunks.join(' ')}</b>`;
+  return `⏰ Дедлайн через <b>${chunks.join(' ')}</b>`;
 };
 
 const formatDate = (value: Date | null) => {
@@ -522,13 +522,13 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   const title = escapeHtml(task.title);
   const description = escapeTaskDescription(task.description);
   const lines = [
-    '🔔 <b>Задача начинает сиять</b>',
-    '',
     `🧩 <b>${title}</b>`,
-    `${description}`,
-    '',
     formatDeadlineLeft(task.dueDate)
   ];
+
+  if (description) {
+    lines.push('', `${description}`);
+  }
 
   if (task.parentTaskId) {
     lines.push('', '📌 <b>Основная задача</b>');
@@ -684,15 +684,19 @@ const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMes
 
   if (!task?.user.telegramChatId) return;
 
+  const description = escapeTaskDescription(task.description);
   const lines = [
-    '🚨 <b>Дедлайн краснеет!</b>',
-    '',
     `🧩 <b>${escapeHtml(task.title)}</b>`,
-    `${escapeTaskDescription(task.description)}`,
-    '',
-    '🤖 <b>Сообщение от ИИ</b>',
-    escapeHtml(aiMessage)
+    '🚨 <b>Просрочена</b>'
   ];
+
+  if (description) {
+    lines.push('', description);
+  }
+
+  if (aiMessage.trim()) {
+    lines.push('', escapeHtml(aiMessage));
+  }
 
   await sendMessage(task.user.telegramChatId, lines.join('\n'), keyboardMain(task.id));
 };
