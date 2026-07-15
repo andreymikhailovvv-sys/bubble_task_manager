@@ -536,6 +536,23 @@ function truncateText(text: string, maxLength: number) {
   return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
+function getHabitCompletedForDate(habit: Habit, dateKey: string) {
+  return habit.stats.find((item) => item.dateKey === dateKey)?.amount ?? 0;
+}
+
+function isHabitScheduledForDate(habit: Habit, date: Date) {
+  if (habit.isAutoCompleted) return false;
+  if (habit.recurrenceType === 'WEEKDAYS') return habit.weekdays.includes(date.getDay());
+  if (habit.recurrenceType === 'INTERVAL') {
+    const start = habit.createdAt ? new Date(habit.createdAt) : new Date();
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+    const currentDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const dayDiff = Math.max(0, Math.round((currentDay - startDay) / 86_400_000));
+    return dayDiff % Math.max(1, habit.intervalDays ?? 1) === 0;
+  }
+  return true;
+}
+
 
 type TimelineViewData = {
   title: string;
@@ -768,6 +785,7 @@ export default function App() {
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
+  const [closingTaskIds, setClosingTaskIds] = useState<string[]>([]);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
@@ -1021,6 +1039,7 @@ export default function App() {
     setEditorState(null);
     setSectorEditorSphere(null);
     setPoppingTaskId(null);
+    setClosingTaskIds([]);
     setFocusedTaskId(null);
     setFocusedDraft(null);
     setIsAddingFocusedSubtask(false);
@@ -2752,19 +2771,28 @@ ${allContext}`,
     return dialog.slice(readCount).some((message) => message.role === 'assistant');
   };
 
+  const markTaskAsClosing = (taskId: string) => {
+    setClosingTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    setTimelineCompletionAnimationIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    window.setTimeout(() => {
+      setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== taskId));
+    }, 900);
+  };
+
+  const unmarkTaskAsClosing = (taskId: string) => {
+    setClosingTaskIds((prev) => prev.filter((id) => id !== taskId));
+    setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== taskId));
+    setPoppingTaskId((prev) => (prev === taskId ? null : prev));
+  };
+
   const completeTask = async (task: Task) => {
-    if (displayMode === 'timeline') {
-      setTimelineCompletionAnimationIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
-      setTimeout(() => {
-        setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== task.id));
-      }, 900);
-    }
+    markTaskAsClosing(task.id);
     setPoppingTaskId(task.id);
-    await new Promise((resolve) => setTimeout(resolve, 320));
+    await new Promise((resolve) => setTimeout(resolve, 680));
     await api.updateTask(task.id, { status: 'DONE' });
     void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
-    setPoppingTaskId(null);
+    unmarkTaskAsClosing(task.id);
     setEditorState(null);
     setFocusedTaskId(null);
     await load();
@@ -2823,6 +2851,11 @@ ${allContext}`,
 
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
+    if (nextStatus === 'DONE') {
+      markTaskAsClosing(subtask.id);
+      setPoppingTaskId(subtask.id);
+      await new Promise((resolve) => setTimeout(resolve, 680));
+    }
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
@@ -2844,6 +2877,7 @@ ${allContext}`,
       }
     }
     await load();
+    unmarkTaskAsClosing(subtask.id);
   };
 
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
@@ -3147,6 +3181,7 @@ ${allContext}`,
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
     const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
+    const isCompletingOutsideTimeline = displayMode !== 'timeline' && closingTaskIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
     const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
     const isHoverCardVisible = draggedTimelineTaskId === null && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
@@ -3159,7 +3194,7 @@ ${allContext}`,
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
         className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
-        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
+        } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
           borderColor: isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
@@ -3218,13 +3253,13 @@ ${allContext}`,
         }}
       >
         <span className="flex min-w-0 items-center gap-1">
-          {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline ? (
+          {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline || isCompletingOutsideTimeline ? (
             <Check size={13} className="timeline-task-chip-success shrink-0" />
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
-          <span className={`truncate transition-all duration-300 ${isCompletingInTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
+          <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
           {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
@@ -3237,7 +3272,7 @@ ${allContext}`,
           {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
         {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
-        {isCompletingInTimeline ? (
+        {isCompletingInTimeline || isCompletingOutsideTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
             animate={{ scaleX: 1 }}
@@ -3289,6 +3324,37 @@ ${allContext}`,
       </motion.button>
     );
   };
+
+  const renderTimelineHabitChip = (habit: Habit, date: Date, options?: { showTime?: boolean }) => {
+    const dateKey = toLocalDateKey(date);
+    const completed = getHabitCompletedForDate(habit, dateKey);
+    const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
+    const reminderLabel = (habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—';
+    return (
+      <div
+        key={`timeline-habit-${habit.id}-${dateKey}-${options?.showTime ? 'time' : 'plain'}`}
+        className="timeline-habit-chip flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-xs"
+        style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%`, borderColor: hexToRgba(habit.color, themeMode === 'light' ? 0.5 : 0.72) ?? habit.color } as CSSProperties}
+      >
+        <span className="miniapp-habit-circle inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
+          <span className="miniapp-habit-circle-core inline-flex h-5 w-5 items-center justify-center rounded-full">{habit.icon}</span>
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate font-semibold">{habit.name}</span>
+          <span className="timeline-habit-chip-meta block truncate">Привычка · {reminderLabel} · {completed}/{habit.targetCount}</span>
+        </span>
+      </div>
+    );
+  };
+
+  const getTimelineHabitsForDateHour = (date: Date, hour?: number) => habits
+    .filter((habit) => (habit.reminderTimes?.length || habit.reminderTime) && isHabitScheduledForDate(habit, date))
+    .filter((habit) => {
+      if (typeof hour !== 'number') return true;
+      const times = habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []);
+      return times.some((time) => Number(time.slice(0, 2)) === hour);
+    })
+    .sort((a, b) => ((a.reminderTimes?.[0] ?? a.reminderTime) ?? '').localeCompare((b.reminderTimes?.[0] ?? b.reminderTime) ?? ''));
 
   const listTasks = [...visibleTasks].sort((a, b) => {
     if (isTimelineMode) {
@@ -3923,10 +3989,11 @@ ${allContext}`,
                 </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
                   {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
-                    <li key={subtask.id} className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
+                    <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
                       <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
-                      <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-violet-700" onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
+                      <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
@@ -4233,11 +4300,12 @@ ${allContext}`,
                 const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
                 const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
                 const hasAiNotificationState = hasUnreadAiMessage(task.id);
+                const isClosingTask = closingTaskIds.includes(task.id);
                 return (
                   <motion.li
                     key={task.id}
                     layout
-                    className={`list-task-item flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition ${
+                    className={`list-task-item relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
                       hasOverdueState
                         ? 'list-task-item-overdue'
                         : hasReminderState
@@ -4257,21 +4325,26 @@ ${allContext}`,
                       setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
-                    onClick={() => openTaskWithFocusGuard(task)}
+                    onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
                   >
                     <input
                       type="checkbox"
                       className="list-task-checkbox mt-1"
-                      checked={task.status === 'DONE'}
+                      checked={task.status === 'DONE' || isClosingTask}
                       onClick={(event) => event.stopPropagation()}
                       onChange={async () => {
-                        await api.updateTask(task.id, { status: task.status === 'DONE' ? 'TODO' : 'DONE' });
-                        await load();
+                        if (task.status === 'DONE') {
+                          await api.updateTask(task.id, { status: 'TODO' });
+                          await load();
+                        } else {
+                          await completeTask(task);
+                        }
                       }}
                     />
+                    {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' ? 'text-subtle line-through opacity-70' : 'text-primary'}`}>
+                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
                         {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
@@ -4587,7 +4660,8 @@ ${allContext}`,
                             <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
                               {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {cell.tasks.length > 4 ? (
+                              {getTimelineHabitsForDateHour(cell.date).slice(0, Math.max(0, 4 - Math.min(cell.tasks.length, 4))).map((habit) => renderTimelineHabitChip(habit, cell.date!))}
+                              {cell.tasks.length + getTimelineHabitsForDateHour(cell.date).length > 4 ? (
                                 <li>
                                   <button
                                     type="button"
@@ -4598,7 +4672,7 @@ ${allContext}`,
                                       setTimelineViewMode('day');
                                     }}
                                   >
-                                    + ещё {cell.tasks.length - 4}
+                                    + ещё {cell.tasks.length + getTimelineHabitsForDateHour(cell.date).length - 4}
                                   </button>
                                 </li>
                               ) : null}
@@ -4685,6 +4759,7 @@ ${allContext}`,
                                 />
                               ) : null}
                               {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
+                              {getTimelineHabitsForDateHour(day.date, hour).map((habit) => renderTimelineHabitChip(habit, day.date))}
                             </div>
                           );
                         })}
@@ -4752,9 +4827,10 @@ ${allContext}`,
                             }}
                           >
                             <span className="timeline-day-quarter-label pointer-events-none absolute right-2 top-1 text-[10px]">:{String(quarter.minute).padStart(2, '0')}</span>
-                            {quarter.tasks.length > 0 ? (
+                            {quarter.tasks.length > 0 || (quarter.minute === 0 && getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).length > 0) ? (
                               <div className="space-y-1.5 pr-9">
                                 {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
+                                {quarter.minute === 0 ? getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).map((habit) => renderTimelineHabitChip(habit, timelineAnchorDate, { showTime: true })) : null}
                               </div>
                             ) : null}
                           </div>
@@ -5934,13 +6010,14 @@ ${allContext}`,
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
-                      className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
                     >
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
+                      {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button
                         type="button"
-                        className={`min-w-0 flex-1 truncate text-left ${subtask.status === 'DONE' ? 'line-through opacity-60' : ''}`}
+                        className={`min-w-0 flex-1 truncate text-left ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}
                         onClick={() => setEditorState({ task: subtask })}
                         title="Открыть доп задачу"
                       >

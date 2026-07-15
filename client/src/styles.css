@@ -4094,3 +4094,62 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   box-shadow: 0 0 14px color-mix(in srgb, var(--subtask-importance-accent, #8b5cf6) 44%, transparent);
   pointer-events: none;
 }
+
+.timeline-habit-chip {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--habit-color, #22c55e) 18%, transparent), var(--timeline-control-bg));
+  color: var(--text-primary);
+  box-shadow: inset 0 0 14px color-mix(in srgb, var(--habit-color, #22c55e) 10%, transparent);
+}
+
+.timeline-habit-chip-meta {
+  color: var(--timeline-chip-meta);
+}
+
+.focused-subtask-row-completing::after {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 85%, transparent);
+  transform-origin: left center;
+  animation: focused-subtask-complete-strike 320ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes focused-subtask-complete-strike {
+  from { transform: scaleX(0); opacity: 0.7; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+
+.miniapp-timeline-habit-card {
+  color: #e2e8f0;
+}
+
+.miniapp-timeline-habit-meta {
+  color: #a7f3d0;
+}
+
+.miniapp-light .miniapp-timeline-habit-card {
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-timeline-habit-meta {
+  color: #334155;
+}
+
+.list-task-item-completing::after {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 85%, transparent);
+  transform-origin: left center;
+  animation: focused-subtask-complete-strike 420ms ease-out forwards;
+  pointer-events: none;
+}
