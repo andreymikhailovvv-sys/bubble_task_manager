@@ -4139,3 +4139,17 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
 .miniapp-light .miniapp-timeline-habit-meta {
   color: #334155;
 }
+
+.list-task-item-completing::after {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 50%;
+  height: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--success) 85%, transparent);
+  transform-origin: left center;
+  animation: focused-subtask-complete-strike 420ms ease-out forwards;
+  pointer-events: none;
+}

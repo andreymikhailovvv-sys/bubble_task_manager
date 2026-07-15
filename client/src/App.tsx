@@ -785,6 +785,7 @@ export default function App() {
   const [editorState, setEditorState] = useState<{ task?: Task; initialSphereId?: string } | null>(null);
   const [sectorEditorSphere, setSectorEditorSphere] = useState<Sphere | null>(null);
   const [poppingTaskId, setPoppingTaskId] = useState<string | null>(null);
+  const [closingTaskIds, setClosingTaskIds] = useState<string[]>([]);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
@@ -1038,6 +1039,7 @@ export default function App() {
     setEditorState(null);
     setSectorEditorSphere(null);
     setPoppingTaskId(null);
+    setClosingTaskIds([]);
     setFocusedTaskId(null);
     setFocusedDraft(null);
     setIsAddingFocusedSubtask(false);
@@ -2769,19 +2771,28 @@ ${allContext}`,
     return dialog.slice(readCount).some((message) => message.role === 'assistant');
   };
 
+  const markTaskAsClosing = (taskId: string) => {
+    setClosingTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    setTimelineCompletionAnimationIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    window.setTimeout(() => {
+      setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== taskId));
+    }, 900);
+  };
+
+  const unmarkTaskAsClosing = (taskId: string) => {
+    setClosingTaskIds((prev) => prev.filter((id) => id !== taskId));
+    setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== taskId));
+    setPoppingTaskId((prev) => (prev === taskId ? null : prev));
+  };
+
   const completeTask = async (task: Task) => {
-    if (displayMode === 'timeline' || displayMode === 'list' || focusedTaskId === task.id) {
-      setTimelineCompletionAnimationIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
-      setTimeout(() => {
-        setTimelineCompletionAnimationIds((prev) => prev.filter((id) => id !== task.id));
-      }, 900);
-    }
+    markTaskAsClosing(task.id);
     setPoppingTaskId(task.id);
-    await new Promise((resolve) => setTimeout(resolve, 320));
+    await new Promise((resolve) => setTimeout(resolve, 680));
     await api.updateTask(task.id, { status: 'DONE' });
     void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
-    setPoppingTaskId(null);
+    unmarkTaskAsClosing(task.id);
     setEditorState(null);
     setFocusedTaskId(null);
     await load();
@@ -2840,6 +2851,11 @@ ${allContext}`,
 
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
+    if (nextStatus === 'DONE') {
+      markTaskAsClosing(subtask.id);
+      setPoppingTaskId(subtask.id);
+      await new Promise((resolve) => setTimeout(resolve, 680));
+    }
     await api.updateTask(subtask.id, { status: nextStatus });
     if (nextStatus === 'DONE') {
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneSubtask, 'task');
@@ -2861,6 +2877,7 @@ ${allContext}`,
       }
     }
     await load();
+    unmarkTaskAsClosing(subtask.id);
   };
 
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
@@ -3164,7 +3181,7 @@ ${allContext}`,
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
     const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
-    const isCompletingOutsideTimeline = displayMode !== 'timeline' && poppingTaskId === task.id;
+    const isCompletingOutsideTimeline = displayMode !== 'timeline' && closingTaskIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
     const canDragTask = task.status !== 'DONE' && Boolean(task.dueDate);
     const isHoverCardVisible = draggedTimelineTaskId === null && !options?.disableHoverCard && timelineHoverCard?.taskId === task.id;
@@ -3972,11 +3989,11 @@ ${allContext}`,
                 </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
                   {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
-                    <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${poppingTaskId === subtask.id ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
+                    <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
                       <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
-                      {poppingTaskId === subtask.id ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
-                      <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${poppingTaskId === subtask.id ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
+                      <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
@@ -4283,11 +4300,12 @@ ${allContext}`,
                 const SphereIcon = resolveSphereIcon(taskSphere?.icon) ?? LayoutGrid;
                 const taskCoefficient = getTaskCoefficient(task, displayedSubtaskMap);
                 const hasAiNotificationState = hasUnreadAiMessage(task.id);
+                const isClosingTask = closingTaskIds.includes(task.id);
                 return (
                   <motion.li
                     key={task.id}
                     layout
-                    className={`list-task-item flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition ${
+                    className={`list-task-item relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
                       hasOverdueState
                         ? 'list-task-item-overdue'
                         : hasReminderState
@@ -4307,12 +4325,12 @@ ${allContext}`,
                       setListTaskContextMenu({ ...getViewportSafeContextMenuPosition(event.clientX, event.clientY, { submenu: true }), taskId: task.id });
                       setListTaskPostponeSubmenuOpen(false);
                     }}
-                    onClick={() => openTaskWithFocusGuard(task)}
+                    onClick={() => { if (!isClosingTask) openTaskWithFocusGuard(task); }}
                   >
                     <input
                       type="checkbox"
                       className="list-task-checkbox mt-1"
-                      checked={task.status === 'DONE'}
+                      checked={task.status === 'DONE' || isClosingTask}
                       onClick={(event) => event.stopPropagation()}
                       onChange={async () => {
                         if (task.status === 'DONE') {
@@ -4323,9 +4341,10 @@ ${allContext}`,
                         }
                       }}
                     />
+                    {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' ? 'text-subtle line-through opacity-70' : 'text-primary'}`}>
+                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
                         {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
@@ -5991,14 +6010,14 @@ ${allContext}`,
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
-                      className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${poppingTaskId === subtask.id ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
                     >
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
-                      {poppingTaskId === subtask.id ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
+                      {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button
                         type="button"
-                        className={`min-w-0 flex-1 truncate text-left ${subtask.status === 'DONE' || poppingTaskId === subtask.id ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}
+                        className={`min-w-0 flex-1 truncate text-left ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}
                         onClick={() => setEditorState({ task: subtask })}
                         title="Открыть доп задачу"
                       >
