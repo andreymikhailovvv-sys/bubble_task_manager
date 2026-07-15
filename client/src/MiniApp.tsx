@@ -2433,10 +2433,10 @@ export default function MiniApp() {
 
       {isHabitModalOpen ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('habit')}`}>
-          <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
+          <div className="miniapp-slide-panel miniapp-habit-modal-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 text-slate-950 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold">{editingHabitId ? 'Редактирование привычки' : 'Новая привычка'}</h2>
+                <h2 className="text-lg font-semibold text-slate-950">{editingHabitId ? 'Редактирование привычки' : 'Новая привычка'}</h2>
                 <p className="text-xs text-slate-400">Нажатие на круг — редактирование, зажатие — отметка выполнения.</p>
               </div>
               <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
