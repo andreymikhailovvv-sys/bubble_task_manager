@@ -3333,7 +3333,7 @@ ${allContext}`,
     return (
       <div
         key={`timeline-habit-${habit.id}-${dateKey}-${options?.showTime ? 'time' : 'plain'}`}
-        className="timeline-habit-chip flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-xs"
+        className="timeline-habit-chip flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-xs transition"
         style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%`, borderColor: hexToRgba(habit.color, themeMode === 'light' ? 0.5 : 0.72) ?? habit.color } as CSSProperties}
       >
         <span className="miniapp-habit-circle inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
@@ -4660,8 +4660,7 @@ ${allContext}`,
                             <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
                               {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {getTimelineHabitsForDateHour(cell.date).slice(0, Math.max(0, 4 - Math.min(cell.tasks.length, 4))).map((habit) => renderTimelineHabitChip(habit, cell.date!))}
-                              {cell.tasks.length + getTimelineHabitsForDateHour(cell.date).length > 4 ? (
+                              {cell.tasks.length > 4 ? (
                                 <li>
                                   <button
                                     type="button"
@@ -4672,7 +4671,7 @@ ${allContext}`,
                                       setTimelineViewMode('day');
                                     }}
                                   >
-                                    + ещё {cell.tasks.length + getTimelineHabitsForDateHour(cell.date).length - 4}
+                                    + ещё {cell.tasks.length - 4}
                                   </button>
                                 </li>
                               ) : null}

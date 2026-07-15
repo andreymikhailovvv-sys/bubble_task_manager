@@ -2229,11 +2229,10 @@ body[data-theme='light'] .notes-editor-list-option:hover {
 
 .miniapp-habit-circle {
   --habit-progress: 0%;
-  background:
-    radial-gradient(circle at center, var(--habit-core-bg, rgba(15, 23, 42, 0.96)) 0 62%, transparent 63%),
-    conic-gradient(var(--habit-color, #22c55e) var(--habit-progress), var(--habit-track, rgba(30, 41, 59, 0.92)) var(--habit-progress) 100%);
+  background: conic-gradient(var(--habit-color, #22c55e) var(--habit-progress), var(--habit-track, rgba(30, 41, 59, 0.92)) var(--habit-progress) 100%);
   border-color: color-mix(in srgb, var(--habit-color, #22c55e) 58%, transparent);
   box-shadow: 0 8px 18px rgba(2, 6, 23, 0.16);
+  overflow: hidden;
   touch-action: manipulation;
 }
 
@@ -4152,4 +4151,65 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   transform-origin: left center;
   animation: focused-subtask-complete-strike 420ms ease-out forwards;
   pointer-events: none;
+}
+
+.miniapp-habit-modal-panel {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.miniapp-habit-modal-panel label,
+.miniapp-habit-modal-panel .text-slate-300,
+.miniapp-habit-modal-panel .text-slate-400 {
+  color: #475569;
+}
+
+.miniapp-habit-modal-panel .text-slate-100,
+.miniapp-habit-modal-panel .text-slate-200 {
+  color: #0f172a;
+}
+
+.miniapp-habit-modal-panel input:not([type='color']),
+.miniapp-habit-modal-panel .miniapp-habit-field,
+.miniapp-habit-modal-panel .miniapp-habit-weekday-muted,
+.miniapp-habit-modal-panel .miniapp-habit-stepper,
+.miniapp-habit-modal-panel .miniapp-habit-reminder-chip,
+.miniapp-habit-modal-panel .miniapp-habit-recurrence-panel,
+.miniapp-habit-modal-panel .miniapp-habit-duration-summary {
+  border-color: rgba(203, 213, 225, 0.95);
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.miniapp-habit-modal-panel .miniapp-habit-recurrence-panel,
+.miniapp-habit-modal-panel .miniapp-habit-duration-summary,
+.miniapp-habit-modal-panel .bg-slate-800\/70 {
+  background: #f8fafc;
+}
+
+.miniapp-habit-modal-panel .miniapp-habit-counter-button,
+.miniapp-habit-modal-panel .miniapp-habit-add-reminder,
+.miniapp-habit-modal-panel .miniapp-habit-stepper-button,
+.miniapp-habit-modal-panel label[aria-label='Выбрать свой цвет'] {
+  border-color: rgba(203, 213, 225, 0.95);
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.miniapp-habit-modal-panel .miniapp-habit-duration-option-active {
+  border-color: rgba(16, 185, 129, 0.7);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.miniapp-habit-modal-panel button[aria-label='Закрыть окно'] {
+  border-color: rgba(203, 213, 225, 0.95);
+  color: #334155;
+}
+
+.timeline-habit-chip:hover {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--habit-color, #22c55e) 28%, transparent), var(--timeline-control-bg));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--habit-color, #22c55e) 18%, transparent), inset 0 0 16px color-mix(in srgb, var(--habit-color, #22c55e) 18%, transparent);
+  transform: translateY(-1px);
 }
