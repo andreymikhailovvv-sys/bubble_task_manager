@@ -1841,9 +1841,11 @@ export default function MiniApp() {
                       const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
                       const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={`timeline-habit-${habit.id}`}
                           className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
+                          onClick={() => openEditHabitModal(habit)}
                           style={{
                             top: `${placement.top}px`,
                             minHeight: `${TIMELINE_CARD_HEIGHT}px`,
@@ -1862,10 +1864,10 @@ export default function MiniApp() {
                             </span>
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">{habit.name}</p>
-                              <p className="text-xs text-emerald-200">Привычка · {(habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—'} · {completed}/{habit.targetCount}</p>
+                              <p className="miniapp-timeline-habit-meta text-xs">Привычка · {(habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—'} · {completed}/{habit.targetCount}</p>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
