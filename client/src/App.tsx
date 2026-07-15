@@ -1,4 +1,4 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
@@ -66,11 +66,18 @@ const NOTIFY_PRESETS = [
   { value: '180', label: 'За 3 часа' }
 ] as const;
 const IMPORTANCE_STYLES: Record<number, string> = {
-  1: 'bg-sky-500/70 border-sky-300',
-  2: 'bg-cyan-500/70 border-cyan-300',
+  1: 'bg-cyan-400/70 border-cyan-200',
+  2: 'bg-sky-700/75 border-sky-500',
   3: 'bg-violet-500/70 border-violet-300',
   4: 'bg-orange-500/70 border-orange-300',
   5: 'bg-rose-500/75 border-rose-300'
+};
+const IMPORTANCE_ACCENT_COLORS: Record<number, string> = {
+  1: '#67e8f9',
+  2: '#0369a1',
+  3: '#8b5cf6',
+  4: '#f97316',
+  5: '#f43f5e'
 };
 type SubtaskFilterMode = 'none' | 'urgency' | 'importance';
 const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> = [
@@ -3916,7 +3923,8 @@ ${allContext}`,
                 </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
                   {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
-                    <li key={subtask.id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <li key={subtask.id} className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
+                      style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
                       <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       <button type="button" className="min-w-0 flex-1 truncate text-left hover:text-violet-700" onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
@@ -5926,7 +5934,8 @@ ${allContext}`,
                       key={subtask.id}
                       value={subtask}
                       whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
-                      className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      className={`focused-subtask-row flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
+                      style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
                     >
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <button
