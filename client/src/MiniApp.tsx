@@ -2217,7 +2217,7 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
           <div className="miniapp-slide-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-slate-100">Редактирование подзадачи</h3>
@@ -2281,7 +2281,7 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedTask && isAiDialogOpen ? (
-        <div className={`miniapp-ai-fullscreen-backdrop miniapp-slide-backdrop fixed inset-0 z-[60] bg-slate-950/90 p-3 sm:p-6 ${getMiniWindowMotionClass('task-ai')}`}>
+        <div className={`miniapp-ai-fullscreen-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/90 p-3 sm:p-6 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-dialog miniapp-slide-panel mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
