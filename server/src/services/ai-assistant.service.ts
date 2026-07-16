@@ -946,7 +946,7 @@ export const aiAssistantService = {
       const delegated = await this.askGeneralAssistant({
         userId: input.userId,
         question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${question}`,
-        history: [],
+        history: input.history,
         userTimeZone: input.userTimeZone
       });
       return { ...delegated, delegatedToPlanner: true };
