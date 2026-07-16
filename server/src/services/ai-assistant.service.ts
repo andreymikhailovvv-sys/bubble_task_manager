@@ -1924,8 +1924,9 @@ ${parsed.answer}`
       'Названия задач в списках и summary указывай на русском (при необходимости переводи естественно, без технических идентификаторов).',
       'Также можно управлять задачами через actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
-      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, sphereId?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_task (taskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
+      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, sphereId?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_task (taskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       'Если действий не нужно — actions: [].',
+      'Если в answer пишешь, что задача/подзадача создана, перенесена, обновлена, удалена или отмечена, обязательно добавь соответствующий action. Если action не сформирован, честно напиши, что изменение не применялось.',
       'Текст для пользователя клади только в answer на русском.'
     ].join(' ');
 
@@ -1971,6 +1972,12 @@ ${parsed.answer}`
     }
 
     const parsed = parseGeneralAssistantPayload(rawAnswer);
+    console.info('[AI] general assistant actions parsed', {
+      userId: input.userId,
+      actionCount: parsed.actions.length,
+      actionTypes: parsed.actions.map((action) => action.type),
+      model: GENERAL_CHAT_MODEL
+    });
     const actionReports: string[] = [];
     const undoOperations: GeneralAssistantUndoOperation[] = [];
     let appliedActionsCount = 0;
@@ -2237,6 +2244,11 @@ ${parsed.answer}`
         continue;
       }
       if (action.type === 'update_task') {
+        const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+        if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+          actionReports.push(`Обновление задачи "${task.title}" пропущено: неверный формат dueDate.`);
+          continue;
+        }
         const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
         const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
         const importance = nextImportance ?? task.importance;
@@ -2246,6 +2258,7 @@ ${parsed.answer}`
           where: { id: task.id },
           data: {
             ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+            ...(dueDate === undefined ? {} : { dueDate }),
             ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
             ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
             ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
@@ -2277,6 +2290,13 @@ ${parsed.answer}`
         appliedActionsCount += 1;
       }
     }
+
+    console.info('[AI] general assistant actions applied', {
+      userId: input.userId,
+      requestedActionCount: parsed.actions.length,
+      appliedActionsCount,
+      actionReports
+    });
 
     const answer = parsed.actions.length > 0 && appliedActionsCount === 0
       ? `Не удалось применить изменения по запросу. Проверьте названия задач/подзадач и попробуйте ещё раз.\n\n${parsed.answer}`

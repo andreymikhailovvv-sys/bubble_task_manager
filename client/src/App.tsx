@@ -2325,7 +2325,11 @@ ${allContext}`,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
       });
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}` };
+      const actionReports = result.actionReports ?? [];
+      const serviceReport = result.delegatedToPlanner && actionReports.length > 0
+        ? `\n\nОтчёт сервиса:\n- ${actionReports.join('\n- ')}`
+        : '';
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}${serviceReport}` };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();
