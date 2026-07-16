@@ -1151,6 +1151,7 @@ export default function App() {
           .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
           .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
         setGeneralAiMessages(normalized);
+        setAiChatProjects((prev) => normalizeAiChatProjects(prev, normalized));
       } catch {
         if (isCancelled) return;
         setGeneralAiMessages([]);
