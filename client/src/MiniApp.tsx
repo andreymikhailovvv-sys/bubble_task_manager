@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -76,6 +76,45 @@ type MiniAiChatProject = { id: string; title: string; color: string; icon: strin
 type MiniAiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 
 const AI_CHAT_STORAGE_KEY = 'btm:ai-chat-projects';
+
+const QUICK_AI_CHAT_TITLE = 'Быстрые запросы';
+const QUICK_AI_CHAT_PROJECT_TITLE = 'Личный проект';
+const QUICK_AI_CHAT_ID = 'quick-ai-requests';
+
+function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProject>> | null | undefined): MiniAiChatProject[] {
+  const quickChat: MiniAiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: [] };
+  const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
+  const source = rawProjects?.length ? rawProjects : fallback;
+  const normalized = source.map((project, index) => ({
+    id: project.id ?? crypto.randomUUID(),
+    title: index === 0 ? QUICK_AI_CHAT_PROJECT_TITLE : (project.title ?? `Проект ${index + 1}`),
+    color: project.color ?? '#8b5cf6',
+    icon: project.icon ?? '✨',
+    chats: (project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat, chatIndex) => ({
+      id: chat.id ?? crypto.randomUUID(),
+      title: chat.title ?? `Чат ${chatIndex + 1}`,
+      messages: (chat.messages ?? [])
+        .filter((message) => (message?.role === 'user' || message?.role === 'assistant') && typeof message?.content === 'string')
+        .map((message) => ({ id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content }))
+    }))
+  }));
+  const defaultProject = normalized[0] ?? fallback[0];
+  const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
+  const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
+  const mergedQuickChat: MiniAiChatThread = {
+    ...quickChat,
+    ...existingQuickChat,
+    id: QUICK_AI_CHAT_ID,
+    title: QUICK_AI_CHAT_TITLE,
+    messages: (existingQuickChat?.messages ?? []).slice(-20)
+  };
+  normalized[0] = {
+    ...defaultProject,
+    title: QUICK_AI_CHAT_PROJECT_TITLE,
+    chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)]
+  };
+  return normalized;
+}
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
   { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', creditsCost: 2 },
   { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: 5 },
@@ -270,6 +309,104 @@ function formatRemaining(value?: string | null) {
   return diffMs >= 0 ? `Через ${text}` : `Просрочено на ${text}`;
 }
 
+
+type MiniAiTaskReference = {
+  taskId: string;
+  label: string;
+};
+
+const MINI_TASK_REF_PATTERN = /\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
+
+function normalizeMiniAiMessageContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{') || !trimmed.includes('"answer"')) return content;
+
+  try {
+    const parsed = JSON.parse(trimmed) as { answer?: unknown };
+    if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+  } catch {
+    const answerMatch = trimmed.match(/"answer"\s*:\s*"([\s\S]*?)"\s*,\s*"actions"\s*:/);
+    if (answerMatch?.[1]) {
+      return answerMatch[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        .trim();
+    }
+  }
+
+  return content;
+}
+
+function parseMiniTaskReferencesInLine(content: string): Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: MiniAiTaskReference }> {
+  const chunks: Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: MiniAiTaskReference }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  MINI_TASK_REF_PATTERN.lastIndex = 0;
+  while ((match = MINI_TASK_REF_PATTERN.exec(content)) !== null) {
+    const [full, rawTaskIdEq, rawTaskIdLegacy, rawLabelLegacy] = match;
+    const textBefore = content.slice(lastIndex, match.index);
+    if (textBefore) chunks.push({ type: 'text', value: textBefore });
+    const taskId = (rawTaskIdEq || rawTaskIdLegacy || '').trim();
+    const label = (rawLabelLegacy || '').trim() || 'Открыть задачу';
+    if (taskId && label) chunks.push({ type: 'taskRef', reference: { taskId, label } });
+    lastIndex = match.index + full.length;
+  }
+  const tail = content.slice(lastIndex);
+  if (tail) chunks.push({ type: 'text', value: tail });
+  MINI_TASK_REF_PATTERN.lastIndex = 0;
+  return chunks;
+}
+
+function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { content: string; tasks: Task[]; onOpenTask: (task: Task) => void }) {
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const normalizedContent = useMemo(() => normalizeMiniAiMessageContent(content), [content]);
+  const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
+
+  return (
+    <>
+      {lines.map((line, lineIndex) => {
+        const chunks = parseMiniTaskReferencesInLine(line);
+        if (chunks.length === 0) return <p key={`mini-ai-line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
+        const taskReferences = chunks
+          .filter((chunk): chunk is { type: 'taskRef'; reference: MiniAiTaskReference } => chunk.type === 'taskRef')
+          .map((chunk) => chunk.reference);
+        return (
+          <div key={`mini-ai-line-${lineIndex}`} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {chunks.map((chunk, chunkIndex) => {
+              if (chunk.type === 'taskRef') return null;
+              return <span key={`mini-ai-text-${lineIndex}-${chunkIndex}`}>{renderMiniAiText(chunk.value)}</span>;
+            })}
+            {taskReferences.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {taskReferences.map((reference, referenceIndex) => {
+                  const matchedTask = taskById.get(reference.taskId);
+                  const label = matchedTask?.title || reference.label;
+                  return (
+                    <button
+                      key={`mini-ai-task-${lineIndex}-${reference.taskId}-${referenceIndex}`}
+                      type="button"
+                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95 disabled:opacity-60"
+                      onClick={() => { if (matchedTask) onOpenTask(matchedTask); }}
+                      disabled={!matchedTask}
+                      title={matchedTask ? `Открыть задачу: ${label}` : `Задача не найдена: ${reference.taskId}`}
+                    >
+                      <ArrowUpRight size={12} />
+                      <span className="truncate">{matchedTask ? label : 'Задача не найдена'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function renderMiniAiText(content: string) {
   return content.split('\n').map((line, lineIndex) => (
     <p key={`mini-ai-line-${lineIndex}`} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
@@ -437,24 +574,13 @@ export default function MiniApp() {
   const [renamingAiChatId, setRenamingAiChatId] = useState<string | null>(null);
   const [aiChatRenameDraft, setAiChatRenameDraft] = useState('');
   const [aiChatProjects, setAiChatProjects] = useState<MiniAiChatProject[]>(() => {
-    const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: 'Личный проект', color: '#8b5cf6', icon: '✨', chats: [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }] }];
     try {
       const parsed = JSON.parse(localStorage.getItem(AI_CHAT_STORAGE_KEY) || '') as Array<Partial<MiniAiChatProject>>;
-      return parsed.length ? parsed.map((project, index) => ({
-        id: project.id ?? crypto.randomUUID(),
-        title: project.title ?? `Проект ${index + 1}`,
-        color: project.color ?? '#8b5cf6',
-        icon: project.icon ?? '✨',
-        chats: project.chats?.length ? project.chats.map((chat, chatIndex) => ({
-          id: chat.id ?? crypto.randomUUID(),
-          title: chat.title ?? `Чат ${chatIndex + 1}`,
-          messages: (chat.messages ?? []).map((message) => ({ id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content }))
-        })) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]
-      })) : fallback;
-    } catch { return fallback; }
+      return normalizeMiniAiChatProjects(parsed);
+    } catch { return normalizeMiniAiChatProjects(null); }
   });
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
-  const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? '');
+  const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -482,7 +608,20 @@ export default function MiniApp() {
         throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
       }
 
-      const [sphereList, taskList, habitList] = await Promise.all([api.getSpheres(), api.getTasks(), api.getHabits()]);
+      const [sphereList, taskList, habitList, quickHistory] = await Promise.all([
+        api.getSpheres(),
+        api.getTasks(),
+        api.getHabits(),
+        api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] }))
+      ]);
+      const quickMessages: MiniAiChatMessage[] = quickHistory.messages
+        .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+        .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }))
+        .slice(-20);
+      setAiChatProjects((prev) => normalizeMiniAiChatProjects(prev).map((project, projectIndex) => projectIndex === 0 ? {
+        ...project,
+        chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
+      } : project));
       setSpheres(sphereList);
       setTasks(taskList);
       setHabits(habitList);
@@ -1191,6 +1330,8 @@ export default function MiniApp() {
     localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(aiChatProjects));
   }, [aiChatProjects]);
 
+
+
   useEffect(() => {
     aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
   }, [activeAiChat?.messages.length, aiChatLoading, isAiChatOpen]);
@@ -1215,11 +1356,11 @@ export default function MiniApp() {
       const result = await api.askAiChat({
         question,
         history,
-        model: selectedAiChatModel,
-        projectTitle: activeAiChatProject?.title,
-        chatTitle: activeAiChat?.title
+        model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-5.4-nano' : selectedAiChatModel,
+        projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
+        chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
       });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeMiniAiMessageContent(result.answer)}` };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await loadData();
     } catch (e) {
@@ -2263,7 +2404,7 @@ export default function MiniApp() {
               {openedTaskAiDialog.map((message, index) => (
                 <div key={`mini-ai-full-${index}`} className={`miniapp-ai-message max-w-[94%] rounded-xl border px-3 py-2.5 ${message.role === 'assistant' ? 'miniapp-ai-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'miniapp-ai-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
                 </div>
               ))}
               {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
@@ -2322,14 +2463,14 @@ export default function MiniApp() {
 
       <button
         type="button"
-        onClick={() => { setClosingMiniWindow(null); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
+        onClick={() => { setClosingMiniWindow(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
         className="miniapp-ai-chat-launcher fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-xl text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95"
         aria-label="Открыть чат с ИИ"
       >✦</button>
 
       {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/92 p-3 ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 pt-3 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
+          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
@@ -2350,7 +2491,7 @@ export default function MiniApp() {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-2xl border px-3 py-2 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50' : 'miniapp-ai-chat-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
                 </div>
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
@@ -2379,7 +2520,7 @@ export default function MiniApp() {
                 {aiChatProjects.map((project) => (
                   <div key={project.id} className={`rounded-xl border p-2 ${project.id === activeAiChatProject?.id ? 'border-violet-400 bg-violet-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
                     <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-medium">{project.title}</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} className="inline" /> Настроить</button><button type="button" disabled={aiChatProjects.length <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} className="inline" /> Удалить</button></div>
+                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} className="inline" /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} className="inline" /> Удалить</button></div>
                   </div>
                 ))}
               </div>
@@ -2388,7 +2529,7 @@ export default function MiniApp() {
                 {(activeAiChatProject?.chats ?? []).map((chat) => (
                   <div key={chat.id} className={`rounded-xl border p-2 ${chat.id === activeAiChat?.id ? 'border-cyan-400 bg-cyan-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
                     <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-medium">{chat.title}</span><span className="text-[11px] text-slate-400">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={(activeAiChatProject?.chats.length ?? 0) <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
                   </div>
                 ))}
               </div>
