@@ -4262,3 +4262,154 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   color: #0f172a !important;
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
+
+/* Mini app task/subtask focus dialogs adapted from the desktop focus editor. */
+.miniapp-focus-panel {
+  border-color: rgba(139, 92, 246, 0.42);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 27, 75, 0.95) 55%, rgba(49, 46, 129, 0.9));
+  color: #f8fafc;
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.72);
+}
+
+.miniapp-light .miniapp-focus-panel {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(245,243,255,0.96) 55%, rgba(237,233,254,0.92));
+  color: #0f172a;
+  box-shadow: 0 28px 80px rgba(109, 40, 217, 0.18);
+}
+
+.miniapp-focus-title-input {
+  color: inherit;
+}
+
+.miniapp-focus-title-input::placeholder {
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.miniapp-light .miniapp-focus-title-input::placeholder {
+  color: rgba(100, 116, 139, 0.58);
+}
+
+.miniapp-focus-description-surface {
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  background: rgba(15, 23, 42, 0.52);
+}
+
+.miniapp-light .miniapp-focus-description-surface {
+  border-color: rgba(196, 181, 253, 0.54);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.miniapp-focus-icon-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  border-radius: 9999px;
+  background: rgba(30, 41, 59, 0.88);
+  color: #ddd6fe;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.miniapp-light .miniapp-focus-icon-button {
+  border-color: rgba(196, 181, 253, 0.65);
+  background: rgba(255, 255, 255, 0.78);
+  color: #6d28d9;
+}
+
+.miniapp-focus-icon-button:hover,
+.miniapp-focus-action-pill:hover,
+.miniapp-focus-primary-button:hover,
+.miniapp-focus-success-button:hover,
+.miniapp-focus-danger-button:hover {
+  transform: translateY(-1px);
+}
+
+.miniapp-focus-date-input {
+  border-color: rgba(139, 92, 246, 0.44);
+  background: rgba(15, 23, 42, 0.44);
+  color: inherit;
+}
+
+.miniapp-light .miniapp-focus-date-input {
+  border-color: rgba(196, 181, 253, 0.65);
+  background: rgba(255, 255, 255, 0.74);
+  color: #5b21b6;
+}
+
+.miniapp-focus-action-pill,
+.miniapp-focus-primary-button,
+.miniapp-focus-success-button,
+.miniapp-focus-danger-button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  transition: transform 0.18s ease, filter 0.18s ease, opacity 0.18s ease;
+}
+
+.miniapp-focus-action-pill {
+  border-color: rgba(56, 189, 248, 0.52);
+  background: #0284c7;
+}
+
+.miniapp-focus-action-pill-ai {
+  border-color: rgba(244, 114, 182, 0.5);
+  background: #e11d48;
+}
+
+.miniapp-focus-primary-button { background: #2563eb; }
+.miniapp-focus-success-button { background: #059669; }
+.miniapp-focus-danger-button { background: #e11d48; }
+
+.miniapp-focus-primary-button:disabled,
+.miniapp-focus-success-button:disabled,
+.miniapp-focus-danger-button:disabled,
+.miniapp-focus-action-pill:disabled,
+.miniapp-focus-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+  transform: none;
+}
+
+.miniapp-focus-subtasks {
+  border-color: rgba(139, 92, 246, 0.28);
+}
+
+.miniapp-light .miniapp-focus-subtasks {
+  border-color: rgba(196, 181, 253, 0.5);
+}
+
+.miniapp-focus-subtask-row,
+.miniapp-focus-attachment-pill {
+  border: 1px solid rgba(71, 85, 105, 0.72);
+  background: rgba(15, 23, 42, 0.54);
+  color: inherit;
+}
+
+.miniapp-light .miniapp-focus-subtask-row,
+.miniapp-light .miniapp-focus-attachment-pill {
+  border-color: rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.92);
+  color: #334155;
+}
+
+@media (max-width: 420px) {
+  .miniapp-focus-primary-button,
+  .miniapp-focus-success-button,
+  .miniapp-focus-danger-button {
+    padding-inline: 0.45rem;
+    font-size: 0.68rem;
+  }
+}
