@@ -2018,264 +2018,175 @@ export default function MiniApp() {
       </div>
 
       {openedTask && openedTaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[90] flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('task')}`}>
-          <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold">Задача</h2>
-              <button
-                type="button"
-                onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)}
-                className="rounded-md border border-slate-600 p-1 text-slate-300"
-                aria-label="Закрыть окно"
-              >
-                <X size={16} />
-              </button>
-            </div>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[90] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}>
+          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Фокус задачи</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsAiDialogOpen(true)} className="miniapp-focus-action-pill miniapp-focus-action-pill-ai">
+                    <Bot size={14} /> ИИ
+                  </button>
+                  <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
 
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Название задачи</label>
-                <input
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                <textarea
                   value={openedTaskDraft.title}
                   onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                  className="miniapp-focus-title-input invisible-scrollbar min-h-[3.25rem] w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none"
+                  rows={2}
+                  placeholder="Без названия"
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Описание</label>
-                <textarea
-                  value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
-                  onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
-                  className="miniapp-task-text-field min-h-20 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                />
-                <div className="flex justify-end gap-2">
+                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-300">
+                  <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTask.dueDate)}` : 'Дедлайн не задан'}</span>
+                </div>
+                <div className="miniapp-focus-description-surface mt-3 rounded-2xl p-3">
+                  <textarea
+                    value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
+                    onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
+                    className="invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                    placeholder="Введите описание"
+                  />
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={openedTaskDraft.dueDate}
+                    onChange={(event) => onChangeDraft(openedTask.id, { dueDate: event.target.value })}
+                    className="miniapp-focus-date-input min-w-0 flex-1 rounded-full border px-3 py-2 text-xs font-semibold"
+                    aria-label="Срок задачи"
+                  />
+                  <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
+                    <Maximize2 size={15} />
+                  </button>
                   <button
                     type="button"
-                    className={`notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
+                    className={`miniapp-focus-icon-button ${isTaskAttachmentDragActive ? 'notes-open-button-active' : ''} ${isUploadingTaskAttachment ? 'opacity-60' : ''}`}
                     onClick={() => taskAttachmentInputRef.current?.click()}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      setIsTaskAttachmentDragActive(true);
-                    }}
-                    onDragLeave={(event) => {
-                      event.preventDefault();
-                      setIsTaskAttachmentDragActive(false);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const files = Array.from(event.dataTransfer.files ?? []);
-                      void uploadTaskAttachmentFiles(files);
-                    }}
+                    onDragOver={(event) => { event.preventDefault(); setIsTaskAttachmentDragActive(true); }}
+                    onDragLeave={(event) => { event.preventDefault(); setIsTaskAttachmentDragActive(false); }}
+                    onDrop={(event) => { event.preventDefault(); void uploadTaskAttachmentFiles(Array.from(event.dataTransfer.files ?? [])); }}
                     disabled={isUploadingTaskAttachment}
                     title="Добавить файлы к задаче"
                     aria-label="Добавить файлы к задаче"
                   >
                     <Plus size={15} />
                   </button>
-                  <button
-                    type="button"
-                    className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
-                    onClick={() => setIsTaskNotesEditorOpen(true)}
-                    title="Открыть заметки"
-                    aria-label="Открыть заметки"
-                  >
-                    <Maximize2 size={15} />
-                  </button>
                 </div>
-                <input
-                  ref={taskAttachmentInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
-                  multiple
-                  className="hidden"
-                  onChange={handleTaskAttachmentFileSelect}
-                />
+                <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
                 {taskAttachments.length > 0 ? (
-                  <div className="flex flex-wrap items-start gap-2">
+                  <div className="mt-2 flex flex-wrap items-start gap-2">
                     {taskAttachments.map((attachment) => (
-                      <div key={attachment.id} className="inline-flex max-w-[210px] items-center gap-1 rounded-xl border border-slate-600 bg-slate-800/90 px-2 py-1 text-[11px] text-slate-100">
-                        <button
-                          type="button"
-                          title={`${attachment.name} • скачать`}
-                          onClick={() => downloadTaskAttachment(attachment)}
-                          className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-slate-700"
-                        >
-                          <FileText size={12} className="shrink-0 text-cyan-300" />
+                      <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
+                        <button type="button" title={`${attachment.name} • скачать`} onClick={() => downloadTaskAttachment(attachment)} className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5">
+                          <FileText size={12} className="shrink-0" />
                           <span className="truncate">{attachment.name}</span>
                         </button>
-                        <button
-                          type="button"
-                          title="Удалить файл"
-                          onClick={() => void removeTaskAttachment(attachment.id)}
-                          className="rounded-md p-0.5 text-slate-300 hover:bg-rose-600/80 hover:text-white"
-                        >
+                        <button type="button" title="Удалить файл" onClick={() => void removeTaskAttachment(attachment.id)} className="rounded-md p-0.5 hover:bg-rose-600/80 hover:text-white">
                           <X size={11} className="shrink-0" />
                         </button>
                       </div>
                     ))}
                   </div>
                 ) : null}
-              </div>
-              {isTaskNotesEditorOpen ? (
-                <NotesEditor
-                  value={openedTaskDraft.description}
-                  onChange={(description) => onChangeDraft(openedTask.id, { description })}
-                  onClose={() => setIsTaskNotesEditorOpen(false)}
-                />
-              ) : null}
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Срок</label>
-                <input
-                  type="datetime-local"
-                  value={openedTaskDraft.dueDate}
-                  onChange={(event) => onChangeDraft(openedTask.id, { dueDate: event.target.value })}
-                  className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => void saveTask(openedTask.id)}
-                  disabled={savingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  <Save size={14} />
-                  {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить задачу'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void completeTask(openedTask.id)}
-                  disabled={completingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  <CheckCircle2 size={14} />
-                  {completingId === openedTask.id ? 'Завершаем…' : 'Выполнить'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void deleteTask(openedTask.id)}
-                  disabled={deletingId === openedTask.id}
-                  className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60"
-                >
-                  <Trash2 size={14} />
-                  {deletingId === openedTask.id ? 'Удаляем…' : 'Удалить'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAiDialogOpen(true)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-sm font-medium text-white"
-                >
-                  <Bot size={14} />
-                  Диалог с ИИ
-                </button>
-              </div>
-            </div>
+                {isTaskNotesEditorOpen ? <NotesEditor value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
 
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <button type="button" onClick={() => void saveTask(openedTask.id)} disabled={savingId === openedTask.id} className="miniapp-focus-primary-button">
+                    <Save size={14} /> {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить'}
+                  </button>
+                  <button type="button" onClick={() => void completeTask(openedTask.id)} disabled={completingId === openedTask.id} className="miniapp-focus-success-button">
+                    <CheckCircle2 size={14} /> {completingId === openedTask.id ? '...' : 'Выполнить'}
+                  </button>
+                  <button type="button" onClick={() => void deleteTask(openedTask.id)} disabled={deletingId === openedTask.id} className="miniapp-focus-danger-button">
+                    <Trash2 size={14} /> {deletingId === openedTask.id ? '...' : 'Удалить'}
+                  </button>
+                </div>
 
-            <div className="mt-4 space-y-2 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">Подзадачи</h3>
-                <button
-                  type="button"
-                  onClick={() => void addSubtask(openedTask)}
-                  disabled={creatingSubtaskForId === openedTask.id}
-                  className="rounded-xl bg-sky-600 px-2 py-1 text-xs font-medium text-white disabled:opacity-60"
-                >
-                  {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить подзадачу'}
-                </button>
-              </div>
-              {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Подзадач пока нет.</p> : null}
-              {openedTaskSubtasks.map((subtask) => {
-                const hasOverdueSubtaskState = isOverdue(subtask);
-                const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
-                return (
-                  <article
-                    key={subtask.id}
-                    className="rounded-xl border border-slate-700 bg-slate-900 p-2"
-                    style={hasOverdueSubtaskState
-                      ? { boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)' }
-                      : hasReminderSubtaskState
-                        ? { boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)' }
-                        : undefined}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setOpenedSubtaskId(subtask.id)}
-                      className="flex w-full items-start justify-between gap-2 text-left"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{subtask.title}</p>
-                        <p className="text-xs text-slate-300">Дедлайн: {formatDueDate(subtask.dueDate)}</p>
-                      </div>
-                      <ChevronDown size={16} />
+                <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
+                    <button type="button" onClick={() => void addSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-action-pill">
+                      <Plus size={13} /> {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить'}
                     </button>
-                  </article>
-                );
-              })}
+                  </div>
+                  {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
+                  <div className="space-y-2">
+                    {openedTaskSubtasks.map((subtask) => {
+                      const hasOverdueSubtaskState = isOverdue(subtask);
+                      const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
+                      return (
+                        <article key={subtask.id} className={`miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`} style={hasOverdueSubtaskState ? { boxShadow: '0 0 15px rgba(239,68,68,0.6), inset 0 0 10px rgba(239,68,68,0.22)' } : hasReminderSubtaskState ? { boxShadow: '0 0 15px rgba(56,189,248,0.55), inset 0 0 10px rgba(56,189,248,0.2)' } : undefined}>
+                          <button type="button" onClick={() => setOpenedSubtaskId(subtask.id)} className="flex w-full items-center gap-2 text-left">
+                            <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+                            <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
+                            <span className="shrink-0 text-xs font-semibold text-violet-400">{formatDueDate(subtask.dueDate)}</span>
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
-          <div className="miniapp-slide-panel max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-100">Редактирование подзадачи</h3>
-              <button type="button" onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно подзадачи">
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
+          <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Редактирование подзадачи</p>
+                <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
+              </div>
+              <button type="button" onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))} className="miniapp-focus-icon-button" aria-label="Закрыть окно подзадачи">
                 <X size={16} />
               </button>
             </div>
-            <div className="space-y-2">
-              <input
-                value={openedSubtaskDraft.title}
-                onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
-                className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
-                placeholder="Название подзадачи"
-              />
+            <textarea
+              value={openedSubtaskDraft.title}
+              onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
+              className="miniapp-focus-title-input invisible-scrollbar min-h-[3rem] w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none"
+              rows={2}
+              placeholder="Название подзадачи"
+            />
+            <div className="miniapp-focus-description-surface mt-3 rounded-2xl p-3">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
-                className="miniapp-task-text-field min-h-16 w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="invisible-scrollbar min-h-24 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="notes-open-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
-                  onClick={() => setIsSubtaskNotesEditorOpen(true)}
-                  title="Открыть заметки"
-                  aria-label="Открыть заметки"
-                >
-                  <Maximize2 size={15} />
-                </button>
-              </div>
-              {isSubtaskNotesEditorOpen ? (
-                <NotesEditor
-                  value={openedSubtaskDraft.description}
-                  onChange={(description) => onChangeDraft(openedSubtask.id, { description })}
-                  onClose={() => setIsSubtaskNotesEditorOpen(false)}
-                />
-              ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 type="datetime-local"
                 value={openedSubtaskDraft.dueDate}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { dueDate: event.target.value })}
-                className="miniapp-task-text-field w-full rounded-xl border border-slate-600 bg-slate-800 px-2 py-1 text-sm"
+                className="miniapp-focus-date-input min-w-0 flex-1 rounded-full border px-3 py-2 text-xs font-semibold"
+                aria-label="Срок подзадачи"
               />
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-medium text-white disabled:opacity-60">
-                  <Save size={14} />
-                  {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить задачу'}
-                </button>
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-emerald-600 px-3 text-sm font-medium text-white disabled:opacity-60">
-                  <CheckCircle2 size={14} />
-                  {completingId === openedSubtask.id ? 'Завершаем…' : 'Выполнить'}
-                </button>
-                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="inline-flex h-10 items-center justify-center gap-1 rounded-xl bg-rose-600 px-3 text-sm font-medium text-white disabled:opacity-60">
-                  <Trash2 size={14} />
-                  {deletingId === openedSubtask.id ? 'Удаляем…' : 'Удалить'}
-                </button>
-              </div>
+              <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
+                <Maximize2 size={15} />
+              </button>
+            </div>
+            {isSubtaskNotesEditorOpen ? <NotesEditor value={openedSubtaskDraft.description} onChange={(description) => onChangeDraft(openedSubtask.id, { description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="miniapp-focus-primary-button">
+                <Save size={14} /> {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить'}
+              </button>
+              <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
+                <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
+              </button>
+              <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="miniapp-focus-danger-button">
+                <Trash2 size={14} /> {deletingId === openedSubtask.id ? '...' : 'Удалить'}
+              </button>
             </div>
           </div>
         </div>
