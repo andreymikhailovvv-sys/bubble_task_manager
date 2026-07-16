@@ -87,7 +87,7 @@ type ChatAttachment = {
 
 const listTaskIdsByChatId = new Map<string, string[]>();
 const pendingAiAttachmentByChatId = new Map<string, ChatAttachment>();
-const generalAiHistoryByChatId = new Map<string, ChatMessage[]>();
+const quickAiHistoryByChatId = new Map<string, ChatMessage[]>();
 
 const isEnabled = () => Boolean(BOT_TOKEN);
 
@@ -728,7 +728,7 @@ const setSession = async (chatId: string, patch: { userId?: string | null; mode?
 const resetBotMenuState = async (chatId: string) => {
   listTaskIdsByChatId.delete(chatId);
   pendingAiAttachmentByChatId.delete(chatId);
-  generalAiHistoryByChatId.delete(chatId);
+  quickAiHistoryByChatId.delete(chatId);
   await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
 };
 
@@ -999,7 +999,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
   }
 
   if (isVoiceMessage) {
-    await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и отправляю в общий чат с ИИ...');
+    await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и отправляю в быстрые запросы ИИ...');
 
     try {
       const voiceAttachment = await loadTelegramAttachment(updateMessage);
@@ -1014,26 +1014,33 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         contentBase64: voiceAttachment.contentBase64
       });
 
-      const history = generalAiHistoryByChatId.get(chatId) ?? [];
-      const result = await aiAssistantService.askGeneralAssistant({
+      const history = quickAiHistoryByChatId.get(chatId) ?? [];
+      const result = await aiAssistantService.askAiChat({
         userId: session.userId,
         question: transcript,
-        history
+        history,
+        model: 'gpt-5.4-nano',
+        projectTitle: 'Личный проект',
+        chatTitle: 'Быстрые запросы'
       });
       const nextHistory: ChatMessage[] = [
         ...history,
         { role: 'user' as const, content: transcript },
         { role: 'assistant' as const, content: result.answer }
       ].slice(-20);
-      generalAiHistoryByChatId.set(chatId, nextHistory);
+      quickAiHistoryByChatId.set(chatId, nextHistory);
+      await aiAssistantService.appendGeneralDialogMessages({ userId: session.userId, messages: [
+        { role: 'user', content: transcript },
+        { role: 'assistant', content: result.answer }
+      ] });
 
       const lines = [
         `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}`,
         '',
         `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
       ];
-      if (result.actionReports.length > 0) {
-        lines.push('', '<b>Что изменил ИИ:</b>', ...result.actionReports.map((report) => `• ${escapeHtml(report)}`));
+      if ((result.actionReports ?? []).length > 0) {
+        lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
       }
 
       await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
@@ -1056,24 +1063,31 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
-    const history = generalAiHistoryByChatId.get(chatId) ?? [];
-    const result = await aiAssistantService.askGeneralAssistant({
+    const history = quickAiHistoryByChatId.get(chatId) ?? [];
+    const result = await aiAssistantService.askAiChat({
       userId: session.userId,
       question: descriptionText,
-      history
+      history,
+      model: 'gpt-5.4-nano',
+      projectTitle: 'Личный проект',
+      chatTitle: 'Быстрые запросы'
     });
     const nextHistory: ChatMessage[] = [
       ...history,
       { role: 'user' as const, content: descriptionText },
       { role: 'assistant' as const, content: result.answer }
     ].slice(-20);
-    generalAiHistoryByChatId.set(chatId, nextHistory);
+    quickAiHistoryByChatId.set(chatId, nextHistory);
+    await aiAssistantService.appendGeneralDialogMessages({ userId: session.userId, messages: [
+      { role: 'user', content: descriptionText },
+      { role: 'assistant', content: result.answer }
+    ] });
 
     const lines = [
       `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
     ];
-    if (result.actionReports.length > 0) {
-      lines.push('', '<b>Что изменил ИИ:</b>', ...result.actionReports.map((report) => `• ${escapeHtml(report)}`));
+    if ((result.actionReports ?? []).length > 0) {
+      lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
     }
 
     await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
