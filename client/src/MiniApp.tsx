@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -307,6 +307,104 @@ function formatRemaining(value?: string | null) {
   if (minutes > 0 && days === 0) parts.push(`${minutes}м`);
   const text = parts.join(' ');
   return diffMs >= 0 ? `Через ${text}` : `Просрочено на ${text}`;
+}
+
+
+type MiniAiTaskReference = {
+  taskId: string;
+  label: string;
+};
+
+const MINI_TASK_REF_PATTERN = /\[\[task_ref=([^\]]+)\]\]|\[\[task_ref:([^|\]]+)\|([^\]]+)\]\]/g;
+
+function normalizeMiniAiMessageContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith('{') || !trimmed.includes('"answer"')) return content;
+
+  try {
+    const parsed = JSON.parse(trimmed) as { answer?: unknown };
+    if (typeof parsed.answer === 'string' && parsed.answer.trim()) return parsed.answer.trim();
+  } catch {
+    const answerMatch = trimmed.match(/"answer"\s*:\s*"([\s\S]*?)"\s*,\s*"actions"\s*:/);
+    if (answerMatch?.[1]) {
+      return answerMatch[1]
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, '\\')
+        .trim();
+    }
+  }
+
+  return content;
+}
+
+function parseMiniTaskReferencesInLine(content: string): Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: MiniAiTaskReference }> {
+  const chunks: Array<{ type: 'text'; value: string } | { type: 'taskRef'; reference: MiniAiTaskReference }> = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  MINI_TASK_REF_PATTERN.lastIndex = 0;
+  while ((match = MINI_TASK_REF_PATTERN.exec(content)) !== null) {
+    const [full, rawTaskIdEq, rawTaskIdLegacy, rawLabelLegacy] = match;
+    const textBefore = content.slice(lastIndex, match.index);
+    if (textBefore) chunks.push({ type: 'text', value: textBefore });
+    const taskId = (rawTaskIdEq || rawTaskIdLegacy || '').trim();
+    const label = (rawLabelLegacy || '').trim() || 'Открыть задачу';
+    if (taskId && label) chunks.push({ type: 'taskRef', reference: { taskId, label } });
+    lastIndex = match.index + full.length;
+  }
+  const tail = content.slice(lastIndex);
+  if (tail) chunks.push({ type: 'text', value: tail });
+  MINI_TASK_REF_PATTERN.lastIndex = 0;
+  return chunks;
+}
+
+function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { content: string; tasks: Task[]; onOpenTask: (task: Task) => void }) {
+  const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const normalizedContent = useMemo(() => normalizeMiniAiMessageContent(content), [content]);
+  const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
+
+  return (
+    <>
+      {lines.map((line, lineIndex) => {
+        const chunks = parseMiniTaskReferencesInLine(line);
+        if (chunks.length === 0) return <p key={`mini-ai-line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
+        const taskReferences = chunks
+          .filter((chunk): chunk is { type: 'taskRef'; reference: MiniAiTaskReference } => chunk.type === 'taskRef')
+          .map((chunk) => chunk.reference);
+        return (
+          <div key={`mini-ai-line-${lineIndex}`} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {chunks.map((chunk, chunkIndex) => {
+              if (chunk.type === 'taskRef') return null;
+              return <span key={`mini-ai-text-${lineIndex}-${chunkIndex}`}>{renderMiniAiText(chunk.value)}</span>;
+            })}
+            {taskReferences.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {taskReferences.map((reference, referenceIndex) => {
+                  const matchedTask = taskById.get(reference.taskId);
+                  const label = matchedTask?.title || reference.label;
+                  return (
+                    <button
+                      key={`mini-ai-task-${lineIndex}-${reference.taskId}-${referenceIndex}`}
+                      type="button"
+                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow transition active:scale-95 disabled:opacity-60"
+                      onClick={() => { if (matchedTask) onOpenTask(matchedTask); }}
+                      disabled={!matchedTask}
+                      title={matchedTask ? `Открыть задачу: ${label}` : `Задача не найдена: ${reference.taskId}`}
+                    >
+                      <ArrowUpRight size={12} />
+                      <span className="truncate">{matchedTask ? label : 'Задача не найдена'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 function renderMiniAiText(content: string) {
@@ -1262,7 +1360,7 @@ export default function MiniApp() {
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
       });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${result.answer}` };
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeMiniAiMessageContent(result.answer)}` };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await loadData();
     } catch (e) {
@@ -2306,7 +2404,7 @@ export default function MiniApp() {
               {openedTaskAiDialog.map((message, index) => (
                 <div key={`mini-ai-full-${index}`} className={`miniapp-ai-message max-w-[94%] rounded-xl border px-3 py-2.5 ${message.role === 'assistant' ? 'miniapp-ai-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'miniapp-ai-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
                 </div>
               ))}
               {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
@@ -2371,8 +2469,8 @@ export default function MiniApp() {
       >✦</button>
 
       {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-x-0 bottom-0 top-3 z-[70] bg-slate-950/92 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-t-2xl border border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 pt-3 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
+          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
@@ -2393,7 +2491,7 @@ export default function MiniApp() {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-2xl border px-3 py-2 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50' : 'miniapp-ai-chat-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{renderMiniAiText(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
                 </div>
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
