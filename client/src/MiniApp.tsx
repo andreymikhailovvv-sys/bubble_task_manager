@@ -552,7 +552,6 @@ export default function MiniApp() {
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
-  const inlineAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const mainScrollRef = useRef<HTMLElement | null>(null);
   const timelineGridRef = useRef<HTMLDivElement | null>(null);
@@ -1653,7 +1652,6 @@ export default function MiniApp() {
       if (!container) return;
       container.scrollTop = container.scrollHeight;
     };
-    scrollToBottom(inlineAiDialogContainerRef.current);
     scrollToBottom(fullscreenAiDialogContainerRef.current);
   }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
 
@@ -2172,87 +2170,7 @@ export default function MiniApp() {
                 </button>
               </div>
             </div>
-            {isAiDialogOpen ? (
-              <div className="miniapp-ai-dialog mt-3 space-y-2 rounded-md border border-violet-500/40 bg-slate-800/80 p-3">
-                <h3 className="text-sm font-semibold text-violet-100">Чат по задаче</h3>
-                <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
-                  <button
-                    type="button"
-                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
-                  >
-                    <span className="block text-left">Быстрая</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-xl px-2 py-1 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                    onClick={() => openedTask && setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
-                  >
-                    <span className="block text-left">Умная</span>
-                    <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
-                  </button>
-                </div>
-                <div ref={inlineAiDialogContainerRef} className="miniapp-ai-thread max-h-52 space-y-2 overflow-y-auto overflow-x-hidden rounded-md bg-slate-900/80 p-2 text-xs">
-                  {openedTaskAiDialog.length === 0 ? <p className="text-slate-400">История пока пустая.</p> : null}
-                  {openedTaskAiDialog.map((message, index) => (
-                    <div key={`mini-ai-${index}`} className={`miniapp-ai-message max-w-[94%] rounded-xl border px-2.5 py-2 ${message.role === 'assistant' ? 'miniapp-ai-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50' : 'miniapp-ai-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50'}`}>
-                      <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300 transition" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                      <div className="text-[13px] leading-relaxed">{renderMiniAiText(message.content)}</div>
-                    </div>
-                  ))}
-                  {aiLoadingTaskId === openedTask.id ? <p className="text-cyan-200">ИИ думает…</p> : null}
-                </div>
-                <input
-                  ref={aiAttachmentInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
-                  multiple
-                  className="hidden"
-                  onChange={handleAiFileSelect}
-                />
-                {aiPendingFiles.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {aiPendingFiles.map((file) => (
-                      <button key={`mini-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full bg-slate-700/80 px-2 py-1 text-[10px]" onClick={() => setAiPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}>
-                        <Paperclip size={10} />
-                        <span className="max-w-[170px] truncate">{file.name}</span>
-                        <X size={10} />
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex items-end gap-2">
-                  <button type="button" className="miniapp-ai-attach-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
-                    <Paperclip size={15} />
-                  </button>
-                  <textarea
-                    ref={aiTextareaRef}
-                    value={aiDraft}
-                    onChange={(event) => setAiDraft(event.target.value)}
-                    placeholder="Напишите сообщение для ИИ"
-                    rows={1}
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                    className="miniapp-ai-input max-h-[180px] w-full resize-none overflow-y-auto rounded-md border border-slate-600 bg-slate-900 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-0"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                        event.preventDefault();
-                        void sendAiMessage();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void sendAiMessage()}
-                    disabled={aiLoadingTaskId === openedTask.id}
-                    className="rounded-xl bg-violet-600 px-3 py-2 disabled:opacity-60"
-                    title="Отправить"
-                  >
-                    <SendHorizontal size={14} />
-                  </button>
-                </div>
-              </div>
-            ) : null}
+
 
             <div className="mt-4 space-y-2 rounded-xl border border-slate-700 bg-slate-800/70 p-3">
               <div className="flex items-center justify-between gap-2">
