@@ -943,7 +943,7 @@ export default function MiniApp() {
     window.setTimeout(() => {
       close();
       setClosingMiniWindow((current) => (current === windowName ? null : current));
-    }, 220);
+    }, windowName === 'ai-chat' ? 140 : 220);
   };
 
   const selectedSphereName = sphereFilter === 'all'
@@ -2020,7 +2020,7 @@ export default function MiniApp() {
       </div>
 
       {openedTask && openedTaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('task')}`}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[90] flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('task')}`}>
           <div className="miniapp-slide-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-700 bg-slate-900 p-4 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
               <h2 className="text-lg font-semibold">Задача</h2>
