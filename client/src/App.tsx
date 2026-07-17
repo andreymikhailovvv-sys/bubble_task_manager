@@ -4034,7 +4034,7 @@ ${allContext}`,
                   <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
                 </div>
               </div>
-              <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-16 z-20 -translate-x-1/2" />
+              <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[3.5rem] z-20 -translate-x-1/2" />
               {!isFocusTimerRunning ? <span className="mt-2 text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
               <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
                 {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
@@ -4061,7 +4061,7 @@ ${allContext}`,
                 <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
-            <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
+            <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
             {!isFocusTimerRunning ? <p className="mb-2 rounded-xl border border-amber-300/50 bg-amber-100/30 px-3 py-2 text-xs text-amber-700">Запустите таймер, чтобы отправлять сообщения и файлы ИИ.</p> : null}
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
               {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
@@ -5438,7 +5438,7 @@ ${allContext}`,
                   </button>
                 </div>
               </div>
-              <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.65rem] z-20 -translate-x-1/2" />
+              <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-16 z-20 -translate-x-1/2" />
               <div ref={focusedAiDialogContainerRef} className="chat-thread mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
@@ -5463,9 +5463,10 @@ ${allContext}`,
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
               </div>
-              <div className="ai-chat-composer mt-2 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              <div className="ai-chat-composer mt-2 flex h-11 items-center gap-2 rounded-3xl border p-0 shadow-lg backdrop-blur">
               <textarea
-                className="form-field min-h-11 flex-1 shrink-0 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0"
+                rows={1}
+                className="form-field h-full min-h-0 flex-1 shrink-0 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0"
                 placeholder="Напишите сообщение…"
                 value={aiDraft}
                 onChange={(event) => setAiDraft(event.target.value)}
@@ -5486,7 +5487,7 @@ ${allContext}`,
               />
               <div className="flex items-center gap-2">
                 <button
-                  className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition hover:brightness-110"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 transition hover:bg-slate-300"
                   type="button"
                   onClick={() => focusedAiFileInputRef.current?.click()}
                   title="Прикрепить файл"
@@ -6197,7 +6198,7 @@ ${allContext}`,
                 </button>
               </div>
             </div>
-            <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
+            <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
             <div ref={expandedAiDialogContainerRef} className="chat-thread mb-3 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
@@ -6229,7 +6230,7 @@ ${allContext}`,
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" type="button" title="Прикрепить файл" onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
-            <p className="mt-2 min-h-5 text-xs text-rose-300">{aiError ?? ''}</p>
+            {aiError ? <p className="mt-2 text-xs text-rose-300">{aiError}</p> : null}
           </div>
         </div>
       ) : null}
