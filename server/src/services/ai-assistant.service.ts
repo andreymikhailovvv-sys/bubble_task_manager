@@ -26,6 +26,7 @@ type AskTaskAssistantInput = {
   question: string;
   history: ChatMessage[];
   mode?: 'fast' | 'smart';
+  model?: AiChatModel;
   attachments?: ChatAttachment[];
   userTimeZone?: string;
   skipCreditsCharge?: boolean;
@@ -63,7 +64,7 @@ type AskGeneralAssistantInput = {
   userTimeZone?: string;
 };
 type AiChatModel = 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
-type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string };
+type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachment[] };
 const TASK_INTENT_PATTERN = /(задач|подзадач|дедлайн|срок|расписан|планиров|заплан|перенес|созда(й|ть).*дел|созда(й|ть).*зада|отметь|выполнен|закрой|сектор|привычк|таймлайн|календар)/i;
 type GeneralAssistantUndoOperation = {
   taskId: string;
@@ -923,7 +924,8 @@ function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined
   };
 }
 
-function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachments: boolean): string[] {
+function resolveModelCandidates(mode: AskTaskAssistantInput['mode'], hasAttachments: boolean, requestedModel?: AskTaskAssistantInput['model']): string[] {
+  if (requestedModel) return [AI_CHAT_MODEL_BY_OPTION[requestedModel]];
   if (hasAttachments) {
     if (mode === 'smart') {
       return Array.from(new Set([FULL_MODEL, ATTACHMENTS_MODEL].filter(Boolean)));
@@ -959,6 +961,7 @@ export const aiAssistantService = {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const history = normalizeGeneralHistory(input.history).slice(-24);
+    const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -968,7 +971,8 @@ export const aiAssistantService = {
           { role: 'system', content: 'Ты универсальный ИИ-чат внутри Bubble Task Manager. Отвечай на обычные вопросы на русском языке. Ты не загружаешь полный контекст задач для экономии токенов. Если пользователь просит создать, изменить, найти или обсудить задачи, сроки, расписание, календарь, привычки или планирование — не выдумывай данные задач, а коротко скажи, что подключаешь ИИ-планировщик.' },
           { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
           ...history,
-          { role: 'user', content: question }
+          { role: 'user', content: question },
+          ...(attachmentsMessage ? [attachmentsMessage] : [])
         ]
       })
     });
@@ -1454,8 +1458,8 @@ export const aiAssistantService = {
     const requestId = randomUUID();
     const reasoningEffort = resolveReasoningEffort(input.mode);
     const modelCandidates = isSmartPostponeRequest
-      ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments)].filter(Boolean)))
-      : resolveModelCandidates(input.mode, hasAttachments);
+      ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, input.model)].filter(Boolean)))
+      : resolveModelCandidates(input.mode, hasAttachments, input.model);
 
     console.info('[AI] Starting OpenAI request', {
       requestId,

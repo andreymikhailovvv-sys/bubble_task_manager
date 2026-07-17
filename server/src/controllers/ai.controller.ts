@@ -73,7 +73,8 @@ export const aiController = {
         model: requestedModel,
         userTimeZone,
         projectTitle,
-        chatTitle
+        chatTitle,
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
       if (projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы') {
         await aiAssistantService.appendGeneralDialogMessages({
@@ -183,6 +184,7 @@ export const aiController = {
         question?: string;
         userMessage?: string;
         mode?: 'fast' | 'smart';
+        model?: 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
         attachments?: ChatAttachment[];
         skipEfficiencyBonus?: boolean;
       };
@@ -193,10 +195,12 @@ export const aiController = {
       }
 
       const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
+      const model = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'].includes(req.body?.model) ? req.body.model as 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4' : undefined;
       console.info('[AI] /tasks/:id/ai-chat request received', {
         userId: req.user!.id,
         taskId: req.params.id,
         mode,
+        model,
         questionLength: question.length,
         userMessageLength: typeof userMessage === 'string' ? userMessage.length : 0
       });
@@ -213,6 +217,7 @@ export const aiController = {
         question,
         history: persistedHistory,
         mode,
+        model,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         userTimeZone,
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
