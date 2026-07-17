@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
@@ -309,6 +309,18 @@ function formatRemaining(value?: string | null) {
   return diffMs >= 0 ? `Через ${text}` : `Просрочено на ${text}`;
 }
 
+function formatSubtaskRelativeDeadline(value?: string | null) {
+  if (!value) return '';
+  const due = new Date(value);
+  if (Number.isNaN(due.getTime())) return '';
+  const diffMs = due.getTime() - Date.now();
+  const totalMinutes = Math.floor(Math.abs(diffMs) / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const suffix = diffMs < 0 ? ' назад' : '';
+  return hours < 1 ? `${Math.max(1, minutes)} мин${suffix}` : `${hours} ч${suffix}`;
+}
+
 
 type MiniAiTaskReference = {
   taskId: string;
@@ -584,6 +596,10 @@ export default function MiniApp() {
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
+  const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
   const launchParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
@@ -1322,6 +1338,20 @@ export default function MiniApp() {
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
   const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
 
+  useLayoutEffect(() => {
+    const updateTitleRows = (textarea: HTMLTextAreaElement | null, setIsSingleLine: (value: boolean) => void) => {
+      if (!textarea) return;
+      const previousRows = textarea.rows;
+      textarea.rows = 1;
+      const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 36;
+      setIsSingleLine(textarea.scrollHeight <= lineHeight + 4);
+      textarea.rows = previousRows;
+    };
+
+    updateTitleRows(taskTitleInputRef.current, setIsTaskTitleSingleLine);
+    updateTitleRows(subtaskTitleInputRef.current, setIsSubtaskTitleSingleLine);
+  }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
+
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
 
@@ -2023,32 +2053,28 @@ export default function MiniApp() {
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Фокус задачи</p>
-                <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setIsAiDialogOpen(true)} className="miniapp-focus-action-pill miniapp-focus-action-pill-ai">
-                    <Bot size={14} /> ИИ
-                  </button>
-                  <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
-                    <X size={16} />
-                  </button>
-                </div>
+                <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
+                  <X size={16} />
+                </button>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 <textarea
+                  ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
                   onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className="miniapp-focus-title-input invisible-scrollbar min-h-[3.25rem] w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none"
-                  rows={2}
+                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${isTaskTitleSingleLine ? 'min-h-[2.25rem]' : 'min-h-[4.5rem]'}`}
+                  rows={isTaskTitleSingleLine ? 1 : 2}
                   placeholder="Без названия"
                 />
-                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-300">
-                  <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTask.dueDate)}` : 'Дедлайн не задан'}</span>
+                <div className={`${isTaskTitleSingleLine ? 'mt-1' : 'mt-2'} flex items-center gap-2 text-sm font-semibold text-violet-500`}>
+                  <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
-                <div className="miniapp-focus-description-surface mt-3 rounded-2xl p-3">
+                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 py-2">
                   <textarea
                     value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
                     onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
-                    className="invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                    className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                   />
                 </div>
@@ -2107,6 +2133,9 @@ export default function MiniApp() {
                     <Trash2 size={14} /> {deletingId === openedTask.id ? '...' : 'Удалить'}
                   </button>
                 </div>
+                <button type="button" onClick={() => setIsAiDialogOpen(true)} className="miniapp-focus-ai-dialog-button mt-2 w-full">
+                  <Bot size={16} /> Открыть диалог с ИИ
+                </button>
 
                 <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
@@ -2125,7 +2154,7 @@ export default function MiniApp() {
                           <button type="button" onClick={() => setOpenedSubtaskId(subtask.id)} className="flex w-full items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
-                            <span className="shrink-0 text-xs font-semibold text-violet-400">{formatDueDate(subtask.dueDate)}</span>
+                            {subtask.dueDate ? <span className="shrink-0 text-xs font-semibold text-violet-500">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                           </button>
                         </article>
                       );
@@ -2150,17 +2179,18 @@ export default function MiniApp() {
               </button>
             </div>
             <textarea
+              ref={subtaskTitleInputRef}
               value={openedSubtaskDraft.title}
               onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
-              className="miniapp-focus-title-input invisible-scrollbar min-h-[3rem] w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none"
-              rows={2}
+              className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${isSubtaskTitleSingleLine ? 'min-h-[1.9rem]' : 'min-h-[3.8rem]'}`}
+              rows={isSubtaskTitleSingleLine ? 1 : 2}
               placeholder="Название подзадачи"
             />
-            <div className="miniapp-focus-description-surface mt-3 rounded-2xl p-3">
+            <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 py-2">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
-                className="invisible-scrollbar min-h-24 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                className="miniapp-focus-description-input invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />
             </div>
