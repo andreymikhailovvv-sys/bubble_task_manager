@@ -4291,12 +4291,12 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
 
 .miniapp-focus-description-surface {
   border: 1px solid rgba(196, 181, 253, 0.54);
-  background: #faf9ff;
+  background: #fff;
 }
 
 .miniapp-light .miniapp-focus-description-surface {
   border-color: rgba(196, 181, 253, 0.54);
-  background: #faf9ff;
+  background: #fff;
 }
 
 .miniapp-focus-description-input {
@@ -4385,7 +4385,6 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   color: #fff;
   font-size: 0.8rem;
   font-weight: 700;
-  box-shadow: 0 8px 18px rgba(124, 58, 237, 0.28);
   animation: miniapp-ai-button-shimmer 4s ease-in-out infinite;
   transition: transform 0.18s ease, filter 0.18s ease;
 }

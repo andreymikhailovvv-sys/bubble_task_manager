@@ -2063,14 +2063,14 @@ export default function MiniApp() {
                   ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
                   onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${isTaskTitleSingleLine ? 'min-h-[2.25rem]' : 'min-h-[4.5rem]'}`}
+                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${isTaskTitleSingleLine ? 'min-h-[2.15rem]' : 'min-h-[4.5rem]'}`}
                   rows={isTaskTitleSingleLine ? 1 : 2}
                   placeholder="Без названия"
                 />
-                <div className={`${isTaskTitleSingleLine ? 'mt-1' : 'mt-2'} flex items-center gap-2 text-sm font-semibold text-violet-500`}>
+                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold text-violet-500`}>
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
-                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 py-2">
+                <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <textarea
                     value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
                     onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
@@ -2147,10 +2147,8 @@ export default function MiniApp() {
                   {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
                   <div className="space-y-2">
                     {openedTaskSubtasks.map((subtask) => {
-                      const hasOverdueSubtaskState = isOverdue(subtask);
-                      const hasReminderSubtaskState = !hasOverdueSubtaskState && shouldTaskGlow(subtask);
                       return (
-                        <article key={subtask.id} className={`miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`} style={hasOverdueSubtaskState ? { boxShadow: '0 0 15px rgba(239,68,68,0.6), inset 0 0 10px rgba(239,68,68,0.22)' } : hasReminderSubtaskState ? { boxShadow: '0 0 15px rgba(56,189,248,0.55), inset 0 0 10px rgba(56,189,248,0.2)' } : undefined}>
+                        <article key={subtask.id} className={`miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
                           <button type="button" onClick={() => setOpenedSubtaskId(subtask.id)} className="flex w-full items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
@@ -2186,7 +2184,7 @@ export default function MiniApp() {
               rows={isSubtaskTitleSingleLine ? 1 : 2}
               placeholder="Название подзадачи"
             />
-            <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 py-2">
+            <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
                 onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
