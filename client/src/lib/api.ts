@@ -143,7 +143,7 @@ export const api = {
 
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
-  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; mode: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) =>
+  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) =>
     request<{ answer: string; model: string; actionReports?: string[] }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
@@ -181,7 +181,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
-  askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string }) =>
+  askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachmentPayload[] }) =>
     request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }> }>('/api/ai-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
