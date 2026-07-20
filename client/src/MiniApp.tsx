@@ -2481,16 +2481,18 @@ export default function MiniApp() {
       >✦</button>
 
       {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 pt-3 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
+        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
           <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
                 <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
-                <h2 className="mt-2 truncate text-2xl font-bold tracking-tight text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2>
-                <div className="mt-2 inline-flex max-w-full items-center gap-2 rounded-2xl border px-2.5 py-1.5 text-xs font-semibold shadow-sm miniapp-ai-chat-project-chip" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white/20 text-base">{activeAiChatProject?.icon}</span>
-                  <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2>
+                  <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon}</span>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
+                  </div>
                 </div>
               </div>
               <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
@@ -2531,24 +2533,24 @@ export default function MiniApp() {
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold">Проекты и чаты</h3>
-                <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
+                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
+                <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">Проекты</p><button type="button" className="rounded-md bg-violet-600 p-1.5" onClick={() => openAiChatProjectDialog()}><Plus size={14} /></button></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
                 {aiChatProjects.map((project) => (
-                  <div key={project.id} className={`rounded-xl border p-2 ${project.id === activeAiChatProject?.id ? 'border-violet-400 bg-violet-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
-                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-medium">{project.title}</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} className="inline" /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} className="inline" /> Удалить</button></div>
+                  <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
+                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
                   </div>
                 ))}
               </div>
               <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Чаты</p><button type="button" className="rounded-md bg-cyan-600 p-1.5 text-white" onClick={createAiChatThread}><Plus size={14} /></button></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread}><Plus size={16} /></button></div>
                 {(activeAiChatProject?.chats ?? []).map((chat) => (
-                  <div key={chat.id} className={`rounded-xl border p-2 ${chat.id === activeAiChat?.id ? 'border-cyan-400 bg-cyan-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
-                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-medium">{chat.title}</span><span className="text-[11px] text-slate-400">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                  <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
+                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
                   </div>
                 ))}
               </div>
