@@ -4764,7 +4764,7 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu-action-danger:disa
 
 .top-control-bar {
   position: relative;
-  z-index: 120;
+  z-index: 35;
   overflow: visible;
   border-color: color-mix(in srgb, var(--panel-border) 80%, var(--accent) 12%);
   background: color-mix(in srgb, var(--card-bg) 86%, transparent);
