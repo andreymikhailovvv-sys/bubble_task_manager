@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -624,6 +624,7 @@ export default function MiniApp() {
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
   const [aiChatDraft, setAiChatDraft] = useState('');
+  const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatError, setAiChatError] = useState<string | null>(null);
@@ -641,6 +642,7 @@ export default function MiniApp() {
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1490,20 +1492,33 @@ export default function MiniApp() {
 
   const sendAiChatQuestion = async () => {
     const question = aiChatDraft.trim();
-    if (!question || aiChatLoading) return;
-    const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: question };
+    if ((!question && aiChatPendingFiles.length === 0) || aiChatLoading) return;
+    const fileNames = aiChatPendingFiles.map((file) => file.name);
+    let attachmentsPayload: ChatAttachmentPayload[] = [];
+    try {
+      attachmentsPayload = await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file)));
+    } catch {
+      setAiChatError('Не удалось прочитать приложенные файлы');
+      return;
+    }
+    const userMessageContent = fileNames.length > 0
+      ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
+      : question;
+    const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent };
     const history = activeAiChat?.messages ?? [];
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
     setAiChatDraft('');
+    setAiChatPendingFiles([]);
     setAiChatLoading(true);
     setAiChatError(null);
     try {
       const result = await api.askAiChat({
-        question,
+        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
         model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-5.4-nano' : selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
-        chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title
+        chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
+        attachments: attachmentsPayload
       });
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeMiniAiMessageContent(result.answer)}` };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
@@ -1513,6 +1528,29 @@ export default function MiniApp() {
     } finally {
       setAiChatLoading(false);
     }
+  };
+
+
+  const handleAiChatFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) return;
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) {
+      setAiChatError(`Файл ${oversized.name} превышает лимит 8MB.`);
+      event.target.value = '';
+      return;
+    }
+    setAiChatPendingFiles((prev) => {
+      const merged = [...prev, ...normalized.filter((file) => !prev.some((item) => item.name === file.name && item.size === file.size))];
+      if (merged.length > MAX_AI_ATTACHMENTS) {
+        setAiChatError(`Можно прикрепить максимум ${MAX_AI_ATTACHMENTS} файла.`);
+        return merged.slice(0, MAX_AI_ATTACHMENTS);
+      }
+      return merged;
+    });
+    event.target.value = '';
   };
 
   const openAiChatProjectDialog = (projectId?: string) => {
@@ -2443,16 +2481,21 @@ export default function MiniApp() {
       >✦</button>
 
       {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 pt-3 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
+        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
           <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
-              <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
+              <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-300">Чат с ИИ</p>
-                <h2 className="truncate text-base font-semibold">{activeAiChat?.title ?? 'Новый чат'}</h2>
-                <p className="truncate text-xs text-slate-400">{activeAiChatProject?.icon} {activeAiChatProject?.title ?? 'Проект'}</p>
+                <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
+                <div className="mt-2 flex min-w-0 items-center gap-2">
+                  <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2>
+                  <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon}</span>
+                    <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
+                  </div>
+                </div>
               </div>
-              <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-md border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
+              <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap absolute left-1/2 top-0 z-10 w-40 -translate-x-1/2 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
@@ -2461,7 +2504,7 @@ export default function MiniApp() {
               <div ref={aiChatDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {(activeAiChat?.messages ?? []).length === 0 ? <p className="miniapp-ai-chat-empty rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-400">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
               {(activeAiChat?.messages ?? []).map((message) => (
-                <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-2xl border px-3 py-2 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto border-cyan-400/40 bg-cyan-500/15 text-cyan-50' : 'miniapp-ai-chat-message-assistant mr-auto border-violet-400/40 bg-violet-500/20 text-violet-50'}`}>
+                <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
                 </div>
@@ -2470,9 +2513,14 @@ export default function MiniApp() {
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               </div>
             </div>
-            <div className="miniapp-ai-chat-composer flex items-end gap-2 border-t border-slate-800 p-3">
-              <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm focus:outline-none" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
-              <button type="button" onClick={() => void sendAiChatQuestion()} disabled={aiChatLoading || !aiChatDraft.trim()} className="miniapp-ai-chat-send flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white disabled:opacity-50" aria-label="Отправить сообщение"><SendHorizontal size={17} /></button>
+            <div className="miniapp-ai-chat-composer border-t border-slate-800 p-3">
+              {aiChatPendingFiles.length > 0 ? <div className="mb-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={`mini-general-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]" onClick={() => setAiChatPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}><Paperclip size={10} /><span className="max-w-[190px] truncate">{file.name}</span><X size={10} /></button>)}</div> : null}
+              <div className="miniapp-ai-chat-composer-card flex items-end gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+                <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
+                <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
+                <button type="button" onClick={() => aiChatFileInputRef.current?.click()} className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label="Прикрепить файл"><Paperclip size={17} /></button>
+                <button type="button" onClick={() => void sendAiChatQuestion()} disabled={aiChatLoading || (!aiChatDraft.trim() && aiChatPendingFiles.length === 0)} className="miniapp-ai-chat-send flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50" aria-label="Отправить сообщение"><SendHorizontal size={17} /></button>
+              </div>
             </div>
           </div>
           <div
@@ -2485,24 +2533,24 @@ export default function MiniApp() {
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="font-semibold">Проекты и чаты</h3>
-                <button type="button" className="rounded-md border border-slate-700 p-1.5" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
+                <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
+                <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">Проекты</p><button type="button" className="rounded-md bg-violet-600 p-1.5" onClick={() => openAiChatProjectDialog()}><Plus size={14} /></button></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
                 {aiChatProjects.map((project) => (
-                  <div key={project.id} className={`rounded-xl border p-2 ${project.id === activeAiChatProject?.id ? 'border-violet-400 bg-violet-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
-                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-medium">{project.title}</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} className="inline" /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} className="inline" /> Удалить</button></div>
+                  <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
+                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
                   </div>
                 ))}
               </div>
               <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Чаты</p><button type="button" className="rounded-md bg-cyan-600 p-1.5 text-white" onClick={createAiChatThread}><Plus size={14} /></button></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread}><Plus size={16} /></button></div>
                 {(activeAiChatProject?.chats ?? []).map((chat) => (
-                  <div key={chat.id} className={`rounded-xl border p-2 ${chat.id === activeAiChat?.id ? 'border-cyan-400 bg-cyan-500/15' : 'border-slate-800 bg-slate-950/50'}`}>
-                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-medium">{chat.title}</span><span className="text-[11px] text-slate-400">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="rounded-md border border-slate-700 px-2 py-1 text-xs" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="rounded-md border border-rose-500/40 px-2 py-1 text-xs text-rose-200 disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                  <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
+                    <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
                   </div>
                 ))}
               </div>
