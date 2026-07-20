@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -285,7 +285,7 @@ function toLocalDateKey(date: Date) {
 }
 
 const DISPLAY_MODE_OPTIONS = [
-  { value: 'bubbles', label: 'Баблы', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
+  { value: 'bubbles', label: 'Пузыри', icon: LayoutGrid, iconClassName: 'text-cyan-300' },
   { value: 'list', label: 'Список', icon: List, iconClassName: 'text-violet-300' },
   { value: 'timeline', label: 'Таймлайн', icon: CalendarDays, iconClassName: 'text-amber-300' }
 ] as const;
@@ -711,7 +711,6 @@ export default function App() {
     copiedAiMessageTimerRef.current = setTimeout(() => setCopiedAiMessageKey((prev) => (prev === key ? null : prev)), 1300);
   };
 
-  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
@@ -891,7 +890,6 @@ export default function App() {
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedDueDateInputRef = useRef<HTMLInputElement | null>(null);
-  const displayModeMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   const efficiencyDetailsRef = useRef<HTMLDivElement | null>(null);
   const focusedAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1336,16 +1334,13 @@ export default function App() {
       if (isSphereFilterOpen && targetElement && !targetElement.closest('[data-sphere-filter-root="true"]')) {
         setIsSphereFilterOpen(false);
       }
-      if (isDisplayModeMenuOpen && displayModeMenuRef.current && target && !displayModeMenuRef.current.contains(target)) {
-        setIsDisplayModeMenuOpen(false);
-      }
       if (isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
         setIsSettingsOpen(false);
       }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [isDisplayModeMenuOpen, isSettingsOpen, isSphereFilterOpen]);
+  }, [isSettingsOpen, isSphereFilterOpen]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -2506,7 +2501,6 @@ ${allContext}`,
     return diff <= notifyBefore;
   }
 
-  const selectedDisplayMode = DISPLAY_MODE_OPTIONS.find((option) => option.value === displayMode) ?? DISPLAY_MODE_OPTIONS[0];
   const isTimelineMode = displayMode === 'timeline';
   const isBubblesMode = displayMode === 'bubbles';
 
@@ -3626,51 +3620,94 @@ ${allContext}`,
         </button>
       </header>
 
-      <section className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative -ml-1 shrink-0" ref={displayModeMenuRef}>
-          <button
-            className="surface-popover light-menu-trigger inline-flex h-10 w-10 items-center justify-center rounded-md border transition hover:border-cyan-300/70"
-            onClick={() => setIsDisplayModeMenuOpen((prev) => !prev)}
-            aria-label="Выбрать режим отображения"
-          >
-            <selectedDisplayMode.icon size={20} className={selectedDisplayMode.iconClassName} />
+      <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
+        <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
+          {DISPLAY_MODE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${displayMode === option.value ? 'display-mode-toggle-button-active' : ''}`}
+              onClick={() => setDisplayMode(option.value)}
+              aria-pressed={displayMode === option.value}
+              title={option.label}
+            >
+              <option.icon size={16} className={option.iconClassName} />
+              <span className="hidden sm:inline">{option.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="top-filter-cluster flex flex-wrap items-center gap-2 md:ml-4">
+          <div className="relative min-w-48" data-sphere-filter-root="true">
+            <button
+              className={`topbar-select-button light-sector-filter-trigger flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
+                isTimelineMode ? 'cursor-not-allowed opacity-60' : ''
+              }`}
+              disabled={isTimelineMode}
+              onClick={() => setIsSphereFilterOpen((prev) => !prev)}
+            >
+              <span className="truncate">{sphereFilterLabel}</span>
+              <ChevronDown size={15} className={`ml-2 shrink-0 transition ${isSphereFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isSphereFilterOpen ? (
+              <div className="light-sector-filter-panel topbar-dropdown absolute left-0 top-[calc(100%+6px)] z-30 w-64 rounded-2xl border p-2 shadow-2xl backdrop-blur">
+                <label className="light-sector-filter-item topbar-dropdown-item mb-1 flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
+                  <input type="checkbox" checked={isAllSpheresSelected} onChange={(event) => { setSelectedSphereIds(event.target.checked ? spheres.map((sphere) => sphere.id) : []); }} />
+                  <span>Все сектора</span>
+                </label>
+                <div className="max-h-44 space-y-1 overflow-y-auto">
+                  {spheres.map((sphere) => (
+                    <label key={sphere.id} className="light-sector-filter-item topbar-dropdown-item flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm">
+                      <input type="checkbox" checked={selectedSphereIds.includes(sphere.id)} onChange={() => toggleSphereSelection(sphere.id)} />
+                      <span className="truncate">{sphere.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <CustomSelect
+            value={timeFilter}
+            onChange={(value) => setTimeFilter(value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
+            options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'За сегодня' }, { value: 'tomorrow', label: 'За завтра' }, { value: 'week', label: 'За эту неделю' }, { value: 'month', label: 'За этот месяц' }, { value: 'focus', label: 'Фокус' }]}
+            className="min-w-44"
+            buttonClassName={`topbar-select-button rounded-xl ${isTimelineMode ? 'cursor-not-allowed opacity-60' : ''}`}
+            menuClassName="topbar-dropdown"
+            disabled={isTimelineMode}
+            ariaLabel="Фильтр по времени"
+          />
+          <CustomSelect
+            value={isBubblesMode ? 'coefficient' : rankingMode}
+            onChange={(value) => setRankingMode(value as BubbleRankingMode)}
+            options={isBubblesMode ? [{ value: 'coefficient', label: 'По коэффициенту' }] : [{ value: 'urgency', label: 'По срочности' }, { value: 'importance', label: 'По важности' }, { value: 'coefficient', label: 'По коэффициенту' }]}
+            className="min-w-52"
+            buttonClassName={`topbar-select-button rounded-xl ${isTimelineMode ? 'cursor-not-allowed opacity-60' : isBubblesMode ? 'cursor-default' : ''}`}
+            menuClassName="topbar-dropdown"
+            disabled={isTimelineMode}
+            ariaLabel="Фильтр важности"
+          />
+        </div>
+
+        <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
+          <button type="button" className="efficiency-icon-button rounded-full p-1.5" title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`} onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}>
+            <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" /></svg>
           </button>
-          {isDisplayModeMenuOpen ? (
-            <div className="surface-popover light-dropdown absolute left-0 top-[calc(100%+6px)] z-30 w-44 rounded-xl border p-2 shadow-2xl backdrop-blur">
-              {DISPLAY_MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`light-dropdown-item flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition ${
-                    option.value === displayMode
-                      ? 'surface-muted text-primary light-dropdown-item-active'
-                      : 'text-muted hover:brightness-110'
-                  }`}
-                  onClick={() => {
-                    setDisplayMode(option.value);
-                    setIsDisplayModeMenuOpen(false);
-                  }}
-                >
-                  <span className="surface-muted light-dropdown-icon inline-flex h-9 w-9 items-center justify-center rounded-md border">
-                    <option.icon size={18} className={option.iconClassName} />
-                  </span>
-                  <span>{option.label}</span>
-                </button>
-              ))}
-            </div>
+          {isEfficiencyDetailsOpen ? (
+            <div className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div>
           ) : null}
         </div>
-        <div className="relative -ml-1 shrink-0" ref={settingsMenuRef}>
-          <button
-            className="surface-popover light-menu-trigger inline-flex h-10 w-10 items-center justify-center rounded-md border text-lg transition hover:border-cyan-300/70"
-            onClick={() => setIsSettingsOpen((prev) => !prev)}
-            aria-label="Настройки"
-            title="Настройки"
-          >
-            ⚙️
-          </button>
-          {isSettingsOpen ? (
-            <div className="surface-popover light-dropdown absolute left-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
+
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
+          <button type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
+          <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}>
+            <button className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
+            {isAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
+          </div>
+          <div className="relative shrink-0" ref={settingsMenuRef}>
+            <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
+            {isSettingsOpen ? (
+            <div className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
               <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
                 <div className="grid grid-cols-2 gap-1 rounded-lg surface-muted p-1 text-xs">
@@ -3768,125 +3805,7 @@ ${allContext}`,
               </div>
             </div>
           ) : null}
-        </div>
-        <div className="relative w-full min-w-52 flex-1 sm:w-auto sm:flex-none" data-sphere-filter-root="true">
-          <button
-            className={`light-sector-filter-trigger flex w-full items-center justify-between rounded p-2 text-left text-sm ${
-              isTimelineMode ? 'cursor-not-allowed bg-slate-800/55 text-slate-500' : 'bg-slate-800'
-            }`}
-            disabled={isTimelineMode}
-            onClick={() => setIsSphereFilterOpen((prev) => !prev)}
-          >
-            <span className="truncate">{sphereFilterLabel}</span>
-            <span className="ml-2 text-xs text-slate-400 light-sector-filter-arrow">{isSphereFilterOpen ? '▲' : '▼'}</span>
-          </button>
-          {isSphereFilterOpen ? (
-            <div className="light-sector-filter-panel absolute left-0 right-0 top-[calc(100%+6px)] z-30 rounded-xl border border-slate-700/70 bg-slate-900/95 p-2 shadow-2xl backdrop-blur">
-              <label className="light-sector-filter-item mb-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
-                <input
-                  type="checkbox"
-                  checked={isAllSpheresSelected}
-                  onChange={(event) => {
-                    setSelectedSphereIds(event.target.checked ? spheres.map((sphere) => sphere.id) : []);
-                  }}
-                />
-                <span>Все сектора</span>
-              </label>
-              <div className="max-h-44 space-y-1 overflow-y-auto">
-                {spheres.map((sphere) => (
-                  <label key={sphere.id} className="light-sector-filter-item flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-slate-800/80">
-                    <input
-                      type="checkbox"
-                      checked={selectedSphereIds.includes(sphere.id)}
-                      onChange={() => toggleSphereSelection(sphere.id)}
-                    />
-                    <span className="truncate">{sphere.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="w-full min-w-44 flex-1 sm:w-auto sm:flex-none">
-          <CustomSelect
-            value={timeFilter}
-            onChange={(value) => setTimeFilter(value as 'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus')}
-            options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'За сегодня' }, { value: 'tomorrow', label: 'За завтра' }, { value: 'week', label: 'За эту неделю' }, { value: 'month', label: 'За этот месяц' }, { value: 'focus', label: 'Фокус' }]}
-            buttonClassName={isTimelineMode ? 'cursor-not-allowed opacity-60' : ''}
-            disabled={isTimelineMode}
-            ariaLabel="Фильтр по времени"
-          />
-        </div>
-        <div className="w-full min-w-52 flex-1 sm:w-auto sm:flex-none">
-          <CustomSelect
-            value={isBubblesMode ? 'coefficient' : rankingMode}
-            onChange={(value) => setRankingMode(value as BubbleRankingMode)}
-            options={isBubblesMode ? [{ value: 'coefficient', label: 'По коэффициенту' }] : [{ value: 'urgency', label: 'По срочности' }, { value: 'importance', label: 'По важности' }, { value: 'coefficient', label: 'По коэффициенту' }]}
-            buttonClassName={isTimelineMode ? 'cursor-not-allowed opacity-60' : isBubblesMode ? 'cursor-default' : ''}
-            disabled={isTimelineMode}
-            ariaLabel="Фильтр важности"
-          />
-        </div>
-        <div className="relative hidden md:flex items-center justify-center px-1" ref={efficiencyDetailsRef}>
-          <button
-            type="button"
-            className="efficiency-icon-button rounded-full p-1.5"
-            title={`Текущий рейтинг: ${formattedEfficiencyScore}/100 (${efficiencyGrade})`}
-            onClick={() => setIsEfficiencyDetailsOpen((prev) => !prev)}
-          >
-            <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon">
-              <defs>
-                <linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient>
-                <linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient>
-              </defs>
-              <circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" />
-              <circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" />
-              <circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" />
-              <path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" />
-            </svg>
-          </button>
-          {isEfficiencyDetailsOpen ? (
-            <div className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur">
-              <div className="text-center">
-                <div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div>
-                <p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p>
-              </div>
-              <div className="mt-4 space-y-2">
-                <div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div>
-                <div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div>
-                <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div>
-                <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={openFocusSetup}
-            className="focus-mode-button flex items-center gap-1 rounded px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300"
-            title="Режим концентрации с ИИ"
-          >
-            <Bot size={16} /> Концентрация
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSubscriptionModalOpen(true)}
-            className="light-credit-badge flex items-center gap-1 rounded bg-slate-800 px-3 py-2 text-sm text-pink-300 transition hover:-translate-y-0.5 hover:bg-slate-700 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400"
-            title="Посмотреть платные подписки и увеличить ИИ-кредиты"
-          >
-            <Coins size={15} />
-            <span>{currentUser?.aiCredits ?? 100}</span>
-          </button>
-          <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}><button className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Добавить</button>{isAddMenuOpen ? <div className="add-menu-popover absolute right-0 top-[calc(100%+0.5rem)] z-40 w-48 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Событие</button></div> : null}</div>
-          <button
-            className="light-add-sector-button flex items-center gap-1 rounded bg-indigo-700 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={spheres.length >= MAX_SPHERES}
-            onClick={() => setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' })}
-          >
-            <Plus size={16} /> Сектор
-          </button>
+          </div>
         </div>
       </section>
 
