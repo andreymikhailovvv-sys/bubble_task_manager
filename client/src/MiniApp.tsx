@@ -2222,28 +2222,12 @@ export default function MiniApp() {
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-fullscreen-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/90 p-3 sm:p-6 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-dialog miniapp-slide-panel mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-violet-500/40 bg-slate-900 p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
                 <h3 className="miniapp-ai-title text-base font-semibold text-violet-100">Диалог с ИИ</h3>
                 <p className="text-xs text-slate-300">{openedTask.title}</p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  className="miniapp-ai-dialog-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition"
-                  aria-label="Поиск по сообщениям"
-                  title="Поиск по сообщениям"
-                >
-                  <Search size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="miniapp-ai-dialog-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition"
-                  aria-label="Развернуть диалог на весь экран"
-                  title="Развернуть диалог на весь экран"
-                >
-                  <Maximize2 size={16} />
-                </button>
+              <div className="flex items-center gap-2">
                 <div className="miniapp-ai-mode-switch inline-flex items-center gap-1 rounded-lg border border-violet-400/40 bg-slate-900/80 p-1 text-xs">
                   <button
                     type="button"
@@ -2265,7 +2249,7 @@ export default function MiniApp() {
                 <button
                   type="button"
                   onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))}
-                  className="miniapp-ai-dialog-icon-button inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition"
+                  className="rounded-md border border-slate-600 p-1 text-slate-300"
                   aria-label="Закрыть диалог с ИИ"
                 >
                   <X size={16} />
@@ -2301,8 +2285,8 @@ export default function MiniApp() {
                 ))}
               </div>
             ) : null}
-            <div className="miniapp-ai-composer mt-2 flex items-end gap-2">
-              <button type="button" className="miniapp-ai-attach-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
+            <div className="mt-3 flex items-end gap-2">
+              <button type="button" className="miniapp-ai-attach-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-600 bg-slate-900 text-slate-200" onClick={() => aiAttachmentInputRef.current?.click()} title="Прикрепить файл">
                 <Paperclip size={15} />
               </button>
               <textarea
@@ -2324,7 +2308,7 @@ export default function MiniApp() {
                 type="button"
                 onClick={() => void sendAiMessage()}
                 disabled={aiLoadingTaskId === openedTask.id}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white disabled:opacity-60"
+                className="rounded-xl bg-violet-600 px-3 py-2 disabled:opacity-60"
                 title="Отправить"
               >
                 <SendHorizontal size={14} />
