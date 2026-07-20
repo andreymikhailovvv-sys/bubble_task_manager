@@ -4492,3 +4492,26 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
 .miniapp-light .miniapp-create-settings-panel {
   background: rgba(255, 255, 255, 0.98);
 }
+
+.miniapp-focus-panel input:focus,
+.miniapp-focus-panel textarea:focus,
+.miniapp-focus-panel button:focus,
+.miniapp-focus-panel input:focus-visible,
+.miniapp-focus-panel textarea:focus-visible,
+.miniapp-focus-panel button:focus-visible,
+.miniapp-create-settings-panel input:focus,
+.miniapp-create-settings-panel textarea:focus,
+.miniapp-create-settings-panel button:focus,
+.miniapp-create-settings-panel input:focus-visible,
+.miniapp-create-settings-panel textarea:focus-visible,
+.miniapp-create-settings-panel button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.miniapp-focus-panel,
+.miniapp-focus-panel *,
+.miniapp-create-settings-panel,
+.miniapp-create-settings-panel * {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -3,6 +3,7 @@ import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coin
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
+import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { noteHtmlToPlainText } from './lib/notes';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
@@ -123,6 +124,13 @@ const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsC
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
 const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];
 
+type CreateSubtaskDraft = {
+  id: string;
+  title: string;
+  description: string;
+  dueDate: string;
+};
+
 type TaskDraft = {
   title: string;
   description: string;
@@ -136,6 +144,7 @@ type TaskDraft = {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | null;
   aiNotificationsEnabled?: boolean;
+  subtasks?: CreateSubtaskDraft[];
 };
 
 type HabitDraft = {
@@ -590,7 +599,8 @@ export default function MiniApp() {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: true
+    aiNotificationsEnabled: true,
+    subtasks: []
   });
   const [isCreateTaskSettingsOpen, setIsCreateTaskSettingsOpen] = useState(false);
   const [createTaskNotifyPreset, setCreateTaskNotifyPreset] = useState('30');
@@ -1159,7 +1169,8 @@ export default function MiniApp() {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: true
+    aiNotificationsEnabled: true,
+    subtasks: []
   });
 
   const openCreateTaskModal = () => {
@@ -1198,7 +1209,7 @@ export default function MiniApp() {
     setIsCreatingTask(true);
     setError(null);
     try {
-      await api.createTask({
+      const createdTask = await api.createTask({
         title: createTaskDraft.title.trim() || 'Новая задача',
         description: createTaskDraft.description.trim() || null,
         dueDate: fromInputDateTime(createTaskDraft.dueDate),
@@ -1212,6 +1223,23 @@ export default function MiniApp() {
         recurrenceUntil: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceUntil ?? null) : null,
         aiNotificationsEnabled: createTaskDraft.aiNotificationsEnabled ?? true
       });
+      const draftSubtasks = (createTaskDraft.subtasks ?? [])
+        .map((subtask) => ({
+          title: subtask.title.trim(),
+          description: subtask.description.trim(),
+          dueDate: subtask.dueDate
+        }))
+        .filter((subtask) => subtask.title || subtask.description || subtask.dueDate);
+      for (const subtask of draftSubtasks) {
+        await api.createTask({
+          title: subtask.title || 'Новая подзадача',
+          description: subtask.description || null,
+          parentTaskId: createdTask.id,
+          sphereId: createTaskDraft.sphereId ?? null,
+          dueDate: fromInputDateTime(subtask.dueDate),
+          importance: createTaskDraft.importance ?? 3
+        });
+      }
       await loadData();
       setIsCreateTaskModalOpen(false);
       setCreateTaskDraft(createEmptyTaskDraft());
@@ -2168,12 +2196,13 @@ export default function MiniApp() {
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="datetime-local"
-                    value={openedTaskDraft.dueDate}
-                    onChange={(event) => onChangeDraft(openedTask.id, { dueDate: event.target.value })}
-                    className="miniapp-focus-date-input min-w-0 flex-1 rounded-full border px-3 py-2 text-xs font-semibold"
-                    aria-label="Срок задачи"
+                  <DateTimePickerWithApply
+                    value={fromInputDateTime(openedTaskDraft.dueDate)}
+                    onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
+                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    iconOnly
+                    detachedPopup
+                    buttonClassName="miniapp-focus-icon-button"
                   />
                   <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
                     <Maximize2 size={15} />
@@ -2919,12 +2948,13 @@ export default function MiniApp() {
                   />
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="datetime-local"
-                    value={createTaskDraft.dueDate}
-                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: event.target.value }))}
-                    className="miniapp-focus-date-input min-w-0 flex-1 rounded-full border px-3 py-2 text-xs font-semibold"
-                    aria-label="Срок задачи"
+                  <DateTimePickerWithApply
+                    value={fromInputDateTime(createTaskDraft.dueDate)}
+                    onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
+                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    iconOnly
+                    detachedPopup
+                    buttonClassName="miniapp-focus-icon-button"
                   />
                 </div>
                 <div className="task-edit-compact-grid mt-4 grid grid-cols-2 gap-2">
@@ -2963,6 +2993,73 @@ export default function MiniApp() {
                       >
                         {level}
                       </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
+                    <button
+                      type="button"
+                      className="miniapp-focus-action-pill"
+                      onClick={() => setCreateTaskDraft((prev) => ({
+                        ...prev,
+                        subtasks: [...(prev.subtasks ?? []), { id: crypto.randomUUID(), title: '', description: '', dueDate: '' }]
+                      }))}
+                    >
+                      <Plus size={13} /> Добавить
+                    </button>
+                  </div>
+                  {(createTaskDraft.subtasks ?? []).length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
+                  <div className="space-y-2">
+                    {(createTaskDraft.subtasks ?? []).map((subtask) => (
+                      <article key={subtask.id} className="miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm">
+                        <div className="flex items-start gap-2">
+                          <span className="mt-3 h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <input
+                              value={subtask.title}
+                              onChange={(event) => setCreateTaskDraft((prev) => ({
+                                ...prev,
+                                subtasks: (prev.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, title: event.target.value } : item)
+                              }))}
+                              className="miniapp-task-text-field w-full rounded-xl border border-violet-200/70 bg-white/80 px-3 py-2 text-sm font-semibold"
+                              placeholder="Название подзадачи"
+                            />
+                            <textarea
+                              value={subtask.description}
+                              onChange={(event) => setCreateTaskDraft((prev) => ({
+                                ...prev,
+                                subtasks: (prev.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, description: event.target.value } : item)
+                              }))}
+                              className="miniapp-task-text-field min-h-16 w-full resize-none rounded-xl border border-violet-200/70 bg-white/80 px-3 py-2 text-xs"
+                              placeholder="Описание подзадачи"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-xs font-semibold text-violet-500">{subtask.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(subtask.dueDate)) : 'Срок не задан'}</span>
+                              <DateTimePickerWithApply
+                                value={fromInputDateTime(subtask.dueDate)}
+                                onChange={(nextValue) => setCreateTaskDraft((prev) => ({
+                                  ...prev,
+                                  subtasks: (prev.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, dueDate: toInputDateTime(nextValue) } : item)
+                                }))}
+                                timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                                iconOnly
+                                detachedPopup
+                                buttonClassName="miniapp-focus-icon-button"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="miniapp-focus-icon-button"
+                            onClick={() => setCreateTaskDraft((prev) => ({ ...prev, subtasks: (prev.subtasks ?? []).filter((item) => item.id !== subtask.id) }))}
+                            aria-label="Удалить черновик подзадачи"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </article>
                     ))}
                   </div>
                 </div>
