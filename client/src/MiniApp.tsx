@@ -5,7 +5,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { noteHtmlToPlainText } from './lib/notes';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -618,7 +618,6 @@ export default function MiniApp() {
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
-  const [aiModeByTask, setAiModeByTask] = useState<Record<string, ChatMode>>({});
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
@@ -1454,7 +1453,6 @@ export default function MiniApp() {
     })
     : null;
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
-  const openedTaskAiMode: ChatMode = openedTask ? (aiModeByTask[openedTask.id] ?? 'fast') : 'fast';
 
   useLayoutEffect(() => {
     const updateTitleRows = (textarea: HTMLTextAreaElement | null, setIsSingleLine: (value: boolean) => void) => {
@@ -1698,21 +1696,6 @@ export default function MiniApp() {
   };
 
   useEffect(() => {
-    const raw = localStorage.getItem('btm:task-ai-mode-map');
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as Record<string, ChatMode>;
-      setAiModeByTask(parsed);
-    } catch {
-      // ignore invalid storage format
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('btm:task-ai-mode-map', JSON.stringify(aiModeByTask));
-  }, [aiModeByTask]);
-
-  useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
       try {
@@ -1781,7 +1764,8 @@ export default function MiniApp() {
       const result = await api.askTaskAssistant(openedTask.id, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage,
-        mode: openedTaskAiMode,
+        mode: selectedAiChatModel === 'gpt-5.4' ? 'smart' : 'fast',
+        model: selectedAiChatModel,
         attachments: attachmentsPayload
       });
       setAiDialogByTask((prev) => ({
@@ -2377,28 +2361,14 @@ export default function MiniApp() {
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
-            <div className="miniapp-ai-chat-header flex items-center justify-end gap-2 border-b border-slate-800 p-3">
+            <div className="miniapp-ai-chat-header flex items-center justify-between gap-2 border-b border-slate-800 p-3">
+              <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
-              <div className="miniapp-ai-chat-select miniapp-ai-chat-model-cap absolute left-1/2 top-0 z-10 inline-flex w-44 -translate-x-1/2 items-stretch overflow-hidden rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 text-xs font-semibold" aria-label="Выбрать режим ИИ для задачи">
-                <button
-                  type="button"
-                  className={`flex flex-1 flex-col items-center justify-center px-2 py-1.5 ${openedTaskAiMode === 'fast' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                  onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'fast' }))}
-                >
-                  <span>Быстрая</span>
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>2</span><Coins size={10} /></span>
-                </button>
-                <button
-                  type="button"
-                  className={`flex flex-1 flex-col items-center justify-center px-2 py-1.5 ${openedTaskAiMode === 'smart' ? 'bg-violet-600 text-white' : 'text-slate-300'}`}
-                  onClick={() => setAiModeByTask((prev) => ({ ...prev, [openedTask.id]: 'smart' }))}
-                >
-                  <span>Умная</span>
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-rose-300"><span>5</span><Coins size={10} /></span>
-                </button>
-              </div>
+              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap absolute left-1/2 top-0 z-10 w-40 -translate-x-1/2 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
+                {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
               <div ref={fullscreenAiDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
                 {openedTaskAiDialog.length === 0 ? <p className="miniapp-ai-chat-empty rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-400">История пока пустая. Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
                 {openedTaskAiDialog.map((message, index) => (
