@@ -5415,31 +5415,32 @@ ${allContext}`,
         ) : null}
 
         <aside className="app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
-              <button type="button" className="absolute right-4 top-4 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
-              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-10">
+              <div className="absolute right-4 top-4 z-20 flex items-center gap-1.5">
+                <button
+                  className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
+                  onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
+                  title="Поиск по диалогу"
+                >
+                  <Search size={14} />
+                </button>
+                <button
+                  className="focused-task-ai-icon-button"
+                  onClick={() => setIsAiExpanded(true)}
+                  title="Развернуть диалог"
+                >
+                  <Maximize2 size={14} />
+                </button>
+                <button type="button" className="focused-task-ai-icon-button" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+              </div>
+              <div className="mb-3 flex shrink-0 items-start justify-between gap-3 pr-32">
                 <div>
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
-                    onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
-                    title="Поиск по диалогу"
-                  >
-                    <Search size={14} />
-                  </button>
-                  <button
-                    className="surface-muted rounded p-1.5 text-muted hover:brightness-110"
-                    onClick={() => setIsAiExpanded(true)}
-                    title="Развернуть диалог"
-                  >
-                    <Maximize2 size={14} />
-                  </button>
-                </div>
               </div>
-              <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-16 z-20 -translate-x-1/2" />
-              <div ref={focusedAiDialogContainerRef} className="chat-thread mb-3 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
+              <div className="relative mb-2 min-h-0 flex-1">
+                <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />
+                <div ref={focusedAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
                     <Search size={12} />
@@ -5462,8 +5463,9 @@ ${allContext}`,
                   </div>
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
+                </div>
               </div>
-              <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              <div className="ai-chat-composer my-2 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
               <textarea
                 rows={1}
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
