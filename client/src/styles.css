@@ -4443,3 +4443,32 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
     font-size: 0.68rem;
   }
 }
+
+.miniapp-ai-dialog-icon-button {
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.miniapp-ai-dialog-icon-button:hover {
+  border-color: rgba(148, 163, 184, 0.5);
+  background: rgba(148, 163, 184, 0.18);
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog-icon-button,
+.miniapp-shell.miniapp-light .miniapp-ai-dialog-icon-button {
+  color: #334155 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-dialog-icon-button:hover,
+.miniapp-shell.miniapp-light .miniapp-ai-dialog-icon-button:hover {
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  background: rgba(148, 163, 184, 0.22) !important;
+}
+
+.miniapp-ai-composer {
+  padding-bottom: 0.25rem;
+}
+
+.miniapp-ai-chat-model-cap {
+  top: 0 !important;
+}
