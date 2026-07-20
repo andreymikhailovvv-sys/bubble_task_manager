@@ -5465,7 +5465,25 @@ ${allContext}`,
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
                 </div>
               </div>
-              <div className="ai-chat-composer my-2 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              {aiPendingFiles.length > 0 ? (
+                <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
+                  {aiPendingFiles.map((file) => (
+                    <button
+                      key={`ai-file-${file.name}`}
+                      type="button"
+                      onClick={() => removePendingAiFile(file.name)}
+                      className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]"
+                      title="Убрать файл"
+                    >
+                      <Paperclip size={10} />
+                      {file.name}
+                      <X size={10} />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
+              <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
               <textarea
                 rows={1}
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -5498,26 +5516,6 @@ ${allContext}`,
                 </button>
                 <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={17} /> : <SendHorizontal size={17} />}</button>
               </div></div>
-              {aiPendingFiles.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {aiPendingFiles.map((file) => (
-                    <button
-                      key={`ai-file-${file.name}`}
-                      type="button"
-                      onClick={() => removePendingAiFile(file.name)}
-                      className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]"
-                      title="Убрать файл"
-                    >
-                      <Paperclip size={10} />
-                      {file.name}
-                      <X size={10} />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <div className="flex shrink-0 items-center justify-between gap-2">
-                <p className="min-h-4 text-[11px] text-rose-300">{aiError ?? ''}</p>
-              </div>
             </aside>
     
         {timelineCreateMenu ? (
