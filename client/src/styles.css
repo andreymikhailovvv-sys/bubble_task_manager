@@ -4443,3 +4443,38 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
     font-size: 0.68rem;
   }
 }
+
+.focused-task-ai-icon-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.focused-task-ai-icon-button:hover,
+.focused-task-ai-icon-button-active {
+  border-color: color-mix(in srgb, var(--muted-bg) 70%, transparent);
+  background: var(--muted-bg);
+  color: var(--text-primary);
+}
+
+.focused-task-ai-icon-button:hover {
+  transform: translateY(-1px);
+}
+
+body[data-theme='dark'] .focused-task-ai-icon-button {
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+body[data-theme='dark'] .focused-task-ai-icon-button:hover,
+body[data-theme='dark'] .focused-task-ai-icon-button-active {
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  background: rgba(148, 163, 184, 0.16) !important;
+}
