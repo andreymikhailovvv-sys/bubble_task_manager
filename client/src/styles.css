@@ -4763,6 +4763,9 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu-action-danger:disa
 }
 
 .top-control-bar {
+  position: relative;
+  z-index: 120;
+  overflow: visible;
   border-color: color-mix(in srgb, var(--panel-border) 80%, var(--accent) 12%);
   background: color-mix(in srgb, var(--card-bg) 86%, transparent);
   box-shadow: 0 18px 45px color-mix(in srgb, #020617 14%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -4809,10 +4812,16 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-menu-action-danger:disa
 .topbar-dropdown.custom-select-menu,
 .topbar-dropdown.add-menu-popover,
 .topbar-dropdown.light-sector-filter-panel {
+  z-index: 220 !important;
   border-color: color-mix(in srgb, var(--accent) 24%, var(--panel-border)) !important;
   background: color-mix(in srgb, var(--card-bg) 94%, var(--field-bg)) !important;
   color: var(--text-primary) !important;
   box-shadow: 0 22px 50px color-mix(in srgb, #020617 22%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.top-control-bar .light-dropdown,
+.top-control-bar .efficiency-details-popover {
+  z-index: 220 !important;
 }
 
 .topbar-dropdown .custom-select-option,
