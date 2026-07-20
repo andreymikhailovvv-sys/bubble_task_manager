@@ -4028,10 +4028,11 @@ ${allContext}`,
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
             <aside className="focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
-              <div className="flex items-start justify-between gap-2 pr-8">
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
                 <div className="flex items-center gap-1.5">
-                  <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
+                  <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(true)} title="Открыть полноразмерный диалог"><Maximize2 size={15} /></button>
+                  <button className="focused-task-ai-icon-button" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
                 </div>
               </div>
               <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
@@ -4058,14 +4059,12 @@ ${allContext}`,
                 <p className="text-xs text-muted">Текущая задача: {focusActiveTask.title}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
+                <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
-            <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[6.75rem] z-20 -translate-x-1/2" />
-            {!isFocusTimerRunning ? <p className="mb-2 rounded-xl border border-amber-300/50 bg-amber-100/30 px-3 py-2 text-xs text-amber-700">Запустите таймер, чтобы отправлять сообщения и файлы ИИ.</p> : null}
+            <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
             <div ref={focusAiExpandedDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
               {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
-              {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
               {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
@@ -6177,25 +6176,27 @@ ${allContext}`,
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  className={`rounded p-1.5 ${isFocusedAiSearchOpen ? 'bg-violet-600 text-white' : 'surface-muted text-muted hover:brightness-110'}`}
-                  onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
-                  title="Поиск по диалогу"
-                >
-                  <Search size={14} />
-                </button>
-                <button
                   className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
                   onClick={clearFocusedAiDialog}
                   title="Очистить историю диалога по этой задаче"
                 >
                   Очистить диалог
                 </button>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsAiExpanded(false)} title="Свернуть">
-                  <Minimize2 size={14} />
-                </button>
-                <button className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть">
-                  <X size={14} />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
+                    onClick={() => setIsFocusedAiSearchOpen((prev) => !prev)}
+                    title="Поиск по диалогу"
+                  >
+                    <Search size={14} />
+                  </button>
+                  <button className="focused-task-ai-icon-button" onClick={() => setIsAiExpanded(false)} title="Свернуть">
+                    <Minimize2 size={14} />
+                  </button>
+                  <button className="focused-task-ai-icon-button" onClick={() => { setIsAiExpanded(false); void closeFocusedTask(); }} title="Закрыть">
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
             </div>
             <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
