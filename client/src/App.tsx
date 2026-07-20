@@ -4163,7 +4163,7 @@ ${allContext}`,
         </div>
       ) : null}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden pr-[320px]">
+      <div className="workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]">
         {displayMode === 'bubbles' ? (
           <div className="relative h-full">
             <div className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
@@ -4888,15 +4888,15 @@ ${allContext}`,
         ) : null}
 
         <aside
-          className="app-side-panel absolute right-0 top-0 z-10 h-full w-[320px] space-y-4 overflow-y-auto overscroll-contain border-l p-4"
+          className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain p-3 pl-5"
           data-no-field-zoom="true"
           onWheel={(event) => {
             event.stopPropagation();
           }}
         >
-          <section className="app-card rounded-2xl border p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Ближайшие подзадачи</h3>
+          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-base font-bold tracking-[-0.01em]">Ближайшие подзадачи</h3>
               <button
                 type="button"
                 className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
@@ -4909,7 +4909,7 @@ ${allContext}`,
             <ul className="max-h-[30vh] space-y-2 overflow-y-auto pr-1 text-xs text-muted">
               {upcomingSubtasksForPanel.length === 0 ? <li className="text-subtle">Нет подзадач с ближайшим дедлайном</li> : null}
               {upcomingSubtasksForPanel.map((task) => (
-                <li key={task.id} className="list-item-surface flex items-center gap-2 rounded border px-2 py-1" title={formatDeadlineTooltip(task)}>
+                <li key={task.id} className="workspace-list-row list-item-surface flex items-center gap-2 rounded-xl border px-2.5 py-2" title={formatDeadlineTooltip(task)}>
                   <input
                     type="checkbox"
                     checked={false}
@@ -5099,9 +5099,9 @@ ${allContext}`,
               </aside>
             </div>
           ) : null}
-          <section className="app-card rounded-2xl border p-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">Выполненные задания</h3>
+          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-base font-bold tracking-[-0.01em]">Выполненные задания</h3>
               <div className="light-completed-toggle flex items-center gap-1 rounded-lg bg-slate-800/80 p-1 text-[11px]">
                 <button
                   className={`light-completed-toggle-button rounded px-2 py-0.5 ${completedFilter === 'today' ? 'light-completed-toggle-button-active bg-cyan-600 text-white' : 'text-slate-300'}`}
@@ -5120,7 +5120,7 @@ ${allContext}`,
             <ul className="max-h-[34vh] space-y-2 overflow-y-auto pr-1 text-xs text-muted">
               {completedTasksForPanel.length === 0 ? <li className="text-subtle">Нет выполненных задач для выбранного фильтра</li> : null}
               {completedTasksVisible.map((task) => (
-                <li key={task.id} className="list-item-surface flex items-center gap-2 rounded border px-2 py-1">
+                <li key={task.id} className="workspace-list-row list-item-surface flex items-center gap-2 rounded-xl border px-2.5 py-2">
                   <input
                     type="checkbox"
                     checked
@@ -5143,9 +5143,9 @@ ${allContext}`,
               </button>
             ) : null}
           </section>
-          <section className="app-card rounded-2xl border p-4">
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <h3 className="text-sm font-semibold">Фон рабочего пространства</h3>
+          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <h3 className="text-base font-bold tracking-[-0.01em]">Фон рабочего пространства</h3>
               {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
             </div>
             {themeMode === 'light' ? (
@@ -5182,13 +5182,13 @@ ${allContext}`,
               </>
             )}
           </section>
-          <section className="app-card rounded-2xl border p-4">
-            <h3 className="mb-2 text-sm font-semibold">Управление секторами</h3>
+          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
+            <h3 className="mb-3 text-base font-bold tracking-[-0.01em]">Управление секторами</h3>
             <ul className="space-y-2 text-xs">
               {spheres.map((sphere) => {
                 const Icon = resolveSphereIcon(sphere.icon);
                 return (
-                  <li key={sphere.id} className="light-sector-management-item flex items-center justify-between rounded bg-slate-800/70 px-2 py-1">
+                  <li key={sphere.id} className="workspace-sector-row light-sector-management-item flex items-center justify-between rounded-xl px-2.5 py-2">
                     <button
                       className="flex min-w-0 flex-1 items-center gap-1 text-left hover:opacity-90"
                       style={{ color: sphere.color }}
