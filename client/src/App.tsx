@@ -3948,7 +3948,6 @@ ${allContext}`,
       {isFocusModeOpen && focusActiveTask ? (
         <div className="modal-backdrop fixed inset-0 z-[134] flex items-center justify-center p-3 backdrop-blur-sm">
           <div className="focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-[1500px] gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[260px_minmax(360px,1fr)_430px]" onClick={(event) => event.stopPropagation()}>
-            <button className="absolute right-2 top-2 z-20 rounded-full p-2 text-muted transition hover:bg-white/60" onClick={() => setIsFocusModeOpen(false)} aria-label="Свернуть"><X size={18} /></button>
             <aside className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
               <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
               <div className="flex min-h-0 flex-1 flex-col justify-center">
@@ -4035,12 +4034,12 @@ ${allContext}`,
                   <button className="focused-task-ai-icon-button" onClick={() => setIsFocusModeOpen(false)} title="Закрыть режим концентрации" aria-label="Закрыть режим концентрации"><X size={15} /></button>
                 </div>
               </div>
-              <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
-              {!isFocusTimerRunning ? <span className="mt-2 text-[11px] text-amber-500">Доступно после запуска таймера</span> : null}
-              <div ref={focusAiDialogContainerRef} className="chat-thread mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
-                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
-                {focusAiMessages.length === 0 ? <p className="text-sm text-subtle">Запустите таймер — после этого ИИ предложит первые шаги и примет вопросы.</p> : null}
-                {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
+              <div className="relative mt-3 min-h-0 flex-1">
+                <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
+                <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
+                  {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
+                  {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
+                </div>
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
@@ -4062,10 +4061,12 @@ ${allContext}`,
                 <button className="focused-task-ai-icon-button" onClick={() => setIsFocusAiExpanded(false)} title="Закрыть"><X size={16} /></button>
               </div>
             </div>
-            <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-[5.25rem] z-20 -translate-x-1/2" />
-            <div ref={focusAiExpandedDialogContainerRef} className="chat-thread min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-              {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
-              {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
+            <div className="relative min-h-0 flex-1">
+              <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
+              <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
+                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
+                {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
+              </div>
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
