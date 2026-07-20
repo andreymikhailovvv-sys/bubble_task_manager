@@ -1459,7 +1459,7 @@ export default function App() {
     }, {}),
     [subtaskMap, subtaskFilterMode]
   );
-  const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
+  const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT'), [rootTasks]);
   const focusCandidateTasks = useMemo(
     () => [...activeTasks].sort((a, b) => getTaskCoefficient(b) - getTaskCoefficient(a)),
     [activeTasks]
@@ -2906,9 +2906,9 @@ ${allContext}`,
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
     const createdSubtask = await api.createTask({
       ...payload,
-      importance: 3,
-      urgency: 3,
-      priorityScore: 3,
+      importance: 2,
+      urgency: 2,
+      priorityScore: 2,
       status: 'TODO',
       sphereId: null,
       parentTaskId: parentTask.id
@@ -3981,7 +3981,18 @@ ${allContext}`,
                   <p className="focus-task-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">{noteHtmlToPlainText(focusActiveTask.description ?? '', { trimEnd: true }) || 'Описание не заполнено.'}</p>
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-primary">Подзадачи</h3>
+                  <h3 className="flex items-center gap-1.5 font-semibold text-primary">
+                    Подзадачи
+                    <button
+                      type="button"
+                      className={`rounded p-1 ${hideClosedFocusedSubtasks ? 'text-cyan-200' : 'text-muted hover:brightness-110'}`}
+                      onClick={() => setHideClosedFocusedSubtasks((prev) => !prev)}
+                      title={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
+                      aria-label={hideClosedFocusedSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
+                    >
+                      {hideClosedFocusedSubtasks ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                  </h3>
                   <div className="relative">
                     <button
                       type="button"
@@ -4010,17 +4021,17 @@ ${allContext}`,
                   </div>
                 </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
-                  {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').map((subtask) => (
-                    <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
+                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : (displayedSubtaskMap[focusActiveTask.id] ?? [])).map((subtask) => (
+                    <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status === 'DONE' ? 'opacity-60' : ''} ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
-                      <input type="checkbox" checked={false} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
+                      <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
-                      <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
                   ))}
-                  {(displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE').length === 0 ? <li className="text-sm text-subtle">Активных подзадач пока нет.</li> : null}
+                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : (displayedSubtaskMap[focusActiveTask.id] ?? [])).length === 0 ? <li className="text-sm text-subtle">{hideClosedFocusedSubtasks ? 'Активных подзадач пока нет.' : 'Подзадач пока нет.'}</li> : null}
                 </ul>
               </motion.article>
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
