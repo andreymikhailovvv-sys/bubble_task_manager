@@ -3170,7 +3170,8 @@ ${allContext}`,
   const aiTaskReferenceTasks = tasks;
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
-    const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
+    const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
+    const hasOverdueState = task.status !== 'DONE' && (isOverdue(task) || hasOverdueSubtask);
     const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
     const sphereColor = taskSphere?.color ?? '#64748b';
     return {
@@ -3196,7 +3197,6 @@ ${allContext}`,
     const previewSubtasks = upcomingSubtasks.slice(0, 3);
     const hiddenSubtasksCount = Math.max(0, upcomingSubtasks.length - previewSubtasks.length);
     const isSubtaskChip = options?.isSubtask ?? Boolean(task.parentTaskId);
-    const overdueSectorColor = isSubtaskChip ? parentSphereColor : sphereColor;
     const isCompletingInTimeline = timelineCompletionAnimationIds.includes(task.id);
     const isCompletingOutsideTimeline = displayMode !== 'timeline' && closingTaskIds.includes(task.id);
     const disableEffects = Boolean(options?.disableEffects);
@@ -3214,18 +3214,18 @@ ${allContext}`,
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
-          borderColor: isEventChip ? '#f59e0b' : hasOverdueState ? overdueSectorColor : isSubtaskChip ? 'rgba(148,163,184,0.75)' : sphereColor,
+          borderColor: isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isEventChip
             ? (themeMode === 'light' ? 'rgba(254,243,199,0.95)' : 'rgba(146,64,14,0.38)')
-            : hasOverdueState
-              ? `linear-gradient(135deg, ${hexToRgba(overdueSectorColor, themeMode === 'light' ? 0.24 : 0.42) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)')} 0%, ${hexToRgba(overdueSectorColor, themeMode === 'light' ? 0.16 : 0.3) ?? 'rgba(100,116,139,0.3)'} 62%, ${themeMode === 'light' ? 'rgba(255,241,242,0.72)' : 'rgba(127,29,29,0.28)'} 100%)`
             : isSubtaskChip
               ? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
+            : hasOverdueState
+              ? (themeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
               : hexToRgba(sphereColor, themeMode === 'light' ? 0.16 : 0.34) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
           boxShadow: disableEffects
             ? undefined
             : (!isEventChip && hasOverdueState)
-              ? `0 0 0 1px rgba(248,113,113,0.42), 0 6px 16px ${hexToRgba(overdueSectorColor, 0.22) ?? 'rgba(15,23,42,0.16)'}, inset 3px 0 0 ${overdueSectorColor}, inset 0 0 8px rgba(248,113,113,0.12)`
+              ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
               : undefined,
         }}
         onDragStartCapture={(event) => {
