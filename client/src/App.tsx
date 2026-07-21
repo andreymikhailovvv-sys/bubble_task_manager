@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -17,6 +17,28 @@ import { NotesEditor } from './components/NotesEditor';
 import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
+
+const TIMELINE_SCALE_STORAGE_KEY = 'bubbleTimelineScaleLevel';
+const TIMELINE_SCALE_LEVELS = [-3, -2, -1, 0, 1, 2, 3] as const;
+type TimelineScaleLevel = typeof TIMELINE_SCALE_LEVELS[number];
+const DEFAULT_TIMELINE_SCALE_LEVEL: TimelineScaleLevel = 0;
+const TIMELINE_SCALE_CONFIG: Record<TimelineScaleLevel, {
+  label: string;
+  monthCellClassName: string;
+  monthTaskLimit: number;
+  weekCellClassName: string;
+  dayQuarterMinHeight: number;
+}> = {
+  [-3]: { label: 'Очень компактно', monthCellClassName: 'min-h-14 p-1.5', monthTaskLimit: 1, weekCellClassName: 'min-h-10 px-1 py-1', dayQuarterMinHeight: 24 },
+  [-2]: { label: 'Компактно', monthCellClassName: 'min-h-16 p-1.5', monthTaskLimit: 2, weekCellClassName: 'min-h-12 px-1 py-1', dayQuarterMinHeight: 30 },
+  [-1]: { label: 'Меньше', monthCellClassName: 'min-h-20 p-2', monthTaskLimit: 3, weekCellClassName: 'min-h-14 px-1.5 py-1.5', dayQuarterMinHeight: 36 },
+  [0]: { label: 'По умолчанию', monthCellClassName: 'min-h-[5.5rem] p-2', monthTaskLimit: 3, weekCellClassName: 'min-h-14 px-1.5 py-1.5', dayQuarterMinHeight: 42 },
+  [1]: { label: 'Крупнее', monthCellClassName: 'min-h-32 p-2.5', monthTaskLimit: 4, weekCellClassName: 'min-h-16 px-2 py-2', dayQuarterMinHeight: 52 },
+  [2]: { label: 'Большой', monthCellClassName: 'min-h-40 p-3', monthTaskLimit: 5, weekCellClassName: 'min-h-20 px-2 py-2', dayQuarterMinHeight: 64 },
+  [3]: { label: 'Очень крупно', monthCellClassName: 'min-h-48 p-3', monthTaskLimit: 6, weekCellClassName: 'min-h-24 px-2.5 py-2.5', dayQuarterMinHeight: 78 }
+};
+const isTimelineScaleLevel = (value: number): value is TimelineScaleLevel => TIMELINE_SCALE_LEVELS.includes(value as TimelineScaleLevel);
+
 
 const AI_CHAT_MODEL_CREDITS: Record<AiChatModel, number> = {
   'gpt-5.4-nano': 2,
@@ -760,6 +782,10 @@ export default function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | null>(null);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [timelineScaleLevel, setTimelineScaleLevel] = useState<TimelineScaleLevel>(() => {
+    const savedScaleLevel = Number(localStorage.getItem(TIMELINE_SCALE_STORAGE_KEY));
+    return isTimelineScaleLevel(savedScaleLevel) ? savedScaleLevel : DEFAULT_TIMELINE_SCALE_LEVEL;
+  });
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
@@ -782,6 +808,19 @@ export default function App() {
   const [timelinePostponeLoadingTaskId, setTimelinePostponeLoadingTaskId] = useState<string | null>(null);
   const [timelinePostponeHighlightedTaskId, setTimelinePostponeHighlightedTaskId] = useState<string | null>(null);
   const [timelineCompletionAnimationIds, setTimelineCompletionAnimationIds] = useState<string[]>([]);
+  const timelineScaleConfig = TIMELINE_SCALE_CONFIG[timelineScaleLevel];
+  const changeTimelineScale = (direction: -1 | 1) => {
+    setTimelineScaleLevel((current) => {
+      const currentIndex = TIMELINE_SCALE_LEVELS.indexOf(current);
+      const nextIndex = Math.min(Math.max(currentIndex + direction, 0), TIMELINE_SCALE_LEVELS.length - 1);
+      return TIMELINE_SCALE_LEVELS[nextIndex];
+    });
+  };
+
+  useEffect(() => {
+    localStorage.setItem(TIMELINE_SCALE_STORAGE_KEY, String(timelineScaleLevel));
+  }, [timelineScaleLevel]);
+
   // Совместимость на случай частичного деплоя старого JSX-блока меню (он ссылался на эти имена).
   // В актуальной версии отдельное меню timelineTaskContextMenu больше не используется.
   const timelineTaskContextMenu: { x: number; y: number; taskId?: string | null; minute?: number | null } | null = null;
@@ -4462,7 +4501,33 @@ ${allContext}`,
                     </button>
                   </div>
                   <h3 className="timeline-title text-sm font-semibold">{timelineViewData.title}</h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="timeline-zoom-control inline-flex items-center gap-1 rounded-lg border px-1.5 py-1" title={`Масштаб календаря: ${timelineScaleConfig.label}`}>
+                      <span className="timeline-zoom-icon inline-flex h-6 w-6 items-center justify-center rounded-md" aria-hidden="true">
+                        <Maximize2 size={13} />
+                      </span>
+                      <button
+                        type="button"
+                        className="timeline-nav-button inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs disabled:cursor-not-allowed disabled:opacity-45"
+                        onClick={() => changeTimelineScale(-1)}
+                        disabled={timelineScaleLevel === TIMELINE_SCALE_LEVELS[0]}
+                        aria-label="Уменьшить масштаб календаря"
+                        title="Уменьшить масштаб календаря"
+                      >
+                        <ZoomOut size={14} />
+                      </button>
+                      <span className="min-w-9 text-center text-[11px] font-semibold text-muted tabular-nums">{timelineScaleLevel > 0 ? `+${timelineScaleLevel}` : timelineScaleLevel}</span>
+                      <button
+                        type="button"
+                        className="timeline-nav-button inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs disabled:cursor-not-allowed disabled:opacity-45"
+                        onClick={() => changeTimelineScale(1)}
+                        disabled={timelineScaleLevel === TIMELINE_SCALE_LEVELS[TIMELINE_SCALE_LEVELS.length - 1]}
+                        aria-label="Увеличить масштаб календаря"
+                        title="Увеличить масштаб календаря"
+                      >
+                        <ZoomIn size={14} />
+                      </button>
+                    </div>
                     <button
                       type="button"
                       className="timeline-nav-button inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
@@ -4567,7 +4632,7 @@ ${allContext}`,
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
-                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
+                        className={`timeline-month-cell ${timelineScaleConfig.monthCellClassName} rounded-xl border ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
                               ? 'timeline-month-cell-weekend'
@@ -4604,8 +4669,8 @@ ${allContext}`,
                           <>
                             <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
                             <ul className="space-y-1">
-                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {cell.tasks.length > 4 ? (
+                              {cell.tasks.slice(0, timelineScaleConfig.monthTaskLimit).map((task) => renderTimelineTaskChip(task))}
+                              {cell.tasks.length > timelineScaleConfig.monthTaskLimit ? (
                                 <li>
                                   <button
                                     type="button"
@@ -4616,7 +4681,7 @@ ${allContext}`,
                                       setTimelineViewMode('day');
                                     }}
                                   >
-                                    + ещё {cell.tasks.length - 4}
+                                    + ещё {cell.tasks.length - timelineScaleConfig.monthTaskLimit}
                                   </button>
                                 </li>
                               ) : null}
@@ -4675,7 +4740,7 @@ ${allContext}`,
                           return (
                             <div
                               key={`${day.key}-${hour}`}
-                              className={`timeline-week-cell relative min-h-14 space-y-1 border-b border-r px-1.5 py-1.5 ${
+                              className={`timeline-week-cell relative ${timelineScaleConfig.weekCellClassName} space-y-1 border-b border-r ${
                                 isWeekend ? 'timeline-week-cell-weekend' : ''
                               } ${
                                 isToday ? 'timeline-week-cell-today border-l border-r' : ''
@@ -4736,6 +4801,7 @@ ${allContext}`,
                           <div
                             key={`${hourGroup.hour}-${quarter.minute}`}
                             className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
+                            style={{ minHeight: `${timelineScaleConfig.dayQuarterMinHeight}px` }}
                             title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
                             aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
                             onDragEnter={(event) => {
