@@ -65,7 +65,7 @@ body[data-theme='dark'] {
   --timeline-canvas-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.84), rgba(2, 6, 23, 0.78) 52%, rgba(49, 46, 129, 0.72));
   --timeline-canvas-border: rgba(103, 232, 249, 0.2);
   --timeline-canvas-shadow: 0 28px 90px rgba(15, 23, 42, 0.75), inset 0 0 80px rgba(56, 189, 248, 0.08);
-  --timeline-toolbar-bg: rgba(15, 23, 42, 0.9);
+  --timeline-toolbar-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.74), rgba(30, 41, 59, 0.56));
   --timeline-panel-bg: rgba(15, 23, 42, 0.7);
   --timeline-panel-border: rgba(51, 65, 85, 0.7);
   --timeline-grid-border: rgba(30, 41, 59, 0.8);
@@ -146,7 +146,7 @@ body[data-theme='light'] {
   --timeline-canvas-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 249, 255, 0.92) 50%, rgba(238, 242, 255, 0.86));
   --timeline-canvas-border: rgba(186, 230, 253, 0.95);
   --timeline-canvas-shadow: 0 24px 70px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.92), inset 0 0 70px rgba(14, 165, 233, 0.08);
-  --timeline-toolbar-bg: rgba(255, 255, 255, 0.9);
+  --timeline-toolbar-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(240, 249, 255, 0.58));
   --timeline-panel-bg: rgba(255, 255, 255, 0.84);
   --timeline-panel-border: rgba(203, 213, 225, 0.92);
   --timeline-grid-border: rgba(203, 213, 225, 0.82);
@@ -869,6 +869,26 @@ body[data-theme='light'] .backdrop-blur-sm {
     box-shadow: 0 18px 45px color-mix(in srgb, #020617 16%, transparent);
   }
 
+  .timeline-toolbar {
+    overflow: visible;
+    background: var(--timeline-toolbar-bg);
+    backdrop-filter: blur(20px) saturate(1.28);
+    -webkit-backdrop-filter: blur(20px) saturate(1.28);
+    box-shadow: 0 18px 45px color-mix(in srgb, #020617 14%, transparent), inset 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+    will-change: transform, opacity;
+  }
+
+  .timeline-toolbar-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  .timeline-toolbar-hidden {
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-115%) scale(0.985);
+  }
+
   .timeline-panel {
     background: var(--timeline-panel-bg);
   }
@@ -917,12 +937,13 @@ body[data-theme='light'] .backdrop-blur-sm {
     border-color: var(--timeline-control-border);
     background: var(--timeline-control-bg);
     color: var(--text-primary);
-    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   }
 
   .timeline-nav-button:hover,
   .timeline-mode-button-idle:hover,
   .timeline-preview-slot:hover {
+    transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--accent) 50%, var(--timeline-control-border));
     background: color-mix(in srgb, var(--timeline-control-bg) 82%, var(--accent-soft));
   }
