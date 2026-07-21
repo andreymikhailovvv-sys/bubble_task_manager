@@ -3170,8 +3170,7 @@ ${allContext}`,
   const aiTaskReferenceTasks = tasks;
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
-    const hasOverdueSubtask = taskSubtasks.some((subtask) => subtask.status !== 'DONE' && isOverdue(subtask));
-    const hasOverdueState = task.status !== 'DONE' && (isOverdue(task) || hasOverdueSubtask);
+    const hasOverdueState = task.status !== 'DONE' && isOverdue(task);
     const taskSphere = task.sphereId ? (sphereById.get(task.sphereId) ?? null) : null;
     const sphereColor = taskSphere?.color ?? '#64748b';
     return {
@@ -3225,7 +3224,7 @@ ${allContext}`,
           boxShadow: disableEffects
             ? undefined
             : (!isEventChip && hasOverdueState)
-              ? '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)'
+              ? '0 0 8px rgba(239,68,68,0.32), inset 0 0 6px rgba(239,68,68,0.14)'
               : undefined,
         }}
         onDragStartCapture={(event) => {
