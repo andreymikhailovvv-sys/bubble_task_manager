@@ -913,26 +913,18 @@ body[data-theme='light'] .backdrop-blur-sm {
 
 
   .timeline-nav-button,
-  .timeline-mode-switch,
-  .timeline-zoom-control {
+  .timeline-mode-switch {
     border-color: var(--timeline-control-border);
     background: var(--timeline-control-bg);
     color: var(--text-primary);
     transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
   }
 
-  .timeline-nav-button:hover:not(:disabled),
+  .timeline-nav-button:hover,
   .timeline-mode-button-idle:hover,
   .timeline-preview-slot:hover {
     border-color: color-mix(in srgb, var(--accent) 50%, var(--timeline-control-border));
     background: color-mix(in srgb, var(--timeline-control-bg) 82%, var(--accent-soft));
-  }
-
-
-
-  .timeline-zoom-icon {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--timeline-control-bg) 82%, transparent));
-    color: var(--accent);
   }
 
   .timeline-mode-button-active {
