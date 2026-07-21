@@ -670,6 +670,14 @@ function buildTimelineViewData(
         .map(({ task }) => task)
     });
   }
+  const visibleMonthCellCount = 42;
+  while (monthCells.length < visibleMonthCellCount) {
+    monthCells.push({
+      key: `empty-tail-${monthCells.length}`,
+      date: null,
+      tasks: []
+    });
+  }
 
   const title = timelineViewMode === 'day'
     ? timelineAnchorDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -3180,7 +3188,7 @@ ${allContext}`,
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; compact?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const isEventChip = task.taskType === 'EVENT';
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
@@ -3209,7 +3217,7 @@ ${allContext}`,
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
+        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between ${options?.compact ? 'gap-1 rounded px-1.5 py-0.5 text-[10px]' : 'gap-2 rounded-md px-2 py-1 text-xs'} border text-left transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
@@ -3271,24 +3279,24 @@ ${allContext}`,
       >
         <span className="flex min-w-0 items-center gap-1">
           {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline || isCompletingOutsideTimeline ? (
-            <Check size={13} className="timeline-task-chip-success shrink-0" />
+            <Check size={options?.compact ? 11 : 13} className="timeline-task-chip-success shrink-0" />
           ) : null}
-          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
-          {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
-          {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
+          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={options?.compact ? 10 : 12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
+          {isEventChip ? <Ticket size={options?.compact ? 10 : 12} className="shrink-0 text-amber-600" /> : null}
+          {isSubtaskChip ? <span className={`${options?.compact ? 'h-3' : 'h-4'} w-1 shrink-0 rounded-sm`} style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
-          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
+          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={options?.compact ? 10 : 12} className="timeline-task-ai-icon shrink-0" /></span> : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
             </span>
           ) : null}
-          {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
+          {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={options?.compact ? 10 : 12} className="timeline-task-chip-accent shrink-0" /></span> : null}
           {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
-        {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
+        {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className={`timeline-task-count-badge rounded-full border ${options?.compact ? 'px-1 py-0 text-[9px]' : 'px-1.5 py-0.5 text-[10px]'}`}>{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline || isCompletingOutsideTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -4552,8 +4560,8 @@ ${allContext}`,
               ) : null}
 
               {timelineViewMode === 'month' ? (
-                <section className="timeline-panel rounded-2xl border p-3">
-                  <div className="mb-2 grid grid-cols-7 gap-2">
+                <section className="timeline-panel flex h-[calc(100vh-210px)] min-h-[420px] flex-col overflow-hidden rounded-2xl border p-2">
+                  <div className="mb-1 grid shrink-0 grid-cols-7 gap-1">
                     {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
                       <div
                         key={dayName}
@@ -4563,11 +4571,11 @@ ${allContext}`,
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
+                  <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-1 overflow-hidden">
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
-                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
+                        className={`timeline-month-cell min-h-0 overflow-hidden rounded-lg border p-1 ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
                               ? 'timeline-month-cell-weekend'
@@ -4602,10 +4610,10 @@ ${allContext}`,
                       >
                         {cell.date ? (
                           <>
-                            <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
-                            <ul className="space-y-1">
-                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
-                              {cell.tasks.length > 4 ? (
+                            <p className="mb-1 text-[11px] font-semibold leading-none text-muted">{cell.date.getDate()}</p>
+                            <ul className="space-y-0.5">
+                              {cell.tasks.slice(0, 3).map((task) => renderTimelineTaskChip(task, { compact: true }))}
+                              {cell.tasks.length > 3 ? (
                                 <li>
                                   <button
                                     type="button"
@@ -4616,7 +4624,7 @@ ${allContext}`,
                                       setTimelineViewMode('day');
                                     }}
                                   >
-                                    + ещё {cell.tasks.length - 4}
+                                    + ещё {cell.tasks.length - 3}
                                   </button>
                                 </li>
                               ) : null}
@@ -4630,28 +4638,28 @@ ${allContext}`,
               ) : null}
 
               {timelineViewMode === 'week' ? (
-                <section className="timeline-panel overflow-x-auto rounded-2xl border">
+                <section className="timeline-panel overflow-x-auto rounded-2xl border text-[11px]">
                   {(() => {
                     const now = new Date();
                     const lineHour = now.getHours();
                     const lineOffsetPercent = (now.getMinutes() / 60) * 100;
                     return (
-                  <div className="grid min-w-[980px] grid-cols-[80px_repeat(7,minmax(120px,1fr))]">
-                    <div className="timeline-grid-header border-b border-r p-2 text-xs">Время</div>
+                  <div className="grid min-w-[900px] grid-cols-[64px_repeat(7,minmax(112px,1fr))]">
+                    <div className="timeline-grid-header border-b border-r p-1.5 text-[11px]">Время</div>
                     {timelineViewData.dayGroups.map((day) => {
                       const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
                       const isToday = day.date.toDateString() === new Date().toDateString();
                       return (
                         <div
                           key={`header-${day.key}`}
-                          className={`timeline-week-header border-b border-r p-2 text-center ${
+                          className={`timeline-week-header border-b border-r p-1.5 text-center ${
                             isToday ? 'timeline-week-header-today ring-1' : isWeekend ? 'timeline-week-header-weekend' : ''
                           }`}
                         >
                           <p className={`text-xs ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-subtle'}`}>
                             {day.date.toLocaleDateString('ru-RU', { weekday: 'short' })}
                           </p>
-                          <p className={`text-sm font-semibold ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-primary'}`}>
+                          <p className={`text-xs font-semibold ${isToday ? 'timeline-today-text' : isWeekend ? 'timeline-weekday-weekend' : 'text-primary'}`}>
                             {day.date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                           </p>
                         </div>
@@ -4659,7 +4667,7 @@ ${allContext}`,
                     })}
                     {Array.from({ length: 24 }, (_, hour) => hour).map((hour) => (
                       <Fragment key={`week-hour-${hour}`}>
-                        <div className="timeline-grid-time border-b border-r px-2 py-2 text-xs">
+                        <div className="timeline-grid-time border-b border-r px-1.5 py-1.5 text-[11px]">
                           <div className="relative">
                             {String(hour).padStart(2, '0')}:00
                           </div>
@@ -4675,7 +4683,7 @@ ${allContext}`,
                           return (
                             <div
                               key={`${day.key}-${hour}`}
-                              className={`timeline-week-cell relative min-h-14 space-y-1 border-b border-r px-1.5 py-1.5 ${
+                              className={`timeline-week-cell relative min-h-12 space-y-0.5 border-b border-r px-1 py-1 ${
                                 isWeekend ? 'timeline-week-cell-weekend' : ''
                               } ${
                                 isToday ? 'timeline-week-cell-today border-l border-r' : ''
@@ -4702,7 +4710,7 @@ ${allContext}`,
                                   style={{ top: `${lineOffsetPercent}%` }}
                                 />
                               ) : null}
-                              {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
+                              {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false, compact: true }))}
                               {getTimelineHabitsForDateHour(day.date, hour).map((habit) => renderTimelineHabitChip(habit, day.date))}
                             </div>
                           );
