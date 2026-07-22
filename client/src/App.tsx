@@ -4756,7 +4756,7 @@ ${allContext}`,
               ) : null}
 
               {timelineViewMode === 'day' ? (
-                <section className="timeline-panel rounded-2xl border">
+                <section className="timeline-panel overflow-hidden rounded-2xl border">
                   {(() => {
                     const now = new Date();
                     const isCurrentDay = timelineAnchorDate.toDateString() === now.toDateString();
@@ -4928,7 +4928,7 @@ ${allContext}`,
         ) : null}
 
         <aside
-          className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain p-3 pl-5"
+          className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain py-0 pl-5 pr-0"
           data-no-field-zoom="true"
           onWheel={(event) => {
             event.stopPropagation();

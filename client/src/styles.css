@@ -4962,3 +4962,63 @@ body[data-theme='dark'] .workspace-widget-card {
   background: color-mix(in srgb, var(--panel-bg) 72%, transparent);
   box-shadow: 0 18px 44px rgba(2, 6, 23, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
+
+/* Alignment and dark-theme refinements for the main workspace controls. */
+.display-mode-toggle-group {
+  align-items: stretch;
+  gap: 0.25rem;
+  line-height: 1;
+}
+
+.display-mode-toggle-button {
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+body[data-theme='dark'] .topbar-select-button.custom-select-trigger,
+body[data-theme='dark'] .topbar-select-button.light-sector-filter-trigger {
+  background: rgba(30, 41, 59, 0.98) !important;
+  border-color: rgba(100, 116, 139, 0.86) !important;
+}
+
+body[data-theme='dark'] .topbar-dropdown.custom-select-menu,
+body[data-theme='dark'] .topbar-dropdown.add-menu-popover,
+body[data-theme='dark'] .topbar-dropdown.light-sector-filter-panel {
+  background: rgba(15, 23, 42, 0.98) !important;
+  border-color: rgba(103, 232, 249, 0.34) !important;
+  box-shadow: 0 24px 56px rgba(2, 6, 23, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+body[data-theme='dark'] .light-credit-badge {
+  border: 1px solid rgba(244, 114, 182, 0.34);
+  background: linear-gradient(135deg, rgba(80, 7, 36, 0.92), rgba(30, 41, 59, 0.94)) !important;
+  color: #fbcfe8 !important;
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+body[data-theme='dark'] .light-credit-badge:hover {
+  border-color: rgba(244, 114, 182, 0.56);
+  background: linear-gradient(135deg, rgba(131, 24, 67, 0.96), rgba(30, 41, 59, 0.98)) !important;
+}
+
+.timeline-canvas {
+  scrollbar-gutter: stable;
+}
+
+.timeline-canvas::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.timeline-canvas::-webkit-scrollbar-track {
+  margin-block: 1.35rem;
+  background: transparent;
+}
+
+.timeline-canvas::-webkit-scrollbar-thumb {
+  border-color: transparent;
+  background-clip: padding-box;
+}
