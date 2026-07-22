@@ -743,31 +743,31 @@ export function BubbleField({
             </filter>
           </defs>
           <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
-            <div className="bubble-tooltip-card flex h-full flex-col rounded-[1.8rem] border p-6">
+            <div className="bubble-tooltip-card bubble-task-info-panel flex h-full flex-col rounded-[2.15rem] border p-6">
               {hoveredBubble ? (
                 <div className="min-h-0 space-y-4 overflow-hidden">
                   <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.28em] text-muted">Информация о задаче</p>
+                    <p className="bubble-task-info-eyebrow text-sm font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
                     <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-primary">
                       <LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick />
                     </h3>
                   </div>
-                  <div className="surface-card rounded-2xl border p-3">
+                  <div className="bubble-task-info-section rounded-[1.35rem] border p-3">
                     <p className="text-sm uppercase tracking-[0.18em] text-subtle">Описание</p>
                     <div className="mt-2 max-h-44 overflow-hidden break-words text-lg leading-relaxed text-muted">
                       <LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-base">
-                    <div className="surface-card bubble-info-badge rounded-xl border p-3">
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3">
                       <p className="text-subtle">Дедлайн</p>
                       <p className="mt-1 font-semibold text-primary">{formatDueDate(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="surface-card bubble-info-badge rounded-xl border p-3">
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3">
                       <p className="text-subtle">Осталось</p>
                       <p className="mt-1 font-semibold text-primary">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
                     </div>
-                    <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Важность</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span
@@ -787,12 +787,12 @@ export function BubbleField({
                         </span>
                       </div>
                     </div>
-                    <div className="surface-card bubble-info-badge rounded-xl border p-3" style={getInfoBadgeStyle(hoveredSphere?.color ?? '#64748b', isLightTheme)}>
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3" style={getInfoBadgeStyle(hoveredSphere?.color ?? '#64748b', isLightTheme)}>
                       <p className="text-subtle">Сектор</p>
                       <p className="mt-1 truncate font-semibold text-primary">{hoveredSphere?.name ?? 'Без сектора'}</p>
                     </div>
                   </div>
-                  <div className="surface-card bubble-info-badge rounded-2xl border p-4 text-base">
+                  <div className="bubble-info-badge rounded-[1.5rem] border p-4 text-base">
                     <div className="mb-2">
                       <p className="font-semibold text-primary">Подзадачи</p>
                     </div>
@@ -805,7 +805,7 @@ export function BubbleField({
                             ? 'bubble-subtask-preview-reminder'
                             : '';
                         return (
-                          <li key={subtask.id} className={`bubble-subtask-preview surface-muted rounded border px-2 py-1.5 ${glowClass}`}>
+                          <li key={subtask.id} className={`bubble-subtask-preview rounded-[1rem] border px-2 py-1.5 ${glowClass}`}>
                             <span className="bubble-subtask-preview-title break-words" title={subtask.title}>{subtask.title}</span>
                             <span className="bubble-subtask-preview-date mt-0.5 block truncate text-sm text-subtle">Срок: {formatDueDate(subtask.dueDate)}</span>
                           </li>
@@ -817,7 +817,7 @@ export function BubbleField({
                 </div>
               ) : (
                 <div className="flex h-full flex-col items-center justify-center text-center text-subtle">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-subtle">Информация о задаче</p>
+                  <p className="bubble-task-info-eyebrow text-[11px] font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
                   <p className="mt-3 text-lg leading-relaxed">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
                 </div>
               )}
