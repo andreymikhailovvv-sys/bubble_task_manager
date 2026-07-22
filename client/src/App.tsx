@@ -2526,6 +2526,12 @@ ${allContext}`,
 
     const handleTimelineScroll = () => {
       const nextScrollTop = Math.max(0, container.scrollTop);
+
+      if (isTimelineOverdueModalOpen) {
+        timelineLastScrollTopRef.current = nextScrollTop;
+        setIsTimelineToolbarHidden(false);
+        return;
+      }
       const delta = nextScrollTop - timelineLastScrollTopRef.current;
 
       if (Math.abs(delta) < 6) return;
@@ -2541,7 +2547,7 @@ ${allContext}`,
 
     container.addEventListener('scroll', handleTimelineScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleTimelineScroll);
-  }, [isTimelineMode, timelineViewMode]);
+  }, [isTimelineMode, timelineViewMode, isTimelineOverdueModalOpen]);
 
   useEffect(() => {
     if (!isTimelineMode || (timelineViewMode !== 'day' && timelineViewMode !== 'week')) return;
@@ -4456,7 +4462,7 @@ ${allContext}`,
         ) : (
           <div ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
+              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
                     <button
@@ -4500,6 +4506,7 @@ ${allContext}`,
                       type="button"
                       className="timeline-nav-button inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
+                        setIsTimelineToolbarHidden(false);
                         setIsTimelineOverdueModalOpen((prev) => !prev);
                         setIsTimelineOverdueModalCollapsedForDrag(false);
                       }}
