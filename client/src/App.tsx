@@ -760,6 +760,7 @@ export default function App() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | null>(null);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
+  const [isTimelineToolbarHidden, setIsTimelineToolbarHidden] = useState(false);
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
@@ -885,6 +886,7 @@ export default function App() {
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineLastScrollTopRef = useRef(0);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const focusedTaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -2509,6 +2511,44 @@ ${allContext}`,
       setRankingMode('coefficient');
     }
   }, [isBubblesMode, rankingMode]);
+
+  useEffect(() => {
+    if (!isTimelineMode) {
+      setIsTimelineToolbarHidden(false);
+      return;
+    }
+
+    const container = timelineScrollContainerRef.current;
+    if (!container) return;
+
+    timelineLastScrollTopRef.current = container.scrollTop;
+    setIsTimelineToolbarHidden(false);
+
+    const handleTimelineScroll = () => {
+      const nextScrollTop = Math.max(0, container.scrollTop);
+
+      if (isTimelineOverdueModalOpen) {
+        timelineLastScrollTopRef.current = nextScrollTop;
+        setIsTimelineToolbarHidden(false);
+        return;
+      }
+      const delta = nextScrollTop - timelineLastScrollTopRef.current;
+
+      if (Math.abs(delta) < 6) return;
+
+      if (nextScrollTop < 24 || delta < 0) {
+        setIsTimelineToolbarHidden(false);
+      } else if (delta > 0 && nextScrollTop > 72) {
+        setIsTimelineToolbarHidden(true);
+      }
+
+      timelineLastScrollTopRef.current = nextScrollTop;
+    };
+
+    container.addEventListener('scroll', handleTimelineScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleTimelineScroll);
+  }, [isTimelineMode, timelineViewMode, isTimelineOverdueModalOpen]);
+
   useEffect(() => {
     if (!isTimelineMode || (timelineViewMode !== 'day' && timelineViewMode !== 'week')) return;
     const container = timelineScrollContainerRef.current;
@@ -4422,9 +4462,9 @@ ${allContext}`,
         ) : (
           <div ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
-              <section className="timeline-toolbar sticky top-0 z-20 rounded-2xl border p-3 backdrop-blur">
+              <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 p-1 shadow-inner">
                     <button
                       className="timeline-nav-button rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
@@ -4460,12 +4500,13 @@ ${allContext}`,
                       →
                     </button>
                   </div>
-                  <h3 className="timeline-title text-sm font-semibold">{timelineViewData.title}</h3>
-                  <div className="flex items-center gap-2">
+                  <h3 className="timeline-title max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm font-semibold capitalize tracking-tight shadow-inner sm:text-base">{timelineViewData.title}</h3>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <button
                       type="button"
                       className="timeline-nav-button inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
                       onClick={() => {
+                        setIsTimelineToolbarHidden(false);
                         setIsTimelineOverdueModalOpen((prev) => !prev);
                         setIsTimelineOverdueModalCollapsedForDrag(false);
                       }}
