@@ -630,6 +630,15 @@ apiRouter.post('/telegram/link-token', requireAuth, async (req, res) => {
   res.json(tokenData);
 });
 
+apiRouter.post('/miniapp/client-log', (req, res) => {
+  const event = typeof req.body?.event === 'string' ? req.body.event.trim().slice(0, 80) : 'unknown';
+  const data = req.body?.data && typeof req.body.data === 'object' ? req.body.data : {};
+  const userAgent = req.get('user-agent') ?? 'unknown';
+  const safeData = JSON.stringify(data).slice(0, 1500);
+  console.info(`[MiniAppClient] event=${event} userId=${req.user?.id ?? 'anonymous'} userAgent="${userAgent.slice(0, 180)}" data=${safeData}`);
+  res.json({ ok: true });
+});
+
 apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
   const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
   const userAgent = req.get('user-agent') ?? 'unknown';
