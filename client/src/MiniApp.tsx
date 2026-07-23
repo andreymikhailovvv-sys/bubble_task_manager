@@ -18,9 +18,8 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   addToHomeScreen?: () => void;
-  checkHomeScreenStatus?: (callback?: (status: TelegramHomeScreenStatus) => void) => void;
-  onEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramWebAppEventPayload) => void) => void;
-  offEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramWebAppEventPayload) => void) => void;
+  onEvent?: (eventType: TelegramWebAppEvent, callback: () => void) => void;
+  offEvent?: (eventType: TelegramWebAppEvent, callback: () => void) => void;
   SettingsButton?: {
     show?: () => void;
     hide?: () => void;
@@ -29,10 +28,7 @@ type TelegramWebApp = {
   };
 };
 
-type TelegramHomeScreenStatus = 'unsupported' | 'unknown' | 'added' | 'missed';
-type TelegramHomeScreenCheckedPayload = { status?: TelegramHomeScreenStatus };
-type TelegramWebAppEvent = 'homeScreenAdded' | 'homeScreenChecked' | 'settingsButtonClicked';
-type TelegramWebAppEventPayload = TelegramHomeScreenCheckedPayload | undefined;
+type TelegramWebAppEvent = 'settingsButtonClicked';
 
 type TelegramWindow = Window & {
   Telegram?: {
@@ -578,7 +574,6 @@ export default function MiniApp() {
     return stored === 'dark' || stored === 'light' ? stored : 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [homeScreenStatus, setHomeScreenStatus] = useState<TelegramHomeScreenStatus>('unknown');
   const [homeScreenHint, setHomeScreenHint] = useState<string | null>(null);
   const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
@@ -665,6 +660,7 @@ export default function MiniApp() {
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastHomeScreenRequestAtRef = useRef(0);
   const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
   const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
   const launchParams = useMemo(() => {
@@ -723,37 +719,21 @@ export default function MiniApp() {
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
     setHasHomeScreenApi(canAddToHomeScreen);
-
-    if (!tgWebApp) return;
-
-    const handleHomeScreenAdded = () => {
-      setHomeScreenStatus('added');
-      setHomeScreenHint('Ярлык добавлен на главный экран.');
-    };
-
-    const handleHomeScreenChecked = (payload?: TelegramHomeScreenCheckedPayload) => {
-      if (payload?.status) setHomeScreenStatus(payload.status);
-    };
-
-    tgWebApp.onEvent?.('homeScreenAdded', handleHomeScreenAdded);
-    tgWebApp.onEvent?.('homeScreenChecked', handleHomeScreenChecked);
-    tgWebApp.checkHomeScreenStatus?.((status) => setHomeScreenStatus(status));
-
-    return () => {
-      tgWebApp.offEvent?.('homeScreenAdded', handleHomeScreenAdded);
-      tgWebApp.offEvent?.('homeScreenChecked', handleHomeScreenChecked);
-    };
   }, []);
 
   const handleAddMiniAppToHomeScreen = () => {
+    const requestedAt = Date.now();
+    if (requestedAt - lastHomeScreenRequestAtRef.current < 700) return;
+    lastHomeScreenRequestAtRef.current = requestedAt;
+
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
-      setHomeScreenHint('Подтвердите добавление ярлыка в окне Telegram.');
+      setHomeScreenHint('Подтвердите добавление ярлыка в окне Telegram. Если ярлык не появился, нажмите кнопку ещё раз.');
       tgWebApp.addToHomeScreen();
       return;
     }
 
-    setHomeScreenHint('Если кнопка недоступна, откройте меню ⋯ в Telegram и выберите «Создать ярлык».');
+    setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
   };
 
   useEffect(() => {
@@ -761,23 +741,18 @@ export default function MiniApp() {
     if (!tgWebApp) return;
 
     const handleTelegramSettingsClick = () => {
-      handleAddMiniAppToHomeScreen();
+      setIsSettingsOpen(true);
+      window.setTimeout(handleAddMiniAppToHomeScreen, 0);
     };
 
-    if (tgWebApp.SettingsButton) {
-      tgWebApp.SettingsButton.show?.();
-      tgWebApp.SettingsButton.onClick?.(handleTelegramSettingsClick);
-    } else {
-      tgWebApp.onEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
-    }
+    tgWebApp.SettingsButton?.show?.();
+    tgWebApp.SettingsButton?.onClick?.(handleTelegramSettingsClick);
+    tgWebApp.onEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
 
     return () => {
-      if (tgWebApp.SettingsButton) {
-        tgWebApp.SettingsButton.offClick?.(handleTelegramSettingsClick);
-        tgWebApp.SettingsButton.hide?.();
-      } else {
-        tgWebApp.offEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
-      }
+      tgWebApp.SettingsButton?.offClick?.(handleTelegramSettingsClick);
+      tgWebApp.offEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
+      tgWebApp.SettingsButton?.hide?.();
     };
   }, []);
 
@@ -2001,26 +1976,24 @@ export default function MiniApp() {
                         Тёмная
                       </button>
                     </div>
-                    <div className="border-t border-slate-700 pt-2">
-                      <p className="mb-2 text-xs text-slate-400">Ярлык на главном экране</p>
-                      {homeScreenStatus === 'added' ? (
-                        <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-2 py-2 text-xs text-emerald-200">
-                          Ярлык уже добавлен.
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={handleAddMiniAppToHomeScreen}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-sky-500/60 bg-sky-500/15 px-2 py-2 text-xs font-medium text-sky-100 hover:bg-sky-500/25"
-                        >
-                          <Smartphone size={13} />
-                          Добавить ярлык
-                        </button>
-                      )}
-                      <p className="mt-2 text-[11px] leading-snug text-slate-500">
+                    <div className={`border-t pt-2 ${isLightTheme ? 'border-slate-200' : 'border-slate-700'}`}>
+                      <p className={`mb-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-slate-400'}`}>Ярлык на главном экране</p>
+                      <button
+                        type="button"
+                        onClick={handleAddMiniAppToHomeScreen}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs font-medium transition ${
+                          isLightTheme
+                            ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                            : 'border-sky-500/60 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25'
+                        }`}
+                      >
+                        <Smartphone size={13} />
+                        Добавить ярлык
+                      </button>
+                      <p className={`mt-2 text-[11px] leading-snug ${isLightTheme ? 'text-slate-500' : 'text-slate-500'}`}>
                         {hasHomeScreenApi
-                          ? (homeScreenHint ?? 'Откроет системное окно Telegram для добавления мини-аппа. Также можно нажать пункт «Настройки» в меню ⋯ Telegram.')
-                          : (homeScreenHint ?? 'Если кнопка не сработает, проверьте версию Telegram: пункт «Создать ярлык» показывает сам клиент Telegram, мини-апп не может добавить его принудительно.')}
+                          ? (homeScreenHint ?? 'Откроет системное окно Telegram для добавления мини-аппа. Кнопку можно нажимать повторно.')
+                          : (homeScreenHint ?? 'Если кнопка не сработает, обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.')}
                       </p>
                     </div>
                   </div>
