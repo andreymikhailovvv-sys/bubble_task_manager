@@ -18,14 +18,6 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   addToHomeScreen?: () => void;
-  onEvent?: (eventType: TelegramWebAppEvent, callback: () => void) => void;
-  offEvent?: (eventType: TelegramWebAppEvent, callback: () => void) => void;
-  SettingsButton?: {
-    show?: () => void;
-    hide?: () => void;
-    onClick?: (callback: () => void) => void;
-    offClick?: (callback: () => void) => void;
-  };
 };
 
 type TelegramWebAppEvent = 'settingsButtonClicked';
@@ -722,39 +714,15 @@ export default function MiniApp() {
   }, []);
 
   const handleAddMiniAppToHomeScreen = () => {
-    const requestedAt = Date.now();
-    if (requestedAt - lastHomeScreenRequestAtRef.current < 700) return;
-    lastHomeScreenRequestAtRef.current = requestedAt;
-
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
-      setHomeScreenHint('Подтвердите добавление ярлыка в окне Telegram. Если ярлык не появился, нажмите кнопку ещё раз.');
+      setHomeScreenHint(null);
       tgWebApp.addToHomeScreen();
       return;
     }
 
     setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
   };
-
-  useEffect(() => {
-    const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
-    if (!tgWebApp) return;
-
-    const handleTelegramSettingsClick = () => {
-      setIsSettingsOpen(true);
-      window.setTimeout(handleAddMiniAppToHomeScreen, 0);
-    };
-
-    tgWebApp.SettingsButton?.show?.();
-    tgWebApp.SettingsButton?.onClick?.(handleTelegramSettingsClick);
-    tgWebApp.onEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
-
-    return () => {
-      tgWebApp.SettingsButton?.offClick?.(handleTelegramSettingsClick);
-      tgWebApp.offEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
-      tgWebApp.SettingsButton?.hide?.();
-    };
-  }, []);
 
   useEffect(() => {
     document.body.dataset.theme = miniThemeMode;
@@ -1990,11 +1958,9 @@ export default function MiniApp() {
                         <Smartphone size={13} />
                         Добавить ярлык
                       </button>
-                      <p className={`mt-2 text-[11px] leading-snug ${isLightTheme ? 'text-slate-500' : 'text-slate-500'}`}>
-                        {hasHomeScreenApi
-                          ? (homeScreenHint ?? 'Откроет системное окно Telegram для добавления мини-аппа. Кнопку можно нажимать повторно.')
-                          : (homeScreenHint ?? 'Если кнопка не сработает, обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.')}
-                      </p>
+                      {!hasHomeScreenApi && homeScreenHint ? (
+                        <p className="mt-2 text-[11px] leading-snug text-slate-500">{homeScreenHint}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
