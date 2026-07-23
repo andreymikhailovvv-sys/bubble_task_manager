@@ -19,12 +19,20 @@ type TelegramWebApp = {
   expand?: () => void;
   addToHomeScreen?: () => void;
   checkHomeScreenStatus?: (callback?: (status: TelegramHomeScreenStatus) => void) => void;
-  onEvent?: (eventType: 'homeScreenAdded' | 'homeScreenChecked', callback: (payload?: TelegramHomeScreenCheckedPayload) => void) => void;
-  offEvent?: (eventType: 'homeScreenAdded' | 'homeScreenChecked', callback: (payload?: TelegramHomeScreenCheckedPayload) => void) => void;
+  onEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramWebAppEventPayload) => void) => void;
+  offEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramWebAppEventPayload) => void) => void;
+  SettingsButton?: {
+    show?: () => void;
+    hide?: () => void;
+    onClick?: (callback: () => void) => void;
+    offClick?: (callback: () => void) => void;
+  };
 };
 
 type TelegramHomeScreenStatus = 'unsupported' | 'unknown' | 'added' | 'missed';
 type TelegramHomeScreenCheckedPayload = { status?: TelegramHomeScreenStatus };
+type TelegramWebAppEvent = 'homeScreenAdded' | 'homeScreenChecked' | 'settingsButtonClicked';
+type TelegramWebAppEventPayload = TelegramHomeScreenCheckedPayload | undefined;
 
 type TelegramWindow = Window & {
   Telegram?: {
@@ -747,6 +755,31 @@ export default function MiniApp() {
 
     setHomeScreenHint('Если кнопка недоступна, откройте меню ⋯ в Telegram и выберите «Создать ярлык».');
   };
+
+  useEffect(() => {
+    const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
+    if (!tgWebApp) return;
+
+    const handleTelegramSettingsClick = () => {
+      handleAddMiniAppToHomeScreen();
+    };
+
+    if (tgWebApp.SettingsButton) {
+      tgWebApp.SettingsButton.show?.();
+      tgWebApp.SettingsButton.onClick?.(handleTelegramSettingsClick);
+    } else {
+      tgWebApp.onEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
+    }
+
+    return () => {
+      if (tgWebApp.SettingsButton) {
+        tgWebApp.SettingsButton.offClick?.(handleTelegramSettingsClick);
+        tgWebApp.SettingsButton.hide?.();
+      } else {
+        tgWebApp.offEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     document.body.dataset.theme = miniThemeMode;
@@ -1986,8 +2019,8 @@ export default function MiniApp() {
                       )}
                       <p className="mt-2 text-[11px] leading-snug text-slate-500">
                         {hasHomeScreenApi
-                          ? (homeScreenHint ?? 'Откроет системное окно Telegram для добавления мини-аппа.')
-                          : (homeScreenHint ?? 'Если кнопка не сработает, откройте меню ⋯ в Telegram и выберите «Создать ярлык».')}
+                          ? (homeScreenHint ?? 'Откроет системное окно Telegram для добавления мини-аппа. Также можно нажать пункт «Настройки» в меню ⋯ Telegram.')
+                          : (homeScreenHint ?? 'Если кнопка не сработает, проверьте версию Telegram: пункт «Создать ярлык» показывает сам клиент Telegram, мини-апп не может добавить его принудительно.')}
                       </p>
                     </div>
                   </div>
