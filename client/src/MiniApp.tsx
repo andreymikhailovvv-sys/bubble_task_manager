@@ -36,9 +36,6 @@ type TelegramWindow = Window & {
   Telegram?: {
     WebApp?: TelegramWebApp;
   };
-  TelegramWebviewProxy?: {
-    postEvent?: (eventType: string, eventData?: string) => void;
-  };
 };
 
 const sendMiniAppHomeScreenLog = (event: string, data: Record<string, unknown> = {}) => {
@@ -731,12 +728,10 @@ export default function MiniApp() {
     const tgWindow = window as TelegramWindow;
     const tgWebApp = tgWindow.Telegram?.WebApp;
     const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
-    const canPostRawHomeScreenEvent = typeof tgWindow.TelegramWebviewProxy?.postEvent === 'function';
-    setHasHomeScreenApi(canAddToHomeScreen || canPostRawHomeScreenEvent);
+    setHasHomeScreenApi(canAddToHomeScreen);
     sendMiniAppHomeScreenLog('api-detected', {
       hasWebApp: Boolean(tgWebApp),
       hasAddToHomeScreen: canAddToHomeScreen,
-      hasRawPostEvent: canPostRawHomeScreenEvent,
       hasSettingsButton: Boolean(tgWebApp?.SettingsButton),
       version: tgWebApp?.version ?? null,
       platform: tgWebApp?.platform ?? null
@@ -753,30 +748,13 @@ export default function MiniApp() {
 
     const tgWindow = window as TelegramWindow;
     const tgWebApp = tgWindow.Telegram?.WebApp;
-    const rawPostEvent = tgWindow.TelegramWebviewProxy?.postEvent;
     sendMiniAppHomeScreenLog('request', {
       source,
       hasWebApp: Boolean(tgWebApp),
       hasAddToHomeScreen: typeof tgWebApp?.addToHomeScreen === 'function',
-      hasRawPostEvent: typeof rawPostEvent === 'function',
       version: tgWebApp?.version ?? null,
       platform: tgWebApp?.platform ?? null
     });
-
-    if (typeof rawPostEvent === 'function') {
-      try {
-        rawPostEvent('web_app_add_to_home_screen', 'null');
-        setHomeScreenHint(null);
-        sendMiniAppHomeScreenLog('raw-call-completed', { source });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        sendMiniAppHomeScreenLog('raw-call-threw', { source, message });
-        if (typeof tgWebApp?.addToHomeScreen !== 'function') {
-          setHomeScreenHint(`Telegram вернул ошибку при открытии добавления ярлыка: ${message}`);
-          return;
-        }
-      }
-    }
 
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
       try {
@@ -2038,7 +2016,6 @@ export default function MiniApp() {
                       <p className={`mb-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-slate-400'}`}>Ярлык на главном экране</p>
                       <button
                         type="button"
-                        onPointerDown={() => requestAddMiniAppToHomeScreen('settings-pointer')}
                         onClick={() => requestAddMiniAppToHomeScreen('settings-button')}
                         className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs font-medium transition ${
                           isLightTheme
