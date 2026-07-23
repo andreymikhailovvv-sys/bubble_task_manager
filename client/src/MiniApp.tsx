@@ -20,6 +20,8 @@ type TelegramWebApp = {
   addToHomeScreen?: () => void;
 };
 
+type TelegramWebAppEvent = 'settingsButtonClicked';
+
 type TelegramWindow = Window & {
   Telegram?: {
     WebApp?: TelegramWebApp;
@@ -650,6 +652,7 @@ export default function MiniApp() {
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastHomeScreenRequestAtRef = useRef(0);
   const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
   const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
   const launchParams = useMemo(() => {
