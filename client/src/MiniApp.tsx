@@ -18,9 +18,20 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   addToHomeScreen?: () => void;
+  checkHomeScreenStatus?: (callback?: (status: TelegramHomeScreenStatus) => void) => void;
+  onEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramHomeScreenCheckedPayload) => void) => void;
+  offEvent?: (eventType: TelegramWebAppEvent, callback: (payload?: TelegramHomeScreenCheckedPayload) => void) => void;
+  SettingsButton?: {
+    show?: () => void;
+    hide?: () => void;
+    onClick?: (callback: () => void) => void;
+    offClick?: (callback: () => void) => void;
+  };
 };
 
-type TelegramWebAppEvent = 'settingsButtonClicked';
+type TelegramHomeScreenStatus = 'unsupported' | 'unknown' | 'added' | 'missed';
+type TelegramHomeScreenCheckedPayload = { status?: TelegramHomeScreenStatus };
+type TelegramWebAppEvent = 'homeScreenAdded' | 'homeScreenChecked' | 'settingsButtonClicked';
 
 type TelegramWindow = Window & {
   Telegram?: {
@@ -711,18 +722,52 @@ export default function MiniApp() {
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
     setHasHomeScreenApi(canAddToHomeScreen);
+
+    if (!tgWebApp) return;
+
+    const handleHomeScreenChecked = (payload?: TelegramHomeScreenCheckedPayload) => {
+      if (payload?.status === 'unsupported') setHasHomeScreenApi(false);
+    };
+
+    tgWebApp.onEvent?.('homeScreenChecked', handleHomeScreenChecked);
+    tgWebApp.checkHomeScreenStatus?.((status) => {
+      if (status === 'unsupported') setHasHomeScreenApi(false);
+    });
+
+    return () => {
+      tgWebApp.offEvent?.('homeScreenChecked', handleHomeScreenChecked);
+    };
   }, []);
 
   const handleAddMiniAppToHomeScreen = () => {
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
-      setHomeScreenHint(null);
       tgWebApp.addToHomeScreen();
+      setHomeScreenHint(null);
       return;
     }
 
     setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
   };
+
+  useEffect(() => {
+    const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
+    if (!tgWebApp) return;
+
+    const handleTelegramSettingsClick = () => {
+      setIsSettingsOpen(true);
+    };
+
+    tgWebApp.SettingsButton?.show?.();
+    tgWebApp.SettingsButton?.onClick?.(handleTelegramSettingsClick);
+    tgWebApp.onEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
+
+    return () => {
+      tgWebApp.SettingsButton?.offClick?.(handleTelegramSettingsClick);
+      tgWebApp.offEvent?.('settingsButtonClicked', handleTelegramSettingsClick);
+      tgWebApp.SettingsButton?.hide?.();
+    };
+  }, []);
 
   useEffect(() => {
     document.body.dataset.theme = miniThemeMode;
