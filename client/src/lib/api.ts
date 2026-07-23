@@ -109,6 +109,8 @@ export const api = {
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   loginTelegramMiniApp: (payload: { initData: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
+  logMiniAppClientEvent: (payload: { event: string; data?: Record<string, unknown> }) =>
+    request<{ ok: true }>('/api/miniapp/client-log', { method: 'POST', body: JSON.stringify(payload) }),
   loginWithGoogle: () => {
     window.location.href = '/api/auth/google';
   },

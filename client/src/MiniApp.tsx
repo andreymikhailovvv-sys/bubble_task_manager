@@ -15,6 +15,8 @@ const MINIAPP_EFFICIENCY_BONUSES = {
 
 type TelegramWebApp = {
   initData?: string;
+  version?: string;
+  platform?: string;
   ready?: () => void;
   expand?: () => void;
   addToHomeScreen?: () => void;
@@ -37,6 +39,13 @@ type TelegramWindow = Window & {
   Telegram?: {
     WebApp?: TelegramWebApp;
   };
+};
+
+const logMiniAppHomeScreen = (event: string, data: Record<string, unknown> = {}) => {
+  console.info(`[MiniAppHomeScreen] ${event}`, data);
+  void api.logMiniAppClientEvent({ event: `home-screen:${event}`, data }).catch(() => {
+    // ignore debug log delivery failures
+  });
 };
 
 const extractInitDataFromUrl = () => {
@@ -722,23 +731,25 @@ export default function MiniApp() {
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
     setHasHomeScreenApi(canAddToHomeScreen);
-    console.info('[MiniAppHomeScreen] Telegram WebApp detected', {
+    logMiniAppHomeScreen('api-detected', {
       hasWebApp: Boolean(tgWebApp),
       hasAddToHomeScreen: canAddToHomeScreen,
       hasCheckHomeScreenStatus: typeof tgWebApp?.checkHomeScreenStatus === 'function',
-      hasSettingsButton: Boolean(tgWebApp?.SettingsButton)
+      hasSettingsButton: Boolean(tgWebApp?.SettingsButton),
+      version: tgWebApp?.version ?? null,
+      platform: tgWebApp?.platform ?? null
     });
 
     if (!tgWebApp) return;
 
     const handleHomeScreenChecked = (payload?: TelegramHomeScreenCheckedPayload) => {
-      console.info('[MiniAppHomeScreen] homeScreenChecked event', payload);
+      logMiniAppHomeScreen('home-screen-checked-event', { status: payload?.status ?? null });
       if (payload?.status === 'unsupported') setHasHomeScreenApi(false);
     };
 
     tgWebApp.onEvent?.('homeScreenChecked', handleHomeScreenChecked);
     tgWebApp.checkHomeScreenStatus?.((status) => {
-      console.info('[MiniAppHomeScreen] checkHomeScreenStatus callback', { status });
+      logMiniAppHomeScreen('check-status-callback', { status });
       if (status === 'unsupported') setHasHomeScreenApi(false);
     });
 
@@ -750,26 +761,34 @@ export default function MiniApp() {
   const requestAddMiniAppToHomeScreen = (source: 'settings-button' | 'settings-pointer' | 'telegram-settings-menu') => {
     const requestedAt = Date.now();
     if (requestedAt - lastHomeScreenRequestAtRef.current < 250) {
-      console.info('[MiniAppHomeScreen] duplicate addToHomeScreen request skipped', { source });
+      logMiniAppHomeScreen('duplicate-request-skipped', { source });
       return;
     }
     lastHomeScreenRequestAtRef.current = requestedAt;
 
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
-    console.info('[MiniAppHomeScreen] addToHomeScreen requested', {
+    logMiniAppHomeScreen('request', {
       source,
       hasWebApp: Boolean(tgWebApp),
-      hasAddToHomeScreen: typeof tgWebApp?.addToHomeScreen === 'function'
+      hasAddToHomeScreen: typeof tgWebApp?.addToHomeScreen === 'function',
+      version: tgWebApp?.version ?? null,
+      platform: tgWebApp?.platform ?? null
     });
 
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
-      tgWebApp.addToHomeScreen();
-      setHomeScreenHint(null);
-      console.info('[MiniAppHomeScreen] addToHomeScreen call completed', { source });
+      try {
+        tgWebApp.addToHomeScreen();
+        setHomeScreenHint(null);
+        logMiniAppHomeScreen('call-completed', { source });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logMiniAppHomeScreen('call-threw', { source, message });
+        setHomeScreenHint(`Telegram вернул ошибку при открытии добавления ярлыка: ${message}`);
+      }
       return;
     }
 
-    console.warn('[MiniAppHomeScreen] addToHomeScreen API is unavailable', { source });
+    logMiniAppHomeScreen('api-unavailable', { source });
     setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
   };
 
