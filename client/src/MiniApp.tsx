@@ -722,15 +722,23 @@ export default function MiniApp() {
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
     const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
     setHasHomeScreenApi(canAddToHomeScreen);
+    console.info('[MiniAppHomeScreen] Telegram WebApp detected', {
+      hasWebApp: Boolean(tgWebApp),
+      hasAddToHomeScreen: canAddToHomeScreen,
+      hasCheckHomeScreenStatus: typeof tgWebApp?.checkHomeScreenStatus === 'function',
+      hasSettingsButton: Boolean(tgWebApp?.SettingsButton)
+    });
 
     if (!tgWebApp) return;
 
     const handleHomeScreenChecked = (payload?: TelegramHomeScreenCheckedPayload) => {
+      console.info('[MiniAppHomeScreen] homeScreenChecked event', payload);
       if (payload?.status === 'unsupported') setHasHomeScreenApi(false);
     };
 
     tgWebApp.onEvent?.('homeScreenChecked', handleHomeScreenChecked);
     tgWebApp.checkHomeScreenStatus?.((status) => {
+      console.info('[MiniAppHomeScreen] checkHomeScreenStatus callback', { status });
       if (status === 'unsupported') setHasHomeScreenApi(false);
     });
 
@@ -739,14 +747,29 @@ export default function MiniApp() {
     };
   }, []);
 
-  const handleAddMiniAppToHomeScreen = () => {
+  const requestAddMiniAppToHomeScreen = (source: 'settings-button' | 'settings-pointer' | 'telegram-settings-menu') => {
+    const requestedAt = Date.now();
+    if (requestedAt - lastHomeScreenRequestAtRef.current < 250) {
+      console.info('[MiniAppHomeScreen] duplicate addToHomeScreen request skipped', { source });
+      return;
+    }
+    lastHomeScreenRequestAtRef.current = requestedAt;
+
     const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
+    console.info('[MiniAppHomeScreen] addToHomeScreen requested', {
+      source,
+      hasWebApp: Boolean(tgWebApp),
+      hasAddToHomeScreen: typeof tgWebApp?.addToHomeScreen === 'function'
+    });
+
     if (typeof tgWebApp?.addToHomeScreen === 'function') {
       tgWebApp.addToHomeScreen();
       setHomeScreenHint(null);
+      console.info('[MiniAppHomeScreen] addToHomeScreen call completed', { source });
       return;
     }
 
+    console.warn('[MiniAppHomeScreen] addToHomeScreen API is unavailable', { source });
     setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
   };
 
@@ -755,7 +778,7 @@ export default function MiniApp() {
     if (!tgWebApp) return;
 
     const handleTelegramSettingsClick = () => {
-      setIsSettingsOpen(true);
+      requestAddMiniAppToHomeScreen('telegram-settings-menu');
     };
 
     tgWebApp.SettingsButton?.show?.();
@@ -1993,7 +2016,8 @@ export default function MiniApp() {
                       <p className={`mb-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-slate-400'}`}>Ярлык на главном экране</p>
                       <button
                         type="button"
-                        onClick={handleAddMiniAppToHomeScreen}
+                        onPointerDown={() => requestAddMiniAppToHomeScreen('settings-pointer')}
+                        onClick={() => requestAddMiniAppToHomeScreen('settings-button')}
                         className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs font-medium transition ${
                           isLightTheme
                             ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
