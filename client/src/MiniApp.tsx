@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -17,6 +17,7 @@ type TelegramWebApp = {
   initData?: string;
   ready?: () => void;
   expand?: () => void;
+  addToHomeScreen?: () => void;
 };
 
 type TelegramWindow = Window & {
@@ -563,6 +564,8 @@ export default function MiniApp() {
     return stored === 'dark' || stored === 'light' ? stored : 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [homeScreenHint, setHomeScreenHint] = useState<string | null>(null);
+  const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
@@ -700,6 +703,23 @@ export default function MiniApp() {
   useEffect(() => {
     void loadData({ showInitialLoader: true });
   }, []);
+
+  useEffect(() => {
+    const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
+    const canAddToHomeScreen = typeof tgWebApp?.addToHomeScreen === 'function';
+    setHasHomeScreenApi(canAddToHomeScreen);
+  }, []);
+
+  const handleAddMiniAppToHomeScreen = () => {
+    const tgWebApp = (window as TelegramWindow).Telegram?.WebApp;
+    if (typeof tgWebApp?.addToHomeScreen === 'function') {
+      setHomeScreenHint(null);
+      tgWebApp.addToHomeScreen();
+      return;
+    }
+
+    setHomeScreenHint('В этой версии Telegram кнопка недоступна. Обновите Telegram или проверьте меню ⋯ — пункт «Создать ярлык» показывает сам клиент Telegram.');
+  };
 
   useEffect(() => {
     document.body.dataset.theme = miniThemeMode;
@@ -1920,6 +1940,24 @@ export default function MiniApp() {
                         <Moon size={13} />
                         Тёмная
                       </button>
+                    </div>
+                    <div className={`border-t pt-2 ${isLightTheme ? 'border-slate-200' : 'border-slate-700'}`}>
+                      <p className={`mb-2 text-xs ${isLightTheme ? 'text-slate-600' : 'text-slate-400'}`}>Ярлык на главном экране</p>
+                      <button
+                        type="button"
+                        onClick={handleAddMiniAppToHomeScreen}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-md border px-2 py-2 text-xs font-medium transition ${
+                          isLightTheme
+                            ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                            : 'border-sky-500/60 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25'
+                        }`}
+                      >
+                        <Smartphone size={13} />
+                        Добавить ярлык
+                      </button>
+                      {!hasHomeScreenApi && homeScreenHint ? (
+                        <p className="mt-2 text-[11px] leading-snug text-slate-500">{homeScreenHint}</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
