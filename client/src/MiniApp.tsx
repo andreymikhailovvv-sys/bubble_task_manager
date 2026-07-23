@@ -48,6 +48,13 @@ const logMiniAppHomeScreen = (event: string, data: Record<string, unknown> = {})
   });
 };
 
+const logMiniAppHomeScreen = (event: string, data: Record<string, unknown> = {}) => {
+  console.info(`[MiniAppHomeScreen] ${event}`, data);
+  void api.logMiniAppClientEvent({ event: `home-screen:${event}`, data }).catch(() => {
+    // ignore debug log delivery failures
+  });
+};
+
 const extractInitDataFromUrl = () => {
   const fromSearch = new URLSearchParams(window.location.search).get('tgWebAppData');
   if (fromSearch?.trim()) return fromSearch.trim();
