@@ -193,6 +193,15 @@ export const persistEfficiencyDelta = async (userId: string, delta: number, buck
   return updated;
 };
 
+
+const authRequestContext = (req: any) => {
+  const origin = req.get?.('origin') ?? 'no-origin';
+  const host = req.get?.('host') ?? 'unknown-host';
+  const forwardedHost = req.get?.('x-forwarded-host') ?? 'no-forwarded-host';
+  const userAgent = req.get?.('user-agent') ?? 'unknown-user-agent';
+  return `host=${host} forwardedHost=${forwardedHost} origin=${origin} ip=${req.ip ?? 'unknown-ip'} userAgent="${userAgent}"`;
+};
+
 const setAuthCookies = (
   res: { cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void },
   user: {
@@ -326,16 +335,19 @@ apiRouter.post('/auth/register', async (req, res) => {
 
   const login = sanitizeLogin(loginRaw);
   if (!login || login.length < 3) {
+    console.warn(`[Auth] register validation failed reason=invalid_login ${authRequestContext(req)}`);
     res.status(400).json({ error: 'Логин должен содержать минимум 3 символа' });
     return;
   }
   if (!passwordRaw || passwordRaw.length < 6) {
+    console.warn(`[Auth] register validation failed reason=invalid_password login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(400).json({ error: 'Пароль должен содержать минимум 6 символов' });
     return;
   }
 
   const exists = await prisma.user.findUnique({ where: { username: login } });
   if (exists) {
+    console.warn(`[Auth] register conflict login=${login} ${authRequestContext(req)}`);
     res.status(409).json({ error: 'Логин уже занят' });
     return;
   }
@@ -354,6 +366,7 @@ apiRouter.post('/auth/register', async (req, res) => {
   });
 
   setAuthCookies(res, user);
+  console.info(`[Auth] register success userId=${user.id} login=${login} ${authRequestContext(req)}`);
   res.json({ user: toAuthUser(user) });
 });
 
@@ -361,17 +374,20 @@ apiRouter.post('/auth/login', async (req, res) => {
   const login = sanitizeLogin(String(req.body?.login ?? ''));
   const password = String(req.body?.password ?? '');
   if (!login || !password) {
+    console.warn(`[Auth] login validation failed reason=missing_credentials login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(400).json({ error: 'Укажите логин и пароль' });
     return;
   }
 
   const user = await prisma.user.findUnique({ where: { username: login } });
   if (!user?.passwordHash || !authService.verifyPassword(password, user.passwordHash)) {
+    console.warn(`[Auth] login failed login=${login} reason=invalid_credentials ${authRequestContext(req)}`);
     res.status(401).json({ error: 'Неверный логин или пароль' });
     return;
   }
 
   setAuthCookies(res, user);
+  console.info(`[Auth] login success userId=${user.id} login=${login} ${authRequestContext(req)}`);
   res.json({ user: toAuthUser(user) });
 });
 
@@ -602,17 +618,20 @@ apiRouter.get('/auth/me', async (req, res) => {
     await persistEfficiencyDelta(req.user.id, 0);
     const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (freshUser) {
+      console.info(`[Auth] me success userId=${freshUser.id} source=cookie ${authRequestContext(req)}`);
       res.json({ user: toAuthUser(freshUser) });
       return;
     }
   }
 
   if (req.user) {
+    console.warn(`[Auth] me stale user userId=${req.user.id} ${authRequestContext(req)}`);
     res.json({ user: toAuthUser(req.user) });
     return;
   }
 
   const user = await ensureDeviceUser(req, res);
+  console.info(`[Auth] me created_or_loaded_device_user userId=${user.id} ${authRequestContext(req)}`);
   res.json({ user: toAuthUser(user) });
 });
 

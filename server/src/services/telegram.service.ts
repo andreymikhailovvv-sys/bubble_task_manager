@@ -8,10 +8,15 @@ import type { ChatMessage } from './ai-assistant.service.js';
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || null;
+const APP_URL = process.env.APP_URL?.trim()
+  || process.env.PUBLIC_APP_URL?.trim()
+  || process.env.CLIENT_URL?.trim()
+  || process.env.CORS_ORIGIN?.split(',')[0]?.trim()
+  || '';
 const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
   || process.env.MINI_APP_URL?.trim()
   || process.env.APP_BASE_URL?.trim()
-  || 'https://bubble-task-manager.onrender.com/miniapp';
+  || (APP_URL ? `${APP_URL.replace(/\/$/, '')}/miniapp` : '/miniapp');
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;

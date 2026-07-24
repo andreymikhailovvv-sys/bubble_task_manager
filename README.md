@@ -98,7 +98,7 @@ npm run start
 
 
 ## Telegram Mini App
-- Мини-приложение доступно по пути: `https://bubble-task-manager.onrender.com/miniapp`.
+- Мини-приложение доступно по пути: `${PUBLIC_APP_URL}/miniapp`.
 - Авторизация в мини-приложении выполняется через Telegram `initData` и поиск пользователя по `telegramChatId` в БД.
 - Если задачи не отображаются, сначала авторизуйтесь в боте (`/start` → «Войти» → `логин пароль`), чтобы связать Telegram с аккаунтом.
 - На мини-экране доступны:
@@ -121,7 +121,7 @@ npm run start
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://bubble-task-manager.onrender.com/api/telegram/webhook",
+    "url": "${PUBLIC_APP_URL}/api/telegram/webhook",
     "secret_token": "<TELEGRAM_WEBHOOK_SECRET>",
     "allowed_updates": ["message", "callback_query"]
   }'
