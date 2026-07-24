@@ -17,7 +17,35 @@ const requestBodyLimit = process.env.REQUEST_BODY_LIMIT?.trim() || '15mb';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(cors({ credentials: true, origin: true }));
+const DEFAULT_CORS_ORIGINS = [
+  'https://planirovych.ru',
+  'https://www.planirovych.ru',
+  'https://bubble-task-manager.onrender.com'
+];
+const URL_ENV_KEYS = ['APP_URL', 'PUBLIC_APP_URL', 'CLIENT_URL', 'CORS_ORIGIN'] as const;
+const parseOriginList = (value: string | undefined) => (value ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedCorsOrigins = new Set([
+  ...DEFAULT_CORS_ORIGINS,
+  ...URL_ENV_KEYS.flatMap((key) => parseOriginList(process.env[key]))
+]);
+
+app.use(cors((req, callback) => {
+  callback(null, {
+    credentials: true,
+    origin(originValue, originCallback) {
+      if (!originValue || allowedCorsOrigins.has(originValue)) {
+        originCallback(null, true);
+        return;
+      }
+
+      console.warn(`[Auth/CORS] blocked origin=${originValue} method=${req.method} path=${req.originalUrl} host=${req.get('host') ?? 'unknown-host'} allowed=${Array.from(allowedCorsOrigins).join(',')}`);
+      originCallback(new Error(`Origin ${originValue} is not allowed by CORS`));
+    }
+  });
+}));
 app.use(express.json({ limit: requestBodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 app.use(cookieParser());
