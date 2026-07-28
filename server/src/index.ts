@@ -53,6 +53,19 @@ app.use(passport.initialize());
 app.use(authSession);
 app.use('/api', apiRouter);
 
+app.use('/api', (error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const errorCode = typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : '';
+  const status = errorCode === 'P2025' ? 404 : 500;
+  const message = status === 404
+    ? 'Запрошенный объект не найден или уже изменён'
+    : 'Не удалось выполнить запрос. Попробуйте ещё раз';
+
+  console.error(`[API] ${req.method} ${req.originalUrl} failed`, error);
+  res.status(status).json({ error: message });
+});
+
 const clientDist = process.env.CLIENT_DIST_PATH
   ? path.resolve(__dirname, process.env.CLIENT_DIST_PATH)
   : path.resolve(__dirname, '../../client/dist');
