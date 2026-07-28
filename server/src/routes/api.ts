@@ -13,6 +13,7 @@ import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
+import { asyncHandler } from '../middleware/async-handler.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -701,12 +702,12 @@ apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
-apiRouter.get('/habits', requireAuth, habitController.list);
-apiRouter.post('/habits', requireAuth, habitController.create);
-apiRouter.patch('/habits/:id', requireAuth, habitController.update);
-apiRouter.post('/habits/:id/complete', requireAuth, habitController.complete);
-apiRouter.post('/habits/:id/uncomplete', requireAuth, habitController.uncomplete);
-apiRouter.delete('/habits/:id', requireAuth, habitController.remove);
+apiRouter.get('/habits', requireAuth, asyncHandler(habitController.list));
+apiRouter.post('/habits', requireAuth, asyncHandler(habitController.create));
+apiRouter.patch('/habits/:id', requireAuth, asyncHandler(habitController.update));
+apiRouter.post('/habits/:id/complete', requireAuth, asyncHandler(habitController.complete));
+apiRouter.post('/habits/:id/uncomplete', requireAuth, asyncHandler(habitController.uncomplete));
+apiRouter.delete('/habits/:id', requireAuth, asyncHandler(habitController.remove));
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
 apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
 apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.create);
