@@ -47,8 +47,11 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
         }
       } else {
         const payload = await response.text();
-        if (payload.trim()) {
+        const looksLikeHtml = /<\s*(?:!doctype\s+html|html|head|body)\b/i.test(payload);
+        if (payload.trim() && !looksLikeHtml) {
           errorMessage = payload.trim().slice(0, 500);
+        } else if (response.status >= 500) {
+          errorMessage = 'Сервис временно недоступен. Попробуйте ещё раз';
         }
       }
     } catch {
