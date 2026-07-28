@@ -4967,7 +4967,7 @@ ${allContext}`,
             </ul>
           </section>
           {isUpcomingSubtasksModalOpen ? (
-            <div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+            <div className="modal-backdrop upcoming-subtasks-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
       
         {timelineCreateMenu ? (
           <div
@@ -5071,16 +5071,19 @@ ${allContext}`,
                 role="dialog"
                 aria-modal="true"
                 aria-label="Окно ближайших подзадач"
-                className="flex h-[84vh] w-[min(1100px,95vw)] flex-col rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl"
+                className="upcoming-subtasks-dialog flex h-[84vh] w-[min(1100px,95vw)] flex-col overflow-hidden rounded-[2.3rem] border"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="flex items-center justify-between gap-2 border-b border-slate-700/70 px-4 py-3">
-                  <h4 className="text-base font-semibold text-primary">Ближайшие подзадачи</h4>
-                  <button type="button" className="surface-muted rounded p-1 text-muted transition hover:brightness-110" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+                <div className="upcoming-subtasks-header flex items-center justify-between gap-4 px-6 pb-4 pt-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус на сроках</p>
+                    <h4 className="mt-1 text-2xl font-bold tracking-tight text-primary">Ближайшие подзадачи</h4>
+                  </div>
+                  <button type="button" className="focused-task-icon-button h-9 w-9" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                     <X size={16} />
                   </button>
                 </div>
-                <div className="border-b border-slate-700/70 px-4 py-3">
+                <div className="upcoming-subtasks-toolbar px-6 py-3">
                   <div className="flex flex-wrap gap-2 text-xs">
                   {([
                     { key: 'today', label: 'на сегодня' },
@@ -5091,7 +5094,7 @@ ${allContext}`,
                     <button
                       key={filter.key}
                       type="button"
-                      className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-primary' : 'secondary-button'}`}
+                      className={`upcoming-subtasks-filter rounded-full border px-3 py-1.5 font-medium transition ${upcomingSubtasksFilter === filter.key ? 'upcoming-subtasks-filter-active' : ''}`}
                       onClick={() => setUpcomingSubtasksFilter(filter.key)}
                     >
                       {filter.label}
@@ -5099,14 +5102,14 @@ ${allContext}`,
                   ))}
                   </div>
                 </div>
-                <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 pr-3 text-sm">
+                <ul className="upcoming-subtasks-list flex-1 space-y-2 overflow-y-auto px-6 py-4 text-sm">
                   {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
-                    <li key={subtask.id} className={`flex items-start gap-3 rounded-lg border border-slate-700/70 bg-slate-800/70 px-3 py-2 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}>
+                    <li key={subtask.id} className={`upcoming-subtask-row flex items-start gap-3 rounded-2xl border px-4 py-3 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}>
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-100"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-slate-300"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="text-sm font-semibold text-primary"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
                         <p className="mt-1 text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
@@ -6208,7 +6211,7 @@ ${allContext}`,
       ) : null}
 
       {isUpcomingSubtasksModalOpen ? (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
+        <div className="modal-backdrop upcoming-subtasks-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
   
         {timelineCreateMenu ? (
           <div
@@ -6312,16 +6315,19 @@ ${allContext}`,
             role="dialog"
             aria-modal="true"
             aria-label="Окно ближайших подзадач"
-            className="dialog-surface flex h-[84vh] w-full max-w-5xl flex-col rounded-3xl border p-5"
+            className="upcoming-subtasks-dialog flex h-[84vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2.3rem] border"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h4 className="text-base font-semibold ai-panel-title">Ближайшие подзадачи</h4>
-              <button type="button" className="surface-muted rounded p-1.5 text-muted hover:brightness-110" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+            <div className="upcoming-subtasks-header flex items-center justify-between gap-4 px-6 pb-4 pt-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус на сроках</p>
+                <h4 className="mt-1 text-2xl font-bold tracking-tight text-primary">Ближайшие подзадачи</h4>
+              </div>
+              <button type="button" className="focused-task-icon-button h-9 w-9" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                 <X size={14} />
               </button>
             </div>
-            <div className="mb-3 flex flex-wrap gap-2 text-xs">
+            <div className="upcoming-subtasks-toolbar flex flex-wrap gap-2 px-6 py-3 text-xs">
               {([
                 { key: 'today', label: 'на сегодня' },
                 { key: 'tomorrow', label: 'на завтра' },
@@ -6331,19 +6337,19 @@ ${allContext}`,
                 <button
                   key={filter.key}
                   type="button"
-                  className={`rounded-full border px-2.5 py-1 transition ${upcomingSubtasksFilter === filter.key ? 'border-cyan-400/80 bg-cyan-500/20 text-primary' : 'secondary-button'}`}
+                  className={`upcoming-subtasks-filter rounded-full border px-3 py-1.5 font-medium transition ${upcomingSubtasksFilter === filter.key ? 'upcoming-subtasks-filter-active' : ''}`}
                   onClick={() => setUpcomingSubtasksFilter(filter.key)}
                 >
                   {filter.label}
                 </button>
               ))}
             </div>
-            <ul className="chat-thread flex-1 space-y-2 overflow-y-auto overflow-x-hidden rounded-2xl p-3 pr-2 text-sm">
+            <ul className="upcoming-subtasks-list flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-6 py-4 text-sm">
               {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className={`list-item-surface flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}
+                  className={`upcoming-subtask-row flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input
