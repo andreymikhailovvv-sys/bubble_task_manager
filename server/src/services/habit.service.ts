@@ -223,7 +223,10 @@ export const habitService = {
       where: { userId, isArchived: false },
       orderBy: [{ createdAt: 'asc' }]
     });
-    return Promise.all(habits.map((habit) => serializeHabit(habit)));
+    // Serialization also checks duration limits and persists automatic
+    // completion. Only habits that remain active should be returned to clients.
+    const serializedHabits = await Promise.all(habits.map((habit) => serializeHabit(habit)));
+    return serializedHabits.filter((habit) => !habit.isAutoCompleted);
   },
 
   create: async (userId: string, input: HabitInput) => {

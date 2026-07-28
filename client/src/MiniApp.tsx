@@ -1033,7 +1033,7 @@ export default function MiniApp() {
 
   const sortedHabits = useMemo(() => {
     const dateKey = toDateKey(new Date());
-    return [...habits].sort((a, b) => {
+    return habits.filter((habit) => !habit.isAutoCompleted).sort((a, b) => {
       const aCompleted = getHabitCompletedForDate(a, dateKey) >= a.targetCount;
       const bCompleted = getHabitCompletedForDate(b, dateKey) >= b.targetCount;
       if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
@@ -1457,7 +1457,9 @@ export default function MiniApp() {
       if (!habit.isAutoCompleted && updatedHabit.isAutoCompleted) {
         void recordMiniAppEfficiencyBonus(MINIAPP_EFFICIENCY_BONUSES.completedHabit);
       }
-      setHabits((currentHabits) => currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
+      setHabits((currentHabits) => updatedHabit.isAutoCompleted
+        ? currentHabits.filter((currentHabit) => currentHabit.id !== updatedHabit.id)
+        : currentHabits.map((currentHabit) => currentHabit.id === updatedHabit.id ? updatedHabit : currentHabit));
       window.setTimeout(() => setCompletedHabitPulseId((current) => current === habit.id ? null : current), 650);
     } catch (e) {
       setCompletedHabitPulseId(null);
