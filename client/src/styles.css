@@ -2018,6 +2018,26 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
   box-shadow: none !important;
 }
 
+.miniapp-timeline-hour-label,
+.miniapp-timeline-quarter-label {
+  top: 0;
+  transform: translateY(-50%);
+  line-height: 1rem;
+}
+
+.miniapp-timeline-quarter-label {
+  opacity: 0.58;
+}
+
+.miniapp-timeline-quarter-line {
+  pointer-events: none;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-quarter-label {
+  background: rgba(248, 250, 252, 0.82) !important;
+  color: #94a3b8 !important;
+}
+
 body[data-theme='light'] .miniapp-shell .miniapp-ai-fullscreen-backdrop {
   background: rgba(15, 23, 42, 0.22) !important;
   backdrop-filter: blur(16px) saturate(1.08);
@@ -3736,10 +3756,15 @@ body[data-theme='light'] .focused-task-ai-panel {
 }
 
 .miniapp-task-list-card,
+.miniapp-timeline-task-card,
 .miniapp-timeline-habit-card,
 .miniapp-timeline-event-card,
 .miniapp-ai-chat-launcher {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
+}
+
+.miniapp-timeline-task-card {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
 .miniapp-task-text-field {
