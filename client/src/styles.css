@@ -3767,10 +3767,6 @@ body[data-theme='light'] .focused-task-ai-panel {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
-.miniapp-timeline-subtask-card {
-  font-size: 0.8125rem;
-}
-
 .miniapp-task-text-field {
   border-radius: 1rem;
 }

@@ -65,6 +65,7 @@ const HOURS_IN_DAY = 24;
 const TIMELINE_QUARTERS_PER_HOUR = 4;
 const TIMELINE_QUARTER_HEIGHT = 24;
 const TIMELINE_CARD_HEIGHT = 52;
+const TIMELINE_SUBTASK_CARD_HEIGHT = 42;
 const TIMELINE_CARD_GAP = 8;
 const TIMELINE_QUARTER_PADDING = 8;
 const MAX_AI_ATTACHMENTS = 3;
@@ -989,21 +990,25 @@ export default function MiniApp() {
       .filter((task) => Boolean(task.dueDate))
       .sort(compareByDueDate);
 
-    const quarterItemCount = Array.from({ length: HOURS_IN_DAY * TIMELINE_QUARTERS_PER_HOUR }, () => 0);
+    const quarterItemHeights = Array.from({ length: HOURS_IN_DAY * TIMELINE_QUARTERS_PER_HOUR }, () => [] as number[]);
     for (const task of timelineEntries) {
       const due = new Date(task.dueDate as string);
       const quarter = (due.getHours() * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(due.getMinutes() / 15);
-      if (quarter >= 0 && quarter < quarterItemCount.length) quarterItemCount[quarter] += 1;
+      if (quarter >= 0 && quarter < quarterItemHeights.length) {
+        quarterItemHeights[quarter].push(task.parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT);
+      }
     }
     for (const habit of scheduledHabits) {
       const [hour, minute] = (habit.reminderTime ?? '00:00').split(':').map(Number);
       const quarter = (hour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(minute / 15);
-      if (quarter >= 0 && quarter < quarterItemCount.length) quarterItemCount[quarter] += 1;
+      if (quarter >= 0 && quarter < quarterItemHeights.length) quarterItemHeights[quarter].push(TIMELINE_CARD_HEIGHT);
     }
 
-    const quarterHeights = quarterItemCount.map((count) => count === 0
+    const quarterHeights = quarterItemHeights.map((itemHeights) => itemHeights.length === 0
       ? TIMELINE_QUARTER_HEIGHT
-      : (count * TIMELINE_CARD_HEIGHT) + ((count - 1) * TIMELINE_CARD_GAP) + TIMELINE_QUARTER_PADDING);
+      : itemHeights.reduce((sum, height) => sum + height, 0)
+        + ((itemHeights.length - 1) * TIMELINE_CARD_GAP)
+        + TIMELINE_QUARTER_PADDING);
     const quarterTops: number[] = [];
     const hourTops: number[] = [];
     let totalHeight = 0;
@@ -1058,13 +1063,17 @@ export default function MiniApp() {
     }
 
     for (const [quarter, quarterHabits] of itemsByQuarter.entries()) {
-      const taskCount = timelineToday.timelineEntries.filter((task) => {
+      const quarterTasks = timelineToday.timelineEntries.filter((task) => {
         const due = new Date(task.dueDate as string);
         return (due.getHours() * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(due.getMinutes() / 15) === quarter;
-      }).length;
+      }).sort(compareByDueDate);
+      const tasksHeight = quarterTasks.reduce(
+        (height, task) => height + (task.parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT) + TIMELINE_CARD_GAP,
+        0
+      );
       const sorted = quarterHabits.slice().sort((a, b) => (a.reminderTime ?? '').localeCompare(b.reminderTime ?? ''));
       for (let index = 0; index < sorted.length; index += 1) {
-        placements.set(sorted[index].id, { top: timelineToday.quarterTops[quarter] + ((taskCount + index) * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
+        placements.set(sorted[index].id, { top: timelineToday.quarterTops[quarter] + tasksHeight + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
       }
     }
 
@@ -1085,9 +1094,11 @@ export default function MiniApp() {
 
     for (const [quarter, tasks] of tasksByQuarter.entries()) {
       const sorted = tasks.slice().sort(compareByDueDate);
+      let offset = 4;
       for (let index = 0; index < sorted.length; index += 1) {
-        const top = timelineToday.quarterTops[quarter] + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4;
+        const top = timelineToday.quarterTops[quarter] + offset;
         placements.set(sorted[index].id, { top });
+        offset += (sorted[index].parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT) + TIMELINE_CARD_GAP;
       }
     }
 
@@ -2244,9 +2255,9 @@ export default function MiniApp() {
                           className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card rounded-lg' : 'rounded-lg'}`}
                           style={{
                             top: `${placement.top}px`,
-                            minHeight: `${TIMELINE_CARD_HEIGHT}px`,
-                            left: isSubtask ? 'calc(5rem + 2px)' : 'calc(4rem + 2px)',
-                            width: isSubtask ? 'calc(100% - 5rem - 12px)' : 'calc(100% - 4rem - 8px)',
+                            height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
+                            left: 'calc(4rem + 2px)',
+                            width: 'calc(100% - 4rem - 8px)',
                             zIndex: 10,
                             borderColor: isEvent
                               ? 'rgba(245,158,11,0.9)'
@@ -2268,8 +2279,8 @@ export default function MiniApp() {
                           }}
                           onClick={() => openTaskModal(parentTask ?? task)}
                         >
-                          <p className="flex items-center gap-1 truncate text-sm font-medium">{isEvent ? <Ticket size={13} className="shrink-0 text-amber-500" /> : null}<span className="truncate">{task.title}</span></p>
-                          <p className="text-xs text-slate-300">{isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
+                          <p className={`flex items-center gap-1 truncate font-medium ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isEvent ? <Ticket size={13} className="shrink-0 text-amber-500" /> : null}<span className="truncate">{task.title}</span></p>
+                          <p className={isSubtask ? 'text-[10px] leading-3 text-slate-300' : 'text-xs text-slate-300'}>{isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
                         </button>
                       );
                     })}
