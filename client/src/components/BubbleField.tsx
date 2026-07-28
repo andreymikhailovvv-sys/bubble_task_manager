@@ -203,7 +203,7 @@ function getInfoBadgeStyle(color: string, isLightTheme: boolean) {
   return {
     backgroundColor: `rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.2 : 0.24})`,
     borderColor: `rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.78 : 0.62})`,
-    boxShadow: `0 10px 24px rgba(${r}, ${g}, ${b}, ${isLightTheme ? 0.14 : 0.2})`
+    boxShadow: 'none'
   };
 }
 
