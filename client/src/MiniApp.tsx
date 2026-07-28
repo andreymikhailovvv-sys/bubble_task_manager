@@ -1176,6 +1176,9 @@ export default function MiniApp() {
         dueDate: fromInputDateTime(draft.dueDate)
       });
       await loadData();
+      if (taskId === openedSubtaskId) {
+        setOpenedSubtaskId(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить задачу');
     } finally {
@@ -1235,7 +1238,7 @@ export default function MiniApp() {
       setDraftByTaskId((prev) => ({
         ...prev,
         [created.id]: {
-          title: created.title,
+          title: '',
           description: created.description ?? '',
           dueDate: toInputDateTime(created.dueDate)
         }
@@ -1560,6 +1563,11 @@ export default function MiniApp() {
     updateTitleRows(taskTitleInputRef.current, setIsTaskTitleSingleLine);
     updateTitleRows(subtaskTitleInputRef.current, setIsSubtaskTitleSingleLine);
   }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
+
+  useEffect(() => {
+    if (!openedSubtaskId) return;
+    subtaskTitleInputRef.current?.focus();
+  }, [openedSubtaskId]);
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];

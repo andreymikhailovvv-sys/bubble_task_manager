@@ -3463,15 +3463,16 @@ ${allContext}`,
     .filter((task) => task.taskType !== 'EVENT' && isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
 
-  const postponeAllOverdueByOneDay = async () => {
+  const postponeAllOverdueToToday = async () => {
     if (timelineOverdueBulkPostponeLoading) return;
     setTimelineOverdueBulkPostponeLoading('normal');
     try {
+      const today = new Date();
       await Promise.all(timelineOverdueTasks.map(async (task) => {
         if (!task.dueDate) return;
         const next = new Date(task.dueDate);
         if (Number.isNaN(next.getTime())) return;
-        next.setDate(next.getDate() + 1);
+        next.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
         await api.updateTask(task.id, { dueDate: next.toISOString() });
       }));
       await load();
@@ -4550,10 +4551,10 @@ ${allContext}`,
                           <h4 className="text-sm font-semibold text-primary">Просроченные задачи</h4>
                           <button
                             className="secondary-button rounded px-2 py-1 text-xs disabled:opacity-60"
-                            onClick={() => void postponeAllOverdueByOneDay()}
+                            onClick={() => void postponeAllOverdueToToday()}
                             disabled={timelineOverdueBulkPostponeLoading !== null}
-                            title="Откладывает задачи на завтра на это же время"
-                            aria-label="Отложить просроченные задачи на завтра на это же время"
+                            title="Переносит задачи на сегодня на это же время"
+                            aria-label="Перенести просроченные задачи на сегодня на это же время"
                           >
                             {timelineOverdueBulkPostponeLoading === 'normal' ? <Loader2 size={12} className="animate-spin" /> : 'Отложить'}
                           </button>
