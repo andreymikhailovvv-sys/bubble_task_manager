@@ -62,10 +62,11 @@ type ListSortMode = 'sector' | 'importance';
 type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
-const TIMELINE_HOUR_HEIGHT = 88;
+const TIMELINE_QUARTERS_PER_HOUR = 4;
+const TIMELINE_QUARTER_HEIGHT = 24;
 const TIMELINE_CARD_HEIGHT = 52;
 const TIMELINE_CARD_GAP = 8;
-const TIMELINE_HOUR_EXTRA_PADDING = 10;
+const TIMELINE_QUARTER_PADDING = 8;
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_AI_FILE_TYPES = new Set([
@@ -988,33 +989,33 @@ export default function MiniApp() {
       .filter((task) => Boolean(task.dueDate))
       .sort(compareByDueDate);
 
-    const hourTaskCount = Array.from({ length: HOURS_IN_DAY }, () => 0);
+    const quarterItemCount = Array.from({ length: HOURS_IN_DAY * TIMELINE_QUARTERS_PER_HOUR }, () => 0);
     for (const task of timelineEntries) {
       const due = new Date(task.dueDate as string);
-      const hour = due.getHours();
-      if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
+      const quarter = (due.getHours() * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(due.getMinutes() / 15);
+      if (quarter >= 0 && quarter < quarterItemCount.length) quarterItemCount[quarter] += 1;
     }
     for (const habit of scheduledHabits) {
-      const hour = Number((habit.reminderTime ?? '00:00').slice(0, 2));
-      if (hour >= 0 && hour < HOURS_IN_DAY) hourTaskCount[hour] += 1;
+      const [hour, minute] = (habit.reminderTime ?? '00:00').split(':').map(Number);
+      const quarter = (hour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(minute / 15);
+      if (quarter >= 0 && quarter < quarterItemCount.length) quarterItemCount[quarter] += 1;
     }
 
-    const hourHeights = hourTaskCount.map((count) => {
-      if (count <= 1) return TIMELINE_HOUR_HEIGHT;
-      return Math.max(
-        TIMELINE_HOUR_HEIGHT,
-        (count * TIMELINE_CARD_HEIGHT) + ((count - 1) * TIMELINE_CARD_GAP) + TIMELINE_HOUR_EXTRA_PADDING
-      );
-    });
+    const quarterHeights = quarterItemCount.map((count) => count === 0
+      ? TIMELINE_QUARTER_HEIGHT
+      : (count * TIMELINE_CARD_HEIGHT) + ((count - 1) * TIMELINE_CARD_GAP) + TIMELINE_QUARTER_PADDING);
+    const quarterTops: number[] = [];
     const hourTops: number[] = [];
     let totalHeight = 0;
-    for (let hour = 0; hour < HOURS_IN_DAY; hour += 1) {
-      hourTops.push(totalHeight);
-      totalHeight += hourHeights[hour];
+    for (let quarter = 0; quarter < quarterHeights.length; quarter += 1) {
+      if (quarter % TIMELINE_QUARTERS_PER_HOUR === 0) hourTops.push(totalHeight);
+      quarterTops.push(totalHeight);
+      totalHeight += quarterHeights[quarter];
     }
 
     const currentHour = now.getHours();
-    const currentTimeTop = hourTops[currentHour] + ((now.getMinutes() / 60) * hourHeights[currentHour]);
+    const currentQuarter = (currentHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(now.getMinutes() / 15);
+    const currentTimeTop = quarterTops[currentQuarter] + (((now.getMinutes() % 15) / 15) * quarterHeights[currentQuarter]);
     const isCurrentDay = now.getFullYear() === anchor.getFullYear()
       && now.getMonth() === anchor.getMonth()
       && now.getDate() === anchor.getDate();
@@ -1024,8 +1025,9 @@ export default function MiniApp() {
       dateKey: toDateKey(startOfDay),
       currentTimeTop,
       isTodayVisible: isCurrentDay,
-      hourHeights,
       hourTops,
+      quarterHeights,
+      quarterTops,
       totalHeight,
       anchorLabel: anchor.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })
     };
@@ -1045,51 +1047,52 @@ export default function MiniApp() {
 
   const timelineHabitPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
-    const itemsByHour = new Map<number, Habit[]>();
+    const itemsByQuarter = new Map<number, Habit[]>();
 
     for (const habit of timelineToday.scheduledHabits) {
-      const hour = Number((habit.reminderTime ?? '00:00').slice(0, 2));
-      const bucket = itemsByHour.get(hour) ?? [];
+      const [hour, minute] = (habit.reminderTime ?? '00:00').split(':').map(Number);
+      const quarter = (hour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(minute / 15);
+      const bucket = itemsByQuarter.get(quarter) ?? [];
       bucket.push(habit);
-      itemsByHour.set(hour, bucket);
+      itemsByQuarter.set(quarter, bucket);
     }
 
-    for (const [hour, hourHabits] of itemsByHour.entries()) {
+    for (const [quarter, quarterHabits] of itemsByQuarter.entries()) {
       const taskCount = timelineToday.timelineEntries.filter((task) => {
         const due = new Date(task.dueDate as string);
-        return due.getHours() === hour;
+        return (due.getHours() * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(due.getMinutes() / 15) === quarter;
       }).length;
-      const sorted = hourHabits.slice().sort((a, b) => (a.reminderTime ?? '').localeCompare(b.reminderTime ?? ''));
+      const sorted = quarterHabits.slice().sort((a, b) => (a.reminderTime ?? '').localeCompare(b.reminderTime ?? ''));
       for (let index = 0; index < sorted.length; index += 1) {
-        placements.set(sorted[index].id, { top: timelineToday.hourTops[hour] + ((taskCount + index) * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
+        placements.set(sorted[index].id, { top: timelineToday.quarterTops[quarter] + ((taskCount + index) * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
       }
     }
 
     return placements;
-  }, [timelineToday.hourTops, timelineToday.scheduledHabits, timelineToday.timelineEntries]);
+  }, [timelineToday.quarterTops, timelineToday.scheduledHabits, timelineToday.timelineEntries]);
 
   const timelineTaskPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
-    const tasksByHour = new Map<number, Task[]>();
+    const tasksByQuarter = new Map<number, Task[]>();
 
     for (const task of timelineToday.timelineEntries) {
       const due = new Date(task.dueDate as string);
-      const hour = due.getHours();
-      const bucket = tasksByHour.get(hour) ?? [];
+      const quarter = (due.getHours() * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(due.getMinutes() / 15);
+      const bucket = tasksByQuarter.get(quarter) ?? [];
       bucket.push(task);
-      tasksByHour.set(hour, bucket);
+      tasksByQuarter.set(quarter, bucket);
     }
 
-    for (const [hour, tasks] of tasksByHour.entries()) {
+    for (const [quarter, tasks] of tasksByQuarter.entries()) {
       const sorted = tasks.slice().sort(compareByDueDate);
       for (let index = 0; index < sorted.length; index += 1) {
-        const top = timelineToday.hourTops[hour] + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4;
+        const top = timelineToday.quarterTops[quarter] + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4;
         placements.set(sorted[index].id, { top });
       }
     }
 
     return placements;
-  }, [timelineToday.hourHeights, timelineToday.hourTops, timelineToday.timelineEntries]);
+  }, [timelineToday.quarterTops, timelineToday.timelineEntries]);
 
   const isLightTheme = miniThemeMode === 'light';
   const getMiniWindowMotionClass = (windowName: string) => closingMiniWindow === windowName ? 'miniapp-window-closing' : 'miniapp-window-opening';
@@ -2204,11 +2207,18 @@ export default function MiniApp() {
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div className="relative overflow-x-hidden">
                   <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
-                    {Array.from({ length: HOURS_IN_DAY }).map((_, hourIndex) => (
-                      <div key={`hour-${hourIndex}`} className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.hourTops[hourIndex]}px` }}>
-                        <span className="miniapp-timeline-hour-label absolute -top-3 left-0 rounded bg-slate-900 px-1 text-xs text-slate-400">{`${hourIndex.toString().padStart(2, '0')}:00`}</span>
+                    {timelineToday.quarterTops.map((top, quarterIndex) => {
+                      const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
+                      const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
+                      const isHour = minute === 0;
+                      return (
+                      <div key={`quarter-${quarterIndex}`} className={`miniapp-timeline-quarter-line absolute inset-x-0 border-t ${isHour ? 'border-slate-700/80' : 'border-slate-700/35'}`} style={{ top: `${top}px` }}>
+                        <span className={`${isHour ? 'miniapp-timeline-hour-label text-xs text-slate-400' : 'miniapp-timeline-quarter-label text-[10px] text-slate-500'} absolute left-0 bg-slate-950/80 px-1`}>
+                          {isHour ? `${hour.toString().padStart(2, '0')}:00` : `:${minute.toString().padStart(2, '0')}`}
+                        </span>
                       </div>
-                    ))}
+                      );
+                    })}
                     <div className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.totalHeight - 1}px` }} />
                     {timelineToday.isTodayVisible ? (
                       <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
@@ -2219,23 +2229,24 @@ export default function MiniApp() {
                     {timelineToday.timelineEntries.map((task) => {
                       const dueDate = new Date(task.dueDate as string);
                       const taskHour = dueDate.getHours();
+                      const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
                       const isEvent = task.taskType === 'EVENT';
                       const hasOverdueState = !isEvent && isOverdue(task);
                       const isSubtask = Boolean(task.parentTaskId);
                       const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
                       const taskForSectorColor = parentTask ?? task;
                       const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
-                      const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.hourTops[taskHour] + 4 };
+                      const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
                       return (
                         <button
                           type="button"
                           key={task.id}
-                          className={`absolute border px-2 py-1 text-left ${isEvent ? 'miniapp-timeline-event-card rounded-lg' : 'rounded-lg'}`}
+                          className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card rounded-lg' : 'rounded-lg'}`}
                           style={{
                             top: `${placement.top}px`,
                             minHeight: `${TIMELINE_CARD_HEIGHT}px`,
-                            left: 'calc(4rem + 2px)',
-                            width: 'calc(100% - 4rem - 8px)',
+                            left: isSubtask ? 'calc(5rem + 2px)' : 'calc(4rem + 2px)',
+                            width: isSubtask ? 'calc(100% - 5rem - 12px)' : 'calc(100% - 4rem - 8px)',
                             zIndex: 10,
                             borderColor: isEvent
                               ? 'rgba(245,158,11,0.9)'
