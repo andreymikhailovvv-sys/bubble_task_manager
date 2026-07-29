@@ -671,6 +671,7 @@ export default function MiniApp() {
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingSubtaskTitleFocusIdRef = useRef<string | null>(null);
   const lastHomeScreenRequestAtRef = useRef(0);
   const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
   const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
@@ -1148,6 +1149,20 @@ export default function MiniApp() {
     setOpenedTaskId(task.id);
   };
 
+  const openSubtaskModal = (subtask: Task, options: { focusTitle?: boolean } = {}) => {
+    setDraftByTaskId((drafts) => ({
+      ...drafts,
+      [subtask.id]: drafts[subtask.id] ?? {
+        title: subtask.title,
+        description: subtask.description ?? '',
+        dueDate: toInputDateTime(subtask.dueDate)
+      }
+    }));
+    pendingSubtaskTitleFocusIdRef.current = options.focusTitle ? subtask.id : null;
+    setClosingMiniWindow(null);
+    setOpenedSubtaskId(subtask.id);
+  };
+
   useEffect(() => {
     if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
     const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
@@ -1258,7 +1273,7 @@ export default function MiniApp() {
         }
       }));
       await loadData();
-      setOpenedSubtaskId(created.id);
+      openSubtaskModal(created, { focusTitle: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось добавить подзадачу');
     } finally {
@@ -1579,7 +1594,8 @@ export default function MiniApp() {
   }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
 
   useEffect(() => {
-    if (!openedSubtaskId) return;
+    if (!openedSubtaskId || pendingSubtaskTitleFocusIdRef.current !== openedSubtaskId) return;
+    pendingSubtaskTitleFocusIdRef.current = null;
     subtaskTitleInputRef.current?.focus();
   }, [openedSubtaskId]);
 
@@ -2277,7 +2293,13 @@ export default function MiniApp() {
                                 : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
                             boxShadow: hasOverdueState ? (isLightTheme ? '0 10px 28px rgba(225,29,72,0.18)' : '0 0 12px rgba(239,68,68,0.45)') : undefined
                           }}
-                          onClick={() => openTaskModal(parentTask ?? task)}
+                          onClick={() => {
+                            if (isSubtask) {
+                              openSubtaskModal(task);
+                              return;
+                            }
+                            openTaskModal(task);
+                          }}
                         >
                           <p className={`flex items-center gap-1 truncate font-medium ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isEvent ? <Ticket size={13} className="shrink-0 text-amber-500" /> : null}<span className="truncate">{task.title}</span></p>
                           <p className={isSubtask ? 'text-[10px] leading-3 text-slate-300' : 'text-xs text-slate-300'}>{isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
@@ -2429,7 +2451,7 @@ export default function MiniApp() {
                     {openedTaskSubtasks.map((subtask) => {
                       return (
                         <article key={subtask.id} className={`miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
-                          <button type="button" onClick={() => setOpenedSubtaskId(subtask.id)} className="flex w-full items-center gap-2 text-left">
+                          <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
                             {subtask.dueDate ? <span className="shrink-0 text-xs font-semibold text-violet-500">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
@@ -2473,12 +2495,16 @@ export default function MiniApp() {
               />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                type="datetime-local"
-                value={openedSubtaskDraft.dueDate}
-                onChange={(event) => onChangeDraft(openedSubtask.id, { dueDate: event.target.value })}
-                className="miniapp-focus-date-input min-w-0 flex-1 rounded-full border px-3 py-2 text-xs font-semibold"
-                aria-label="Срок подзадачи"
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">
+                {openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}
+              </span>
+              <DateTimePickerWithApply
+                value={fromInputDateTime(openedSubtaskDraft.dueDate)}
+                onChange={(nextValue) => onChangeDraft(openedSubtask.id, { dueDate: toInputDateTime(nextValue) })}
+                timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                iconOnly
+                detachedPopup
+                buttonClassName="miniapp-focus-icon-button"
               />
               <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
                 <Maximize2 size={15} />
