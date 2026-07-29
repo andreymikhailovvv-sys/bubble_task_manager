@@ -585,6 +585,7 @@ export default function MiniApp() {
     return stored === 'dark' || stored === 'light' ? stored : 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [homeScreenHint, setHomeScreenHint] = useState<string | null>(null);
   const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
@@ -1981,7 +1982,7 @@ export default function MiniApp() {
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+        <section className={`relative sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 px-2.5 pb-3 pt-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
             <Search size={14} className="text-slate-400" />
@@ -1992,11 +1993,11 @@ export default function MiniApp() {
               className="miniapp-search-input w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
             </div>
-            <div className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
+            <div className="relative inline-flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={openCreateTaskModal}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-emerald-500/10"
                 aria-label="Создать задачу"
                 title="Создать задачу"
               >
@@ -2005,24 +2006,24 @@ export default function MiniApp() {
               <button
                 type="button"
                 onClick={toggleDisplayMode}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-sky-500/10"
                 aria-label={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
                 title={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
               >
                 {displayMode === 'list' ? (
                   <List size={16} className="text-sky-400" />
                 ) : (
-                  <CalendarDays size={16} className="text-violet-400" />
+                  <CalendarDays size={16} className="text-sky-400" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen((prev) => !prev)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-amber-500/10"
                 aria-label="Открыть настройки"
                 title="Настройки"
               >
-                <Settings size={16} className="text-slate-300" />
+                <Settings size={16} className="text-amber-400" />
               </button>
               {isSettingsOpen ? (
                 <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
@@ -2075,7 +2076,7 @@ export default function MiniApp() {
               ) : null}
             </div>
           </div>
-          <div className="miniapp-habits-strip mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+          {areHabitsExpanded ? <div className="miniapp-habits-strip mt-2.5 flex items-center gap-2 overflow-x-auto pb-1">
             {sortedHabits.map((habit) => {
               const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
               const cappedCompleted = Math.min(completed, habit.targetCount);
@@ -2117,7 +2118,17 @@ export default function MiniApp() {
             >
               <Plus size={18} />
             </button>
-          </div>
+          </div> : null}
+          <button
+            type="button"
+            onClick={() => setAreHabitsExpanded((previous) => !previous)}
+            className="absolute bottom-0 left-1/2 inline-flex h-5 w-10 -translate-x-1/2 translate-y-1/2 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-400 shadow-sm transition-colors hover:text-slate-200"
+            aria-expanded={areHabitsExpanded}
+            aria-label={areHabitsExpanded ? 'Скрыть привычки' : 'Показать привычки'}
+            title={areHabitsExpanded ? 'Скрыть привычки' : 'Показать привычки'}
+          >
+            <ChevronDown size={14} className={`transition-transform duration-200 ${areHabitsExpanded ? 'rotate-180' : ''}`} />
+          </button>
         </section>
 
         {error ? (
