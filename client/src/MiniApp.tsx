@@ -1981,7 +1981,7 @@ export default function MiniApp() {
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-3 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+        <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
             <Search size={14} className="text-slate-400" />
@@ -1992,11 +1992,11 @@ export default function MiniApp() {
               className="miniapp-search-input w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
             />
             </div>
-            <div className="relative inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-600 bg-slate-800 p-1">
+            <div className="relative inline-flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 onClick={openCreateTaskModal}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-emerald-500/10"
                 aria-label="Создать задачу"
                 title="Создать задачу"
               >
@@ -2005,24 +2005,24 @@ export default function MiniApp() {
               <button
                 type="button"
                 onClick={toggleDisplayMode}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-sky-500/10"
                 aria-label={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
                 title={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
               >
                 {displayMode === 'list' ? (
                   <List size={16} className="text-sky-400" />
                 ) : (
-                  <CalendarDays size={16} className="text-violet-400" />
+                  <CalendarDays size={16} className="text-sky-400" />
                 )}
               </button>
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen((prev) => !prev)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-900"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-amber-500/10"
                 aria-label="Открыть настройки"
                 title="Настройки"
               >
-                <Settings size={16} className="text-slate-300" />
+                <Settings size={16} className="text-amber-400" />
               </button>
               {isSettingsOpen ? (
                 <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
@@ -2075,49 +2075,6 @@ export default function MiniApp() {
               ) : null}
             </div>
           </div>
-          <div className="miniapp-habits-strip mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-            {sortedHabits.map((habit) => {
-              const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
-              const cappedCompleted = Math.min(completed, habit.targetCount);
-              const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
-              const isCompleted = completed >= habit.targetCount;
-              const isPulsing = completedHabitPulseId === habit.id;
-              return (
-                <button
-                  key={habit.id}
-                  type="button"
-                  className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
-                  style={{
-                    '--habit-color': isCompleted ? '#94a3b8' : habit.color,
-                    '--habit-progress': `${progress}%`
-                  } as CSSProperties}
-                  onMouseDown={() => startHabitPress(habit)}
-                  onMouseUp={() => finishHabitPress(habit)}
-                  onMouseLeave={cancelHabitPress}
-                  onTouchStart={() => startHabitPress(habit)}
-                  onTouchEnd={() => finishHabitPress(habit)}
-                  onTouchCancel={cancelHabitPress}
-                  aria-label={`${habit.name}: ${cappedCompleted} из ${habit.targetCount}`}
-                  title={isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
-                >
-                  <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
-                  <span className="relative z-10 flex flex-col items-center leading-none">
-                    <span className="text-lg">{habit.icon}</span>
-                    <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
-                  </span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={openCreateHabitModal}
-              className="miniapp-habit-add inline-flex h-[58px] min-w-[58px] shrink-0 items-center justify-center rounded-full border border-dashed border-emerald-400/70 bg-emerald-500/10 text-emerald-300"
-              aria-label="Добавить привычку"
-              title="Добавить привычку"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
         </section>
 
         {error ? (
@@ -2150,6 +2107,50 @@ export default function MiniApp() {
                   ariaLabel="Фильтр по времени"
                 />
               </div>
+            </div>
+
+            <div className="miniapp-habits-strip flex items-center gap-2 overflow-x-auto pb-1">
+              {sortedHabits.map((habit) => {
+                const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
+                const cappedCompleted = Math.min(completed, habit.targetCount);
+                const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
+                const isCompleted = completed >= habit.targetCount;
+                const isPulsing = completedHabitPulseId === habit.id;
+                return (
+                  <button
+                    key={habit.id}
+                    type="button"
+                    className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
+                    style={{
+                      '--habit-color': isCompleted ? '#94a3b8' : habit.color,
+                      '--habit-progress': `${progress}%`
+                    } as CSSProperties}
+                    onMouseDown={() => startHabitPress(habit)}
+                    onMouseUp={() => finishHabitPress(habit)}
+                    onMouseLeave={cancelHabitPress}
+                    onTouchStart={() => startHabitPress(habit)}
+                    onTouchEnd={() => finishHabitPress(habit)}
+                    onTouchCancel={cancelHabitPress}
+                    aria-label={`${habit.name}: ${cappedCompleted} из ${habit.targetCount}`}
+                    title={isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
+                  >
+                    <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
+                    <span className="relative z-10 flex flex-col items-center leading-none">
+                      <span className="text-lg">{habit.icon}</span>
+                      <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
+                    </span>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={openCreateHabitModal}
+                className="miniapp-habit-add inline-flex h-[58px] min-w-[58px] shrink-0 items-center justify-center rounded-full border border-dashed border-emerald-400/70 bg-emerald-500/10 text-emerald-300"
+                aria-label="Добавить привычку"
+                title="Добавить привычку"
+              >
+                <Plus size={18} />
+              </button>
             </div>
 
             {listTasks.map((task) => {
