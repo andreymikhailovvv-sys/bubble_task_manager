@@ -2082,34 +2082,14 @@ export default function MiniApp() {
           <div className="rounded-xl border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>
         ) : null}
 
-        {listTasks.length === 0 ? (
+        {displayMode === 'timeline' && listTasks.length === 0 ? (
           <div className="rounded-xl border border-slate-700 bg-slate-900 p-4 text-sm text-slate-300">Задачи не найдены.</div>
         ) : null}
 
         {displayMode === 'list' ? (
+          <div className="space-y-4">
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Список задач</h2>
-              <div className="flex items-center gap-2">
-                <CustomSelect
-                  className="min-w-32"
-                  value={listSortMode}
-                  onChange={(value) => setListSortMode(value as ListSortMode)}
-                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
-                  buttonClassName="h-8 px-2 py-1 text-xs"
-                  ariaLabel="Сортировка задач"
-                />
-                <CustomSelect
-                  className="min-w-32"
-                  value={timeFilter}
-                  onChange={(value) => setTimeFilter(value as TimeFilter)}
-                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
-                  buttonClassName="h-8 px-2 py-1 text-xs"
-                  ariaLabel="Фильтр по времени"
-                />
-              </div>
-            </div>
-
+            <h2 className="text-lg font-semibold">Привычки</h2>
             <div className="miniapp-habits-strip flex items-center gap-2 overflow-x-auto pb-1">
               {sortedHabits.map((habit) => {
                 const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
@@ -2153,6 +2133,34 @@ export default function MiniApp() {
                 <Plus size={18} />
               </button>
             </div>
+          </section>
+
+          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-semibold">Список задач</h2>
+              <div className="flex items-center gap-2">
+                <CustomSelect
+                  className="min-w-32"
+                  value={listSortMode}
+                  onChange={(value) => setListSortMode(value as ListSortMode)}
+                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
+                  buttonClassName="h-8 px-2 py-1 text-xs"
+                  ariaLabel="Сортировка задач"
+                />
+                <CustomSelect
+                  className="min-w-32"
+                  value={timeFilter}
+                  onChange={(value) => setTimeFilter(value as TimeFilter)}
+                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
+                  buttonClassName="h-8 px-2 py-1 text-xs"
+                  ariaLabel="Фильтр по времени"
+                />
+              </div>
+            </div>
+
+            {listTasks.length === 0 ? (
+              <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
+            ) : null}
 
             {listTasks.map((task) => {
               const isEvent = task.taskType === 'EVENT';
@@ -2221,6 +2229,7 @@ export default function MiniApp() {
               );
             })}
           </section>
+          </div>
         ) : (
 
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
