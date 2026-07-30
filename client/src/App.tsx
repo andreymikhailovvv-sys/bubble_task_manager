@@ -3207,6 +3207,11 @@ ${allContext}`,
 
   const sphereById = new Map(spheres.map((sphere) => [sphere.id, sphere]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const getSubtaskSphereColor = (subtask: Task) => {
+    const parentTask = subtask.parentTaskId ? taskById.get(subtask.parentTaskId) : null;
+    const sphereId = parentTask?.sphereId ?? subtask.sphereId;
+    return (sphereId ? sphereById.get(sphereId)?.color : null) ?? '#64748b';
+  };
   const aiTaskReferenceTasks = tasks;
   const getTimelineTaskViewModel = (task: Task) => {
     const taskSubtasks = displayedSubtaskMap[task.id] ?? [];
@@ -5106,7 +5111,11 @@ ${allContext}`,
                 <ul className="upcoming-subtasks-list flex-1 space-y-2 overflow-y-auto px-6 py-4 text-sm">
                   {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
-                    <li key={subtask.id} className={`upcoming-subtask-row flex items-start gap-3 rounded-2xl border px-4 py-3 ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}>
+                    <li
+                      key={subtask.id}
+                      className="upcoming-subtask-row upcoming-subtask-row-sector flex items-start gap-3 rounded-2xl border px-4 py-3"
+                      style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
+                    >
                       <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-primary"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
@@ -5120,6 +5129,7 @@ ${allContext}`,
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
                           timelineTasks={timelinePickerTasks}
+                          className="upcoming-subtask-date-action"
                           onChange={async (dueDate) => {
                             await api.updateTask(subtask.id, { dueDate });
                             await load();
@@ -5127,7 +5137,7 @@ ${allContext}`,
                         />
                         <button
                           type="button"
-                          className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
+                          className="upcoming-subtask-icon-action surface-muted text-muted transition hover:brightness-110"
                           title="Удалить подзадачу"
                           onClick={async () => {
                             await api.deleteTask(subtask.id);
@@ -6350,7 +6360,8 @@ ${allContext}`,
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
                   key={subtask.id}
-                  className={`upcoming-subtask-row flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px] ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-overdue-glow-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-reminder-glow-static' : ''}`}
+                  className="upcoming-subtask-row upcoming-subtask-row-sector flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-all duration-200 hover:-translate-y-[1px]"
+                  style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
                   onClick={() => setEditorState({ task: subtask })}
                 >
                   <input
@@ -6377,11 +6388,11 @@ ${allContext}`,
                         await api.updateTask(subtask.id, { dueDate });
                         await load();
                       }}
-                      className="surface-muted rounded p-1 hover:brightness-110"
+                      className="upcoming-subtask-date-action"
                     />
                     <button
                       type="button"
-                      className="surface-muted rounded p-1 text-muted transition hover:brightness-110"
+                      className="upcoming-subtask-icon-action surface-muted text-muted transition hover:brightness-110"
                       title="Удалить подзадачу"
                       onClick={async (event) => {
                         event.stopPropagation();

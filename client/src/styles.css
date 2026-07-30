@@ -234,6 +234,31 @@ body {
   background: rgba(255, 255, 255, 0.86);
 }
 
+.upcoming-subtask-row-sector {
+  box-shadow: inset 4px 0 0 var(--upcoming-subtask-sector-color, #64748b);
+}
+
+.upcoming-subtask-icon-action,
+.upcoming-subtask-date-action > .date-time-trigger {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  min-width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  padding: 0;
+}
+
+.upcoming-subtask-date-action > .date-time-trigger {
+  background: rgba(241, 245, 249, 0.9);
+}
+
+body[data-theme='dark'] .upcoming-subtask-date-action > .date-time-trigger {
+  background: rgba(51, 65, 85, 0.82);
+}
+
 .upcoming-subtask-row:hover {
   border-color: rgba(139, 92, 246, 0.32);
   background: #fff;
