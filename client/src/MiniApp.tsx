@@ -585,6 +585,7 @@ export default function MiniApp() {
     return stored === 'dark' || stored === 'light' ? stored : 'light';
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [homeScreenHint, setHomeScreenHint] = useState<string | null>(null);
   const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
