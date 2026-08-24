@@ -3224,7 +3224,7 @@ ${allContext}`,
       sphereColor
     };
   };
-  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void; compact?: boolean }) => {
+  const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const isEventChip = task.taskType === 'EVENT';
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
@@ -3253,7 +3253,7 @@ ${allContext}`,
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between border text-left transition-all duration-200 hover:brightness-110 ${options?.compact ? 'gap-1 rounded px-1 py-0 text-[9px] leading-3' : 'gap-2 rounded-md px-2 py-1 text-xs'} ${
+        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
@@ -3315,24 +3315,24 @@ ${allContext}`,
       >
         <span className="flex min-w-0 items-center gap-1">
           {timelinePostponeHighlightedTaskId === task.id || isCompletingInTimeline || isCompletingOutsideTimeline ? (
-            <Check size={options?.compact ? 10 : 13} className="timeline-task-chip-success shrink-0" />
+            <Check size={13} className="timeline-task-chip-success shrink-0" />
           ) : null}
-          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={options?.compact ? 10 : 12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
-          {isEventChip ? <Ticket size={options?.compact ? 10 : 12} className="shrink-0 text-amber-600" /> : null}
-          {isSubtaskChip ? <span className={`${options?.compact ? 'h-3 w-px' : 'h-4 w-1'} shrink-0 rounded-sm`} style={{ backgroundColor: parentSphereColor }} /> : null}
+          {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
+          {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
+          {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
-          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={options?.compact ? 10 : 12} className="timeline-task-ai-icon shrink-0" /></span> : null}
+          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
             </span>
           ) : null}
-          {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={options?.compact ? 10 : 12} className="timeline-task-chip-accent shrink-0" /></span> : null}
+          {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
           {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
-        {!options?.compact && !isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
+        {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline || isCompletingOutsideTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -4613,7 +4613,7 @@ ${allContext}`,
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
-                        className={`timeline-month-cell h-20 overflow-hidden rounded-xl border p-1 ${
+                        className={`timeline-month-cell min-h-24 rounded-xl border p-1 ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
                               ? 'timeline-month-cell-weekend'
@@ -4648,12 +4648,24 @@ ${allContext}`,
                       >
                         {cell.date ? (
                           <>
-                            <p className="mb-1 flex items-center justify-between text-[10px] font-semibold leading-3 text-muted">
-                              <span>{cell.date.getDate()}</span>
-                              {cell.tasks.length > 3 ? <span title={`Ещё задач: ${cell.tasks.length - 3}`}>+{cell.tasks.length - 3}</span> : null}
-                            </p>
-                            <ul className="space-y-0.5">
-                              {cell.tasks.slice(0, 3).map((task) => renderTimelineTaskChip(task, { compact: true }))}
+                            <p className="mb-2 text-xs font-semibold text-muted">{cell.date.getDate()}</p>
+                            <ul className="space-y-1">
+                              {cell.tasks.slice(0, 4).map((task) => renderTimelineTaskChip(task))}
+                              {cell.tasks.length > 4 ? (
+                                <li>
+                                  <button
+                                    type="button"
+                                    className="timeline-more-button rounded-md border px-2 py-0.5 text-[11px] transition"
+                                    onClick={() => {
+                                      if (!cell.date) return;
+                                      setTimelineAnchorDate(new Date(cell.date));
+                                      setTimelineViewMode('day');
+                                    }}
+                                  >
+                                    + ещё {cell.tasks.length - 4}
+                                  </button>
+                                </li>
+                              ) : null}
                             </ul>
                           </>
                         ) : null}
