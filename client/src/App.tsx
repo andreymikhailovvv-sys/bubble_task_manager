@@ -4599,7 +4599,7 @@ ${allContext}`,
 
               {timelineViewMode === 'month' ? (
                 <section className="timeline-panel rounded-2xl border p-3">
-                  <div className="mb-1 grid grid-cols-7 gap-1">
+                  <div className="mb-2 grid grid-cols-7 gap-2">
                     {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((dayName, index) => (
                       <div
                         key={dayName}
@@ -4609,11 +4609,11 @@ ${allContext}`,
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-7 gap-1">
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-7">
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
-                        className={`timeline-month-cell min-h-24 rounded-xl border p-1 ${
+                        className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
                               ? 'timeline-month-cell-weekend'
