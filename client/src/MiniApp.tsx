@@ -950,7 +950,8 @@ export default function MiniApp() {
   }, [tasks]);
 
   const listTasks = useMemo(() => {
-    const result = [...filteredTasks];
+    // События отображаются только на таймлайне, чтобы не смешивать их с задачами в списке.
+    const result = filteredTasks.filter((task) => task.taskType !== 'EVENT');
     result.sort((a, b) => {
       if (listSortMode === 'importance') {
         if (a.importance !== b.importance) return b.importance - a.importance;
