@@ -847,6 +847,8 @@ export default function App() {
       return normalizeAiChatProjects(parsedProjects, quickMessages);
     } catch { return normalizeAiChatProjects(null); }
   });
+  const aiChatProjectsSyncReadyRef = useRef(false);
+  const aiChatProjectsSaveTimerRef = useRef<number | null>(null);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? QUICK_AI_CHAT_ID);
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
@@ -1120,6 +1122,8 @@ export default function App() {
   }, [spheres]);
 
   useEffect(() => {
+    aiChatProjectsSyncReadyRef.current = false;
+    if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
     if (!currentUser) {
       setAiDialogByTask({});
       setAiReadCursorByTask({});
@@ -1153,13 +1157,22 @@ export default function App() {
     }
     const loadGeneralAiHistory = async () => {
       try {
-        const result = await api.getGeneralAssistantHistory();
+        const [result, syncedProjects] = await Promise.all([
+          api.getGeneralAssistantHistory(),
+          api.getAiChatProjects<Partial<AiChatProject>>()
+        ]);
         if (isCancelled) return;
         const normalized = result.messages
           .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
           .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
         setGeneralAiMessages(normalized);
-        setAiChatProjects((prev) => normalizeAiChatProjects(prev, normalized));
+        setAiChatProjects((prev) => {
+          const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
+          const next = normalizeAiChatProjects(source, normalized);
+          if (!syncedProjects.projects?.length) void api.saveAiChatProjects(next).catch(() => undefined);
+          return next;
+        });
+        aiChatProjectsSyncReadyRef.current = true;
       } catch {
         if (isCancelled) return;
         setGeneralAiMessages([]);
@@ -2285,6 +2298,15 @@ ${allContext}`,
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
+    if (aiChatProjectsSyncReadyRef.current) {
+      if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+      aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
+        void api.saveAiChatProjects(aiChatProjects).catch((error) => console.error('[AI chat] sync failed', error));
+      }, 400);
+    }
+    return () => {
+      if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+    };
   }, [aiChatProjects]);
 
   const scrollQuickAiChatToBottom = () => {

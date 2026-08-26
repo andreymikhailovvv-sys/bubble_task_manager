@@ -106,6 +106,11 @@ type AdminUser = {
 
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
+  getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
+  saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
+    method: 'PUT',
+    body: JSON.stringify({ projects })
+  }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
