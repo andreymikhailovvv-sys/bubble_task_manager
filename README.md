@@ -14,6 +14,8 @@ Monorepo с frontend (React + Vite + TypeScript) и backend (Express + Prisma + 
   client/
   server/
   package.json
+  package-lock.json
+  Dockerfile
   render.yaml
   README.md
 ```
@@ -42,7 +44,7 @@ TELEGRAM_POLL_INTERVAL_MS=60000
 ## Локальный запуск
 1. Установка зависимостей:
 ```bash
-npm install
+npm ci
 ```
 2. Сгенерировать Prisma client и выполнить миграцию:
 ```bash
@@ -70,11 +72,22 @@ npm run start
 1. Подключите GitHub репозиторий в Render.
 2. Используйте `render.yaml` (Blueprint deploy).
 3. Render выполнит:
-   - `npm install`
+   - `npm ci`
    - `npm run build`
-   - `npm run db:migrate`
-   - `npm run db:seed`
+   - при запуске `npm run start` — `prisma migrate deploy`, затем `node dist/index.js`
 4. Health check: `/api/health`
+
+Render по-прежнему использует Node runtime (`env: node` в `render.yaml`), а не Dockerfile. Задайте секрет `DATABASE_URL` в переменных окружения Render.
+
+## Deploy в Timeweb
+1. Выберите сборку из корневого `Dockerfile`. Отключите автоматическую Node-сборку или выберите Dockerfile-сборку вместо неё.
+2. Добавьте в настройках сервиса переменные окружения:
+   - `DATABASE_URL` — обязательная строка подключения к базе данных;
+   - `PORT` — порт, который выдал Timeweb;
+   - остальные секреты (`OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` и т. д.) — по мере использования соответствующих функций.
+3. Не добавляйте секреты в `Dockerfile`: контейнер получит их из окружения Timeweb при запуске.
+
+Образ использует Node.js 22: один `npm ci` устанавливает зависимости всех npm workspaces, после чего `npm run build` собирает client и server. Контейнер запускается корневой командой `npm run start`.
 
 > На free-tier файловая система эфемерная. SQLite база будет пересоздаваться при redeploy/restart. Для persistence переходите на managed Postgres.
 
