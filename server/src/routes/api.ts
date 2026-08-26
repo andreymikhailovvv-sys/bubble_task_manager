@@ -714,6 +714,32 @@ apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.c
 apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
 
+apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { aiChatProjects: true }
+  });
+  res.json({ projects: user?.aiChatProjects ?? null });
+}));
+
+apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
+  const projects = req.body?.projects;
+  if (!Array.isArray(projects)) {
+    res.status(400).json({ error: 'Список проектов должен быть массивом' });
+    return;
+  }
+  const serialized = JSON.stringify(projects);
+  if (Buffer.byteLength(serialized, 'utf8') > 2_000_000) {
+    res.status(413).json({ error: 'История чатов слишком большая' });
+    return;
+  }
+  await prisma.user.update({
+    where: { id: req.user!.id },
+    data: { aiChatProjects: projects }
+  });
+  res.json({ projects });
+}));
+
 apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);

@@ -663,6 +663,8 @@ export default function MiniApp() {
       return normalizeMiniAiChatProjects(parsed);
     } catch { return normalizeMiniAiChatProjects(null); }
   });
+  const aiChatProjectsSyncReadyRef = useRef(false);
+  const aiChatProjectsSaveTimerRef = useRef<number | null>(null);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -699,20 +701,22 @@ export default function MiniApp() {
         throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
       }
 
-      const [sphereList, taskList, habitList, quickHistory] = await Promise.all([
+      const [sphereList, taskList, habitList, quickHistory, syncedProjects] = await Promise.all([
         api.getSpheres(),
         api.getTasks(),
         api.getHabits(),
-        api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] }))
+        api.getGeneralAssistantHistory().catch(() => ({ messages: [] as ChatMessage[] })),
+        api.getAiChatProjects<Partial<MiniAiChatProject>>()
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
         .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }))
         .slice(-20);
-      setAiChatProjects((prev) => normalizeMiniAiChatProjects(prev).map((project, projectIndex) => projectIndex === 0 ? {
+      setAiChatProjects((prev) => normalizeMiniAiChatProjects(syncedProjects.projects?.length ? syncedProjects.projects : prev).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
         chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
       } : project));
+      aiChatProjectsSyncReadyRef.current = true;
       setSpheres(sphereList);
       setTasks(taskList);
       setHabits(habitList);
@@ -1618,6 +1622,15 @@ export default function MiniApp() {
 
   useEffect(() => {
     localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(aiChatProjects));
+    if (aiChatProjectsSyncReadyRef.current) {
+      if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+      aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
+        void api.saveAiChatProjects(aiChatProjects).catch((error) => console.error('[MiniApp AI chat] sync failed', error));
+      }, 400);
+    }
+    return () => {
+      if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+    };
   }, [aiChatProjects]);
 
 
