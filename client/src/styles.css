@@ -2058,6 +2058,21 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
   pointer-events: none;
 }
 
+.miniapp-timeline-empty-slot {
+  z-index: 1;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.miniapp-timeline-empty-slot:hover,
+.miniapp-timeline-empty-slot:focus-visible {
+  background: rgba(139, 92, 246, 0.1);
+  outline: 1px solid rgba(139, 92, 246, 0.28);
+  outline-offset: -1px;
+}
+
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-quarter-label {
   background: rgba(248, 250, 252, 0.82) !important;
   color: #94a3b8 !important;

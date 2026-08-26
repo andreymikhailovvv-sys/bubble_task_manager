@@ -1033,6 +1033,7 @@ export default function MiniApp() {
       currentTimeTop,
       isTodayVisible: isCurrentDay,
       hourTops,
+      occupiedQuarters: new Set(quarterItemHeights.flatMap((itemHeights, quarter) => itemHeights.length > 0 ? [quarter] : [])),
       quarterHeights,
       quarterTops,
       totalHeight,
@@ -1298,13 +1299,25 @@ export default function MiniApp() {
     subtasks: []
   });
 
-  const openCreateTaskModal = () => {
-    setCreateTaskDraft(createEmptyTaskDraft());
+  const openCreateTaskModal = (dueDate?: Date) => {
+    const draft = createEmptyTaskDraft();
+    setCreateTaskDraft(dueDate ? { ...draft, dueDate: toInputDateTime(dueDate.toISOString()) } : draft);
     setCreateTaskNotifyPreset('30');
     setCreateTaskRecurrenceNextDueLabel(null);
     setIsCreateTaskSettingsOpen(false);
     setClosingMiniWindow(null);
     setIsCreateTaskModalOpen(true);
+  };
+
+  const openCreateTaskModalForTimelineQuarter = (quarterIndex: number) => {
+    const dueDate = new Date(
+      timelineAnchorDate.getFullYear(),
+      timelineAnchorDate.getMonth(),
+      timelineAnchorDate.getDate(),
+      Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR),
+      (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15
+    );
+    openCreateTaskModal(dueDate);
   };
 
   const applyCreateTaskRecurrence = async () => {
@@ -1996,7 +2009,7 @@ export default function MiniApp() {
             <div className="relative inline-flex shrink-0 items-center gap-1">
               <button
                 type="button"
-                onClick={openCreateTaskModal}
+                onClick={() => openCreateTaskModal()}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-emerald-500/10"
                 aria-label="Создать задачу"
                 title="Создать задачу"
@@ -2245,6 +2258,28 @@ export default function MiniApp() {
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div className="relative overflow-x-hidden">
                   <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
+                    {timelineToday.quarterTops.map((top, quarterIndex) => {
+                      if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
+                      const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
+                      const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
+                      const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                      return (
+                        <button
+                          type="button"
+                          key={`empty-quarter-${quarterIndex}`}
+                          className="miniapp-timeline-empty-slot absolute"
+                          style={{
+                            top: `${top}px`,
+                            height: `${timelineToday.quarterHeights[quarterIndex]}px`,
+                            left: '4rem',
+                            width: 'calc(100% - 4rem)'
+                          }}
+                          onClick={() => openCreateTaskModalForTimelineQuarter(quarterIndex)}
+                          aria-label={`Создать задачу на ${timeLabel}`}
+                          title={`Создать задачу на ${timeLabel}`}
+                        />
+                      );
+                    })}
                     {timelineToday.quarterTops.map((top, quarterIndex) => {
                       const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
                       const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
