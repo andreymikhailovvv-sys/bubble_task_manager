@@ -888,6 +888,7 @@ export default function App() {
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineCurrentDayRef = useRef<HTMLDivElement | null>(null);
   const timelineLastScrollTopRef = useRef(0);
   const focusedAiFileInputRef = useRef<HTMLInputElement | null>(null);
   const expandedAiFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2583,6 +2584,30 @@ ${allContext}`,
     requestAnimationFrame(() => {
       container.scrollTop = targetScrollTop;
     });
+  }, [isTimelineMode, timelineViewMode, timelineAnchorDate]);
+
+  useEffect(() => {
+    if (!isTimelineMode || timelineViewMode !== 'month') return;
+
+    const animationFrameId = requestAnimationFrame(() => {
+      const container = timelineScrollContainerRef.current;
+      const currentDay = timelineCurrentDayRef.current;
+      if (!container || !currentDay) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const currentDayRect = currentDay.getBoundingClientRect();
+      const currentDayTop = container.scrollTop + currentDayRect.top - containerRect.top;
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const targetScrollTop = Math.min(
+        maxScrollTop,
+        Math.max(0, currentDayTop - (container.clientHeight - currentDayRect.height) / 2)
+      );
+
+      container.scrollTop = targetScrollTop;
+      timelineLastScrollTopRef.current = targetScrollTop;
+    });
+
+    return () => cancelAnimationFrame(animationFrameId);
   }, [isTimelineMode, timelineViewMode, timelineAnchorDate]);
 
   useEffect(() => {
@@ -4635,6 +4660,7 @@ ${allContext}`,
                     {timelineViewData.monthCells.map((cell) => (
                       <div
                         key={cell.key}
+                        ref={cell.date && cell.date.toDateString() === new Date().toDateString() ? timelineCurrentDayRef : undefined}
                         className={`timeline-month-cell min-h-32 rounded-xl border p-2 ${
                           cell.date
                             ? ((cell.date.getDay() === 0 || cell.date.getDay() === 6)
