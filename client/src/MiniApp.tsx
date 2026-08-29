@@ -4,6 +4,7 @@ import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
+import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
@@ -431,11 +432,9 @@ function parseMiniTaskReferencesInLine(content: string): Array<{ type: 'text'; v
 function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { content: string; tasks: Task[]; onOpenTask: (task: Task) => void }) {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const normalizedContent = useMemo(() => normalizeMiniAiMessageContent(content), [content]);
-  const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
-
-  return (
-    <>
-      {lines.map((line, lineIndex) => {
+  return renderAiContentBlocks(normalizedContent, (text, blockKey) => (
+    <div key={blockKey}>
+      {text.split(/\r?\n/).map((line, lineIndex) => {
         const chunks = parseMiniTaskReferencesInLine(line);
         if (chunks.length === 0) return <p key={`mini-ai-line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
         const taskReferences = chunks
@@ -471,8 +470,14 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { cont
           </div>
         );
       })}
-    </>
-  );
+    </div>
+  ));
+}
+
+function renderMiniAiMessageContent(content: string) {
+  return renderAiContentBlocks(normalizeMiniAiMessageContent(content), (text, key) => (
+    <div key={key}>{renderMiniAiText(text)}</div>
+  ));
 }
 
 function renderMiniAiText(content: string) {
@@ -2600,7 +2605,7 @@ export default function MiniApp() {
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
+                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
@@ -2694,7 +2699,7 @@ export default function MiniApp() {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiText(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                 </div>
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}

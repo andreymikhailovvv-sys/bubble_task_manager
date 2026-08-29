@@ -14,6 +14,7 @@ import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
+import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 
 const MAX_SPHERES = 8;
@@ -150,7 +151,6 @@ const TIMEZONE_OPTIONS = [
 const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
 const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
-const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -414,7 +414,6 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
 }) {
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const normalizedContent = useMemo(() => normalizeAiMessageContent(content), [content]);
-  const lines = useMemo(() => normalizedContent.split(/\r?\n/), [normalizedContent]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
     onOpenTask?.(showTaskReferenceButtons ? (matchedTask?.id ?? taskId) : (matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId));
@@ -440,9 +439,9 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
     );
   };
 
-  return (
-    <>
-      {lines.map((line, lineIndex) => {
+  return renderAiContentBlocks(normalizedContent, (text, blockKey) => (
+    <Fragment key={blockKey}>
+      {text.split(/\r?\n/).map((line, lineIndex) => {
         const chunks = parseTaskReferencesInLine(line);
         if (chunks.length === 0) return <div key={`line-empty-${lineIndex}`} className="min-h-[1em] whitespace-pre-wrap" />;
         const taskReferences = showTaskReferenceButtons
@@ -462,45 +461,15 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
           </div>
         );
       })}
-    </>
-  );
+    </Fragment>
+  ));
 });
 
 function renderAiMessageContent(content: string): ReactNode {
   const normalizedContent = normalizeAiMessageContent(content);
-  const blocks: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  CODE_BLOCK_PATTERN.lastIndex = 0;
-  while ((match = CODE_BLOCK_PATTERN.exec(normalizedContent)) !== null) {
-    const [full, language, code] = match;
-    const before = normalizedContent.slice(lastIndex, match.index);
-    if (before) {
-      blocks.push(<div key={`text-${lastIndex}`} className="whitespace-pre-wrap">{renderInlineAiMarkup(before)}</div>);
-    }
-    const normalizedCode = code.replace(/\n$/, '');
-    blocks.push(
-      <div key={`code-${match.index}`} className="my-2 overflow-hidden rounded-lg border border-slate-600/70 bg-slate-950/95">
-        <div className="flex items-center justify-between border-b border-slate-700/70 px-2 py-1 text-[10px] text-slate-300">
-          <span>{language || 'code'}</span>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded bg-slate-700/80 px-2 py-1 text-[10px] text-slate-100 hover:bg-slate-600"
-            onClick={() => { void navigator.clipboard?.writeText(normalizedCode); }}
-            title="Скопировать код"
-          >
-            <Copy size={11} /> Копировать
-          </button>
-        </div>
-        <pre className="m-0 overflow-x-auto p-2 text-[12px] leading-5 text-cyan-100"><code>{normalizedCode}</code></pre>
-      </div>
-    );
-    lastIndex = match.index + full.length;
-  }
-  const tail = normalizedContent.slice(lastIndex);
-  if (tail) blocks.push(<div key="text-tail" className="whitespace-pre-wrap">{renderInlineAiMarkup(tail)}</div>);
-  CODE_BLOCK_PATTERN.lastIndex = 0;
-  return blocks.length > 0 ? blocks : <span>{renderInlineAiMarkup(normalizedContent)}</span>;
+  return renderAiContentBlocks(normalizedContent, (text, key) => (
+    <div key={key} className="whitespace-pre-wrap">{renderInlineAiMarkup(text)}</div>
+  ));
 }
 
 function resolveAttachmentMimeType(file: File): string {
@@ -6502,7 +6471,7 @@ ${allContext}`,
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
               {quickAiChatMessages.map((message) => (
                 <div key={message.id} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
-                  <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}
+                  <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(message.content)}
                 </div>
               ))}
               {quickAiChatMessages.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
@@ -6554,7 +6523,7 @@ ${allContext}`,
                 </div>
                 <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderInlineAiMarkup(message.content)}</div></div></div>)}
+                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
                 </div>
