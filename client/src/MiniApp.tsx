@@ -1168,7 +1168,9 @@ export default function MiniApp() {
       [task.id]: {
         title: task.title,
         description: task.description ?? '',
-        dueDate: toInputDateTime(task.dueDate)
+        dueDate: toInputDateTime(task.dueDate),
+        sphereId: task.sphereId,
+        notifyBeforeMinutes: task.notifyBeforeMinutes
       }
     }));
     const subtasks = subtasksByParent[task.id] ?? [];
@@ -1239,7 +1241,9 @@ export default function MiniApp() {
       await api.updateTask(taskId, {
         title: draft.title.trim() || 'Задача без названия',
         description: draft.description.trim() || null,
-        dueDate: fromInputDateTime(draft.dueDate)
+        dueDate: fromInputDateTime(draft.dueDate),
+        ...(draft.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
+        ...(draft.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: draft.notifyBeforeMinutes } : {})
       });
       await loadData();
       if (taskId === openedSubtaskId) {
@@ -2463,7 +2467,7 @@ export default function MiniApp() {
                   rows={isTaskTitleSingleLine ? 1 : 2}
                   placeholder="Без названия"
                 />
-                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold text-violet-500`}>
+                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
@@ -2500,6 +2504,27 @@ export default function MiniApp() {
                   >
                     <Plus size={15} />
                   </button>
+                </div>
+                <div className="task-edit-compact-grid mt-3 grid grid-cols-2 gap-2">
+                  <CustomSelect
+                    value={openedTaskDraft.sphereId ?? 'none'}
+                    onChange={(value) => onChangeDraft(openedTask.id, { sphereId: value === 'none' ? null : value })}
+                    options={[{ value: 'none', label: 'Без сектора', color: '#7c3aed' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color }))]}
+                    ariaLabel="Выбор сектора"
+                    buttonClassName="focused-task-pill-select"
+                    menuClassName="task-edit-sector-menu"
+                    detachedPopup
+                  />
+                  <CustomSelect
+                    value={openedTaskDraft.notifyBeforeMinutes == null ? 'null' : String(openedTaskDraft.notifyBeforeMinutes)}
+                    onChange={(value) => onChangeDraft(openedTask.id, { notifyBeforeMinutes: value === 'null' ? null : Number(value) })}
+                    options={NOTIFY_PRESETS}
+                    ariaLabel="Уведомлять за"
+                    disabled={Boolean(openedTask.isRecurring)}
+                    buttonClassName="focused-task-pill-select"
+                    menuClassName="task-edit-notify-menu"
+                    detachedPopup
+                  />
                 </div>
                 <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
                 {taskAttachments.length > 0 ? (
@@ -2549,7 +2574,7 @@ export default function MiniApp() {
                           <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
-                            {subtask.dueDate ? <span className="shrink-0 text-xs font-semibold text-violet-500">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                            {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                           </button>
                         </article>
                       );
