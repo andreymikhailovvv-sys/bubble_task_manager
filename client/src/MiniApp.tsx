@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -602,6 +602,7 @@ export default function MiniApp() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
@@ -976,6 +977,27 @@ export default function MiniApp() {
   }, [filteredTasks, listSortMode, spheres]);
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
+  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && isOverdue(task)), [tasks]);
+
+  const postponeAllOverdueToToday = async () => {
+    if (isPostponingOverdue || overdueTasks.length === 0) return;
+    setIsPostponingOverdue(true);
+    setError(null);
+    try {
+      const today = new Date();
+      await Promise.all(overdueTasks.map(async (task) => {
+        const nextDueDate = new Date(task.dueDate as string);
+        nextDueDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
+        await api.updateTask(task.id, { dueDate: nextDueDate.toISOString() });
+      }));
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось перенести просроченные задачи');
+    } finally {
+      setIsPostponingOverdue(false);
+    }
+  };
 
   const timelineToday = useMemo(() => {
     const now = timelineNow;
@@ -2188,6 +2210,19 @@ export default function MiniApp() {
                 />
               </div>
             </div>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={13} className="animate-spin" /> : null}
+                Отложить
+              </button>
+            </div>
 
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
@@ -2271,6 +2306,19 @@ export default function MiniApp() {
                 <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
                 <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
               </div>
+            </div>
+            <div className="mb-3 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={13} className="animate-spin" /> : null}
+                Отложить
+              </button>
             </div>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
