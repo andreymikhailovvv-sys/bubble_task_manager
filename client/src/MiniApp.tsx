@@ -2628,14 +2628,14 @@ export default function MiniApp() {
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
               <div ref={fullscreenAiDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
-                {openedTaskAiDialog.length === 0 ? <p className="miniapp-ai-chat-empty rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-400">История пока пустая. Спросите ИИ, как эффективнее выполнить задачу.</p> : null}
+                {openedTaskAiDialog.length === 0 ? <div className="miniapp-ai-chat-empty"><span className="miniapp-ai-chat-empty-icon"><Sparkles size={22} /></span><strong>ИИ готов помочь</strong><p>Спросите, как эффективнее выполнить эту задачу, или попросите составить план.</p></div> : null}
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                   </div>
                 ))}
-                {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+                {aiLoadingTaskId === openedTask.id ? <div className="miniapp-ai-chat-typing" aria-label="ИИ формирует ответ"><span /><span /><span /></div> : null}
               </div>
             </div>
             <div className="miniapp-ai-chat-composer border-t border-slate-800 p-3">
@@ -2722,14 +2722,14 @@ export default function MiniApp() {
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
               <div ref={aiChatDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
-              {(activeAiChat?.messages ?? []).length === 0 ? <p className="miniapp-ai-chat-empty rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-400">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
+              {(activeAiChat?.messages ?? []).length === 0 ? <div className="miniapp-ai-chat-empty"><span className="miniapp-ai-chat-empty-icon"><Sparkles size={22} /></span><strong>Начните новый диалог</strong><p>Задайте вопрос, обсудите идею или попросите ИИ помочь с вашими задачами.</p></div> : null}
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                 </div>
               ))}
-              {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+              {aiChatLoading ? <div className="miniapp-ai-chat-typing" aria-label="ИИ формирует ответ"><span /><span /><span /></div> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               </div>
             </div>
@@ -2756,7 +2756,7 @@ export default function MiniApp() {
                 <h3 className="text-xl font-bold tracking-tight text-primary">Проекты и чаты</h3>
                 <button type="button" className="miniapp-ai-chat-menu-close rounded-2xl border p-2" onClick={() => setIsAiChatMenuOpen(false)}><X size={16} /></button>
               </div>
-              <div className="space-y-2">
+              <div className="miniapp-ai-chat-menu-section space-y-2">
                 <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
                 {aiChatProjects.map((project) => (
                   <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
@@ -2765,7 +2765,7 @@ export default function MiniApp() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 space-y-2">
+              <div className="miniapp-ai-chat-menu-section mt-3 space-y-2">
                 <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread}><Plus size={16} /></button></div>
                 {(activeAiChatProject?.chats ?? []).map((chat) => (
                   <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
@@ -2781,7 +2781,7 @@ export default function MiniApp() {
 
       {isAiChatProjectDialogOpen ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-project')}`} onClick={() => closeMiniWindowWithMotion('ai-project', () => setIsAiChatProjectDialogOpen(false))}>
-          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="miniapp-ai-project-dialog miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-300">{aiChatProjectDraft.mode === 'edit' ? 'Настройка проекта' : 'Новый проект'}</p>
@@ -2805,7 +2805,7 @@ export default function MiniApp() {
 
       {renamingAiChatId ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4 ${getMiniWindowMotionClass('ai-rename')}`}>
-          <div className="miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
+          <div className="miniapp-ai-project-dialog miniapp-slide-panel w-full max-w-sm rounded-2xl border border-slate-700 bg-slate-900 p-4 text-slate-100">
             <h3 className="font-semibold">Переименовать чат</h3>
             <input value={aiChatRenameDraft} onChange={(event) => setAiChatRenameDraft(event.target.value)} className="mt-3 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm" autoFocus />
             <div className="mt-4 flex justify-end gap-2"><button type="button" className="rounded-md border border-slate-700 px-3 py-2 text-sm" onClick={() => closeMiniWindowWithMotion('ai-rename', () => setRenamingAiChatId(null))}>Отмена</button><button type="button" className="rounded-md bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" onClick={saveAiChatRename}>Сохранить</button></div>
