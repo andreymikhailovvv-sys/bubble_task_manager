@@ -400,7 +400,7 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
             <p className="text-xs text-muted">Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.</p>
           </div>
         </div>
-        <div className="notes-editor-toolbar flex flex-wrap gap-2 border-b px-4 py-3">
+        <div className="notes-editor-toolbar flex flex-nowrap justify-between gap-1 border-b px-2 py-3 sm:justify-start sm:gap-2 sm:px-4">
           {NOTE_FORMAT_BUTTONS.map((button) => {
             const Icon = button.icon;
             const isPlainButton = button.format === 'plain';
@@ -479,4 +479,3 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
     </div>
   ), document.body);
 }
-
