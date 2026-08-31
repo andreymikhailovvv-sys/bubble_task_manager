@@ -332,9 +332,9 @@ export function DateTimePickerWithApply({
         : null}
       {isTimelinePreviewOpen ? createPortal(
         <div className="timeline-preview-overlay fixed inset-0 z-[210] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="timeline-preview-panel w-full max-w-4xl rounded-2xl border p-4">
+          <div className={`timeline-preview-panel w-full max-w-4xl overflow-hidden rounded-2xl border p-4 ${previewMode === 'day' ? 'timeline-preview-panel-day flex max-h-[calc(100dvh-2rem)] flex-col' : ''}`}>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="timeline-title text-sm font-semibold">Предпросмотр таймлайна (месяц)</h3>
+              <h3 className="timeline-title text-sm font-semibold">Предпросмотр таймлайна ({previewMode === 'month' ? 'месяц' : 'день'})</h3>
               <button type="button" className="secondary-button rounded px-2 py-1 text-xs" onClick={() => setIsTimelinePreviewOpen(false)}>Закрыть</button>
             </div>
             <div className="mb-2 flex items-center justify-between text-sm">
@@ -371,7 +371,7 @@ export function DateTimePickerWithApply({
                         {dayTasks.slice(0, 3).map((task) => {
                           const isEvent = task.taskType === 'EVENT';
                           return (
-                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1 py-0.5 text-[9px] leading-tight ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                               {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                               {task.title}
                             </div>
@@ -384,21 +384,21 @@ export function DateTimePickerWithApply({
                 </div>
               </div>
             ) : (
-              <div>
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div className="mb-2 flex items-center justify-between">
                   <button type="button" className="timeline-nav-button rounded border px-2 py-1 text-xs" onClick={() => setPreviewMode('month')}>← К месяцу</button>
                   <p className="text-xs text-muted">{selectedPreviewDate?.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                 </div>
-                <div ref={previewDayScrollRef} className="timeline-preview-day-scroll max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+                <div ref={previewDayScrollRef} className="timeline-preview-day-scroll min-h-0 min-w-0 flex-1 space-y-1 overflow-x-hidden overflow-y-auto pr-1">
                   {selectedDayTasksByHour.map(({ hour, quarters }) => (
-                    <div key={hour} className="timeline-preview-hour-row flex w-full items-start gap-2 rounded border p-2 text-left">
+                    <div key={hour} className="timeline-preview-hour-row flex w-full min-w-0 items-start gap-2 rounded border p-2 text-left">
                       <span className="timeline-today-text w-14 shrink-0 pt-1 text-xs">{`${hour.toString().padStart(2, '0')}:00`}</span>
-                      <div className="min-h-6 flex-1 space-y-1">
+                      <div className="min-h-6 min-w-0 flex-1 space-y-1">
                         {quarters.map(({ minute, tasks }) => (
                           <button
                             key={`${hour}-${minute}`}
                             type="button"
-                            className="timeline-preview-slot flex w-full items-start gap-2 rounded px-1.5 py-1 text-left transition"
+                            className="timeline-preview-slot flex w-full min-w-0 items-start gap-2 overflow-hidden rounded px-1.5 py-1 text-left transition"
                             onClick={() => {
                               if (!selectedPreviewDate) return;
                               const picked = new Date(selectedPreviewDate);
@@ -412,7 +412,7 @@ export function DateTimePickerWithApply({
                             }}
                           >
                             <span className="timeline-today-text w-10 shrink-0 text-[11px] font-medium">{`:${minute.toString().padStart(2, '0')}`}</span>
-                            <div className="min-h-4 flex-1 space-y-1">
+                            <div className="min-h-4 min-w-0 flex-1 space-y-1 overflow-hidden">
                               {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => {
                                 const isEvent = task.taskType === 'EVENT';
                                 return (
