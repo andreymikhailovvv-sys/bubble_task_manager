@@ -3402,14 +3402,13 @@ ${allContext}`,
     );
   };
 
-  const renderTimelineHabitChip = (habit: Habit, date: Date, options?: { showTime?: boolean }) => {
+  const renderTimelineHabitChip = (habit: Habit, reminderTime: string, date: Date, options?: { showTime?: boolean }) => {
     const dateKey = toLocalDateKey(date);
     const completed = getHabitCompletedForDate(habit, dateKey);
     const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
-    const reminderLabel = (habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—';
     return (
       <div
-        key={`timeline-habit-${habit.id}-${dateKey}-${options?.showTime ? 'time' : 'plain'}`}
+        key={`timeline-habit-${habit.id}-${reminderTime}-${dateKey}-${options?.showTime ? 'time' : 'plain'}`}
         className="timeline-habit-chip flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-xs transition"
         style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%`, borderColor: hexToRgba(habit.color, themeMode === 'light' ? 0.5 : 0.72) ?? habit.color } as CSSProperties}
       >
@@ -3418,7 +3417,7 @@ ${allContext}`,
         </span>
         <span className="min-w-0">
           <span className="block truncate font-semibold">{habit.name}</span>
-          <span className="timeline-habit-chip-meta block truncate">Привычка · {reminderLabel} · {completed}/{habit.targetCount}</span>
+          <span className="timeline-habit-chip-meta block truncate">Привычка · {reminderTime} · {completed}/{habit.targetCount}</span>
         </span>
       </div>
     );
@@ -3426,12 +3425,13 @@ ${allContext}`,
 
   const getTimelineHabitsForDateHour = (date: Date, hour?: number) => habits
     .filter((habit) => (habit.reminderTimes?.length || habit.reminderTime) && isHabitScheduledForDate(habit, date))
-    .filter((habit) => {
-      if (typeof hour !== 'number') return true;
+    .flatMap((habit) => {
       const times = habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []);
-      return times.some((time) => Number(time.slice(0, 2)) === hour);
+      return times
+        .filter((time) => typeof hour !== 'number' || Number(time.slice(0, 2)) === hour)
+        .map((reminderTime) => ({ habit, reminderTime }));
     })
-    .sort((a, b) => ((a.reminderTimes?.[0] ?? a.reminderTime) ?? '').localeCompare((b.reminderTimes?.[0] ?? b.reminderTime) ?? ''));
+    .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
 
   const listTasks = [...visibleTasks].sort((a, b) => {
     if (isTimelineMode) {
@@ -4766,7 +4766,7 @@ ${allContext}`,
                                 />
                               ) : null}
                               {hourTasks.map((task) => renderTimelineTaskChip(task, { showTime: false }))}
-                              {getTimelineHabitsForDateHour(day.date, hour).map((habit) => renderTimelineHabitChip(habit, day.date))}
+                              {getTimelineHabitsForDateHour(day.date, hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, day.date))}
                             </div>
                           );
                         })}
@@ -4837,7 +4837,7 @@ ${allContext}`,
                             {quarter.tasks.length > 0 || (quarter.minute === 0 && getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).length > 0) ? (
                               <div className="space-y-1.5 pr-9">
                                 {quarter.tasks.map((task) => renderTimelineTaskChip(task, { showTime: true }))}
-                                {quarter.minute === 0 ? getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).map((habit) => renderTimelineHabitChip(habit, timelineAnchorDate, { showTime: true })) : null}
+                                {quarter.minute === 0 ? getTimelineHabitsForDateHour(timelineAnchorDate, hourGroup.hour).map(({ habit, reminderTime }) => renderTimelineHabitChip(habit, reminderTime, timelineAnchorDate, { showTime: true })) : null}
                               </div>
                             ) : null}
                           </div>
