@@ -2219,6 +2219,19 @@ export default function MiniApp() {
                 Отложить
               </button>
             </div>
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={13} className="animate-spin" /> : null}
+                Отложить
+              </button>
+            </div>
 
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
@@ -2298,6 +2311,19 @@ export default function MiniApp() {
                 aria-label="Перенести просроченные задачи на сегодня на это же время"
               >
                 {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
+                Отложить
+              </button>
+            </div>
+            <div className="mb-3 flex justify-center">
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={13} className="animate-spin" /> : null}
                 Отложить
               </button>
             </div>
