@@ -598,6 +598,7 @@ export default function MiniApp() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
+  const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -1168,7 +1169,10 @@ export default function MiniApp() {
       [task.id]: {
         title: task.title,
         description: task.description ?? '',
-        dueDate: toInputDateTime(task.dueDate)
+        dueDate: toInputDateTime(task.dueDate),
+        sphereId: task.sphereId,
+        notifyBeforeMinutes: task.notifyBeforeMinutes,
+        importance: task.importance
       }
     }));
     const subtasks = subtasksByParent[task.id] ?? [];
@@ -1211,6 +1215,7 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
+    setIsTaskSettingsOpen(false);
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
     setIsAiDialogOpen(false);
@@ -1239,7 +1244,10 @@ export default function MiniApp() {
       await api.updateTask(taskId, {
         title: draft.title.trim() || 'Задача без названия',
         description: draft.description.trim() || null,
-        dueDate: fromInputDateTime(draft.dueDate)
+        dueDate: fromInputDateTime(draft.dueDate),
+        ...(draft.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
+        ...(draft.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: draft.notifyBeforeMinutes } : {}),
+        ...(draft.importance !== undefined ? { importance: draft.importance } : {})
       });
       await loadData();
       if (taskId === openedSubtaskId) {
@@ -2445,14 +2453,72 @@ export default function MiniApp() {
 
       {openedTask && openedTaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-[90] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}>
-          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
+          <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Фокус задачи</p>
-                <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
+                    <Settings size={16} />
+                  </button>
+                  <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
+
+              {isTaskSettingsOpen ? (
+                <div className="miniapp-task-settings-panel absolute left-4 right-4 top-14 z-50 space-y-4 rounded-3xl border p-4 shadow-2xl sm:left-auto sm:w-[360px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Настройки задачи</h3>
+                    <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskSettingsOpen(false)} aria-label="Закрыть настройки">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="task-edit-compact-grid grid grid-cols-2 gap-2">
+                    <label className="min-w-0 text-xs font-semibold text-slate-500">
+                      <span className="mb-1 block">Сектор</span>
+                      <CustomSelect
+                        value={openedTaskDraft.sphereId ?? 'none'}
+                        onChange={(value) => onChangeDraft(openedTask.id, { sphereId: value === 'none' ? null : value })}
+                        options={[{ value: 'none', label: 'Без сектора', color: '#7c3aed' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color }))]}
+                        ariaLabel="Выбор сектора"
+                        buttonClassName="focused-task-pill-select"
+                        menuClassName="task-edit-sector-menu"
+                        detachedPopup
+                      />
+                    </label>
+                    <label className="min-w-0 text-xs font-semibold text-slate-500">
+                      <span className="mb-1 block">Уведомлять за</span>
+                      <CustomSelect
+                        value={openedTaskDraft.notifyBeforeMinutes == null ? 'null' : String(openedTaskDraft.notifyBeforeMinutes)}
+                        onChange={(value) => onChangeDraft(openedTask.id, { notifyBeforeMinutes: value === 'null' ? null : Number(value) })}
+                        options={NOTIFY_PRESETS}
+                        ariaLabel="Уведомлять за"
+                        disabled={Boolean(openedTask.isRecurring)}
+                        buttonClassName="focused-task-pill-select"
+                        menuClassName="task-edit-notify-menu"
+                        detachedPopup
+                      />
+                    </label>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-slate-500">Важность: {openedTaskDraft.importance ?? 3}</p>
+                    <div className="importance-choice-group grid grid-cols-5 gap-2">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <button
+                          key={level}
+                          type="button"
+                          className={`importance-choice-button task-edit-importance rounded-xl border px-2 py-2 text-sm font-semibold transition ${IMPORTANCE_STYLES[level]} ${(openedTaskDraft.importance ?? 3) === level ? 'importance-choice-button-active ring-2' : 'opacity-80 hover:opacity-100'}`}
+                          onClick={() => onChangeDraft(openedTask.id, { importance: level })}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 <textarea
@@ -2463,7 +2529,7 @@ export default function MiniApp() {
                   rows={isTaskTitleSingleLine ? 1 : 2}
                   placeholder="Без названия"
                 />
-                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold text-violet-500`}>
+                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
@@ -2549,7 +2615,7 @@ export default function MiniApp() {
                           <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full items-center gap-2 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
-                            {subtask.dueDate ? <span className="shrink-0 text-xs font-semibold text-violet-500">{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                            {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                           </button>
                         </article>
                       );
