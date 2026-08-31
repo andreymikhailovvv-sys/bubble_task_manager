@@ -2567,6 +2567,27 @@ export default function MiniApp() {
                     <Plus size={15} />
                   </button>
                 </div>
+                <div className="task-edit-compact-grid mt-3 grid grid-cols-2 gap-2">
+                  <CustomSelect
+                    value={openedTaskDraft.sphereId ?? 'none'}
+                    onChange={(value) => onChangeDraft(openedTask.id, { sphereId: value === 'none' ? null : value })}
+                    options={[{ value: 'none', label: 'Без сектора', color: '#7c3aed' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color }))]}
+                    ariaLabel="Выбор сектора"
+                    buttonClassName="focused-task-pill-select"
+                    menuClassName="task-edit-sector-menu"
+                    detachedPopup
+                  />
+                  <CustomSelect
+                    value={openedTaskDraft.notifyBeforeMinutes == null ? 'null' : String(openedTaskDraft.notifyBeforeMinutes)}
+                    onChange={(value) => onChangeDraft(openedTask.id, { notifyBeforeMinutes: value === 'null' ? null : Number(value) })}
+                    options={NOTIFY_PRESETS}
+                    ariaLabel="Уведомлять за"
+                    disabled={Boolean(openedTask.isRecurring)}
+                    buttonClassName="focused-task-pill-select"
+                    menuClassName="task-edit-notify-menu"
+                    detachedPopup
+                  />
+                </div>
                 <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
                 {taskAttachments.length > 0 ? (
                   <div className="mt-2 flex flex-wrap items-start gap-2">
