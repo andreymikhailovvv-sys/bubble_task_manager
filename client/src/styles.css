@@ -3803,6 +3803,61 @@ body[data-theme='light'] .focused-task-ai-panel {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background-color 160ms ease;
 }
 
+.miniapp-postpone-button {
+  border: 1px solid rgba(56, 189, 248, 0.72);
+  border-radius: 9999px;
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.08);
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.miniapp-postpone-button:hover:not(:disabled) {
+  background: rgba(14, 165, 233, 0.16) !important;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+  transform: translateY(-1px);
+}
+
+.miniapp-postpone-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.miniapp-task-list-card,
+.miniapp-timeline-task-card,
+.miniapp-timeline-habit-card,
+.miniapp-task-list-event-card,
+.miniapp-timeline-event-card {
+  border-radius: 0.625rem;
+  box-shadow: 0 5px 16px rgba(2, 6, 23, 0.12);
+}
+
+.miniapp-task-overdue {
+  box-shadow: 0 5px 16px rgba(2, 6, 23, 0.12) !important;
+}
+
+.miniapp-overdue-label {
+  color: #fb7185 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-task-list-card,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-task-card,
+body[data-theme='light'] .miniapp-shell .miniapp-task-overdue {
+  border-color: rgba(203, 213, 225, 0.9);
+  background-color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.08) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-overdue-label {
+  color: #e11d48 !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-postpone-button {
+  border-color: rgba(2, 132, 199, 0.62);
+  color: #0369a1;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.08);
+}
+
 .miniapp-timeline-task-card {
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }

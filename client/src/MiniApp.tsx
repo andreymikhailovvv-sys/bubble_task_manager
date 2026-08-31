@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Coins, Copy, FileText, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -602,6 +602,7 @@ export default function MiniApp() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
@@ -976,6 +977,27 @@ export default function MiniApp() {
   }, [filteredTasks, listSortMode, spheres]);
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+
+  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && isOverdue(task)), [tasks]);
+
+  const postponeAllOverdueToToday = async () => {
+    if (isPostponingOverdue || overdueTasks.length === 0) return;
+    setIsPostponingOverdue(true);
+    setError(null);
+    try {
+      const today = new Date();
+      await Promise.all(overdueTasks.map(async (task) => {
+        const nextDueDate = new Date(task.dueDate as string);
+        nextDueDate.setFullYear(today.getFullYear(), today.getMonth(), today.getDate());
+        await api.updateTask(task.id, { dueDate: nextDueDate.toISOString() });
+      }));
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось перенести просроченные задачи');
+    } finally {
+      setIsPostponingOverdue(false);
+    }
+  };
 
   const timelineToday = useMemo(() => {
     const now = timelineNow;
@@ -2167,11 +2189,10 @@ export default function MiniApp() {
           </section>
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Список задач</h2>
-              <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
                 <CustomSelect
-                  className="min-w-32"
+                  className="min-w-0"
                   value={listSortMode}
                   onChange={(value) => setListSortMode(value as ListSortMode)}
                   options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
@@ -2179,14 +2200,24 @@ export default function MiniApp() {
                   ariaLabel="Сортировка задач"
                 />
                 <CustomSelect
-                  className="min-w-32"
+                  className="min-w-0"
                   value={timeFilter}
                   onChange={(value) => setTimeFilter(value as TimeFilter)}
                   options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
                   buttonClassName="h-8 px-2 py-1 text-xs"
                   ariaLabel="Фильтр по времени"
                 />
-              </div>
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="miniapp-postpone-button inline-flex h-8 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
+                Отложить
+              </button>
             </div>
 
             {listTasks.length === 0 ? (
@@ -2196,10 +2227,6 @@ export default function MiniApp() {
             {listTasks.map((task) => {
               const isEvent = task.taskType === 'EVENT';
               const hasOverdueState = !isEvent && isOverdue(task);
-              const hasReminderState = !isEvent && !hasOverdueState && shouldTaskGlow(task);
-              const taskSubtasks = subtasksByParent[task.id] ?? [];
-              const hasOverdueSubtaskState = !hasOverdueState && taskSubtasks.some((subtask) => isOverdue(subtask));
-              const hasReminderSubtaskState = !hasOverdueState && !hasReminderState && !hasOverdueSubtaskState && taskSubtasks.some((subtask) => shouldTaskGlow(subtask));
               const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
               const importanceColors: Record<number, string> = {
                 1: 'rgba(148,163,184,0.95)',
@@ -2218,20 +2245,12 @@ export default function MiniApp() {
                 : 0;
               const taskCardStyle: CSSProperties & Record<'--miniapp-task-stripe', string> = isEvent
                 ? { '--miniapp-task-stripe': 'rgba(245,158,11,0.95)', borderColor: 'rgba(245,158,11,0.72)', borderLeftWidth: '1px', borderLeftColor: 'rgba(245,158,11,0.95)' }
-                : hasOverdueState
-                  ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(239,68,68,0.78), inset 0 0 10px rgba(239,68,68,0.34)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                  : hasReminderState
-                    ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 15px rgba(56,189,248,0.72), inset 0 0 10px rgba(56,189,248,0.3)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                    : hasOverdueSubtaskState
-                      ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 11px rgba(239,68,68,0.38), inset 0 0 8px rgba(239,68,68,0.16)', backgroundColor: 'rgba(127,29,29,0.18)', borderColor: 'rgba(248,113,113,0.46)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                      : hasReminderSubtaskState
-                        ? { '--miniapp-task-stripe': leftStripeColor, boxShadow: '0 0 11px rgba(56,189,248,0.34), inset 0 0 8px rgba(56,189,248,0.14)', backgroundColor: 'rgba(8,47,73,0.18)', borderColor: 'rgba(103,232,249,0.42)', borderLeftWidth: '4px', borderLeftColor: leftStripeColor }
-                        : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
+                : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
 
               return (
                 <article
                   key={task.id}
-                  className={`miniapp-task-list-card border border-slate-700 bg-slate-800/80 p-3 ${isEvent ? 'miniapp-task-list-event-card rounded-lg' : 'rounded-lg'}`}
+                  className={`miniapp-task-list-card border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
                   style={taskCardStyle}
                 >
                   <button
@@ -2239,12 +2258,11 @@ export default function MiniApp() {
                     className="relative flex w-full items-start gap-2 text-left"
                     onClick={() => openTaskModal(task)}
                   >
-                    <div className="min-w-0 flex-1 pr-8">
-                      <h3 className="flex items-center gap-1 font-medium">{isEvent ? <Ticket size={14} className="shrink-0 text-amber-500" /> : null}<span className="truncate">{task.title}</span></h3>
+                    <div className="min-w-0 flex-1 pr-5">
+                      <h3 className="truncate font-semibold">{task.title}</h3>
                       <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
-                      <p className="text-xs text-sky-200">{formatRemaining(task.dueDate)}</p>
+                      <p className={`mt-0.5 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
                     </div>
-                    <ChevronDown size={18} className="absolute right-0 top-0 shrink-0" />
                     {hasSubtasks ? (
                       <span
                         className="miniapp-subtask-progress pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
@@ -2264,13 +2282,24 @@ export default function MiniApp() {
         ) : (
 
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold">Таймлайн задач</h2>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
+            <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+            <div className="mb-3 mt-3 flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="truncate rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
                 <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
                 <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
               </div>
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="miniapp-postpone-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
+                Отложить
+              </button>
             </div>
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
@@ -2332,7 +2361,7 @@ export default function MiniApp() {
                         <button
                           type="button"
                           key={task.id}
-                          className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card rounded-lg' : 'rounded-lg'}`}
+                          className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''}`}
                           style={{
                             top: `${placement.top}px`,
                             height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
@@ -2354,8 +2383,7 @@ export default function MiniApp() {
                               ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
                               : isEvent
                                 ? 'rgba(245,158,11,0.9)'
-                                : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)'),
-                            boxShadow: hasOverdueState ? (isLightTheme ? '0 10px 28px rgba(225,29,72,0.18)' : '0 0 12px rgba(239,68,68,0.45)') : undefined
+                                : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)')
                           }}
                           onClick={() => {
                             if (isSubtask) {
@@ -2365,8 +2393,8 @@ export default function MiniApp() {
                             openTaskModal(task);
                           }}
                         >
-                          <p className={`flex items-center gap-1 truncate font-medium ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isEvent ? <Ticket size={13} className="shrink-0 text-amber-500" /> : null}<span className="truncate">{task.title}</span></p>
-                          <p className={isSubtask ? 'text-[10px] leading-3 text-slate-300' : 'text-xs text-slate-300'}>{isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}{formatDueDate(task.dueDate)}</p>
+                          <p className={`truncate font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
+                          <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                         </button>
                       );
                     })}
