@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Coins, Copy, FileText, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Coins, Copy, FileText, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -2189,24 +2189,10 @@ export default function MiniApp() {
           </section>
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
-              <button
-                type="button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button mt-2 inline-flex min-w-40 items-center justify-center gap-2 px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45"
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время"
-              >
-                {isPostponingOverdue ? <Loader2 size={15} className="animate-spin" /> : null}
-                Отложить
-              </button>
-            </div>
-            <div className="flex justify-center">
-              <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
                 <CustomSelect
-                  className="min-w-32"
+                  className="min-w-0"
                   value={listSortMode}
                   onChange={(value) => setListSortMode(value as ListSortMode)}
                   options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
@@ -2214,14 +2200,24 @@ export default function MiniApp() {
                   ariaLabel="Сортировка задач"
                 />
                 <CustomSelect
-                  className="min-w-32"
+                  className="min-w-0"
                   value={timeFilter}
                   onChange={(value) => setTimeFilter(value as TimeFilter)}
                   options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
                   buttonClassName="h-8 px-2 py-1 text-xs"
                   ariaLabel="Фильтр по времени"
                 />
-              </div>
+              <button
+                type="button"
+                onClick={() => void postponeAllOverdueToToday()}
+                disabled={isPostponingOverdue || overdueTasks.length === 0}
+                className="miniapp-postpone-button inline-flex h-8 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                title="Перенести просроченные задачи на сегодня на это же время"
+                aria-label="Перенести просроченные задачи на сегодня на это же время"
+              >
+                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
+                Отложить
+              </button>
             </div>
             <div className="flex justify-center">
               <button
@@ -2299,26 +2295,24 @@ export default function MiniApp() {
         ) : (
 
           <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="text-center">
-              <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+            <div className="mb-3 mt-3 flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="truncate rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
+                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
+                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
+              </div>
               <button
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
                 disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button mt-2 inline-flex min-w-40 items-center justify-center gap-2 px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                className="miniapp-postpone-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
                 title="Перенести просроченные задачи на сегодня на это же время"
                 aria-label="Перенести просроченные задачи на сегодня на это же время"
               >
-                {isPostponingOverdue ? <Loader2 size={15} className="animate-spin" /> : null}
+                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
                 Отложить
               </button>
-            </div>
-            <div className="mb-3 mt-3 flex justify-center">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
-                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
-                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
-              </div>
             </div>
             <div className="mb-3 flex justify-center">
               <button
