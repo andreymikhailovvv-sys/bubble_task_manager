@@ -4559,6 +4559,17 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   box-shadow: 0 28px 80px rgba(109, 40, 217, 0.18);
 }
 
+.miniapp-task-settings-panel {
+  border-color: rgba(139, 92, 246, 0.42);
+  background: #fff;
+  color: #0f172a;
+}
+
+.miniapp-light .miniapp-task-settings-panel {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: #fff;
+}
+
 .miniapp-focus-title-input {
   color: inherit;
 }
