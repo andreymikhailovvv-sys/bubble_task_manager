@@ -1007,8 +1007,12 @@ export default function MiniApp() {
     endOfDay.setDate(endOfDay.getDate() + 1);
 
     const scheduledHabits = habits
-      .filter((habit) => habit.reminderTime && isHabitScheduledForDate(habit, startOfDay))
-      .sort((a, b) => (a.reminderTime ?? '').localeCompare(b.reminderTime ?? ''));
+      .filter((habit) => (habit.reminderTimes?.length || habit.reminderTime) && isHabitScheduledForDate(habit, startOfDay))
+      .flatMap((habit) => {
+        const reminderTimes = habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []);
+        return reminderTimes.map((reminderTime) => ({ habit, reminderTime }));
+      })
+      .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
 
     const todayTasks = timelineFilteredTasks
       .filter((task) => {
@@ -1031,8 +1035,8 @@ export default function MiniApp() {
         quarterItemHeights[quarter].push(task.parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT);
       }
     }
-    for (const habit of scheduledHabits) {
-      const [hour, minute] = (habit.reminderTime ?? '00:00').split(':').map(Number);
+    for (const { reminderTime } of scheduledHabits) {
+      const [hour, minute] = reminderTime.split(':').map(Number);
       const quarter = (hour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(minute / 15);
       if (quarter >= 0 && quarter < quarterItemHeights.length) quarterItemHeights[quarter].push(TIMELINE_CARD_HEIGHT);
     }
@@ -1086,13 +1090,13 @@ export default function MiniApp() {
 
   const timelineHabitPlacements = useMemo(() => {
     const placements = new Map<string, { top: number }>();
-    const itemsByQuarter = new Map<number, Habit[]>();
+    const itemsByQuarter = new Map<number, typeof timelineToday.scheduledHabits>();
 
-    for (const habit of timelineToday.scheduledHabits) {
-      const [hour, minute] = (habit.reminderTime ?? '00:00').split(':').map(Number);
+    for (const entry of timelineToday.scheduledHabits) {
+      const [hour, minute] = entry.reminderTime.split(':').map(Number);
       const quarter = (hour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(minute / 15);
       const bucket = itemsByQuarter.get(quarter) ?? [];
-      bucket.push(habit);
+      bucket.push(entry);
       itemsByQuarter.set(quarter, bucket);
     }
 
@@ -1105,9 +1109,9 @@ export default function MiniApp() {
         (height, task) => height + (task.parentTaskId ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT) + TIMELINE_CARD_GAP,
         0
       );
-      const sorted = quarterHabits.slice().sort((a, b) => (a.reminderTime ?? '').localeCompare(b.reminderTime ?? ''));
+      const sorted = quarterHabits.slice().sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
       for (let index = 0; index < sorted.length; index += 1) {
-        placements.set(sorted[index].id, { top: timelineToday.quarterTops[quarter] + tasksHeight + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
+        placements.set(`${sorted[index].habit.id}-${sorted[index].reminderTime}`, { top: timelineToday.quarterTops[quarter] + tasksHeight + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
       }
     }
 
@@ -2397,14 +2401,14 @@ export default function MiniApp() {
                         </button>
                       );
                     })}
-                    {timelineToday.scheduledHabits.map((habit) => {
-                      const placement = timelineHabitPlacements.get(habit.id) ?? { top: 4 };
+                    {timelineToday.scheduledHabits.map(({ habit, reminderTime }) => {
+                      const placement = timelineHabitPlacements.get(`${habit.id}-${reminderTime}`) ?? { top: 4 };
                       const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
                       const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
                       return (
                         <button
                           type="button"
-                          key={`timeline-habit-${habit.id}`}
+                          key={`timeline-habit-${habit.id}-${reminderTime}`}
                           className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
                           onClick={() => openEditHabitModal(habit)}
                           style={{
@@ -2425,7 +2429,7 @@ export default function MiniApp() {
                             </span>
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">{habit.name}</p>
-                              <p className="miniapp-timeline-habit-meta text-xs">Привычка · {(habit.reminderTimes?.join(', ') || habit.reminderTime) ?? '—'} · {completed}/{habit.targetCount}</p>
+                              <p className="miniapp-timeline-habit-meta text-xs">Привычка · {reminderTime} · {completed}/{habit.targetCount}</p>
                             </div>
                           </div>
                         </button>
