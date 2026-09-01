@@ -2058,6 +2058,26 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
   pointer-events: none;
 }
 
+.miniapp-timeline-hour-block {
+  pointer-events: none;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(30, 41, 59, 0.12);
+}
+
+.miniapp-timeline-hour-block-alternate {
+  background: rgba(51, 65, 85, 0.18);
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-block {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(241, 245, 249, 0.46);
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-block-alternate {
+  background: rgba(226, 232, 240, 0.5);
+}
+
 .miniapp-timeline-empty-slot {
   z-index: 1;
   border: 0;

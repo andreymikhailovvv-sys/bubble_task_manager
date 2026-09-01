@@ -2358,6 +2358,22 @@ export default function MiniApp() {
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div className="relative overflow-x-hidden">
                   <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
+                    {timelineToday.hourTops.map((top, hour) => {
+                      const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
+                      return (
+                        <div
+                          key={`hour-block-${hour}`}
+                          className={`miniapp-timeline-hour-block absolute ${hour % 2 === 1 ? 'miniapp-timeline-hour-block-alternate' : ''}`}
+                          style={{
+                            top: `${top + 2}px`,
+                            height: `${Math.max(0, nextHourTop - top - 4)}px`,
+                            left: '4rem',
+                            width: 'calc(100% - 4rem)'
+                          }}
+                          aria-hidden="true"
+                        />
+                      );
+                    })}
                     {timelineToday.quarterTops.map((top, quarterIndex) => {
                       if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
                       const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
