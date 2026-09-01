@@ -2248,13 +2248,6 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-thread,
   background: linear-gradient(180deg, #f8fafc, #eef2ff) !important;
 }
 
-body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-empty,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-empty {
-  border-color: rgba(203, 213, 225, 0.82) !important;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #64748b !important;
-}
-
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-assistant,
 .miniapp-shell.miniapp-light .miniapp-ai-chat-message-assistant {
   border-color: rgba(124, 58, 237, 0.26) !important;
@@ -4576,19 +4569,17 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   border-color: color-mix(in srgb, var(--panel-border) 86%, transparent) !important;
 }
 
-.miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
-  border-top: 1px solid rgba(30, 41, 59, 0.95);
-}
-
 .miniapp-ai-chat-model-cap {
+  position: absolute;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  top: auto !important;
+  z-index: 10;
+  transform: translate(-50%, 100%);
   border-top-color: rgba(15, 23, 42, 0.96) !important;
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.2);
   outline: none;
-}
-
-body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
-  border-top-color: rgba(203, 213, 225, 0.9) !important;
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
@@ -4878,6 +4869,95 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
 
 .miniapp-ai-chat-panel {
   position: relative;
+}
+
+.miniapp-ai-chat-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 20;
+  border: 0 !important;
+  background: color-mix(in srgb, var(--app-card-bg, #0f172a) 56%, transparent) !important;
+  box-shadow: none;
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  transition: transform 220ms ease, opacity 180ms ease;
+  will-change: transform;
+}
+
+.miniapp-ai-chat-header-hidden {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-100%);
+}
+
+.miniapp-ai-chat-header-task + .miniapp-ai-chat-thread-wrap {
+  --miniapp-ai-header-height: 4.25rem;
+}
+
+.miniapp-ai-chat-header-general + .miniapp-ai-chat-thread-wrap {
+  --miniapp-ai-header-height: 7.25rem;
+}
+
+.miniapp-ai-chat-header + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
+  padding-top: calc(var(--miniapp-ai-header-height) + 0.75rem);
+}
+
+.miniapp-ai-chat-empty {
+  display: flex;
+  min-height: min(52vh, 28rem);
+  margin: 2.25rem auto 0;
+  padding: 2rem 1.5rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--app-card-border, #475569) 64%, transparent);
+  border-radius: 2rem;
+  background: color-mix(in srgb, var(--app-card-bg, #0f172a) 60%, transparent);
+  color: var(--primary-text, #f8fafc);
+  text-align: center;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.miniapp-ai-chat-empty-icon {
+  display: flex;
+  width: 4.5rem;
+  height: 4.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, rgba(196, 181, 253, 0.82), rgba(186, 230, 253, 0.78));
+  color: #8b5cf6;
+  box-shadow: 0 18px 38px rgba(139, 92, 246, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+}
+
+.miniapp-ai-chat-empty strong {
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.miniapp-ai-chat-empty p {
+  max-width: 24rem;
+  color: var(--muted-text, #94a3b8);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-header,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-header {
+  border: 0 !important;
+  background: rgba(255, 255, 255, 0.54) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-empty,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-empty {
+  border-color: rgba(203, 213, 225, 0.82) !important;
+  background: rgba(255, 255, 255, 0.62) !important;
+  color: #172033 !important;
 }
 
 .miniapp-ai-chat-composer {
