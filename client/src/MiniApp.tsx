@@ -2154,7 +2154,12 @@ export default function MiniApp() {
         {displayMode === 'list' ? (
           <div className="space-y-4">
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <h2 className="text-lg font-semibold">Привычки</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Привычки</h2>
+              <span className="miniapp-habits-summary rounded-full px-2.5 py-1 text-xs font-semibold">
+                Выполнено {sortedHabits.filter((habit) => getHabitCompletedForDate(habit, toDateKey(new Date())) >= habit.targetCount).length} из {sortedHabits.length}
+              </span>
+            </div>
             <div className="miniapp-habits-strip flex items-center gap-2 overflow-x-auto pb-1">
               {sortedHabits.map((habit) => {
                 const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
@@ -2709,7 +2714,7 @@ export default function MiniApp() {
       ) : null}
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('task-ai')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-center justify-between gap-2 border-b border-slate-800 p-3">
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
@@ -2727,9 +2732,10 @@ export default function MiniApp() {
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+                <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
-            <div className="miniapp-ai-chat-composer border-t border-slate-800 p-3">
+            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
@@ -2793,7 +2799,7 @@ export default function MiniApp() {
 
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-y border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
             <div className="miniapp-ai-chat-header flex items-start justify-between gap-2 border-b border-slate-800 p-3">
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
@@ -2822,9 +2828,10 @@ export default function MiniApp() {
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
+              <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
-            <div className="miniapp-ai-chat-composer border-t border-slate-800 p-3">
+            <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
               {aiChatPendingFiles.length > 0 ? <div className="mb-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={`mini-general-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]" onClick={() => setAiChatPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}><Paperclip size={10} /><span className="max-w-[190px] truncate">{file.name}</span><X size={10} /></button>)}</div> : null}
               <div className="miniapp-ai-chat-composer-card flex items-end gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
                 <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
@@ -2933,9 +2940,12 @@ export default function MiniApp() {
                     placeholder="Например, вода или зарядка"
                     className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
                   />
-                  <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2">
-                    <span className="text-xs text-slate-300">Выполнение: <span className="font-semibold text-slate-100">{habitModalCompleted}/{parseHabitTargetCount(habitDraft.targetCount)}</span></span>
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-slate-300">Выполнено</span>
+                      <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
+                    </div>
+                    <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
                       <button
                         type="button"
                         onClick={() => editingHabit ? void uncompleteHabit(editingHabit) : undefined}
@@ -2944,6 +2954,14 @@ export default function MiniApp() {
                         aria-label="Снять отметку повтора"
                       >
                         <Minus size={14} strokeWidth={2.4} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => editingHabit ? void completeHabit(editingHabit) : undefined}
+                        className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
+                        disabled={!editingHabit || habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}
+                      >
+                        Выполнить
                       </button>
                       <button
                         type="button"
