@@ -69,6 +69,7 @@ const TIMELINE_CARD_HEIGHT = 52;
 const TIMELINE_SUBTASK_CARD_HEIGHT = 42;
 const TIMELINE_CARD_GAP = 8;
 const TIMELINE_QUARTER_PADDING = 8;
+const TIMELINE_HOUR_EDGE_PADDING = 6;
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
 const SUPPORTED_AI_FILE_TYPES = new Set([
@@ -1044,11 +1045,16 @@ export default function MiniApp() {
       if (quarter >= 0 && quarter < quarterItemHeights.length) quarterItemHeights[quarter].push(TIMELINE_CARD_HEIGHT);
     }
 
-    const quarterHeights = quarterItemHeights.map((itemHeights) => itemHeights.length === 0
-      ? TIMELINE_QUARTER_HEIGHT
-      : itemHeights.reduce((sum, height) => sum + height, 0)
+    const quarterHeights = quarterItemHeights.map((itemHeights, quarter) => {
+      if (itemHeights.length === 0) return TIMELINE_QUARTER_HEIGHT;
+      const isHourStart = quarter % TIMELINE_QUARTERS_PER_HOUR === 0;
+      const isHourEnd = quarter % TIMELINE_QUARTERS_PER_HOUR === TIMELINE_QUARTERS_PER_HOUR - 1;
+      return itemHeights.reduce((sum, height) => sum + height, 0)
         + ((itemHeights.length - 1) * TIMELINE_CARD_GAP)
-        + TIMELINE_QUARTER_PADDING);
+        + TIMELINE_QUARTER_PADDING
+        + (isHourStart ? TIMELINE_HOUR_EDGE_PADDING : 0)
+        + (isHourEnd ? TIMELINE_HOUR_EDGE_PADDING : 0);
+    });
     const quarterTops: number[] = [];
     const hourTops: number[] = [];
     let totalHeight = 0;
@@ -1114,7 +1120,8 @@ export default function MiniApp() {
       );
       const sorted = quarterHabits.slice().sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
       for (let index = 0; index < sorted.length; index += 1) {
-        placements.set(`${sorted[index].habit.id}-${sorted[index].reminderTime}`, { top: timelineToday.quarterTops[quarter] + tasksHeight + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 });
+        const hourStartPadding = quarter % TIMELINE_QUARTERS_PER_HOUR === 0 ? TIMELINE_HOUR_EDGE_PADDING : 0;
+        placements.set(`${sorted[index].habit.id}-${sorted[index].reminderTime}`, { top: timelineToday.quarterTops[quarter] + tasksHeight + (index * (TIMELINE_CARD_HEIGHT + TIMELINE_CARD_GAP)) + 4 + hourStartPadding });
       }
     }
 
@@ -1135,7 +1142,7 @@ export default function MiniApp() {
 
     for (const [quarter, tasks] of tasksByQuarter.entries()) {
       const sorted = tasks.slice().sort(compareByDueDate);
-      let offset = 4;
+      let offset = 4 + (quarter % TIMELINE_QUARTERS_PER_HOUR === 0 ? TIMELINE_HOUR_EDGE_PADDING : 0);
       for (let index = 0; index < sorted.length; index += 1) {
         const top = timelineToday.quarterTops[quarter] + offset;
         placements.set(sorted[index].id, { top });
