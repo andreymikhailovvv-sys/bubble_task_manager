@@ -638,6 +638,8 @@ export default function MiniApp() {
   const [createTaskNotifyPreset, setCreateTaskNotifyPreset] = useState('30');
   const [createTaskRecurrenceLoading, setCreateTaskRecurrenceLoading] = useState(false);
   const [createTaskRecurrenceNextDueLabel, setCreateTaskRecurrenceNextDueLabel] = useState<string | null>(null);
+  const [taskRecurrenceLoading, setTaskRecurrenceLoading] = useState(false);
+  const [taskRecurrenceNextDueLabel, setTaskRecurrenceNextDueLabel] = useState<string | null>(null);
   const [isTaskNotesEditorOpen, setIsTaskNotesEditorOpen] = useState(false);
   const [isSubtaskNotesEditorOpen, setIsSubtaskNotesEditorOpen] = useState(false);
   const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
@@ -1172,7 +1174,13 @@ export default function MiniApp() {
         dueDate: toInputDateTime(task.dueDate),
         sphereId: task.sphereId,
         notifyBeforeMinutes: task.notifyBeforeMinutes,
-        importance: task.importance
+        importance: task.importance,
+        isRecurring: task.isRecurring,
+        recurrenceText: task.recurrenceText,
+        recurrenceJson: task.recurrenceJson,
+        recurrenceSummary: task.recurrenceSummary,
+        recurrenceUntil: task.recurrenceUntil,
+        aiNotificationsEnabled: task.aiNotificationsEnabled
       }
     }));
     const subtasks = subtasksByParent[task.id] ?? [];
@@ -1221,6 +1229,7 @@ export default function MiniApp() {
     setIsAiDialogOpen(false);
     setAiDraft('');
     setTaskAttachments([]);
+    setTaskRecurrenceNextDueLabel(null);
   };
 
   const onChangeDraft = (taskId: string, patch: Partial<TaskDraft>) => {
@@ -1247,7 +1256,13 @@ export default function MiniApp() {
         dueDate: fromInputDateTime(draft.dueDate),
         ...(draft.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
         ...(draft.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: draft.notifyBeforeMinutes } : {}),
-        ...(draft.importance !== undefined ? { importance: draft.importance } : {})
+        ...(draft.importance !== undefined ? { importance: draft.importance } : {}),
+        ...(draft.isRecurring !== undefined ? { isRecurring: draft.isRecurring } : {}),
+        ...(draft.recurrenceText !== undefined ? { recurrenceText: draft.recurrenceText?.trim() || null } : {}),
+        ...(draft.recurrenceJson !== undefined ? { recurrenceJson: draft.recurrenceJson } : {}),
+        ...(draft.recurrenceSummary !== undefined ? { recurrenceSummary: draft.recurrenceSummary } : {}),
+        ...(draft.recurrenceUntil !== undefined ? { recurrenceUntil: draft.recurrenceUntil } : {}),
+        ...(draft.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {})
       });
       await loadData();
       if (taskId === openedSubtaskId) {
@@ -1383,6 +1398,28 @@ export default function MiniApp() {
       setError(e instanceof Error ? e.message : 'Не удалось настроить повторение');
     } finally {
       setCreateTaskRecurrenceLoading(false);
+    }
+  };
+
+  const applyTaskRecurrence = async (taskId: string) => {
+    const text = draftByTaskId[taskId]?.recurrenceText?.trim() ?? '';
+    if (!text) return;
+    setTaskRecurrenceLoading(true);
+    setError(null);
+    try {
+      const parsed = await api.parseRecurrence({ text });
+      onChangeDraft(taskId, {
+        isRecurring: true,
+        recurrenceText: text,
+        recurrenceJson: parsed.schedule,
+        recurrenceSummary: parsed.summary,
+        recurrenceUntil: parsed.schedule.until
+      });
+      setTaskRecurrenceNextDueLabel(parsed.nextDueDate ? formatDueDate(parsed.nextDueDate) : null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось настроить повторение');
+    } finally {
+      setTaskRecurrenceLoading(false);
     }
   };
 
@@ -2473,7 +2510,7 @@ export default function MiniApp() {
               </div>
 
               {isTaskSettingsOpen ? (
-                <div className="miniapp-task-settings-panel absolute left-4 right-4 top-14 z-50 space-y-4 rounded-3xl border p-4 shadow-2xl sm:left-auto sm:w-[360px]">
+                <div className="miniapp-task-settings-panel absolute left-4 right-4 top-14 z-50 max-h-[calc(94vh-5rem)] space-y-4 overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:max-h-[calc(88vh-5rem)] sm:w-[360px]">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">Настройки задачи</h3>
                     <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskSettingsOpen(false)} aria-label="Закрыть настройки">
@@ -2500,12 +2537,54 @@ export default function MiniApp() {
                         onChange={(value) => onChangeDraft(openedTask.id, { notifyBeforeMinutes: value === 'null' ? null : Number(value) })}
                         options={NOTIFY_PRESETS}
                         ariaLabel="Уведомлять за"
-                        disabled={Boolean(openedTask.isRecurring)}
+                        disabled={Boolean(openedTaskDraft.isRecurring)}
                         buttonClassName="focused-task-pill-select"
                         menuClassName="task-edit-notify-menu"
                         detachedPopup
                       />
                     </label>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(openedTaskDraft.isRecurring)}
+                        onChange={(event) => {
+                          const enabled = event.target.checked;
+                          onChangeDraft(openedTask.id, enabled
+                            ? { isRecurring: true, recurrenceText: openedTaskDraft.recurrenceText || '' }
+                            : { isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null });
+                          if (!enabled) setTaskRecurrenceNextDueLabel(null);
+                        }}
+                      />
+                      повторять
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={openedTaskDraft.aiNotificationsEnabled ?? true}
+                        onChange={(event) => onChangeDraft(openedTask.id, { aiNotificationsEnabled: event.target.checked })}
+                      />
+                      уведомления от ИИ
+                    </label>
+                    {openedTaskDraft.isRecurring ? (
+                      <div className="rounded-2xl border border-violet-200/70 p-2 text-xs">
+                        <p className="mb-1 text-slate-500">Опишите как должна повторяться задача</p>
+                        <textarea
+                          className="miniapp-task-text-field min-h-16 w-full rounded-xl border px-2 py-2 text-sm"
+                          placeholder="Например: каждый вторник в 17:00"
+                          value={openedTaskDraft.recurrenceText ?? ''}
+                          onChange={(event) => onChangeDraft(openedTask.id, { recurrenceText: event.target.value })}
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <button type="button" className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:opacity-70" onClick={() => void applyTaskRecurrence(openedTask.id)} disabled={taskRecurrenceLoading}>
+                            {taskRecurrenceLoading ? '...' : 'Отправить'}
+                          </button>
+                          <p className="text-[11px] text-emerald-500">{openedTaskDraft.recurrenceSummary ?? ''}</p>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-500">{taskRecurrenceNextDueLabel ? `Ближайший срок: ${taskRecurrenceNextDueLabel}` : ''}</p>
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     <p className="mb-2 text-xs font-semibold text-slate-500">Важность: {openedTaskDraft.importance ?? 3}</p>
@@ -2571,27 +2650,6 @@ export default function MiniApp() {
                   >
                     <Plus size={15} />
                   </button>
-                </div>
-                <div className="task-edit-compact-grid mt-3 grid grid-cols-2 gap-2">
-                  <CustomSelect
-                    value={openedTaskDraft.sphereId ?? 'none'}
-                    onChange={(value) => onChangeDraft(openedTask.id, { sphereId: value === 'none' ? null : value })}
-                    options={[{ value: 'none', label: 'Без сектора', color: '#7c3aed' }, ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color }))]}
-                    ariaLabel="Выбор сектора"
-                    buttonClassName="focused-task-pill-select"
-                    menuClassName="task-edit-sector-menu"
-                    detachedPopup
-                  />
-                  <CustomSelect
-                    value={openedTaskDraft.notifyBeforeMinutes == null ? 'null' : String(openedTaskDraft.notifyBeforeMinutes)}
-                    onChange={(value) => onChangeDraft(openedTask.id, { notifyBeforeMinutes: value === 'null' ? null : Number(value) })}
-                    options={NOTIFY_PRESETS}
-                    ariaLabel="Уведомлять за"
-                    disabled={Boolean(openedTask.isRecurring)}
-                    buttonClassName="focused-task-pill-select"
-                    menuClassName="task-edit-notify-menu"
-                    detachedPopup
-                  />
                 </div>
                 <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
                 {taskAttachments.length > 0 ? (
