@@ -648,6 +648,8 @@ export default function MiniApp() {
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const taskAiChatScrollTopRef = useRef(0);
+  const [isTaskAiChatHeaderHidden, setIsTaskAiChatHeaderHidden] = useState(false);
   const mainScrollRef = useRef<HTMLElement | null>(null);
   const timelineGridRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
@@ -678,6 +680,8 @@ export default function MiniApp() {
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const generalAiChatScrollTopRef = useRef(0);
+  const [isGeneralAiChatHeaderHidden, setIsGeneralAiChatHeaderHidden] = useState(false);
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -1719,8 +1723,17 @@ export default function MiniApp() {
 
 
   useEffect(() => {
-    aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
+    const container = aiChatDialogContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    generalAiChatScrollTopRef.current = container.scrollHeight;
   }, [activeAiChat?.messages.length, aiChatLoading, isAiChatOpen]);
+
+  useEffect(() => {
+    if (!isAiChatOpen) return;
+    setIsGeneralAiChatHeaderHidden(false);
+    generalAiChatScrollTopRef.current = aiChatDialogContainerRef.current?.scrollTop ?? 0;
+  }, [isAiChatOpen, activeAiChatId]);
 
   const updateActiveAiChatMessages = (updater: (messages: MiniAiChatMessage[]) => MiniAiChatMessage[]) => {
     setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
@@ -2062,7 +2075,30 @@ export default function MiniApp() {
       container.scrollTop = container.scrollHeight;
     };
     scrollToBottom(fullscreenAiDialogContainerRef.current);
+    taskAiChatScrollTopRef.current = fullscreenAiDialogContainerRef.current?.scrollTop ?? 0;
   }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
+
+  useEffect(() => {
+    if (!isAiDialogOpen) return;
+    setIsTaskAiChatHeaderHidden(false);
+    taskAiChatScrollTopRef.current = fullscreenAiDialogContainerRef.current?.scrollTop ?? 0;
+  }, [isAiDialogOpen, openedTaskId]);
+
+  const updateAiChatHeaderVisibility = (
+    scrollTop: number,
+    previousScrollTopRef: { current: number },
+    setIsHidden: (isHidden: boolean) => void
+  ) => {
+    if (scrollTop <= 8) {
+      setIsHidden(false);
+      previousScrollTopRef.current = scrollTop;
+      return;
+    }
+    const delta = scrollTop - previousScrollTopRef.current;
+    if (Math.abs(delta) < 8) return;
+    setIsHidden(delta > 0);
+    previousScrollTopRef.current = scrollTop;
+  };
 
   useEffect(() => {
     if (displayMode !== 'timeline' || !timelineToday.isTodayVisible) return;
@@ -2792,7 +2828,7 @@ export default function MiniApp() {
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
-            <div className="miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3">
+            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
             </div>
@@ -2800,7 +2836,7 @@ export default function MiniApp() {
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap absolute left-1/2 top-0 z-10 w-40 -translate-x-1/2 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-              <div ref={fullscreenAiDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              <div ref={fullscreenAiDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, taskAiChatScrollTopRef, setIsTaskAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
                 {openedTaskAiDialog.length === 0 ? (
                   <div className="miniapp-ai-chat-empty" role="status">
                     <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
@@ -2883,7 +2919,7 @@ export default function MiniApp() {
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
           <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
-            <div className="miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3">
+            <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
                 <p className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700"><Sparkles size={13} /> Чат с ИИ</p>
@@ -2901,7 +2937,7 @@ export default function MiniApp() {
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap absolute left-1/2 top-0 z-10 w-40 -translate-x-1/2 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-              <div ref={aiChatDialogContainerRef} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              <div ref={aiChatDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {(activeAiChat?.messages ?? []).length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>

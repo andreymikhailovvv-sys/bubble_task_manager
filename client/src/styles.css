@@ -4875,6 +4875,14 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
   box-shadow: none;
   backdrop-filter: blur(18px) saturate(125%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
+  transition: transform 220ms ease, opacity 180ms ease;
+  will-change: transform;
+}
+
+.miniapp-ai-chat-header-hidden {
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-100%);
 }
 
 .miniapp-ai-chat-header-task + .miniapp-ai-chat-thread-wrap {
