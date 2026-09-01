@@ -2358,6 +2358,24 @@ export default function MiniApp() {
               <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
                 <div className="relative overflow-x-hidden">
                   <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
+                    {timelineToday.hourTops.map((top, hour) => {
+                      const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
+                      return (
+                        <div
+                          key={`hour-block-${hour}`}
+                          className="miniapp-timeline-hour-block absolute inset-x-0"
+                          style={{
+                            top: `${top + 2}px`,
+                            height: `${Math.max(0, nextHourTop - top - 4)}px`
+                          }}
+                          aria-hidden="true"
+                        >
+                          <span className="miniapp-timeline-hour-block-label">
+                            {hour.toString().padStart(2, '0')}:00
+                          </span>
+                        </div>
+                      );
+                    })}
                     {timelineToday.quarterTops.map((top, quarterIndex) => {
                       if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
                       const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
@@ -2381,18 +2399,16 @@ export default function MiniApp() {
                       );
                     })}
                     {timelineToday.quarterTops.map((top, quarterIndex) => {
-                      const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
                       const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
                       const isHour = minute === 0;
                       return (
-                      <div key={`quarter-${quarterIndex}`} className={`miniapp-timeline-quarter-line absolute inset-x-0 border-t ${isHour ? 'border-slate-700/80' : 'border-slate-700/35'}`} style={{ top: `${top}px` }}>
-                        <span className={`${isHour ? 'miniapp-timeline-hour-label text-xs text-slate-400' : 'miniapp-timeline-quarter-label text-[10px] text-slate-500'} absolute left-0 bg-slate-950/80 px-1`}>
-                          {isHour ? `${hour.toString().padStart(2, '0')}:00` : `:${minute.toString().padStart(2, '0')}`}
-                        </span>
-                      </div>
+                        <div
+                          key={`quarter-${quarterIndex}`}
+                          className={`miniapp-timeline-quarter-line absolute border-t ${isHour ? 'miniapp-timeline-hour-line' : ''}`}
+                          style={{ top: `${top}px` }}
+                        />
                       );
                     })}
-                    <div className="absolute inset-x-0 border-t border-slate-700/80" style={{ top: `${timelineToday.totalHeight - 1}px` }} />
                     {timelineToday.isTodayVisible ? (
                       <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
                         <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
