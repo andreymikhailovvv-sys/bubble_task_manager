@@ -2037,13 +2037,19 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
-  border-radius: 0 !important;
-  background: transparent !important;
+  background: rgba(248, 250, 252, 0.88) !important;
   color: #64748b !important;
   box-shadow: none !important;
 }
 
-.miniapp-timeline-hour-label,
+.miniapp-timeline-hour-label {
+  top: 0.5rem;
+  transform: none;
+  border-radius: 0.25rem;
+  background: rgba(2, 6, 23, 0.82) !important;
+  line-height: 1rem;
+}
+
 .miniapp-timeline-quarter-label {
   top: 0;
   transform: translateY(-50%);
@@ -2060,22 +2066,14 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-label {
 
 .miniapp-timeline-hour-block {
   pointer-events: none;
-  border: 1px solid rgba(100, 116, 139, 0.2);
+  border: 1px solid rgba(100, 116, 139, 0.34);
   border-radius: 0.5rem;
-  background: rgba(30, 41, 59, 0.12);
-}
-
-.miniapp-timeline-hour-block-alternate {
-  background: rgba(51, 65, 85, 0.18);
+  background: rgba(30, 41, 59, 0.16);
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-block {
-  border-color: rgba(148, 163, 184, 0.32);
-  background: rgba(241, 245, 249, 0.46);
-}
-
-body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-block-alternate {
-  background: rgba(226, 232, 240, 0.5);
+  border-color: rgba(148, 163, 184, 0.42);
+  background: rgba(241, 245, 249, 0.58);
 }
 
 .miniapp-timeline-empty-slot {

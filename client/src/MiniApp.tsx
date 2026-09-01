@@ -2363,12 +2363,10 @@ export default function MiniApp() {
                       return (
                         <div
                           key={`hour-block-${hour}`}
-                          className={`miniapp-timeline-hour-block absolute ${hour % 2 === 1 ? 'miniapp-timeline-hour-block-alternate' : ''}`}
+                          className="miniapp-timeline-hour-block absolute inset-x-0"
                           style={{
                             top: `${top + 2}px`,
-                            height: `${Math.max(0, nextHourTop - top - 4)}px`,
-                            left: '4rem',
-                            width: 'calc(100% - 4rem)'
+                            height: `${Math.max(0, nextHourTop - top - 4)}px`
                           }}
                           aria-hidden="true"
                         />
