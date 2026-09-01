@@ -153,6 +153,6 @@ setInterval(() => {
   });
 }, CHECKUP_POLL_INTERVAL_MS).unref();
 
-app.listen(port, () => {
-  console.log(`Server started on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server started on http://0.0.0.0:${port}`);
 });
