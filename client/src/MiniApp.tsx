@@ -2732,6 +2732,7 @@ export default function MiniApp() {
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+                <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
@@ -2827,6 +2828,7 @@ export default function MiniApp() {
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
+              <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
