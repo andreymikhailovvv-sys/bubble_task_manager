@@ -2098,18 +2098,6 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-line {
   border-color: transparent;
 }
 
-.miniapp-timeline-hour-block {
-  pointer-events: none;
-  border: 1px solid rgba(100, 116, 139, 0.34);
-  border-radius: 0.5rem;
-  background: rgba(30, 41, 59, 0.16);
-}
-
-body[data-theme='light'] .miniapp-shell .miniapp-timeline-hour-block {
-  border-color: rgba(148, 163, 184, 0.42);
-  background: rgba(241, 245, 249, 0.58);
-}
-
 .miniapp-timeline-empty-slot {
   z-index: 1;
   border: 0;

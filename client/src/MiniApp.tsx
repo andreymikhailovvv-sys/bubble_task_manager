@@ -2334,7 +2334,7 @@ export default function MiniApp() {
           </div>
         ) : (
 
-          <section className="rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
             <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
             <div className="mb-3 mt-3 flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2 text-sm">
@@ -2354,155 +2354,151 @@ export default function MiniApp() {
                 Отложить
               </button>
             </div>
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-700 bg-slate-950/50 p-2">
-                <div className="relative overflow-x-hidden">
-                  <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
-                    {timelineToday.hourTops.map((top, hour) => {
-                      const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
-                      return (
-                        <div
-                          key={`hour-block-${hour}`}
-                          className="miniapp-timeline-hour-block absolute inset-x-0"
-                          style={{
-                            top: `${top + 2}px`,
-                            height: `${Math.max(0, nextHourTop - top - 4)}px`
-                          }}
-                          aria-hidden="true"
-                        >
-                          <span className="miniapp-timeline-hour-block-label">
-                            {hour.toString().padStart(2, '0')}:00
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {timelineToday.quarterTops.map((top, quarterIndex) => {
-                      if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
-                      const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
-                      const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
-                      const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                      return (
-                        <button
-                          type="button"
-                          key={`empty-quarter-${quarterIndex}`}
-                          className="miniapp-timeline-empty-slot absolute"
-                          style={{
-                            top: `${top}px`,
-                            height: `${timelineToday.quarterHeights[quarterIndex]}px`,
-                            left: '4rem',
-                            width: 'calc(100% - 4rem)'
-                          }}
-                          onClick={() => openCreateTaskModalForTimelineQuarter(quarterIndex)}
-                          aria-label={`Создать задачу на ${timeLabel}`}
-                          title={`Создать задачу на ${timeLabel}`}
-                        />
-                      );
-                    })}
-                    {timelineToday.quarterTops.map((top, quarterIndex) => {
-                      const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
-                      const isHour = minute === 0;
-                      return (
-                        <div
-                          key={`quarter-${quarterIndex}`}
-                          className={`miniapp-timeline-quarter-line absolute border-t ${isHour ? 'miniapp-timeline-hour-line' : ''}`}
-                          style={{ top: `${top}px` }}
-                        />
-                      );
-                    })}
-                    {timelineToday.isTodayVisible ? (
-                      <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
-                        <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
-                        <span className="h-[2px] w-full bg-rose-400/90" />
-                      </div>
-                    ) : null}
-                    {timelineToday.timelineEntries.map((task) => {
-                      const dueDate = new Date(task.dueDate as string);
-                      const taskHour = dueDate.getHours();
-                      const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
-                      const isEvent = task.taskType === 'EVENT';
-                      const hasOverdueState = !isEvent && isOverdue(task);
-                      const isSubtask = Boolean(task.parentTaskId);
-                      const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
-                      const taskForSectorColor = parentTask ?? task;
-                      const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
-                      const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
-                      return (
-                        <button
-                          type="button"
-                          key={task.id}
-                          className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''}`}
-                          style={{
-                            top: `${placement.top}px`,
-                            height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
-                            left: 'calc(4rem + 2px)',
-                            width: 'calc(100% - 4rem - 8px)',
-                            zIndex: 10,
-                            borderColor: isEvent
-                              ? 'rgba(245,158,11,0.9)'
-                              : isSubtask
-                                ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
-                                : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
-                            background: isEvent
-                              ? (isLightTheme ? 'rgba(254,243,199,0.96)' : 'rgba(146,64,14,0.42)')
-                              : isSubtask
-                                ? (isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(71,85,105,0.82)')
-                                : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
-                            borderLeftWidth: isSubtask ? '4px' : '1px',
-                            borderLeftColor: isSubtask
-                              ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
-                              : isEvent
-                                ? 'rgba(245,158,11,0.9)'
-                                : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)')
-                          }}
-                          onClick={() => {
-                            if (isSubtask) {
-                              openSubtaskModal(task);
-                              return;
-                            }
-                            openTaskModal(task);
-                          }}
-                        >
-                          <p className={`truncate font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
-                          <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
-                        </button>
-                      );
-                    })}
-                    {timelineToday.scheduledHabits.map(({ habit, reminderTime }) => {
-                      const placement = timelineHabitPlacements.get(`${habit.id}-${reminderTime}`) ?? { top: 4 };
-                      const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
-                      const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
-                      return (
-                        <button
-                          type="button"
-                          key={`timeline-habit-${habit.id}-${reminderTime}`}
-                          className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
-                          onClick={() => openEditHabitModal(habit)}
-                          style={{
-                            top: `${placement.top}px`,
-                            minHeight: `${TIMELINE_CARD_HEIGHT}px`,
-                            left: 'calc(4rem + 2px)',
-                            width: 'calc(100% - 4rem - 8px)',
-                            zIndex: 9,
-                            borderColor: hexToRgba(habit.color, isLightTheme ? 0.55 : 0.72) ?? habit.color,
-                            background: `linear-gradient(135deg, ${hexToRgba(habit.color, isLightTheme ? 0.18 : 0.28) ?? 'rgba(34,197,94,0.18)'}, ${isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.82)'})`,
-                            borderLeftWidth: '4px',
-                            borderLeftColor: habit.color
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="miniapp-habit-circle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-base" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
-                              <span className="miniapp-habit-circle-core inline-flex h-6 w-6 items-center justify-center rounded-full">{habit.icon}</span>
-                            </span>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{habit.name}</p>
-                              <p className="miniapp-timeline-habit-meta text-xs">Привычка · {reminderTime} · {completed}/{habit.targetCount}</p>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
+            <div className="relative overflow-x-hidden">
+              <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
+                {timelineToday.hourTops.map((top, hour) => {
+                  const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
+                  return (
+                    <div
+                      key={`hour-block-${hour}`}
+                      className="miniapp-timeline-hour-block absolute inset-x-0"
+                      style={{
+                        top: `${top + 2}px`,
+                        height: `${Math.max(0, nextHourTop - top - 4)}px`
+                      }}
+                      aria-hidden="true"
+                    >
+                      <span className="miniapp-timeline-hour-block-label">
+                        {hour.toString().padStart(2, '0')}:00
+                      </span>
+                    </div>
+                  );
+                })}
+                {timelineToday.quarterTops.map((top, quarterIndex) => {
+                  if (timelineToday.occupiedQuarters.has(quarterIndex)) return null;
+                  const hour = Math.floor(quarterIndex / TIMELINE_QUARTERS_PER_HOUR);
+                  const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
+                  const timeLabel = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                  return (
+                    <button
+                      type="button"
+                      key={`empty-quarter-${quarterIndex}`}
+                      className="miniapp-timeline-empty-slot absolute"
+                      style={{
+                        top: `${top}px`,
+                        height: `${timelineToday.quarterHeights[quarterIndex]}px`,
+                        left: '4rem',
+                        width: 'calc(100% - 4rem)'
+                      }}
+                      onClick={() => openCreateTaskModalForTimelineQuarter(quarterIndex)}
+                      aria-label={`Создать задачу на ${timeLabel}`}
+                      title={`Создать задачу на ${timeLabel}`}
+                    />
+                  );
+                })}
+                {timelineToday.quarterTops.map((top, quarterIndex) => {
+                  const minute = (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15;
+                  const isHour = minute === 0;
+                  return (
+                    <div
+                      key={`quarter-${quarterIndex}`}
+                      className={`miniapp-timeline-quarter-line absolute border-t ${isHour ? 'miniapp-timeline-hour-line' : ''}`}
+                      style={{ top: `${top}px` }}
+                    />
+                  );
+                })}
+                {timelineToday.isTodayVisible ? (
+                  <div className="pointer-events-none absolute inset-x-0 z-20 flex items-center" style={{ top: `${timelineToday.currentTimeTop}px` }}>
+                    <span className="h-3 w-3 -translate-x-1 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.8)]" />
+                    <span className="h-[2px] w-full bg-rose-400/90" />
                   </div>
-                </div>
+                ) : null}
+                {timelineToday.timelineEntries.map((task) => {
+                  const dueDate = new Date(task.dueDate as string);
+                  const taskHour = dueDate.getHours();
+                  const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
+                  const isEvent = task.taskType === 'EVENT';
+                  const hasOverdueState = !isEvent && isOverdue(task);
+                  const isSubtask = Boolean(task.parentTaskId);
+                  const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
+                  const taskForSectorColor = parentTask ?? task;
+                  const sphereColor = taskForSectorColor.sphereId ? spheres.find((item) => item.id === taskForSectorColor.sphereId)?.color ?? null : null;
+                  const placement = timelineTaskPlacements.get(task.id) ?? { top: timelineToday.quarterTops[taskQuarter] + 4 };
+                  return (
+                    <button
+                      type="button"
+                      key={task.id}
+                      className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''}`}
+                      style={{
+                        top: `${placement.top}px`,
+                        height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
+                        left: 'calc(4rem + 2px)',
+                        width: 'calc(100% - 4rem - 8px)',
+                        zIndex: 10,
+                        borderColor: isEvent
+                          ? 'rgba(245,158,11,0.9)'
+                          : isSubtask
+                            ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
+                            : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
+                        background: isEvent
+                          ? (isLightTheme ? 'rgba(254,243,199,0.96)' : 'rgba(146,64,14,0.42)')
+                          : isSubtask
+                            ? (isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(71,85,105,0.82)')
+                            : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
+                        borderLeftWidth: isSubtask ? '4px' : '1px',
+                        borderLeftColor: isSubtask
+                          ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
+                          : isEvent
+                            ? 'rgba(245,158,11,0.9)'
+                            : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)')
+                      }}
+                      onClick={() => {
+                        if (isSubtask) {
+                          openSubtaskModal(task);
+                          return;
+                        }
+                        openTaskModal(task);
+                      }}
+                    >
+                      <p className={`truncate font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
+                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
+                    </button>
+                  );
+                })}
+                {timelineToday.scheduledHabits.map(({ habit, reminderTime }) => {
+                  const placement = timelineHabitPlacements.get(`${habit.id}-${reminderTime}`) ?? { top: 4 };
+                  const completed = getHabitCompletedForDate(habit, timelineToday.dateKey);
+                  const progress = Math.round((Math.min(completed, habit.targetCount) / Math.max(1, habit.targetCount)) * 100);
+                  return (
+                    <button
+                      type="button"
+                      key={`timeline-habit-${habit.id}-${reminderTime}`}
+                      className="miniapp-timeline-habit-card absolute rounded-md border px-2 py-1 text-left"
+                      onClick={() => openEditHabitModal(habit)}
+                      style={{
+                        top: `${placement.top}px`,
+                        minHeight: `${TIMELINE_CARD_HEIGHT}px`,
+                        left: 'calc(4rem + 2px)',
+                        width: 'calc(100% - 4rem - 8px)',
+                        zIndex: 9,
+                        borderColor: hexToRgba(habit.color, isLightTheme ? 0.55 : 0.72) ?? habit.color,
+                        background: `linear-gradient(135deg, ${hexToRgba(habit.color, isLightTheme ? 0.18 : 0.28) ?? 'rgba(34,197,94,0.18)'}, ${isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.82)'})`,
+                        borderLeftWidth: '4px',
+                        borderLeftColor: habit.color
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="miniapp-habit-circle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-base" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
+                          <span className="miniapp-habit-circle-core inline-flex h-6 w-6 items-center justify-center rounded-full">{habit.icon}</span>
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{habit.name}</p>
+                          <p className="miniapp-timeline-habit-meta text-xs">Привычка · {reminderTime} · {completed}/{habit.targetCount}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </section>
