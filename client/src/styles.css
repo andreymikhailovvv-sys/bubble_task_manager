@@ -4570,6 +4570,13 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
 }
 
 .miniapp-ai-chat-model-cap {
+  position: absolute;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  top: auto !important;
+  z-index: 10;
+  transform: translate(-50%, 100%);
   border-top-color: rgba(15, 23, 42, 0.96) !important;
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.2);
   outline: none;
@@ -4895,10 +4902,6 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
 
 .miniapp-ai-chat-header + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-thread {
   padding-top: calc(var(--miniapp-ai-header-height) + 0.75rem);
-}
-
-.miniapp-ai-chat-header + .miniapp-ai-chat-thread-wrap .miniapp-ai-chat-model-cap {
-  top: var(--miniapp-ai-header-height);
 }
 
 .miniapp-ai-chat-empty {
