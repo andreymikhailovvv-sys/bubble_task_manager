@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Coins, Copy, FileText, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -59,7 +59,7 @@ const extractInitDataFromUrl = () => {
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
-type ListSortMode = 'sector' | 'importance';
+type ListSortMode = 'sector' | 'importance' | 'urgency';
 type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
@@ -974,6 +974,7 @@ export default function MiniApp() {
         if (a.importance !== b.importance) return b.importance - a.importance;
         return compareByDueDate(a, b);
       }
+      if (listSortMode === 'urgency') return compareByDueDate(a, b);
 
       const aSectorName = a.sphereId ? (spheres.find((item) => item.id === a.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
       const bSectorName = b.sphereId ? (spheres.find((item) => item.id === b.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
@@ -1257,7 +1258,7 @@ export default function MiniApp() {
 
   const saveTask = async (taskId: string) => {
     const draft = draftByTaskId[taskId];
-    if (!draft) return;
+    if (!draft) return false;
     setSavingId(taskId);
     setError(null);
     try {
@@ -1276,14 +1277,20 @@ export default function MiniApp() {
         ...(draft.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {})
       });
       await loadData();
-      if (taskId === openedSubtaskId) {
-        setOpenedSubtaskId(null);
-      }
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить задачу');
+      return false;
     } finally {
       setSavingId(null);
     }
+  };
+
+  const saveAndCloseTaskEditor = async (taskId: string, editor: 'task' | 'subtask') => {
+    if (savingId === taskId) return;
+    const saved = await saveTask(taskId);
+    if (!saved) return;
+    closeMiniWindowWithMotion(editor, editor === 'task' ? closeTaskModal : () => setOpenedSubtaskId(null));
   };
 
   const completeTask = async (taskId: string) => {
@@ -2292,7 +2299,7 @@ export default function MiniApp() {
                   className="min-w-0"
                   value={listSortMode}
                   onChange={(value) => setListSortMode(value as ListSortMode)}
-                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }]}
+                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }, { value: 'urgency', label: 'По срочности' }]}
                   buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
                   ariaLabel="Сортировка задач"
                 />
@@ -2324,16 +2331,9 @@ export default function MiniApp() {
               const isEvent = task.taskType === 'EVENT';
               const hasOverdueState = !isEvent && isOverdue(task);
               const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
-              const importanceColors: Record<number, string> = {
-                1: 'rgba(148,163,184,0.95)',
-                2: 'rgba(56,189,248,0.95)',
-                3: 'rgba(34,197,94,0.95)',
-                4: 'rgba(251,191,36,0.95)',
-                5: 'rgba(248,113,113,0.95)'
-              };
-              const leftStripeColor = listSortMode === 'sector'
-                ? (hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)')
-                : (importanceColors[task.importance] ?? importanceColors[3]);
+              const leftStripeColor = hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)';
+              const importanceRating = Math.max(0, Math.min(1, task.importance / 5));
+              const importanceBadgeColor = `rgba(${Math.round(80 + importanceRating * 170)}, ${Math.round(165 - importanceRating * 95)}, ${Math.round(220 - importanceRating * 190)}, ${isLightTheme ? 0.48 : 0.32})`;
               const subtaskProgress = subtaskProgressByParent.get(task.id);
               const hasSubtasks = Boolean(subtaskProgress && subtaskProgress.total > 0);
               const progressPercent = hasSubtasks
@@ -2356,8 +2356,21 @@ export default function MiniApp() {
                   >
                     <div className="min-w-0 flex-1 pr-5">
                       <h3 className="truncate font-semibold">{task.title}</h3>
-                      <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
-                      <p className={`mt-0.5 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                      {listSortMode === 'importance' ? (
+                        <span
+                          className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
+                          style={{ backgroundColor: importanceBadgeColor }}
+                          title={`Рейтинг важности: ${importanceRating.toFixed(1)}`}
+                        >
+                          <Gauge size={13} />
+                          {importanceRating.toFixed(1)}
+                        </span>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
+                          <p className={`mt-0.5 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                        </>
+                      )}
                     </div>
                     {hasSubtasks ? (
                       <span
@@ -2486,7 +2499,7 @@ export default function MiniApp() {
                         background: isEvent
                           ? (isLightTheme ? 'rgba(254,243,199,0.96)' : 'rgba(146,64,14,0.42)')
                           : isSubtask
-                            ? (isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(71,85,105,0.82)')
+                            ? `linear-gradient(135deg, ${hexToRgba(sphereColor ?? '', isLightTheme ? 0.2 : 0.34) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.26)')}, ${isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(15,23,42,0.82)'})`
                             : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
                         borderLeftWidth: isSubtask ? '4px' : '1px',
                         borderLeftColor: isSubtask
@@ -2558,8 +2571,8 @@ export default function MiniApp() {
                   <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
                     <Settings size={16} />
                   </button>
-                  <button type="button" onClick={() => closeMiniWindowWithMotion('task', closeTaskModal)} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
-                    <X size={16} />
+                  <button type="button" onClick={() => void saveAndCloseTaskEditor(openedTask.id, 'task')} disabled={savingId === openedTask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно">
+                    {savingId === openedTask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
                   </button>
                 </div>
               </div>
@@ -2724,10 +2737,7 @@ export default function MiniApp() {
                 ) : null}
                 {isTaskNotesEditorOpen ? <NotesEditor value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
 
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => void saveTask(openedTask.id)} disabled={savingId === openedTask.id} className="miniapp-focus-primary-button">
-                    <Save size={14} /> {savingId === openedTask.id ? 'Сохраняем…' : 'Сохранить'}
-                  </button>
+                <div className="mt-4 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => void completeTask(openedTask.id)} disabled={completingId === openedTask.id} className="miniapp-focus-success-button">
                     <CheckCircle2 size={14} /> {completingId === openedTask.id ? '...' : 'Выполнить'}
                   </button>
@@ -2767,15 +2777,15 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedSubtask && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')}>
           <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Редактирование подзадачи</p>
                 <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
               </div>
-              <button type="button" onClick={() => closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null))} className="miniapp-focus-icon-button" aria-label="Закрыть окно подзадачи">
-                <X size={16} />
+              <button type="button" onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')} disabled={savingId === openedSubtask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно подзадачи">
+                {savingId === openedSubtask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
               </button>
             </div>
             <textarea
@@ -2811,10 +2821,7 @@ export default function MiniApp() {
               </button>
             </div>
             {isSubtaskNotesEditorOpen ? <NotesEditor value={openedSubtaskDraft.description} onChange={(description) => onChangeDraft(openedSubtask.id, { description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => void saveTask(openedSubtask.id)} disabled={savingId === openedSubtask.id} className="miniapp-focus-primary-button">
-                <Save size={14} /> {savingId === openedSubtask.id ? 'Сохраняем…' : 'Сохранить'}
-              </button>
+            <div className="mt-4 grid grid-cols-2 gap-2">
               <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
                 <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
               </button>
