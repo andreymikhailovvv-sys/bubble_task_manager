@@ -2101,6 +2101,7 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
   min-width: 0;
   min-height: 9rem;
   padding: 0.35rem;
+  overflow: hidden;
   border: 1px solid rgba(100, 116, 139, 0.28);
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.42);
@@ -2133,11 +2134,13 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 }
 
 .miniapp-calendar-day.is-today .miniapp-calendar-date strong { color: white; background: #7c3aed; }
-.miniapp-calendar-entries { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.miniapp-calendar-entries { display: flex; min-width: 0; max-width: 100%; flex-direction: column; gap: 3px; overflow: hidden; }
 
 .miniapp-calendar-hour-group {
   min-width: 0;
+  max-width: 100%;
   padding: 0.25rem;
+  overflow: hidden;
   border: 1px solid rgba(100, 116, 139, 0.25);
   border-radius: 0.5rem;
   background: rgba(15, 23, 42, 0.24);
@@ -2149,7 +2152,9 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 
 .miniapp-calendar-entry {
   display: flex;
+  width: 100%;
   min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 0.2rem;
   padding: 0.25rem;
@@ -2163,6 +2168,13 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
   text-align: left;
 }
 
+.miniapp-calendar-entry-title {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+}
+
 .miniapp-calendar-entry-time { flex-shrink: 0; color: #94a3b8; font-size: 0.55rem; }
 .miniapp-calendar-grid-month .miniapp-calendar-entry { display: block; padding: 0.2rem; }
 .miniapp-calendar-grid-month .miniapp-calendar-entry-time { display: block; margin-bottom: 1px; }
@@ -2172,7 +2184,9 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch { border-c
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button { color: #64748b; }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active { color: white; }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active,
-body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active:hover {
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active:hover,
+.miniapp-shell.miniapp-light .miniapp-timeline-view-switch button.is-active,
+.miniapp-shell.miniapp-light .miniapp-timeline-view-switch button.is-active:hover {
   color: #ffffff !important;
   background: #7c3aed !important;
   box-shadow: 0 3px 10px rgba(124, 58, 237, 0.3);
