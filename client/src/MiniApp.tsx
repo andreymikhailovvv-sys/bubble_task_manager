@@ -2706,7 +2706,7 @@ export default function MiniApp() {
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
                               <button key={entry.id} type="button" className="miniapp-calendar-entry" style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
-                                <span className="truncate">{entry.title}</span>
+                                <span className="miniapp-calendar-entry-title truncate">{entry.title}</span>
                               </button>
                             ))}
                           </div>
