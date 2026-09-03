@@ -1766,6 +1766,9 @@ export default function MiniApp() {
   const openedSubtask = openedSubtaskId
     ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
     : null;
+  const openedSubtaskParent = openedSubtask?.parentTaskId
+    ? tasks.find((task) => task.id === openedSubtask.parentTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
+    : null;
   const openedSubtaskDraft = newSubtaskDraft ?? (openedSubtask
     ? (draftByTaskId[openedSubtask.id] ?? {
       title: openedSubtask.title,
@@ -2971,6 +2974,22 @@ export default function MiniApp() {
                 placeholder="Описание подзадачи"
               />
             </div>
+            {openedSubtask && openedSubtaskParent ? (
+              <button
+                type="button"
+                className="main-task-link-button mt-2 inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition"
+                disabled={savingId === openedSubtask.id}
+                onClick={async () => {
+                  const saved = await saveTask(openedSubtask.id);
+                  if (!saved) return;
+                  setOpenedSubtaskId(null);
+                  openTaskModal(openedSubtaskParent);
+                }}
+              >
+                {savingId === openedSubtask.id ? <Loader2 size={13} className="shrink-0 animate-spin" /> : <ArrowUpRight size={13} className="shrink-0" />}
+                <span className="truncate">Основная задача: {openedSubtaskParent.title}</span>
+              </button>
+            ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">
                 {openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}
