@@ -59,6 +59,7 @@ const extractInitDataFromUrl = () => {
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
+type TimelineView = 'day' | 'week' | 'month';
 type ListSortMode = 'importance' | 'urgency';
 type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -598,6 +599,7 @@ export default function MiniApp() {
   const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
+  const [timelineView, setTimelineView] = useState<TimelineView>('day');
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
@@ -1102,6 +1104,44 @@ export default function MiniApp() {
     };
   }, [habits, timelineAnchorDate, timelineFilteredTasks, timelineNow]);
 
+  const timelineCalendar = useMemo(() => {
+    const startOfAnchorDay = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth(), timelineAnchorDate.getDate());
+    const periodStart = new Date(startOfAnchorDay);
+    if (timelineView === 'week') {
+      const mondayOffset = (periodStart.getDay() + 6) % 7;
+      periodStart.setDate(periodStart.getDate() - mondayOffset);
+    } else if (timelineView === 'month') {
+      periodStart.setDate(1);
+      const mondayOffset = (periodStart.getDay() + 6) % 7;
+      periodStart.setDate(periodStart.getDate() - mondayOffset);
+    }
+    const dayCount = timelineView === 'month' ? 42 : 7;
+    const days = Array.from({ length: dayCount }, (_, index) => {
+      const date = new Date(periodStart);
+      date.setDate(periodStart.getDate() + index);
+      const nextDate = new Date(date);
+      nextDate.setDate(date.getDate() + 1);
+      const dateTasks = timelineFilteredTasks.filter((task) => {
+        if (!task.dueDate) return false;
+        const due = new Date(task.dueDate);
+        return !Number.isNaN(due.getTime()) && due >= date && due < nextDate;
+      }).sort(compareByDueDate);
+      const dateHabits = habits
+        .filter((habit) => (habit.reminderTimes?.length || habit.reminderTime) && isHabitScheduledForDate(habit, date))
+        .flatMap((habit) => {
+          const times = habit.reminderTimes?.length ? habit.reminderTimes : (habit.reminderTime ? [habit.reminderTime] : []);
+          return times.map((reminderTime) => ({ habit, reminderTime }));
+        })
+        .sort((a, b) => a.reminderTime.localeCompare(b.reminderTime));
+      return { date, dateKey: toDateKey(date), tasks: dateTasks, habits: dateHabits };
+    });
+    const periodEnd = days[days.length - 1]?.date ?? periodStart;
+    const label = timelineView === 'month'
+      ? timelineAnchorDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+      : `${periodStart.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} — ${periodEnd.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`;
+    return { days, label };
+  }, [habits, timelineAnchorDate, timelineFilteredTasks, timelineView]);
+
   const sortedHabits = useMemo(() => {
     const dateKey = toDateKey(new Date());
     return habits.filter((habit) => !habit.isAutoCompleted).sort((a, b) => {
@@ -1424,6 +1464,15 @@ export default function MiniApp() {
       (quarterIndex % TIMELINE_QUARTERS_PER_HOUR) * 15
     );
     openCreateTaskModal(dueDate);
+  };
+
+  const moveTimelinePeriod = (direction: -1 | 1) => {
+    setTimelineAnchorDate((previous) => {
+      const next = new Date(previous);
+      if (timelineView === 'month') next.setMonth(next.getMonth() + direction);
+      else next.setDate(next.getDate() + direction * (timelineView === 'week' ? 7 : 1));
+      return next;
+    });
   };
 
   const applyCreateTaskRecurrence = async () => {
@@ -2453,12 +2502,19 @@ export default function MiniApp() {
         ) : (
 
           <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
-            <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+              <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
+                {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
+                  <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
+                ))}
+              </div>
+            </div>
             <div className="mb-3 mt-3 flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2 text-sm">
-                <span className="truncate rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineToday.anchorLabel}</span>
-                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() - 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">←</button>
-                <button type="button" onClick={() => setTimelineAnchorDate((prev) => { const next = new Date(prev); next.setDate(next.getDate() + 1); return next; })} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1">→</button>
+                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1" aria-label="Предыдущий период">←</button>
+                <span className="truncate rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</span>
+                <button type="button" onClick={() => moveTimelinePeriod(1)} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1" aria-label="Следующий период">→</button>
               </div>
               <button
                 type="button"
@@ -2472,7 +2528,7 @@ export default function MiniApp() {
                 Отложить
               </button>
             </div>
-            <div className="relative overflow-x-hidden">
+            {timelineView === 'day' ? <div className="relative overflow-x-hidden">
               <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                 {timelineToday.hourTops.map((top, hour) => {
                   const nextHourTop = timelineToday.hourTops[hour + 1] ?? timelineToday.totalHeight;
@@ -2618,7 +2674,37 @@ export default function MiniApp() {
                   );
                 })}
               </div>
-            </div>
+            </div> : (
+              <div className={`miniapp-calendar-grid miniapp-calendar-grid-${timelineView}`}>
+                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((weekday) => <div key={weekday} className="miniapp-calendar-weekday">{weekday}</div>)}
+                {timelineCalendar.days.map(({ date, dateKey, tasks: dayTasks, habits: dayHabits }) => {
+                  const isToday = dateKey === toDateKey(timelineNow);
+                  const isOutsideMonth = timelineView === 'month' && date.getMonth() !== timelineAnchorDate.getMonth();
+                  const entries = [
+                    ...dayTasks.map((task) => ({ id: task.id, time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
+                    ...dayHabits.map(({ habit, reminderTime }) => ({ id: `habit-${habit.id}-${reminderTime}`, time: reminderTime, title: `${habit.icon} ${habit.name}`, color: habit.color, habit }))
+                  ].sort((a, b) => a.time.localeCompare(b.time));
+                  const visibleEntries = timelineView === 'month' ? entries.slice(0, 3) : entries;
+                  return (
+                    <div key={dateKey} className={`miniapp-calendar-day ${isToday ? 'is-today' : ''} ${isOutsideMonth ? 'is-outside' : ''}`}>
+                      <button type="button" className="miniapp-calendar-date" onClick={() => openCreateTaskModal(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12))} aria-label={`Создать задачу на ${date.toLocaleDateString('ru-RU')}`}>
+                        {timelineView === 'week' && <span>{date.toLocaleDateString('ru-RU', { weekday: 'short' })}</span>}
+                        <strong>{date.getDate()}</strong>
+                      </button>
+                      <div className="miniapp-calendar-entries">
+                        {visibleEntries.map((entry) => (
+                          <button key={entry.id} type="button" className="miniapp-calendar-entry" style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
+                            <span className="miniapp-calendar-entry-time">{entry.time}</span>
+                            <span className="truncate">{entry.title}</span>
+                          </button>
+                        ))}
+                        {entries.length > visibleEntries.length ? <span className="miniapp-calendar-more">Ещё {entries.length - visibleEntries.length}</span> : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
         )}
       </div>
