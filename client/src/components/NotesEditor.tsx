@@ -10,6 +10,7 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   onClose: () => void;
+  miniAppSheet?: boolean;
 };
 
 type FormatButton = {
@@ -136,7 +137,7 @@ function createChecklistItem(line: string) {
   return item;
 }
 
-export function NotesEditor({ value, onChange, onClose }: Props) {
+export function NotesEditor({ value, onChange, onClose, miniAppSheet = false }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -389,8 +390,8 @@ export function NotesEditor({ value, onChange, onClose }: Props) {
   };
 
   return createPortal((
-    <div className="notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4" onClick={onClose}>
-      <section className="notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
+    <div className={`notes-editor-backdrop fixed inset-0 z-[2147483646] flex items-center justify-center p-4 ${miniAppSheet ? 'miniapp-notes-editor-backdrop' : ''}`} onClick={onClose}>
+      <section className={`notes-editor-panel relative flex h-[min(82vh,680px)] w-full max-w-4xl flex-col rounded-3xl border shadow-2xl ${miniAppSheet ? 'miniapp-notes-editor-panel' : ''}`} onClick={(event) => event.stopPropagation()}>
         <button type="button" className="notes-editor-close absolute right-3 top-3 rounded-full p-2" onClick={onClose} title="Закрыть заметки" aria-label="Закрыть заметки">
           <X size={18} />
         </button>

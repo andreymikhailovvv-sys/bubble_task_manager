@@ -59,7 +59,7 @@ const extractInitDataFromUrl = () => {
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
-type ListSortMode = 'sector' | 'importance' | 'urgency';
+type ListSortMode = 'importance' | 'urgency';
 type MiniThemeMode = 'dark' | 'light';
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
@@ -585,7 +585,9 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
-  const [listSortMode, setListSortMode] = useState<ListSortMode>('sector');
+  const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
+  const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
+  const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
   const [miniThemeMode, setMiniThemeMode] = useState<MiniThemeMode>(() => {
     const stored = localStorage.getItem('btm:miniapp-theme-mode');
     return stored === 'dark' || stored === 'light' ? stored : 'light';
@@ -599,6 +601,7 @@ export default function MiniApp() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
+  const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -968,7 +971,9 @@ export default function MiniApp() {
   }, [tasks]);
 
   const listTasks = useMemo(() => {
-    const result = filteredTasks.filter((task) => task.taskType !== 'EVENT');
+    const selectedSpheres = new Set(listSelectedSphereIds ?? spheres.map((sphere) => sphere.id));
+    const isSectorSubsetSelected = listSelectedSphereIds !== null && listSelectedSphereIds.length < spheres.length;
+    const result = filteredTasks.filter((task) => task.taskType !== 'EVENT' && (!isSectorSubsetSelected || Boolean(task.sphereId && selectedSpheres.has(task.sphereId))));
     result.sort((a, b) => {
       if (listSortMode === 'importance') {
         if (a.importance !== b.importance) return b.importance - a.importance;
@@ -976,14 +981,21 @@ export default function MiniApp() {
       }
       if (listSortMode === 'urgency') return compareByDueDate(a, b);
 
-      const aSectorName = a.sphereId ? (spheres.find((item) => item.id === a.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
-      const bSectorName = b.sphereId ? (spheres.find((item) => item.id === b.sphereId)?.name ?? 'Без сектора') : 'Без сектора';
-      const sectorCompare = aSectorName.localeCompare(bSectorName, 'ru-RU');
-      if (sectorCompare !== 0) return sectorCompare;
       return compareByDueDate(a, b);
     });
     return result;
-  }, [filteredTasks, listSortMode, spheres]);
+  }, [filteredTasks, listSelectedSphereIds, listSortMode, spheres.length]);
+
+  const listSphereFilterLabel = spheres.length === 0 || listSelectedSphereIds === null || listSelectedSphereIds.length === spheres.length
+    ? 'Все сектора'
+    : `Секторы: ${listSelectedSphereIds.length}`;
+
+  const toggleListSphereSelection = (sphereId: string) => {
+    setListSelectedSphereIds((current) => {
+      const normalized = current ?? spheres.map((sphere) => sphere.id);
+      return normalized.includes(sphereId) ? normalized.filter((id) => id !== sphereId) : [...normalized, sphereId];
+    });
+  };
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
 
@@ -1211,6 +1223,7 @@ export default function MiniApp() {
   };
 
   const openSubtaskModal = (subtask: Task, options: { focusTitle?: boolean } = {}) => {
+    setNewSubtaskDraft(null);
     setDraftByTaskId((drafts) => ({
       ...drafts,
       [subtask.id]: drafts[subtask.id] ?? {
@@ -1235,6 +1248,7 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
+    setNewSubtaskDraft(null);
     setIsTaskSettingsOpen(false);
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
@@ -1342,29 +1356,34 @@ export default function MiniApp() {
     }
   };
 
-  const addSubtask = async (parentTask: Task) => {
+  const openCreateSubtaskModal = () => {
+    setOpenedSubtaskId(null);
+    setNewSubtaskDraft({ title: '', description: '', dueDate: '' });
+    pendingSubtaskTitleFocusIdRef.current = 'new-subtask';
+    setClosingMiniWindow(null);
+  };
+
+  const cancelCreateSubtask = () => {
+    setNewSubtaskDraft(null);
+    setIsSubtaskNotesEditorOpen(false);
+  };
+
+  const createSubtask = async (parentTask: Task) => {
+    if (!newSubtaskDraft || creatingSubtaskForId === parentTask.id) return;
     setCreatingSubtaskForId(parentTask.id);
     setError(null);
     try {
-      const created = await api.createTask({
-        title: 'Новая подзадача',
-        description: null,
+      await api.createTask({
+        title: newSubtaskDraft.title.trim() || 'Новая подзадача',
+        description: newSubtaskDraft.description.trim() || null,
         parentTaskId: parentTask.id,
         sphereId: parentTask.sphereId ?? null,
-        dueDate: null
+        dueDate: fromInputDateTime(newSubtaskDraft.dueDate)
       });
-      setDraftByTaskId((prev) => ({
-        ...prev,
-        [created.id]: {
-          title: '',
-          description: created.description ?? '',
-          dueDate: toInputDateTime(created.dueDate)
-        }
-      }));
       await loadData();
-      openSubtaskModal(created, { focusTitle: true });
+      closeMiniWindowWithMotion('subtask', cancelCreateSubtask);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось добавить подзадачу');
+      setError(e instanceof Error ? e.message : 'Не удалось создать подзадачу');
     } finally {
       setCreatingSubtaskForId(null);
     }
@@ -1693,13 +1712,22 @@ export default function MiniApp() {
   const openedSubtask = openedSubtaskId
     ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
     : null;
-  const openedSubtaskDraft = openedSubtask
+  const openedSubtaskDraft = newSubtaskDraft ?? (openedSubtask
     ? (draftByTaskId[openedSubtask.id] ?? {
       title: openedSubtask.title,
       description: openedSubtask.description ?? '',
       dueDate: toInputDateTime(openedSubtask.dueDate)
     })
-    : null;
+    : null);
+  const subtaskEditorId = openedSubtask?.id ?? 'new-subtask';
+  const isCreatingNewSubtask = newSubtaskDraft !== null;
+  const changeSubtaskDraft = (patch: Partial<TaskDraft>) => {
+    if (isCreatingNewSubtask) {
+      setNewSubtaskDraft((current) => current ? { ...current, ...patch } : current);
+      return;
+    }
+    if (openedSubtask) onChangeDraft(openedSubtask.id, patch);
+  };
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
 
   useLayoutEffect(() => {
@@ -1717,10 +1745,10 @@ export default function MiniApp() {
   }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
 
   useEffect(() => {
-    if (!openedSubtaskId || pendingSubtaskTitleFocusIdRef.current !== openedSubtaskId) return;
+    if (pendingSubtaskTitleFocusIdRef.current !== subtaskEditorId) return;
     pendingSubtaskTitleFocusIdRef.current = null;
     subtaskTitleInputRef.current?.focus();
-  }, [openedSubtaskId]);
+  }, [isCreatingNewSubtask, subtaskEditorId]);
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
@@ -2304,24 +2332,8 @@ export default function MiniApp() {
           </section>
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
-            <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
-                <CustomSelect
-                  className="min-w-0"
-                  value={listSortMode}
-                  onChange={(value) => setListSortMode(value as ListSortMode)}
-                  options={[{ value: 'sector', label: 'По секторам' }, { value: 'importance', label: 'По важности' }, { value: 'urgency', label: 'По срочности' }]}
-                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
-                  ariaLabel="Сортировка задач"
-                />
-                <CustomSelect
-                  className="min-w-0"
-                  value={timeFilter}
-                  onChange={(value) => setTimeFilter(value as TimeFilter)}
-                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
-                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
-                  ariaLabel="Фильтр по времени"
-                />
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
               <button
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
@@ -2333,6 +2345,45 @@ export default function MiniApp() {
                 {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
                 Отложить
               </button>
+            </div>
+            <div className="grid grid-cols-3 items-center gap-2">
+                <CustomSelect
+                  className="min-w-0"
+                  value={listSortMode}
+                  onChange={(value) => setListSortMode(value as ListSortMode)}
+                  options={[{ value: 'importance', label: 'По важности' }, { value: 'urgency', label: 'По срочности' }]}
+                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
+                  ariaLabel="Сортировка задач"
+                />
+                <CustomSelect
+                  className="min-w-0"
+                  value={timeFilter}
+                  onChange={(value) => setTimeFilter(value as TimeFilter)}
+                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
+                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
+                  ariaLabel="Фильтр по времени"
+                />
+              <div className="relative min-w-0">
+                <button type="button" className="miniapp-list-filter-button custom-select-trigger flex h-8 w-full items-center justify-between gap-1 rounded border px-2 py-1 text-left text-xs" onClick={() => setIsListSphereFilterOpen((open) => !open)} aria-haspopup="menu" aria-expanded={isListSphereFilterOpen} aria-label="Фильтр по секторам">
+                  <span className="truncate">{listSphereFilterLabel}</span>
+                  <ChevronDown size={14} className={`shrink-0 transition ${isListSphereFilterOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {isListSphereFilterOpen ? (
+                  <div className="miniapp-sector-filter-menu custom-select-menu absolute right-0 top-[calc(100%+6px)] z-[170] w-[min(16rem,85vw)] rounded-xl border p-1.5 shadow-2xl backdrop-blur">
+                    <label className="custom-select-option flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm">
+                      <input type="checkbox" checked={listSelectedSphereIds === null || listSelectedSphereIds.length === spheres.length} onChange={(event) => setListSelectedSphereIds(event.target.checked ? null : [])} />
+                      <span>Все сектора</span>
+                    </label>
+                    {spheres.map((sphere) => (
+                      <label key={sphere.id} className="custom-select-option flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm">
+                        <input type="checkbox" checked={listSelectedSphereIds === null || listSelectedSphereIds.includes(sphere.id)} onChange={() => toggleListSphereSelection(sphere.id)} />
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: sphere.color }} />
+                        <span className="truncate">{sphere.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
@@ -2746,7 +2797,7 @@ export default function MiniApp() {
                     ))}
                   </div>
                 ) : null}
-                {isTaskNotesEditorOpen ? <NotesEditor value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
+                {isTaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedTaskDraft.description} onChange={(description) => onChangeDraft(openedTask.id, { description })} onClose={() => setIsTaskNotesEditorOpen(false)} /> : null}
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => void completeTask(openedTask.id)} disabled={completingId === openedTask.id} className="miniapp-focus-success-button">
@@ -2763,8 +2814,8 @@ export default function MiniApp() {
                 <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
-                    <button type="button" onClick={() => void addSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-action-pill">
-                      <Plus size={13} /> {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить'}
+                    <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-action-pill">
+                      <Plus size={13} /> Добавить
                     </button>
                   </div>
                   {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
@@ -2787,22 +2838,22 @@ export default function MiniApp() {
           </div>
         </div>
       ) : null}
-      {openedSubtask && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')}>
+      {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
           <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Редактирование подзадачи</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{isCreatingNewSubtask ? 'Создание подзадачи' : 'Редактирование подзадачи'}</p>
                 <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
               </div>
-              <button type="button" onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')} disabled={savingId === openedSubtask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно подзадачи">
-                {savingId === openedSubtask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+              <button type="button" onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')} disabled={!isCreatingNewSubtask && savingId === subtaskEditorId} className="miniapp-focus-icon-button" aria-label={isCreatingNewSubtask ? 'Отменить создание подзадачи' : 'Сохранить и закрыть окно подзадачи'}>
+                {!isCreatingNewSubtask && savingId === subtaskEditorId ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
               </button>
             </div>
             <textarea
               ref={subtaskTitleInputRef}
               value={openedSubtaskDraft.title}
-              onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
+              onChange={(event) => changeSubtaskDraft({ title: event.target.value })}
               className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${isSubtaskTitleSingleLine ? 'min-h-[1.9rem]' : 'min-h-[3.8rem]'}`}
               rows={isSubtaskTitleSingleLine ? 1 : 2}
               placeholder="Название подзадачи"
@@ -2810,7 +2861,7 @@ export default function MiniApp() {
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
-                onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
+                onChange={(event) => changeSubtaskDraft({ description: event.target.value })}
                 className="miniapp-focus-description-input invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />
@@ -2821,7 +2872,7 @@ export default function MiniApp() {
               </span>
               <DateTimePickerWithApply
                 value={fromInputDateTime(openedSubtaskDraft.dueDate)}
-                onChange={(nextValue) => onChangeDraft(openedSubtask.id, { dueDate: toInputDateTime(nextValue) })}
+                onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })}
                 timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
                 iconOnly
                 detachedPopup
@@ -2831,15 +2882,21 @@ export default function MiniApp() {
                 <Maximize2 size={15} />
               </button>
             </div>
-            {isSubtaskNotesEditorOpen ? <NotesEditor value={openedSubtaskDraft.description} onChange={(description) => onChangeDraft(openedSubtask.id, { description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
-                <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
+            {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
+            {isCreatingNewSubtask && openedTask ? (
+              <button type="button" onClick={() => void createSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-success-button mt-4 w-full">
+                {creatingSubtaskForId === openedTask.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {creatingSubtaskForId === openedTask.id ? 'Создаём…' : 'Создать подзадачу'}
               </button>
-              <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="miniapp-focus-danger-button">
-                <Trash2 size={14} /> {deletingId === openedSubtask.id ? '...' : 'Удалить'}
-              </button>
-            </div>
+            ) : openedSubtask ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
+                  <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
+                </button>
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="miniapp-focus-danger-button">
+                  <Trash2 size={14} /> {deletingId === openedSubtask.id ? '...' : 'Удалить'}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
