@@ -1805,6 +1805,19 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
   overflow: hidden;
 }
 
+@media (max-width: 639px) {
+  .miniapp-notes-editor-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .miniapp-notes-editor-panel {
+    height: 92vh;
+    max-width: none;
+    border-radius: 2rem 2rem 0 0;
+  }
+}
+
 .notes-editor-header,
 .notes-editor-toolbar,
 .notes-editor-toolbar-spacer {
