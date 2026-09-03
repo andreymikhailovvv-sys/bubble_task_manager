@@ -56,7 +56,7 @@ const toDueDate = (value: string | Date | null): Date | null => {
 const toNotifyBeforeMinutes = (value: number | string | null): number | null => {
   if (value === null) return null;
   const numericValue = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(numericValue) || numericValue < 1) {
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
     throw new TypeError('Invalid notifyBeforeMinutes value');
   }
   return Math.round(numericValue);
@@ -168,7 +168,7 @@ export const taskService = {
         priorityScore: calcScore(importance, urgency),
         status: input.status ?? 'TODO',
         dueDate: resolvedDueDate,
-        notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 30
+        notifyBeforeMinutes: input.notifyBeforeMinutes !== undefined ? toNotifyBeforeMinutes(input.notifyBeforeMinutes) : 0
         ,
         isRecurring: isSubtask ? false : (input.isRecurring ?? false),
         recurrenceText: isSubtask ? null : (input.recurrenceText ?? null),

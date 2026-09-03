@@ -278,7 +278,7 @@ export function BubbleField({
   const nativeCalendarCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '30' } satisfies SubtaskDraft);
+  const defaultSubtaskDraft = () => ({ title: '', description: '', dueDate: '', notifyPreset: '0' } satisfies SubtaskDraft);
 
   const getDraftForTask = (taskId: string): SubtaskDraft => subtaskDrafts[taskId] ?? defaultSubtaskDraft();
 

@@ -1,0 +1,1 @@
+ALTER TABLE "Task" ALTER COLUMN "notifyBeforeMinutes" SET DEFAULT 0;

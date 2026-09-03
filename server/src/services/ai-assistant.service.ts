@@ -475,9 +475,11 @@ function parseGeneratedTaskDraft(rawAnswer: string): GeneratedTaskDraft {
   const selectedSphereName = typeof source.selectedSphereName === 'string' && source.selectedSphereName.trim()
     ? source.selectedSphereName.trim().slice(0, 180)
     : null;
-  const notifyBeforeMinutes = notifyRaw === null || notifyRaw === undefined
+  const notifyBeforeMinutes = notifyRaw === null
     ? null
-    : Math.max(1, Math.round(Number(notifyRaw)));
+    : notifyRaw === undefined
+      ? 0
+      : Math.max(0, Math.round(Number(notifyRaw)));
   const importance = Number.isFinite(importanceRaw) ? Math.max(1, Math.min(5, Math.round(importanceRaw))) : 3;
   const urgency = Number.isFinite(urgencyRaw) ? Math.max(1, Math.min(5, Math.round(urgencyRaw))) : 3;
 
@@ -1699,7 +1701,7 @@ export const aiAssistantService = {
                 ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
                 ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
                 ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
-                ...(action.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 30 : Math.max(1, Math.round(action.notifyBeforeMinutes)) } : {})
+                ...(action.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) } : {})
               }
             });
             actionReports.push(`Обновил параметры задачи "${task.title}".`);
@@ -1732,7 +1734,7 @@ export const aiAssistantService = {
             }
             const dueDate = action.dueDate ? new Date(action.dueDate) : null;
             const subtask = await prisma.task.create({
-              data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 30 }
+              data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
             });
             actionReports.push(`Добавил подзадачу "${subtask.title}".`);
             appliedActionsCount += 1;
@@ -2043,8 +2045,8 @@ ${parsed.answer}`
         const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
         const dueDate = action.dueDate ? new Date(action.dueDate) : null;
         const notifyBeforeMinutes = action.notifyBeforeMinutes === null || action.notifyBeforeMinutes === undefined
-          ? 30
-          : Math.max(1, Math.round(action.notifyBeforeMinutes));
+          ? 0
+          : Math.max(0, Math.round(action.notifyBeforeMinutes));
         const createdTask = await prisma.task.create({
           data: {
             title: action.title.slice(0, 180),
@@ -2076,7 +2078,7 @@ ${parsed.answer}`
                 priorityScore: 3,
                 status: 'TODO',
                 dueDate: subtaskDueDate && !Number.isNaN(subtaskDueDate.getTime()) ? subtaskDueDate : null,
-                notifyBeforeMinutes: 30
+                notifyBeforeMinutes: 0
               }
             });
           }));
@@ -2109,7 +2111,7 @@ ${parsed.answer}`
             priorityScore: 3,
             status: 'TODO',
             dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
-            notifyBeforeMinutes: 30
+            notifyBeforeMinutes: 0
           }
         });
         actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
@@ -2267,7 +2269,7 @@ ${parsed.answer}`
             ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
             ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
             ...(action.notifyBeforeMinutes !== undefined
-              ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 30 : Math.max(1, Math.round(action.notifyBeforeMinutes)) }
+              ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) }
               : {})
           }
         });
@@ -2624,7 +2626,7 @@ ${lines}`}] }) });
           priorityScore: 3,
           status: 'TODO',
           dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
-          notifyBeforeMinutes: 30
+          notifyBeforeMinutes: 0
         }
       }))
     );

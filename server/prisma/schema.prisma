@@ -120,7 +120,7 @@ model Task {
   priorityScore       Float      @default(3)
   status              TaskStatus @default(TODO)
   dueDate             DateTime?
-  notifyBeforeMinutes Int?       @default(60)
+  notifyBeforeMinutes Int?       @default(0)
   isRecurring         Boolean    @default(false)
   recurrenceText      String?
   recurrenceJson      Json?
