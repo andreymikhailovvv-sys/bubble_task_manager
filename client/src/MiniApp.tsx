@@ -1297,8 +1297,19 @@ export default function MiniApp() {
     setCompletingId(taskId);
     setError(null);
     try {
-      await api.updateTask(taskId, { status: 'DONE' });
       const completed = tasks.find((item) => item.id === taskId);
+      const updatedTask = await api.updateTask(taskId, { status: 'DONE' });
+      setTasks((current) => current.map((item) => item.id === taskId ? updatedTask : item));
+
+      if (!completed?.parentTaskId && openedTaskId === taskId) {
+        setDraftByTaskId((current) => {
+          const next = { ...current };
+          delete next[taskId];
+          return next;
+        });
+        closeTaskModal();
+      }
+
       if (completed?.parentTaskId) {
         const siblings = tasks.filter((item) => item.parentTaskId === completed.parentTaskId && item.id !== taskId);
         const allOthersDone = siblings.every((item) => item.status === 'DONE');
