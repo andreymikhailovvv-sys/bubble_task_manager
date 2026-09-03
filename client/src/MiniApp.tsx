@@ -197,6 +197,7 @@ const timeFilterLabel: Record<TimeFilter, string> = {
 
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
+  { value: '0', label: 'Вовремя' },
   { value: '15', label: 'За 15 минут' },
   { value: '30', label: 'За 30 мин' },
   { value: '60', label: 'За час' },
@@ -549,7 +550,7 @@ function shouldTaskGlow(task: Task) {
   const diff = due.getTime() - Date.now();
   if (diff < 0) return true;
   if (task.notifyBeforeMinutes === null) return false;
-  const notifyBefore = Math.min(task.notifyBeforeMinutes ?? 30, MAX_SHINE_WINDOW_MINUTES) * 60_000;
+  const notifyBefore = Math.min(task.notifyBeforeMinutes ?? 0, MAX_SHINE_WINDOW_MINUTES) * 60_000;
   return diff <= notifyBefore;
 }
 
@@ -630,7 +631,7 @@ export default function MiniApp() {
     description: '',
     dueDate: '',
     sphereId: null,
-    notifyBeforeMinutes: 30,
+    notifyBeforeMinutes: 0,
     importance: 3,
     isRecurring: false,
     recurrenceText: '',
@@ -641,7 +642,7 @@ export default function MiniApp() {
     subtasks: []
   });
   const [isCreateTaskSettingsOpen, setIsCreateTaskSettingsOpen] = useState(false);
-  const [createTaskNotifyPreset, setCreateTaskNotifyPreset] = useState('30');
+  const [createTaskNotifyPreset, setCreateTaskNotifyPreset] = useState('0');
   const [createTaskRecurrenceLoading, setCreateTaskRecurrenceLoading] = useState(false);
   const [createTaskRecurrenceNextDueLabel, setCreateTaskRecurrenceNextDueLabel] = useState<string | null>(null);
   const [taskRecurrenceLoading, setTaskRecurrenceLoading] = useState(false);
@@ -1439,7 +1440,7 @@ export default function MiniApp() {
     description: '',
     dueDate: '',
     sphereId: sphereFilter === 'all' || sphereFilter === 'without-sphere' ? null : sphereFilter,
-    notifyBeforeMinutes: 30,
+    notifyBeforeMinutes: 0,
     importance: 3,
     isRecurring: false,
     recurrenceText: '',

@@ -849,7 +849,7 @@ const createTaskFromAiPrompt = async (userId: string, prompt: string, attachment
         priorityScore: 3,
         status: 'TODO',
         dueDate: subtask.dueDate ? new Date(subtask.dueDate) : null,
-        notifyBeforeMinutes: 30
+        notifyBeforeMinutes: 0
       }
     })));
   }
@@ -1659,7 +1659,9 @@ export const telegramService = {
       const dueAt = task.dueDate?.getTime() ?? 0;
       const diffMs = dueAt - now.getTime();
       const notifyWindowMs = Math.min(task.notifyBeforeMinutes ?? 0, MAX_SHINE_WINDOW_MINUTES) * 60_000;
-      const isShining = diffMs > 0 && diffMs <= notifyWindowMs;
+      const isShining = task.notifyBeforeMinutes === 0
+        ? diffMs <= 0
+        : diffMs > 0 && diffMs <= notifyWindowMs;
 
       if (isShining && !task.telegramNotifiedAt) {
         const text = await getTaskNotificationText(task.id, task.userId);

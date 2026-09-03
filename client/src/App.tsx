@@ -71,6 +71,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 const NOTIFY_PRESETS = [
   { value: 'null', label: 'Не уведомлять' },
+  { value: '0', label: 'Вовремя' },
   { value: '15', label: 'За 15 минут' },
   { value: '30', label: 'За 30 мин' },
   { value: '60', label: 'За час' },
@@ -994,7 +995,7 @@ export default function App() {
         dueDate: dueDate.toISOString(),
         parentTaskId: null,
         createdAt: new Date().toISOString(),
-        notifyBeforeMinutes: 30,
+        notifyBeforeMinutes: 0,
         aiNotificationsEnabled: taskType === 'EVENT' ? false : isAiNotificationsDefaultEnabled,
         isRecurring: false,
         recurrenceText: null,
@@ -1596,8 +1597,8 @@ export default function App() {
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
       setFocusedNotifyPreset('null');
-    } else if ([15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 30)) {
-      setFocusedNotifyPreset(String(focusedTask.notifyBeforeMinutes ?? 30));
+    } else if ([0, 15, 30, 60, 180].includes(focusedTask.notifyBeforeMinutes ?? 0)) {
+      setFocusedNotifyPreset(String(focusedTask.notifyBeforeMinutes ?? 0));
     } else {
       setFocusedNotifyPreset('30');
     }
@@ -2766,7 +2767,7 @@ ${allContext}`,
           urgency: 3,
           priorityScore: 3,
           status: 'TODO',
-          notifyBeforeMinutes: 30,
+          notifyBeforeMinutes: 0,
           sphereId: null,
           parentTaskId: createdTask.id
         })));
@@ -2820,7 +2821,7 @@ ${allContext}`,
         urgency: 3,
         priorityScore: 3,
         status: 'TODO',
-        notifyBeforeMinutes: 30,
+        notifyBeforeMinutes: 0,
         sphereId: null,
         parentTaskId: createdTask.id
       })));
@@ -2979,7 +2980,7 @@ ${allContext}`,
   const addFocusedSubtask = async () => {
     if (!focusedTask) return;
     const title = focusedSubtaskTitle.trim() || 'Новая доп задача';
-    await createSubtaskForParent(focusedTask, { title, dueDate: focusedSubtaskDueDate, notifyBeforeMinutes: 30 });
+    await createSubtaskForParent(focusedTask, { title, dueDate: focusedSubtaskDueDate, notifyBeforeMinutes: 0 });
     setFocusedSubtaskTitle('');
     setFocusedSubtaskDueDate(null);
     setIsAddingFocusedSubtask(false);
@@ -3763,7 +3764,7 @@ ${allContext}`,
           <button type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}>
             <button className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
-            {isAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 30, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
+            {isAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
           </div>
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>

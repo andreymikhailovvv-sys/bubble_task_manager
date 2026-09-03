@@ -85,6 +85,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 const NOTIFY_PRESETS = [
   { value: "null", label: "Не уведомлять" },
+  { value: "0", label: "Вовремя" },
   { value: "15", label: "За 15 минут" },
   { value: "30", label: "За 30 мин" },
   { value: "60", label: "За час" },
@@ -300,7 +301,7 @@ export function TaskEditor({
     importance: 3,
     sphereId: initialSphereId ?? null,
   });
-  const [notifyPreset, setNotifyPreset] = useState<string>("30");
+  const [notifyPreset, setNotifyPreset] = useState<string>("0");
   const [createMode, setCreateMode] = useState<"manual" | "ai">("manual");
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiSphereSelection, setAiSphereSelection] = useState<string>("auto");
@@ -377,7 +378,7 @@ export function TaskEditor({
       importance: 3,
       sphereId: initialSphereId ?? null,
       status: "TODO",
-      notifyBeforeMinutes: 30,
+      notifyBeforeMinutes: 0,
       aiNotificationsEnabled: isEventEditor
         ? false
         : defaultAiNotificationsEnabled,
@@ -387,11 +388,11 @@ export function TaskEditor({
     setForm(nextForm);
     if (nextForm.notifyBeforeMinutes === null) {
       setNotifyPreset("null");
-    } else if ([15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 30)) {
-      setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 30));
+    } else if ([0, 15, 30, 60, 180].includes(nextForm.notifyBeforeMinutes ?? 0)) {
+      setNotifyPreset(String(nextForm.notifyBeforeMinutes ?? 0));
     } else {
-      setNotifyPreset("30");
-      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 30 }));
+      setNotifyPreset("0");
+      setForm((prev) => ({ ...prev, notifyBeforeMinutes: 0 }));
     }
     setCreateMode("manual");
     setAiPrompt("");

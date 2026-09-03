@@ -57,7 +57,7 @@ export const onboardingService = {
           urgency,
           priorityScore: calcScore(importance, urgency),
           dueDate: input.dueDate ?? null,
-          notifyBeforeMinutes: input.dueDate ? 60 : null
+          notifyBeforeMinutes: input.dueDate ? 0 : null
         }
       });
 
@@ -73,7 +73,7 @@ export const onboardingService = {
             urgency,
             priorityScore: calcScore(importance, urgency),
             dueDate: subtask.dueDate ?? null,
-            notifyBeforeMinutes: subtask.dueDate ? 60 : null
+            notifyBeforeMinutes: subtask.dueDate ? 0 : null
           }))
         });
       }
