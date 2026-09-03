@@ -2057,6 +2057,119 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
   border-style: dashed;
 }
 
+.miniapp-timeline-view-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.miniapp-timeline-view-switch button {
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.55rem;
+  color: #94a3b8;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  transition: color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.miniapp-timeline-view-switch button.is-active {
+  color: #f8fafc;
+  background: #7c3aed;
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.3);
+}
+
+.miniapp-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.miniapp-calendar-weekday {
+  padding: 0.35rem 0;
+  color: #94a3b8;
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.miniapp-calendar-day {
+  min-width: 0;
+  min-height: 9rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.miniapp-calendar-grid-month .miniapp-calendar-day { min-height: 6.5rem; }
+.miniapp-calendar-day.is-outside { opacity: 0.42; }
+.miniapp-calendar-day.is-today { border-color: rgba(139, 92, 246, 0.9); background: rgba(124, 58, 237, 0.1); }
+
+.miniapp-calendar-date {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.3rem;
+  color: #cbd5e1;
+  font-size: 0.625rem;
+  text-transform: capitalize;
+}
+
+.miniapp-calendar-date strong {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+}
+
+.miniapp-calendar-day.is-today .miniapp-calendar-date strong { color: white; background: #7c3aed; }
+.miniapp-calendar-entries { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+
+.miniapp-calendar-entry {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  overflow: hidden;
+  border-left: 3px solid var(--calendar-entry-color);
+  border-radius: 0.35rem;
+  color: #e2e8f0;
+  background: color-mix(in srgb, var(--calendar-entry-color) 18%, rgba(15, 23, 42, 0.88));
+  font-size: 0.625rem;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.miniapp-calendar-entry-time { flex-shrink: 0; color: #94a3b8; font-size: 0.55rem; }
+.miniapp-calendar-grid-month .miniapp-calendar-entry { display: block; padding: 0.2rem; }
+.miniapp-calendar-grid-month .miniapp-calendar-entry-time { display: block; margin-bottom: 1px; }
+.miniapp-calendar-more { padding-left: 0.25rem; color: #a78bfa; font-size: 0.6rem; font-weight: 700; }
+
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch { border-color: rgba(203, 213, 225, 0.95); background: rgba(241, 245, 249, 0.9); }
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button { color: #64748b; }
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active { color: white; }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-day { border-color: rgba(203, 213, 225, 0.9); background: rgba(248, 250, 252, 0.9); }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-day.is-today { border-color: rgba(124, 58, 237, 0.65); background: rgba(245, 243, 255, 0.95); }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-date { color: #475569; }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-entry { color: #0f172a; background: color-mix(in srgb, var(--calendar-entry-color) 14%, white); }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-entry-time { color: #64748b; }
+
+@media (max-width: 380px) {
+  .miniapp-timeline-view-switch button { padding-inline: 0.4rem; font-size: 0.625rem; }
+  .miniapp-calendar-day { padding: 0.2rem; }
+}
+
 .miniapp-timeline-hour-line {
   border-color: transparent;
 }
