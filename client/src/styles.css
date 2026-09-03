@@ -2135,6 +2135,18 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 .miniapp-calendar-day.is-today .miniapp-calendar-date strong { color: white; background: #7c3aed; }
 .miniapp-calendar-entries { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 
+.miniapp-calendar-hour-group {
+  min-width: 0;
+  padding: 0.25rem;
+  border: 1px solid rgba(100, 116, 139, 0.25);
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.miniapp-calendar-hour-group + .miniapp-calendar-hour-group { margin-top: 2px; }
+.miniapp-calendar-hour-label { display: block; margin-bottom: 0.2rem; color: #94a3b8; font-size: 0.55rem; font-weight: 700; }
+.miniapp-calendar-hour-group .miniapp-calendar-entry + .miniapp-calendar-entry { margin-top: 3px; }
+
 .miniapp-calendar-entry {
   display: flex;
   min-width: 0;
@@ -2159,11 +2171,19 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch { border-color: rgba(203, 213, 225, 0.95); background: rgba(241, 245, 249, 0.9); }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button { color: #64748b; }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active { color: white; }
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active,
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active:hover {
+  color: #ffffff !important;
+  background: #7c3aed !important;
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.3);
+}
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-day { border-color: rgba(203, 213, 225, 0.9); background: rgba(248, 250, 252, 0.9); }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-day.is-today { border-color: rgba(124, 58, 237, 0.65); background: rgba(245, 243, 255, 0.95); }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-date { color: #475569; }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-entry { color: #0f172a; background: color-mix(in srgb, var(--calendar-entry-color) 14%, white); }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-entry-time { color: #64748b; }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-hour-group { border-color: rgba(203, 213, 225, 0.9); background: rgba(241, 245, 249, 0.72); }
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-hour-label { color: #64748b; }
 
 @media (max-width: 380px) {
   .miniapp-timeline-view-switch button { padding-inline: 0.4rem; font-size: 0.625rem; }
