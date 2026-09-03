@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -2516,10 +2516,16 @@ export default function MiniApp() {
               </div>
             </div>
             <div className="mb-3 mt-3 flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-2 text-sm">
-                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1" aria-label="Предыдущий период">←</button>
-                <span className="truncate rounded-md border border-slate-600 bg-slate-800 px-2 py-1">{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</span>
-                <button type="button" onClick={() => moveTimelinePeriod(1)} className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1" aria-label="Следующий период">→</button>
+              <div className="miniapp-timeline-date-nav">
+                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
+                <div className="miniapp-timeline-date-current" aria-live="polite">
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span className="miniapp-timeline-date-copy">
+                    <strong>{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</strong>
+                    <small>{timelineView === 'day' ? 'Выбранный день' : timelineView === 'week' ? 'Выбранная неделя' : 'Выбранный месяц'}</small>
+                  </span>
+                </div>
+                <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
               </div>
               <button
                 type="button"
@@ -2639,7 +2645,7 @@ export default function MiniApp() {
                         openTaskModal(task);
                       }}
                     >
-                      <p className={`truncate font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
+                      <p className={`miniapp-timeline-card-title font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
                       <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                     </button>
                   );
@@ -2706,7 +2712,7 @@ export default function MiniApp() {
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
                               <button key={entry.id} type="button" className="miniapp-calendar-entry" style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
-                                <span className="miniapp-calendar-entry-title truncate">{entry.title}</span>
+                                <span className="miniapp-calendar-entry-title">{entry.title}</span>
                               </button>
                             ))}
                           </div>
