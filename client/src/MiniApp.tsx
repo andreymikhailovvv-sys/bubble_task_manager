@@ -601,6 +601,7 @@ export default function MiniApp() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
+  const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -1222,6 +1223,7 @@ export default function MiniApp() {
   };
 
   const openSubtaskModal = (subtask: Task, options: { focusTitle?: boolean } = {}) => {
+    setNewSubtaskDraft(null);
     setDraftByTaskId((drafts) => ({
       ...drafts,
       [subtask.id]: drafts[subtask.id] ?? {
@@ -1246,6 +1248,7 @@ export default function MiniApp() {
   const closeTaskModal = () => {
     setOpenedTaskId(null);
     setOpenedSubtaskId(null);
+    setNewSubtaskDraft(null);
     setIsTaskSettingsOpen(false);
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
@@ -1353,29 +1356,34 @@ export default function MiniApp() {
     }
   };
 
-  const addSubtask = async (parentTask: Task) => {
+  const openCreateSubtaskModal = () => {
+    setOpenedSubtaskId(null);
+    setNewSubtaskDraft({ title: '', description: '', dueDate: '' });
+    pendingSubtaskTitleFocusIdRef.current = 'new-subtask';
+    setClosingMiniWindow(null);
+  };
+
+  const cancelCreateSubtask = () => {
+    setNewSubtaskDraft(null);
+    setIsSubtaskNotesEditorOpen(false);
+  };
+
+  const createSubtask = async (parentTask: Task) => {
+    if (!newSubtaskDraft || creatingSubtaskForId === parentTask.id) return;
     setCreatingSubtaskForId(parentTask.id);
     setError(null);
     try {
-      const created = await api.createTask({
-        title: 'Новая подзадача',
-        description: null,
+      await api.createTask({
+        title: newSubtaskDraft.title.trim() || 'Новая подзадача',
+        description: newSubtaskDraft.description.trim() || null,
         parentTaskId: parentTask.id,
         sphereId: parentTask.sphereId ?? null,
-        dueDate: null
+        dueDate: fromInputDateTime(newSubtaskDraft.dueDate)
       });
-      setDraftByTaskId((prev) => ({
-        ...prev,
-        [created.id]: {
-          title: '',
-          description: created.description ?? '',
-          dueDate: toInputDateTime(created.dueDate)
-        }
-      }));
       await loadData();
-      openSubtaskModal(created, { focusTitle: true });
+      closeMiniWindowWithMotion('subtask', cancelCreateSubtask);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось добавить подзадачу');
+      setError(e instanceof Error ? e.message : 'Не удалось создать подзадачу');
     } finally {
       setCreatingSubtaskForId(null);
     }
@@ -1704,13 +1712,22 @@ export default function MiniApp() {
   const openedSubtask = openedSubtaskId
     ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
     : null;
-  const openedSubtaskDraft = openedSubtask
+  const openedSubtaskDraft = newSubtaskDraft ?? (openedSubtask
     ? (draftByTaskId[openedSubtask.id] ?? {
       title: openedSubtask.title,
       description: openedSubtask.description ?? '',
       dueDate: toInputDateTime(openedSubtask.dueDate)
     })
-    : null;
+    : null);
+  const subtaskEditorId = openedSubtask?.id ?? 'new-subtask';
+  const isCreatingNewSubtask = newSubtaskDraft !== null;
+  const changeSubtaskDraft = (patch: Partial<TaskDraft>) => {
+    if (isCreatingNewSubtask) {
+      setNewSubtaskDraft((current) => current ? { ...current, ...patch } : current);
+      return;
+    }
+    if (openedSubtask) onChangeDraft(openedSubtask.id, patch);
+  };
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
 
   useLayoutEffect(() => {
@@ -1728,10 +1745,10 @@ export default function MiniApp() {
   }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
 
   useEffect(() => {
-    if (!openedSubtaskId || pendingSubtaskTitleFocusIdRef.current !== openedSubtaskId) return;
+    if (pendingSubtaskTitleFocusIdRef.current !== subtaskEditorId) return;
     pendingSubtaskTitleFocusIdRef.current = null;
     subtaskTitleInputRef.current?.focus();
-  }, [openedSubtaskId]);
+  }, [isCreatingNewSubtask, subtaskEditorId]);
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
@@ -2797,8 +2814,8 @@ export default function MiniApp() {
                 <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
-                    <button type="button" onClick={() => void addSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-action-pill">
-                      <Plus size={13} /> {creatingSubtaskForId === openedTask.id ? 'Добавляем…' : 'Добавить'}
+                    <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-action-pill">
+                      <Plus size={13} /> Добавить
                     </button>
                   </div>
                   {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
@@ -2821,22 +2838,22 @@ export default function MiniApp() {
           </div>
         </div>
       ) : null}
-      {openedSubtask && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')}>
+      {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
           <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Редактирование подзадачи</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{isCreatingNewSubtask ? 'Создание подзадачи' : 'Редактирование подзадачи'}</p>
                 <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
               </div>
-              <button type="button" onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')} disabled={savingId === openedSubtask.id} className="miniapp-focus-icon-button" aria-label="Сохранить и закрыть окно подзадачи">
-                {savingId === openedSubtask.id ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+              <button type="button" onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')} disabled={!isCreatingNewSubtask && savingId === subtaskEditorId} className="miniapp-focus-icon-button" aria-label={isCreatingNewSubtask ? 'Отменить создание подзадачи' : 'Сохранить и закрыть окно подзадачи'}>
+                {!isCreatingNewSubtask && savingId === subtaskEditorId ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
               </button>
             </div>
             <textarea
               ref={subtaskTitleInputRef}
               value={openedSubtaskDraft.title}
-              onChange={(event) => onChangeDraft(openedSubtask.id, { title: event.target.value })}
+              onChange={(event) => changeSubtaskDraft({ title: event.target.value })}
               className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${isSubtaskTitleSingleLine ? 'min-h-[1.9rem]' : 'min-h-[3.8rem]'}`}
               rows={isSubtaskTitleSingleLine ? 1 : 2}
               placeholder="Название подзадачи"
@@ -2844,7 +2861,7 @@ export default function MiniApp() {
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
-                onChange={(event) => onChangeDraft(openedSubtask.id, { description: event.target.value })}
+                onChange={(event) => changeSubtaskDraft({ description: event.target.value })}
                 className="miniapp-focus-description-input invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />
@@ -2855,7 +2872,7 @@ export default function MiniApp() {
               </span>
               <DateTimePickerWithApply
                 value={fromInputDateTime(openedSubtaskDraft.dueDate)}
-                onChange={(nextValue) => onChangeDraft(openedSubtask.id, { dueDate: toInputDateTime(nextValue) })}
+                onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })}
                 timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
                 iconOnly
                 detachedPopup
@@ -2865,10 +2882,21 @@ export default function MiniApp() {
                 <Maximize2 size={15} />
               </button>
             </div>
-            {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => onChangeDraft(openedSubtask.id, { description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
-            <button type="button" onClick={() => void saveAndCloseTaskEditor(openedSubtask.id, 'subtask')} disabled={savingId === openedSubtask.id} className="miniapp-focus-success-button mt-4 w-full">
-              {savingId === openedSubtask.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {savingId === openedSubtask.id ? 'Создаём…' : 'Создать подзадачу'}
-            </button>
+            {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
+            {isCreatingNewSubtask && openedTask ? (
+              <button type="button" onClick={() => void createSubtask(openedTask)} disabled={creatingSubtaskForId === openedTask.id} className="miniapp-focus-success-button mt-4 w-full">
+                {creatingSubtaskForId === openedTask.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {creatingSubtaskForId === openedTask.id ? 'Создаём…' : 'Создать подзадачу'}
+              </button>
+            ) : openedSubtask ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
+                  <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
+                </button>
+                <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="miniapp-focus-danger-button">
+                  <Trash2 size={14} /> {deletingId === openedSubtask.id ? '...' : 'Удалить'}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
