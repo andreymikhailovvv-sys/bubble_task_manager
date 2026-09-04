@@ -358,7 +358,7 @@ const sendMessage = async (chatId: string, text: string, replyMarkup?: Record<st
 
 const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 const SAFE_MAX_MESSAGE_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH - 200;
-const MAX_TASK_DETAILS_DESCRIPTION_LENGTH = 1500;
+const MAX_TASK_DESCRIPTION_LENGTH = 150;
 const MIN_SUBTASK_LINES_IN_DETAILS = 5;
 const TASK_DETAILS_SUBTASKS_PER_PAGE = 10;
 
@@ -387,9 +387,10 @@ const splitTextByLimit = (lines: string[], limit: number) => {
   return chunks;
 };
 
-const truncateEscapedText = (value: string, maxLength: number) => {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+const truncateText = (value: string, maxLength: number) => {
+  const characters = Array.from(value);
+  if (characters.length <= maxLength) return value;
+  return `${characters.slice(0, Math.max(0, maxLength - 1)).join('').trimEnd()}…`;
 };
 
 const decodeHtmlEntity = (entity: string) => {
@@ -440,7 +441,10 @@ const noteHtmlToTelegramText = (value?: string | null) => {
   return plain || 'Без описания';
 };
 
-const escapeTaskDescription = (value?: string | null) => escapeHtml(noteHtmlToTelegramText(value));
+const escapeTaskDescription = (value?: string | null) => escapeHtml(truncateText(
+  noteHtmlToTelegramText(value),
+  MAX_TASK_DESCRIPTION_LENGTH
+));
 
 const editMessage = async (chatId: string, messageId: number, text: string, replyMarkup?: Record<string, unknown>) => {
   await telegramRequest('editMessageText', {
@@ -577,10 +581,7 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
   const pageStart = (currentPage - 1) * TASK_DETAILS_SUBTASKS_PER_PAGE;
   const pageEnd = pageStart + TASK_DETAILS_SUBTASKS_PER_PAGE;
   let subtaskLines = allSubtaskLines.slice(pageStart, pageEnd);
-  const escapedDescription = truncateEscapedText(
-    escapeTaskDescription(task.description),
-    MAX_TASK_DETAILS_DESCRIPTION_LENGTH
-  );
+  const escapedDescription = escapeTaskDescription(task.description);
 
   let lines = [
     subtitle,
@@ -622,7 +623,7 @@ const getTaskDetailsText = async (taskId: string, userId: string, taskIndex?: nu
       `📍 <b>${escapeHtml(task.title)}</b>`,
       '',
       '🧩 <b>Описание подзадачи</b>',
-      truncateEscapedText(escapedDescription, 700),
+      escapedDescription,
       '',
       `⏳ <b>Дедлайн:</b> ${escapeHtml(formatDate(task.dueDate))}`,
       '',
