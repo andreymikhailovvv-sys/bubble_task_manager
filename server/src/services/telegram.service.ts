@@ -20,6 +20,7 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
+const MAX_NOTIFICATION_SUBTASKS = 5;
 const TELEGRAM_BOT_USERNAME = process.env.TELEGRAM_BOT_USERNAME?.trim() || null;
 const TELEGRAM_LINK_SECRET = process.env.TELEGRAM_LINK_SECRET?.trim() || BOT_TOKEN || null;
 const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
@@ -521,7 +522,15 @@ const getTaskNotificationText = async (taskId: string, userId: string) => {
   const task = await prisma.task.findFirst({
     where: { id: taskId, userId },
     include: {
-      subtasks: { orderBy: { createdAt: 'asc' } },
+      subtasks: {
+        where: { status: { not: 'DONE' } },
+        orderBy: [
+          { urgency: 'desc' },
+          { dueDate: 'asc' },
+          { createdAt: 'asc' }
+        ],
+        take: MAX_NOTIFICATION_SUBTASKS
+      },
       parentTask: true
     }
   });
