@@ -158,6 +158,7 @@ type CreateSubtaskDraft = {
 
 type TaskDraft = {
   title: string;
+  location?: string | null;
   description: string;
   dueDate: string;
   sphereId?: string | null;
@@ -613,6 +614,7 @@ export default function MiniApp() {
   const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [createEditorType, setCreateEditorType] = useState<'task' | 'event'>('task');
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [habitDraft, setHabitDraft] = useState<HabitDraft>(() => createEmptyHabitDraft());
@@ -1243,6 +1245,7 @@ export default function MiniApp() {
       ...drafts,
       [task.id]: {
         title: task.title,
+        location: task.location ?? '',
         description: task.description ?? '',
         dueDate: toInputDateTime(task.dueDate),
         sphereId: task.sphereId,
@@ -1326,7 +1329,8 @@ export default function MiniApp() {
     setError(null);
     try {
       await api.updateTask(taskId, {
-        title: draft.title.trim() || 'Задача без названия',
+        title: draft.title.trim() || (tasks.find((item) => item.id === taskId)?.taskType === 'EVENT' ? 'Событие без названия' : 'Задача без названия'),
+        ...(draft.location !== undefined ? { location: draft.location?.trim() || null } : {}),
         description: draft.description.trim() || null,
         dueDate: fromInputDateTime(draft.dueDate),
         ...(draft.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
@@ -1454,10 +1458,17 @@ export default function MiniApp() {
     subtasks: []
   });
 
-  const openCreateTaskModal = (dueDate?: Date) => {
+  const openCreateTaskModal = (dueDate?: Date, editorType: 'task' | 'event' = 'task') => {
     const draft = createEmptyTaskDraft();
-    setCreateTaskDraft(dueDate ? { ...draft, dueDate: toInputDateTime(dueDate.toISOString()) } : draft);
-    setCreateTaskNotifyPreset('0');
+    const notifyBeforeMinutes = editorType === 'event' ? 60 : 0;
+    setCreateEditorType(editorType);
+    setCreateTaskDraft({
+      ...draft,
+      ...(dueDate ? { dueDate: toInputDateTime(dueDate.toISOString()) } : {}),
+      location: '',
+      notifyBeforeMinutes
+    });
+    setCreateTaskNotifyPreset(String(notifyBeforeMinutes));
     setCreateTaskRecurrenceNextDueLabel(null);
     setIsCreateTaskSettingsOpen(false);
     setClosingMiniWindow(null);
@@ -1534,7 +1545,9 @@ export default function MiniApp() {
     setError(null);
     try {
       const createdTask = await api.createTask({
-        title: createTaskDraft.title.trim() || 'Новая задача',
+        title: createTaskDraft.title.trim() || (createEditorType === 'event' ? 'Новое событие' : 'Новая задача'),
+        taskType: createEditorType === 'event' ? 'EVENT' : 'TASK',
+        location: createEditorType === 'event' ? (createTaskDraft.location?.trim() || null) : null,
         description: createTaskDraft.description.trim() || null,
         dueDate: fromInputDateTime(createTaskDraft.dueDate),
         sphereId: createTaskDraft.sphereId ?? null,
@@ -1547,7 +1560,7 @@ export default function MiniApp() {
         recurrenceUntil: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceUntil ?? null) : null,
         aiNotificationsEnabled: createTaskDraft.aiNotificationsEnabled ?? true
       });
-      const draftSubtasks = (createTaskDraft.subtasks ?? [])
+      const draftSubtasks = (createEditorType === 'event' ? [] : (createTaskDraft.subtasks ?? []))
         .map((subtask) => ({
           title: subtask.title.trim(),
           description: subtask.description.trim(),
@@ -1567,9 +1580,10 @@ export default function MiniApp() {
       await loadData();
       setIsCreateTaskModalOpen(false);
       setCreateTaskDraft(createEmptyTaskDraft());
+      setCreateEditorType('task');
       setIsCreateTaskSettingsOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось создать задачу');
+      setError(e instanceof Error ? e.message : `Не удалось создать ${createEditorType === 'event' ? 'событие' : 'задачу'}`);
     } finally {
       setIsCreatingTask(false);
     }
@@ -2743,7 +2757,7 @@ export default function MiniApp() {
           <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Фокус задачи</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
                     <Settings size={16} />
@@ -2757,7 +2771,7 @@ export default function MiniApp() {
               {isTaskSettingsOpen ? (
                 <div className="miniapp-task-settings-panel absolute left-4 right-4 top-14 z-50 max-h-[calc(94vh-5rem)] space-y-4 overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:max-h-[calc(88vh-5rem)] sm:w-[360px]">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">Настройки задачи</h3>
+                    <h3 className="text-sm font-semibold">Настройки {openedTask.taskType === 'EVENT' ? 'события' : 'задачи'}</h3>
                     <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskSettingsOpen(false)} aria-label="Закрыть настройки">
                       <X size={14} />
                     </button>
@@ -2804,17 +2818,17 @@ export default function MiniApp() {
                       />
                       повторять
                     </label>
-                    <label className="flex items-center gap-2 text-sm font-medium">
+                    {openedTask.taskType !== 'EVENT' ? <label className="flex items-center gap-2 text-sm font-medium">
                       <input
                         type="checkbox"
                         checked={openedTaskDraft.aiNotificationsEnabled ?? true}
                         onChange={(event) => onChangeDraft(openedTask.id, { aiNotificationsEnabled: event.target.checked })}
                       />
                       уведомления от ИИ
-                    </label>
+                    </label> : null}
                     {openedTaskDraft.isRecurring ? (
                       <div className="rounded-2xl border border-violet-200/70 p-2 text-xs">
-                        <p className="mb-1 text-slate-500">Опишите как должна повторяться задача</p>
+                        <p className="mb-1 text-slate-500">Опишите как должно повторяться {openedTask.taskType === 'EVENT' ? 'событие' : 'задача'}</p>
                         <textarea
                           className="miniapp-task-text-field min-h-16 w-full rounded-xl border px-2 py-2 text-sm"
                           placeholder="Например: каждый вторник в 17:00"
@@ -2831,7 +2845,7 @@ export default function MiniApp() {
                       </div>
                     ) : null}
                   </div>
-                  <div>
+                  {openedTask.taskType !== 'EVENT' ? <div>
                     <p className="mb-2 text-xs font-semibold text-slate-500">Важность: {openedTaskDraft.importance ?? 3}</p>
                     <div className="importance-choice-group grid grid-cols-5 gap-2">
                       {[1, 2, 3, 4, 5].map((level) => (
@@ -2845,7 +2859,7 @@ export default function MiniApp() {
                         </button>
                       ))}
                     </div>
-                  </div>
+                  </div> : null}
                 </div>
               ) : null}
 
@@ -2858,6 +2872,15 @@ export default function MiniApp() {
                   rows={isTaskTitleSingleLine ? 1 : 2}
                   placeholder="Без названия"
                 />
+                {openedTask.taskType === 'EVENT' ? (
+                  <input
+                    value={openedTaskDraft.location ?? ''}
+                    onChange={(event) => onChangeDraft(openedTask.id, { location: event.target.value })}
+                    className="miniapp-task-text-field mt-2 w-full rounded-2xl border px-3 py-2.5 text-sm"
+                    placeholder="Место события"
+                    autoComplete="street-address"
+                  />
+                ) : null}
                 <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
@@ -3117,6 +3140,9 @@ export default function MiniApp() {
 
       <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''}`}>
         <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(undefined, 'event'); }} className="miniapp-quick-create-action miniapp-quick-create-event inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Добавить событие</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><CalendarDays size={18} /></span>
+          </button>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
           </button>
@@ -3589,9 +3615,9 @@ export default function MiniApp() {
           <div className="relative miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
             <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Новая задача</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{createEditorType === 'event' ? 'Новое событие' : 'Новая задача'}</p>
                 <div className="relative flex items-center gap-2">
-                  <button type="button" onClick={() => setIsCreateTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" aria-label="Настройки новой задачи" aria-expanded={isCreateTaskSettingsOpen}>
+                  <button type="button" onClick={() => setIsCreateTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" aria-label={createEditorType === 'event' ? 'Настройки нового события' : 'Настройки новой задачи'} aria-expanded={isCreateTaskSettingsOpen}>
                     <Settings size={16} />
                   </button>
                   <button type="button" onClick={() => closeMiniWindowWithMotion('create-task', () => setIsCreateTaskModalOpen(false))} className="miniapp-focus-icon-button" aria-label="Закрыть окно">
@@ -3611,17 +3637,17 @@ export default function MiniApp() {
                         />
                         повторять
                       </label>
-                      <label className="mt-3 flex items-center gap-2 font-medium">
+                      {createEditorType === 'task' ? <label className="mt-3 flex items-center gap-2 font-medium">
                         <input
                           type="checkbox"
                           checked={createTaskDraft.aiNotificationsEnabled ?? true}
                           onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, aiNotificationsEnabled: event.target.checked }))}
                         />
                         уведомления от ИИ
-                      </label>
+                      </label> : null}
                       {createTaskDraft.isRecurring ? (
                         <div className="mt-3 rounded-2xl border border-violet-200/70 p-2 text-xs">
-                          <p className="mb-1 text-slate-500">Опишите как должна повторяться задача</p>
+                          <p className="mb-1 text-slate-500">Опишите как должно повторяться {createEditorType === 'event' ? 'событие' : 'задача'}</p>
                           <textarea
                             className="miniapp-task-text-field min-h-16 w-full rounded-xl border px-2 py-2 text-sm"
                             placeholder="Например: каждый вторник в 17:00"
@@ -3649,10 +3675,25 @@ export default function MiniApp() {
                   onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
                   className="miniapp-focus-title-input invisible-scrollbar min-h-[4.5rem] w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none"
                   rows={2}
-                  placeholder="Введите название"
+                  placeholder={createEditorType === 'event' ? 'Введите название события' : 'Введите название'}
                 />
-                <div className="mt-1 flex items-center gap-2 text-sm font-semibold text-violet-500">
+                {createEditorType === 'event' ? (
+                  <input
+                    value={createTaskDraft.location ?? ''}
+                    onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, location: event.target.value }))}
+                    className="miniapp-task-text-field mt-2 w-full rounded-2xl border px-3 py-2.5 text-sm"
+                    placeholder="Место события"
+                    autoComplete="street-address"
+                  />
+                ) : null}
+                <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-500">
                   <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
+                  <DateTimePickerWithApply
+                    value={fromInputDateTime(createTaskDraft.dueDate)}
+                    onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
+                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
+                  />
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <textarea
@@ -3660,16 +3701,6 @@ export default function MiniApp() {
                     onChange={(event) => setCreateTaskDraft((prev) => ({ ...prev, description: event.target.value }))}
                     className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
-                  />
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <DateTimePickerWithApply
-                    value={fromInputDateTime(createTaskDraft.dueDate)}
-                    onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
-                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
-                    iconOnly
-                    detachedPopup
-                    buttonClassName="miniapp-focus-icon-button"
                   />
                 </div>
                 <div className="task-edit-compact-grid mt-4 grid grid-cols-2 gap-2">
@@ -3696,7 +3727,7 @@ export default function MiniApp() {
                     detachedPopup
                   />
                 </div>
-                <div className="mt-3 pt-1">
+                {createEditorType === 'task' ? <div className="mt-3 pt-1">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Важность: {createTaskDraft.importance ?? 3}</p>
                   <div className="importance-choice-group grid grid-cols-5 gap-2">
                     {[1, 2, 3, 4, 5].map((level) => (
@@ -3710,8 +3741,17 @@ export default function MiniApp() {
                       </button>
                     ))}
                   </div>
-                </div>
-                <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
+                </div> : null}
+                {createEditorType === 'event' ? (
+                  <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium">
+                    <input type="checkbox" checked={Boolean(createTaskDraft.isRecurring)} onChange={(event) => {
+                      const enabled = event.target.checked;
+                      setCreateTaskDraft((prev) => enabled ? { ...prev, isRecurring: true, recurrenceText: prev.recurrenceText || '' } : { ...prev, isRecurring: false, recurrenceText: null, recurrenceJson: null, recurrenceSummary: null, recurrenceUntil: null });
+                    }} />
+                    повторять
+                  </label>
+                ) : null}
+                {createEditorType === 'task' ? <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
                     <button
@@ -3777,7 +3817,7 @@ export default function MiniApp() {
                       </article>
                     ))}
                   </div>
-                </div>
+                </div> : null}
               </div>
               <div className="miniapp-create-task-sticky-action pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4 pt-8">
                 <button
@@ -3786,7 +3826,7 @@ export default function MiniApp() {
                   disabled={isCreatingTask}
                   className="miniapp-focus-primary-button pointer-events-auto min-w-[12rem] shadow-2xl"
                 >
-                  {isCreatingTask ? 'Создаём…' : 'Создать задачу'}
+                  {isCreatingTask ? 'Создаём…' : createEditorType === 'event' ? 'Создать событие' : 'Создать задачу'}
                 </button>
               </div>
             </div>

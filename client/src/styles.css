@@ -2473,6 +2473,7 @@ body[data-theme='light'] .miniapp-shell .miniapp-credit-badge,
 }
 
 .miniapp-quick-create-task span:last-child { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+.miniapp-quick-create-event span:last-child { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
 .miniapp-quick-create-ai span:last-child { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
 
 body[data-theme='light'] .miniapp-shell .miniapp-quick-create-action,
@@ -2487,6 +2488,12 @@ body[data-theme='light'] .miniapp-shell .miniapp-quick-create-task span:last-chi
 .miniapp-shell.miniapp-light .miniapp-quick-create-task span:last-child {
   background: #d1fae5;
   color: #047857;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-quick-create-event span:last-child,
+.miniapp-shell.miniapp-light .miniapp-quick-create-event span:last-child {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-quick-create-ai span:last-child,
