@@ -2446,6 +2446,14 @@ body[data-theme='light'] .miniapp-shell .miniapp-credit-badge,
 .miniapp-quick-create.is-open .miniapp-quick-create-actions {
   transform: translateY(0) scale(1);
   opacity: 1;
+}
+
+.miniapp-quick-create {
+  pointer-events: none;
+}
+
+.miniapp-quick-create .miniapp-ai-chat-launcher,
+.miniapp-quick-create.is-open .miniapp-quick-create-action {
   pointer-events: auto;
 }
 
@@ -2473,6 +2481,18 @@ body[data-theme='light'] .miniapp-shell .miniapp-quick-create-action,
   background: rgba(255, 255, 255, 0.96);
   color: #1e293b;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-quick-create-task span:last-child,
+.miniapp-shell.miniapp-light .miniapp-quick-create-task span:last-child {
+  background: #d1fae5;
+  color: #047857;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-quick-create-ai span:last-child,
+.miniapp-shell.miniapp-light .miniapp-quick-create-ai span:last-child {
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop,
