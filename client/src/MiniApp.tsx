@@ -664,6 +664,8 @@ export default function MiniApp() {
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [aiCredits, setAiCredits] = useState(100);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
   const [aiChatDraft, setAiChatDraft] = useState('');
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
@@ -714,7 +716,8 @@ export default function MiniApp() {
 
       if (initData) {
         console.info(`[MiniApp] Используем Telegram initData (length=${initData.length})`);
-        await api.loginTelegramMiniApp({ initData });
+        const { user } = await api.loginTelegramMiniApp({ initData });
+        setAiCredits(user.aiCredits ?? 100);
         tgWindow.Telegram?.WebApp?.ready?.();
         tgWindow.Telegram?.WebApp?.expand?.();
       } else {
@@ -1846,6 +1849,12 @@ export default function MiniApp() {
     }));
   };
 
+  const refreshAiCredits = () => {
+    void api.getMe()
+      .then(({ user }) => setAiCredits(user.aiCredits ?? 100))
+      .catch(() => undefined);
+  };
+
   const sendAiChatQuestion = async () => {
     const question = aiChatDraft.trim();
     if ((!question && aiChatPendingFiles.length === 0) || aiChatLoading) return;
@@ -1878,6 +1887,7 @@ export default function MiniApp() {
       });
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeMiniAiMessageContent(result.answer)}` };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      refreshAiCredits();
       if (result.delegatedToPlanner) await loadData();
     } catch (e) {
       setAiChatError(e instanceof Error ? e.message : 'Не удалось получить ответ ИИ');
@@ -2130,6 +2140,7 @@ export default function MiniApp() {
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: result.answer }]
       }));
+      refreshAiCredits();
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
@@ -2243,15 +2254,10 @@ export default function MiniApp() {
             />
             </div>
             <div className="relative inline-flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                onClick={() => openCreateTaskModal()}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-emerald-500/10"
-                aria-label="Создать задачу"
-                title="Создать задачу"
-              >
-                <Plus size={16} className="text-emerald-400" />
-              </button>
+              <div className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Доступные ИИ-кредиты" aria-label={`ИИ-кредиты: ${aiCredits}`}>
+                <Coins size={15} />
+                <span>{aiCredits}</span>
+              </div>
               <button
                 type="button"
                 onClick={toggleDisplayMode}
@@ -3109,12 +3115,19 @@ export default function MiniApp() {
         </div>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => { setClosingMiniWindow(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }}
-        className="miniapp-ai-chat-launcher fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-xl text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95"
-        aria-label="Открыть чат с ИИ"
-      >✦</button>
+      <div className={`miniapp-quick-create fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 ${isQuickCreateOpen ? 'is-open' : ''}`}>
+        <div className="miniapp-quick-create-actions flex flex-col items-end gap-2" aria-hidden={!isQuickCreateOpen}>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
+          </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); setClosingMiniWindow(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>Чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
+          </button>
+        </div>
+        <button type="button" onClick={() => setIsQuickCreateOpen((prev) => !prev)} className="miniapp-ai-chat-launcher flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-2xl shadow-violet-950/40 ring-2 ring-white/20 active:scale-95" aria-expanded={isQuickCreateOpen} aria-label={isQuickCreateOpen ? 'Закрыть меню добавления' : 'Открыть меню добавления'}>
+          <Plus size={25} strokeWidth={2.4} />
+        </button>
+      </div>
 
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
