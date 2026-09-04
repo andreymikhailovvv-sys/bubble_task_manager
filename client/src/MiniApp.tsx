@@ -1314,9 +1314,7 @@ export default function MiniApp() {
     setDraftByTaskId((prev) => ({
       ...prev,
       [taskId]: {
-        title: prev[taskId]?.title ?? '',
-        description: prev[taskId]?.description ?? '',
-        dueDate: prev[taskId]?.dueDate ?? '',
+        ...(prev[taskId] ?? { title: '', description: '', dueDate: '' }),
         ...patch
       }
     }));
@@ -2735,7 +2733,7 @@ export default function MiniApp() {
                           <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
-                              <button key={entry.id} type="button" className="miniapp-calendar-entry" style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
+                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
                                 <span className="miniapp-calendar-entry-title">{entry.title}</span>
                               </button>
                             ))}
@@ -2882,6 +2880,14 @@ export default function MiniApp() {
                   />
                 ) : null}
                 <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
+                  <DateTimePickerWithApply
+                    value={fromInputDateTime(openedTaskDraft.dueDate)}
+                    onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
+                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    iconOnly
+                    detachedPopup
+                    buttonClassName="miniapp-focus-icon-button"
+                  />
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
@@ -2894,14 +2900,6 @@ export default function MiniApp() {
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <DateTimePickerWithApply
-                    value={fromInputDateTime(openedTaskDraft.dueDate)}
-                    onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
-                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
-                    iconOnly
-                    detachedPopup
-                    buttonClassName="miniapp-focus-icon-button"
-                  />
                   <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsTaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
                     <Maximize2 size={15} />
                   </button>
@@ -2939,17 +2937,17 @@ export default function MiniApp() {
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => void completeTask(openedTask.id)} disabled={completingId === openedTask.id} className="miniapp-focus-success-button">
-                    <CheckCircle2 size={14} /> {completingId === openedTask.id ? '...' : 'Выполнить'}
+                    <CheckCircle2 size={14} /> {completingId === openedTask.id ? '...' : openedTask.taskType === 'EVENT' ? 'Завершить' : 'Выполнить'}
                   </button>
                   <button type="button" onClick={() => void deleteTask(openedTask.id)} disabled={deletingId === openedTask.id} className="miniapp-focus-danger-button">
                     <Trash2 size={14} /> {deletingId === openedTask.id ? '...' : 'Удалить'}
                   </button>
                 </div>
-                <button type="button" onClick={() => setIsAiDialogOpen(true)} className="miniapp-focus-ai-dialog-button mt-2 w-full">
+                {openedTask.taskType !== 'EVENT' ? <button type="button" onClick={() => setIsAiDialogOpen(true)} className="miniapp-focus-ai-dialog-button mt-2 w-full">
                   <Bot size={16} /> Открыть диалог с ИИ
-                </button>
+                </button> : null}
 
-                <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
+                {openedTask.taskType !== 'EVENT' ? <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
                     <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-action-pill">
@@ -2970,7 +2968,7 @@ export default function MiniApp() {
                       );
                     })}
                   </div>
-                </div>
+                </div> : null}
               </div>
             </div>
           </div>
@@ -3021,9 +3019,6 @@ export default function MiniApp() {
               </button>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">
-                {openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}
-              </span>
               <DateTimePickerWithApply
                 value={fromInputDateTime(openedSubtaskDraft.dueDate)}
                 onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })}
@@ -3032,6 +3027,9 @@ export default function MiniApp() {
                 detachedPopup
                 buttonClassName="miniapp-focus-icon-button"
               />
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">
+                {openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}
+              </span>
               <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
                 <Maximize2 size={15} />
               </button>
@@ -3687,13 +3685,13 @@ export default function MiniApp() {
                   />
                 ) : null}
                 <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-violet-500">
-                  <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
                   <DateTimePickerWithApply
                     value={fromInputDateTime(createTaskDraft.dueDate)}
                     onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
                     timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
                     iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
                   />
+                  <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
                   <textarea
@@ -3791,7 +3789,6 @@ export default function MiniApp() {
                               placeholder="Описание подзадачи"
                             />
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-xs font-semibold text-violet-500">{subtask.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(subtask.dueDate)) : 'Срок не задан'}</span>
                               <DateTimePickerWithApply
                                 value={fromInputDateTime(subtask.dueDate)}
                                 onChange={(nextValue) => setCreateTaskDraft((prev) => ({
@@ -3803,6 +3800,7 @@ export default function MiniApp() {
                                 detachedPopup
                                 buttonClassName="miniapp-focus-icon-button"
                               />
+                              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">{subtask.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(subtask.dueDate)) : 'Срок не задан'}</span>
                             </div>
                           </div>
                           <button
