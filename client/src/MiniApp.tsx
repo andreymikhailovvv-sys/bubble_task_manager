@@ -1457,7 +1457,7 @@ export default function MiniApp() {
   const openCreateTaskModal = (dueDate?: Date) => {
     const draft = createEmptyTaskDraft();
     setCreateTaskDraft(dueDate ? { ...draft, dueDate: toInputDateTime(dueDate.toISOString()) } : draft);
-    setCreateTaskNotifyPreset('30');
+    setCreateTaskNotifyPreset('0');
     setCreateTaskRecurrenceNextDueLabel(null);
     setIsCreateTaskSettingsOpen(false);
     setClosingMiniWindow(null);
