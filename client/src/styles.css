@@ -2802,11 +2802,6 @@ body[data-theme='light'] .notes-editor-list-option:hover {
 
 .miniapp-habits-strip {
   -webkit-overflow-scrolling: touch;
-  /* Keep the horizontal strip scrollable, but move its clipping edge far enough
-     away for the completion glow and scaled circle to remain fully visible. */
-  padding: 2.25rem;
-  margin: -2.25rem;
-  scroll-padding-inline: 2.25rem;
 }
 
 .miniapp-habit-circle {
@@ -2814,6 +2809,7 @@ body[data-theme='light'] .notes-editor-list-option:hover {
   background: conic-gradient(var(--habit-color, #22c55e) var(--habit-progress), var(--habit-track, rgba(30, 41, 59, 0.92)) var(--habit-progress) 100%);
   border-color: color-mix(in srgb, var(--habit-color, #22c55e) 58%, transparent);
   box-shadow: 0 8px 18px rgba(2, 6, 23, 0.16);
+  overflow: hidden;
   touch-action: manipulation;
 }
 
