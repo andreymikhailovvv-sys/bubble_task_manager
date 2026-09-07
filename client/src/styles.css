@@ -2804,12 +2804,17 @@ body[data-theme='light'] .notes-editor-list-option:hover {
   -webkit-overflow-scrolling: touch;
 }
 
+.miniapp-habits-strip:has(.miniapp-habit-complete-pulse) {
+  /* Расширяем область прокрутки только на время вспышки, не увеличивая блок привычек постоянно. */
+  padding: 2rem;
+  margin: -2rem;
+}
+
 .miniapp-habit-circle {
   --habit-progress: 0%;
   background: conic-gradient(var(--habit-color, #22c55e) var(--habit-progress), var(--habit-track, rgba(30, 41, 59, 0.92)) var(--habit-progress) 100%);
   border-color: color-mix(in srgb, var(--habit-color, #22c55e) 58%, transparent);
   box-shadow: 0 8px 18px rgba(2, 6, 23, 0.16);
-  overflow: hidden;
   touch-action: manipulation;
 }
 
