@@ -27,6 +27,11 @@ PORT=4000
 DATABASE_URL="file:./dev.db"
 CLIENT_DIST_PATH=../client/dist
 OPENAI_API_KEY=your_openai_api_key
+# Опциональный исходящий прокси только для запросов к OpenAI
+# OPENAI_PROXY_URL=http://1.2.3.4:8080
+# Опциональная Basic-аутентификация прокси (указываются обе переменные)
+# OPENAI_PROXY_USERNAME=proxy_user
+# OPENAI_PROXY_PASSWORD=proxy_password
 # Опционально: переопределить модель (по умолчанию gpt-5.4-mini, быстрый режим)
 # OPENAI_MODEL=gpt-5.4-mini
 # Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
@@ -40,6 +45,13 @@ TELEGRAM_WEBHOOK_SECRET=your_random_secret
 # Интервал проверки «сияющих» задач в мс (по умолчанию 60000)
 TELEGRAM_POLL_INTERVAL_MS=60000
 ```
+
+Если `OPENAI_PROXY_URL` не задан или пуст, запросы к OpenAI выполняются напрямую.
+При заданном URL только обращения к OpenAI отправляются через этот прокси; прочий
+HTTP-трафик приложения остаётся прямым. Логин и пароль задаются отдельно через
+`OPENAI_PROXY_USERNAME` и `OPENAI_PROXY_PASSWORD`, поэтому спецсимволы в них не
+нужно кодировать для URL. Для прокси без авторизации оставьте обе переменные
+учётных данных незаданными.
 
 ## Локальный запуск
 1. Установка зависимостей:
