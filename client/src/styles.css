@@ -2809,6 +2809,12 @@ body[data-theme='light'] .notes-editor-list-option:hover {
   scroll-padding-inline: 2.25rem;
 }
 
+.miniapp-habits-strip:has(.miniapp-habit-complete-pulse) {
+  /* Расширяем область прокрутки только на время вспышки, не увеличивая блок привычек постоянно. */
+  padding: 2rem;
+  margin: -2rem;
+}
+
 .miniapp-habit-circle {
   --habit-progress: 0%;
   background: conic-gradient(var(--habit-color, #22c55e) var(--habit-progress), var(--habit-track, rgba(30, 41, 59, 0.92)) var(--habit-progress) 100%);
