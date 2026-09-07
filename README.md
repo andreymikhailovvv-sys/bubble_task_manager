@@ -38,6 +38,11 @@ OPENAI_API_KEY=your_openai_api_key
 # OPENAI_MODEL_FULL=gpt-5.4
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+# Опциональный исходящий прокси только для Telegram Bot API
+# TELEGRAM_PROXY_URL=http://1.2.3.4:8080
+# Опциональная Basic-аутентификация прокси (указываются обе переменные)
+# TELEGRAM_PROXY_USERNAME=proxy_user
+# TELEGRAM_PROXY_PASSWORD=proxy_password
 # Username бота без @, используется для QR/deep-link подключения аккаунта
 TELEGRAM_BOT_USERNAME=your_bot_username_without_at
 # Опционально, но рекомендуется для защиты webhook
@@ -52,6 +57,13 @@ HTTP-трафик приложения остаётся прямым. Логин
 `OPENAI_PROXY_USERNAME` и `OPENAI_PROXY_PASSWORD`, поэтому спецсимволы в них не
 нужно кодировать для URL. Для прокси без авторизации оставьте обе переменные
 учётных данных незаданными.
+
+Если `TELEGRAM_PROXY_URL` не задан или пуст, запросы к Telegram Bot API и
+скачивание файлов из Telegram выполняются напрямую. При заданном URL только эти
+запросы отправляются через прокси без автоматического перехода на прямое
+соединение при ошибке. Логин и пароль прокси задаются отдельно через
+`TELEGRAM_PROXY_USERNAME` и `TELEGRAM_PROXY_PASSWORD`; для прокси без
+авторизации оставьте обе переменные незаданными.
 
 ## Локальный запуск
 1. Установка зависимостей:
