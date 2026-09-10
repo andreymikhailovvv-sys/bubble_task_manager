@@ -18,6 +18,7 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
   || process.env.MINI_APP_URL?.trim()
   || process.env.APP_BASE_URL?.trim()
   || (APP_URL ? `${APP_URL.replace(/\/$/, '')}/miniapp` : '/miniapp');
+const TELEGRAM_MENU_MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim() || null;
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -97,6 +98,16 @@ const pendingAiAttachmentByChatId = new Map<string, ChatAttachment>();
 const quickAiHistoryByChatId = new Map<string, ChatMessage[]>();
 
 const isEnabled = () => Boolean(BOT_TOKEN);
+
+const getErrorCode = (error: unknown) => {
+  if (typeof error === 'object' && error !== null) {
+    if ('code' in error) return String(error.code);
+    if ('cause' in error && typeof error.cause === 'object' && error.cause !== null && 'code' in error.cause) {
+      return String(error.cause.code);
+    }
+  }
+  return error instanceof Error ? error.name : 'unknown';
+};
 
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
@@ -336,11 +347,20 @@ const keyboardReplyMain = {
 
 const telegramRequest = async <T>(method: string, payload: Record<string, unknown>): Promise<T | null> => {
   if (!BOT_TOKEN) return null;
-  const response = await telegramFetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
+  const startedAt = performance.now();
+  let response;
+  try {
+    response = await telegramFetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    console.info(`[TelegramTiming] api method=${method} durationMs=${Math.round(performance.now() - startedAt)} status=${response.status} ok=${response.ok}`);
+  } catch (error) {
+    const errorCode = getErrorCode(error);
+    console.error(`[TelegramTiming] api method=${method} durationMs=${Math.round(performance.now() - startedAt)} ok=false error=${errorCode}`);
+    throw error;
+  }
   if (!response.ok) {
     const text = await response.text();
     console.error('[Telegram] API error', { method, status: response.status, text: text.slice(0, 500) });
@@ -748,6 +768,15 @@ const resetBotMenuState = async (chatId: string) => {
   await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
 };
 
+const lookupSession = async (chatId: string) => {
+  const startedAt = performance.now();
+  try {
+    return await prisma.telegramSession.findUnique({ where: { chatId } });
+  } finally {
+    console.info(`[TelegramTiming] sessionLookup chatId=${chatId} durationMs=${Math.round(performance.now() - startedAt)}`);
+  }
+};
+
 const handleLoginInput = async (chatId: string, text: string) => {
   const [loginRaw, passwordRaw] = text.trim().split(/\s+/, 2);
   const login = (loginRaw ?? '').trim().toLowerCase();
@@ -968,7 +997,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     `[Telegram] incoming message chatId=${chatId} hasText=${Boolean(text)} hasCaption=${Boolean(caption)} hasVoice=${isVoiceMessage} hasDocument=${Boolean(updateMessage.document)} hasPhoto=${Boolean(updateMessage.photo?.length)} isStartCommand=${descriptionText.startsWith('/start')}`
   );
 
-  const session = await prisma.telegramSession.findUnique({ where: { chatId } });
+  const session = await lookupSession(chatId);
   console.info(`[Telegram] session lookup chatId=${chatId} found=${Boolean(session)} userId=${session?.userId ?? ''} mode=${session?.mode ?? ''}`);
 
   if (descriptionText.startsWith('/start')) {
@@ -1282,7 +1311,7 @@ const handleCallback = async (update: TelegramUpdate) => {
   const action = parts[0];
   const taskId = parts[1];
   const value = parts[2];
-  const session = await prisma.telegramSession.findUnique({ where: { chatId } });
+  const session = await lookupSession(chatId);
 
   if (!session?.userId) {
     await answerCallback(callback.id, 'Сначала авторизуйтесь через /start');
@@ -1630,18 +1659,54 @@ export const telegramService = {
     try {
       console.info(`[Telegram] processing update hasMessage=${Boolean(update.message)} hasCallback=${Boolean(update.callback_query)}`);
       if (update.callback_query) {
-        await handleCallback(update);
+        const chatId = update.callback_query.message ? String(update.callback_query.message.chat.id) : 'unknown';
+        const startedAt = performance.now();
+        try {
+          await handleCallback(update);
+        } finally {
+          console.info(`[TelegramTiming] handleCallback chatId=${chatId} durationMs=${Math.round(performance.now() - startedAt)}`);
+        }
         return;
       }
 
       if (update.message) {
-        await handleIncomingMessage(update.message);
+        const chatId = String(update.message.chat.id);
+        const startedAt = performance.now();
+        try {
+          await handleIncomingMessage(update.message);
+        } finally {
+          console.info(`[TelegramTiming] handleMessage chatId=${chatId} durationMs=${Math.round(performance.now() - startedAt)}`);
+        }
         return;
       }
 
       console.info('[Telegram] ignored update without message/callback_query');
     } catch (error) {
       console.error('[Telegram] Failed to process update', error);
+    }
+  },
+  async configureMenuButton() {
+    if (!BOT_TOKEN || !TELEGRAM_MENU_MINI_APP_URL) {
+      console.warn('[Telegram] failed to configure menu button: TELEGRAM_BOT_TOKEN or TELEGRAM_MINI_APP_URL is not configured');
+      return;
+    }
+
+    try {
+      const result = await telegramRequest<{ ok: boolean }>('setChatMenuButton', {
+        menu_button: {
+          type: 'web_app',
+          text: 'Список задач',
+          web_app: { url: TELEGRAM_MENU_MINI_APP_URL }
+        }
+      });
+      if (result?.ok) {
+        console.info('[Telegram] menu button configured');
+      } else {
+        console.error('[Telegram] failed to configure menu button: Telegram API rejected the request');
+      }
+    } catch (error) {
+      const errorCode = getErrorCode(error);
+      console.error(`[Telegram] failed to configure menu button error=${errorCode}`);
     }
   },
   async notifyShiningTasks() {
