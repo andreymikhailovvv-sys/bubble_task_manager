@@ -1,6 +1,5 @@
 import { prisma } from '../db/prisma.js';
 import { randomUUID } from 'node:crypto';
-import { openAiFetch } from '../lib/openai-fetch.js';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -965,7 +964,7 @@ export const aiAssistantService = {
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const history = normalizeGeneralHistory(input.history).slice(-24);
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -1002,7 +1001,7 @@ export const aiAssistantService = {
       second: '2-digit',
       hour12: false
     }).format(now);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -1260,7 +1259,7 @@ export const aiAssistantService = {
     formData.append('model', process.env.OPENAI_AUDIO_TRANSCRIBE_MODEL?.trim() || 'gpt-4o-mini-transcribe');
     formData.append('language', 'ru');
 
-    const response = await openAiFetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`
@@ -1494,7 +1493,7 @@ export const aiAssistantService = {
         if (!input.skipCreditsCharge) {
           await chargeAiCredits(input.userId, model, { skipEfficiencyBonus: input.skipEfficiencyBonus });
         }
-        const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
+        const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1954,7 +1953,7 @@ ${parsed.answer}`
     ];
 
     await chargeAiCredits(input.userId, GENERAL_CHAT_MODEL);
-    const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
+    const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2447,7 +2446,7 @@ ${parsed.answer}`
       `основнаяЗадача=${t.parentTask ? `${t.parentTask.title} (${t.parentTask.id})` : 'null'}`
     ].join(' | ')).join('\n');
     await chargeAiCredits(input.userId, OTHER_AI_MODEL);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: OTHER_AI_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
+    const response = await fetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: OTHER_AI_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
     const taskById = new Map(tasks.map((task) => [task.id, task]));
@@ -2487,7 +2486,7 @@ ${parsed.answer}`
     const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
     const overdueIds = overdue.map((t) => t.id);
     await chargeFixedAiCredits(input.userId, 2);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}, body: JSON.stringify({ model: OTHER_AI_MODEL, input:[{ role:'system', content:'Ты помощник планировщик. Верни только JSON.'},{ role:'user', content:`Перераспредели только просроченные задачи и подзадачи по ближайшим окнам: сначала сегодня, если окон нет — завтра. Учитывай паттерны недели пользователя (время задач по секторам). Верни JSON {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO"}]}. Переноси только taskId из списка overdueIds. now=${now.toISOString()} overdueIds=${JSON.stringify(overdueIds)} weekTasks:
+    const response = await fetch('https://api.openai.com/v1/responses', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}, body: JSON.stringify({ model: OTHER_AI_MODEL, input:[{ role:'system', content:'Ты помощник планировщик. Верни только JSON.'},{ role:'user', content:`Перераспредели только просроченные задачи и подзадачи по ближайшим окнам: сначала сегодня, если окон нет — завтра. Учитывай паттерны недели пользователя (время задач по секторам). Верни JSON {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO"}]}. Переноси только taskId из списка overdueIds. now=${now.toISOString()} overdueIds=${JSON.stringify(overdueIds)} weekTasks:
 ${lines}`}] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
@@ -2553,7 +2552,7 @@ ${lines}`}] }) });
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     await chargeAiCredits(input.userId, modelForSubtasks);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2661,7 +2660,7 @@ ${lines}`}] }) });
       ? userSpheres.map((sphere, index) => `${index + 1}. ${sphere.name}`).join('; ')
       : 'список пуст';
     await chargeAiCredits(input.userId, modelForPrompt);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
