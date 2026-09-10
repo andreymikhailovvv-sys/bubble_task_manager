@@ -18,7 +18,10 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
   || process.env.MINI_APP_URL?.trim()
   || process.env.APP_BASE_URL?.trim()
   || (APP_URL ? `${APP_URL.replace(/\/$/, '')}/miniapp` : '/miniapp');
-const TELEGRAM_MENU_MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim() || null;
+const TELEGRAM_MENU_BUTTON_URL = process.env.TELEGRAM_MENU_BUTTON_URL?.trim()
+  || process.env.TELEGRAM_MINI_APP_URL?.trim()
+  || null;
+const TELEGRAM_CONFIGURE_MENU_BUTTON = process.env.TELEGRAM_CONFIGURE_MENU_BUTTON?.trim().toLowerCase() === 'true';
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -29,6 +32,11 @@ const TELEGRAM_LINK_TTL_SECONDS = 5 * 60;
 const TELEGRAM_DEEP_LINK_PREFIX = 'link_';
 const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
 const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
+const SUPPORTED_CALLBACK_ACTIONS = new Set([
+  'backlist', 'snooze', 'snooze_set', 'snooze_subtask', 'snooze_set_subtask',
+  'habit_back', 'snooze_habit', 'snooze_set_habit', 'done_habit', 'done', 'delete',
+  'done_subtask', 'delete_subtask', 'subtasks_page', 'opensubtask', 'backtask'
+]);
 const normalizeAiErrorMessage = (message: string) => message === INSUFFICIENT_AI_CREDITS_ERROR ? INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE : message;
 
 type TelegramLinkTokenRecord = {
@@ -98,6 +106,15 @@ const pendingAiAttachmentByChatId = new Map<string, ChatAttachment>();
 const quickAiHistoryByChatId = new Map<string, ChatMessage[]>();
 
 const isEnabled = () => Boolean(BOT_TOKEN);
+
+const getMenuButtonUrlHost = () => {
+  if (!TELEGRAM_MENU_BUTTON_URL) return null;
+  try {
+    return new URL(TELEGRAM_MENU_BUTTON_URL).hostname || null;
+  } catch {
+    return null;
+  }
+};
 
 const getErrorCode = (error: unknown) => {
   if (typeof error === 'object' && error !== null) {
@@ -1296,9 +1313,12 @@ const handleCallback = async (update: TelegramUpdate) => {
   const data = callback.data;
 
   if (data === 'auth_login') {
+    const callbackAnswer = answerCallback(callback.id);
     await setSession(chatId, { mode: 'AWAITING_LINK_CREDENTIALS', activeTaskId: null });
-    await answerCallback(callback.id);
-    await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyMain);
+    await Promise.allSettled([
+      callbackAnswer,
+      sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyMain)
+    ]);
     return;
   }
 
@@ -1323,12 +1343,24 @@ const handleCallback = async (update: TelegramUpdate) => {
     await answerCallback(callback.id, 'Некорректные данные');
     return;
   }
+  if (!SUPPORTED_CALLBACK_ACTIONS.has(action)) {
+    await answerCallback(callback.id, 'Неизвестное действие');
+    return;
+  }
+  if (['snooze_set', 'snooze_set_subtask', 'snooze_set_habit'].includes(action) && !Number.isFinite(Number(value))) {
+    await answerCallback(callback.id, 'Некорректные данные');
+    return;
+  }
   const resolvedTaskId = taskId as string;
+  // Start the acknowledgement before database work. It is deliberately not awaited here:
+  // a slow or expired callback query must neither delay nor cancel the useful operation.
+  const callbackAnswer = answerCallback(callback.id);
+
+  try {
 
   if (action === 'backlist') {
     await setSession(chatId, { mode: 'VIEWING_TASK_LIST', activeTaskId: null });
     const listParts = await buildTaskListTextParts(userId, chatId);
-    await answerCallback(callback.id);
     await editMessage(chatId, messageId, listParts[0]);
     for (const extraPart of listParts.slice(1)) {
       await sendMessage(chatId, extraPart, keyboardReplyMain);
@@ -1337,7 +1369,6 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
 
   if (action === 'snooze') {
-    await answerCallback(callback.id);
     await editMessage(chatId, messageId, '⏳ <b>На сколько отложить задачу?</b>', keyboardSnooze(resolvedTaskId));
     return;
   }
@@ -1346,7 +1377,7 @@ const handleCallback = async (update: TelegramUpdate) => {
     const minutes = Number(value);
     const task = await prisma.task.findFirst({ where: { id: resolvedTaskId, userId } });
     if (!task) {
-      await answerCallback(callback.id, 'Задача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Задача не найдена.</b>');
       return;
     }
 
@@ -1358,7 +1389,6 @@ const handleCallback = async (update: TelegramUpdate) => {
       data: { dueDate, telegramNotifiedAt: null }
     });
 
-    await answerCallback(callback.id, `Отложено на ${minutes} мин`);
     await editMessage(chatId, messageId, `✅ <b>Готово.</b>\nЗадача отложена на <b>${minutes} мин</b>.\nНовый дедлайн: <b>${formatDate(dueDate)}</b>`, keyboardMain(task.id));
     return;
   }
@@ -1369,11 +1399,10 @@ const handleCallback = async (update: TelegramUpdate) => {
       select: { id: true, parentTaskId: true }
     });
     if (!subtask?.parentTaskId) {
-      await answerCallback(callback.id, 'Подзадача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Подзадача не найдена.</b>');
       return;
     }
 
-    await answerCallback(callback.id);
     await editMessage(chatId, messageId, '⏳ <b>На сколько перенести подзадачу?</b>', keyboardSubtaskSnooze(resolvedTaskId, subtask.parentTaskId));
     return;
   }
@@ -1381,7 +1410,6 @@ const handleCallback = async (update: TelegramUpdate) => {
   if (action === 'snooze_set_subtask') {
     const minutes = Number(parts[2]);
     if (!Number.isFinite(minutes)) {
-      await answerCallback(callback.id, 'Некорректные данные');
       return;
     }
 
@@ -1390,7 +1418,7 @@ const handleCallback = async (update: TelegramUpdate) => {
       select: { id: true, parentTaskId: true, dueDate: true }
     });
     if (!subtask?.parentTaskId) {
-      await answerCallback(callback.id, 'Подзадача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Подзадача не найдена.</b>');
       return;
     }
 
@@ -1401,7 +1429,6 @@ const handleCallback = async (update: TelegramUpdate) => {
       data: { dueDate, telegramNotifiedAt: null }
     });
 
-    await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
     await editMessage(
       chatId,
       messageId,
@@ -1414,7 +1441,6 @@ const handleCallback = async (update: TelegramUpdate) => {
 
   if (action === 'habit_back') {
     const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false } });
-    await answerCallback(callback.id);
     await editMessage(
       chatId,
       messageId,
@@ -1429,10 +1455,9 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
   if (action === 'snooze_habit') {
     const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false }, select: { id: true } });
     if (!habit) {
-      await answerCallback(callback.id, 'Привычка не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Привычка не найдена.</b>');
       return;
     }
-    await answerCallback(callback.id);
     await editMessage(chatId, messageId, '⏳ <b>На сколько перенести привычку?</b>', keyboardHabitSnooze(resolvedTaskId));
     return;
   }
@@ -1440,12 +1465,11 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
   if (action === 'snooze_set_habit') {
     const minutes = Number(value);
     if (!Number.isFinite(minutes)) {
-      await answerCallback(callback.id, 'Некорректные данные');
       return;
     }
     const habit = await prisma.habit.findFirst({ where: { id: resolvedTaskId, userId, isArchived: false, isAutoCompleted: false }, select: { id: true } });
     if (!habit) {
-      await answerCallback(callback.id, 'Привычка не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Привычка не найдена.</b>');
       return;
     }
     const reminderSnoozedUntil = new Date(Date.now() + minutes * 60_000);
@@ -1453,7 +1477,6 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
       where: { id: habit.id },
       data: { reminderSnoozedUntil, lastReminderNotifiedKey: null }
     });
-    await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
     await editMessage(chatId, messageId, `✅ <b>Готово.</b>
 Привычка перенесена на <b>${minutes} мин</b>.`, keyboardHabitReminder(habit.id));
     return;
@@ -1465,7 +1488,7 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
       include: { user: { select: { timeZone: true } } }
     });
     if (!habit) {
-      await answerCallback(callback.id, 'Привычка не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Привычка не найдена.</b>');
       return;
     }
     const dateKey = dateKeyInTimeZone(new Date(), habit.user.timeZone);
@@ -1490,7 +1513,6 @@ ${escapeHtml(habit.icon || '✨')} <b>${escapeHtml(habit.name)}</b>` : '⚠️ <
       }
     });
     await prisma.habit.update({ where: { id: habit.id }, data: { reminderSnoozedUntil: null } });
-    await answerCallback(callback.id, 'Привычка выполнена');
     await editMessage(chatId, messageId, `✅ <b>Привычка выполнена.</b>
 ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
     return;
@@ -1516,7 +1538,6 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
         });
       }
     });
-    await answerCallback(callback.id, 'Задача закрыта');
     await editMessage(chatId, messageId, '✅ <b>Задача выполнена и закрыта.</b> Отличная работа!');
     return;
   }
@@ -1525,7 +1546,6 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
     const deleted = await prisma.task.deleteMany({
       where: { id: resolvedTaskId, userId }
     });
-    await answerCallback(callback.id, deleted.count ? 'Задача удалена' : 'Задача не найдена');
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
     await editMessage(chatId, messageId, deleted.count ? '🗑 <b>Задача удалена.</b>' : '⚠️ <b>Задача не найдена.</b>');
     return;
@@ -1537,7 +1557,7 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       select: { id: true, parentTaskId: true }
     });
     if (!subtask?.parentTaskId) {
-      await answerCallback(callback.id, 'Подзадача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Подзадача не найдена.</b>');
       return;
     }
 
@@ -1545,7 +1565,6 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId },
       data: { status: 'DONE', telegramNotifiedAt: null }
     });
-    await answerCallback(callback.id, updated.count ? 'Подзадача закрыта' : 'Подзадача не найдена');
     await editMessage(
       chatId,
       messageId,
@@ -1561,14 +1580,13 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       select: { id: true, parentTaskId: true }
     });
     if (!subtask?.parentTaskId) {
-      await answerCallback(callback.id, 'Подзадача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Подзадача не найдена.</b>');
       return;
     }
 
     const deleted = await prisma.task.deleteMany({
       where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId }
     });
-    await answerCallback(callback.id, deleted.count ? 'Подзадача удалена' : 'Подзадача не найдена');
     await editMessage(
       chatId,
       messageId,
@@ -1584,7 +1602,6 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
     const index = taskIds.findIndex((id) => id === resolvedTaskId);
     const details = await getTaskDetailsText(resolvedTaskId, userId, index >= 0 ? index + 1 : undefined, Number.isFinite(page) ? page : 1);
 
-    await answerCallback(callback.id);
     if (!details) {
       await editMessage(chatId, messageId, '⚠️ Не удалось открыть задачу. Обновите список через «📋 Посмотреть задачи».', keyboardReplyMain);
       return;
@@ -1601,7 +1618,7 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       select: { parentTaskId: true }
     });
     if (!subtask?.parentTaskId) {
-      await answerCallback(callback.id, 'Подзадача не найдена');
+      await editMessage(chatId, messageId, '⚠️ <b>Подзадача не найдена.</b>');
       return;
     }
 
@@ -1610,7 +1627,6 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       include: { subtasks: { orderBy: { createdAt: 'asc' } } }
     });
 
-    await answerCallback(callback.id);
     if (!parentTask) {
       await editMessage(chatId, messageId, '⚠️ Родительская задача не найдена.', keyboardReplyMain);
       return;
@@ -1638,12 +1654,14 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
     const taskIds = listTaskIdsByChatId.get(chatId) ?? [];
     const index = taskIds.findIndex((id) => id === resolvedTaskId);
     const details = await getTaskDetailsText(resolvedTaskId, userId, index >= 0 ? index + 1 : undefined, 1);
-    await answerCallback(callback.id);
     if (details) {
       await editMessage(chatId, messageId, details.text, keyboardTaskDetails(resolvedTaskId, details.page, details.totalPages));
     } else {
       await editMessage(chatId, messageId, '⬅️ Возврат в меню уведомления.', keyboardTaskDetails(resolvedTaskId));
     }
+  }
+  } finally {
+    await Promise.allSettled([callbackAnswer]);
   }
 };
 
@@ -1686,8 +1704,10 @@ export const telegramService = {
     }
   },
   async configureMenuButton() {
-    if (!BOT_TOKEN || !TELEGRAM_MENU_MINI_APP_URL) {
-      console.warn('[Telegram] failed to configure menu button: TELEGRAM_BOT_TOKEN or TELEGRAM_MINI_APP_URL is not configured');
+    if (!TELEGRAM_CONFIGURE_MENU_BUTTON) return;
+
+    if (!BOT_TOKEN || !TELEGRAM_MENU_BUTTON_URL) {
+      console.warn('[Telegram] failed to configure menu button: TELEGRAM_BOT_TOKEN or Telegram menu button URL is not configured');
       return;
     }
 
@@ -1696,7 +1716,7 @@ export const telegramService = {
         menu_button: {
           type: 'web_app',
           text: 'Список задач',
-          web_app: { url: TELEGRAM_MENU_MINI_APP_URL }
+          web_app: { url: TELEGRAM_MENU_BUTTON_URL }
         }
       });
       if (result?.ok) {
@@ -1708,6 +1728,13 @@ export const telegramService = {
       const errorCode = getErrorCode(error);
       console.error(`[Telegram] failed to configure menu button error=${errorCode}`);
     }
+  },
+  getMiniAppStartupConfig() {
+    return {
+      miniAppUrlConfigured: MINI_APP_URL !== '/miniapp',
+      menuButtonAutoConfigure: TELEGRAM_CONFIGURE_MENU_BUTTON,
+      menuButtonUrlHost: getMenuButtonUrlHost()
+    };
   },
   async notifyShiningTasks() {
     if (!BOT_TOKEN) return;
