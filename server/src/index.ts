@@ -23,7 +23,6 @@ console.info('[Startup] Telegram config', {
   proxyUsernameConfigured: Boolean(process.env.TELEGRAM_PROXY_USERNAME),
   proxyPasswordConfigured: Boolean(process.env.TELEGRAM_PROXY_PASSWORD)
 });
-console.info('[Startup] Telegram MiniApp config', telegramService.getMiniAppStartupConfig());
 
 const DEFAULT_CORS_ORIGINS = [
   'https://planirovych.ru',
