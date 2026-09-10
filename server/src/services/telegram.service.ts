@@ -4,7 +4,6 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
-import { telegramFetch } from '../lib/telegram-fetch.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -336,7 +335,7 @@ const keyboardReplyMain = {
 
 const telegramRequest = async <T>(method: string, payload: Record<string, unknown>): Promise<T | null> => {
   if (!BOT_TOKEN) return null;
-  const response = await telegramFetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/${method}`, {
+  const response = await fetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
@@ -937,7 +936,7 @@ const loadTelegramAttachment = async (message: TelegramUpdate['message']): Promi
     throw new Error('Не удалось получить файл из Telegram.');
   }
 
-  const response = await telegramFetch(`${TELEGRAM_API}/file/bot${BOT_TOKEN}/${filePath}`);
+  const response = await fetch(`${TELEGRAM_API}/file/bot${BOT_TOKEN}/${filePath}`);
   if (!response.ok) {
     throw new Error('Не удалось скачать файл из Telegram.');
   }
