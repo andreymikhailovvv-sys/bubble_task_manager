@@ -17,13 +17,6 @@ const requestBodyLimit = process.env.REQUEST_BODY_LIMIT?.trim() || '15mb';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-console.info('[Startup] Telegram config', {
-  botTokenConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim()),
-  proxyUrlConfigured: Boolean(process.env.TELEGRAM_PROXY_URL?.trim()),
-  proxyUsernameConfigured: Boolean(process.env.TELEGRAM_PROXY_USERNAME),
-  proxyPasswordConfigured: Boolean(process.env.TELEGRAM_PROXY_PASSWORD)
-});
-
 const DEFAULT_CORS_ORIGINS = [
   'https://planirovych.ru',
   'https://www.planirovych.ru',
