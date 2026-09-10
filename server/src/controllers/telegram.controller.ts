@@ -3,8 +3,10 @@ import { telegramService } from '../services/telegram.service.js';
 
 export const telegramController = {
   webhook: async (req: Request, res: Response) => {
+    const webhookStartedAt = performance.now();
     const update = req.body ?? {};
     const updateId = typeof update.update_id === 'number' ? update.update_id : 'unknown';
+    const updateType = update.callback_query ? 'callback' : update.message ? 'message' : 'unknown';
     console.info(`[TelegramWebhook] received updateId=${updateId} hasMessage=${Boolean(update.message)} hasCallback=${Boolean(update.callback_query)}`);
 
     if (!telegramService.isEnabled()) {
@@ -19,7 +21,11 @@ export const telegramController = {
       return;
     }
 
-    await telegramService.processWebhookUpdate(update);
+    try {
+      await telegramService.processWebhookUpdate(update);
+    } finally {
+      console.info(`[TelegramTiming] webhook updateId=${updateId} type=${updateType} durationMs=${Math.round(performance.now() - webhookStartedAt)}`);
+    }
     console.info(`[TelegramWebhook] processed updateId=${updateId}`);
     res.json({ ok: true });
   }
