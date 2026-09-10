@@ -11,11 +11,6 @@ function initializeProxy(): void {
 
   const proxyUrl = process.env.TELEGRAM_PROXY_URL?.trim();
   if (!proxyUrl) {
-    console.info('[Telegram] proxy disabled', {
-      proxyUrlConfigured: false,
-      usernameConfigured: Boolean(process.env.TELEGRAM_PROXY_USERNAME),
-      passwordConfigured: Boolean(process.env.TELEGRAM_PROXY_PASSWORD)
-    });
     initialized = true;
     return;
   }
