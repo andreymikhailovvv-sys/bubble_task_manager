@@ -1,6 +1,5 @@
 import { prisma } from '../db/prisma.js';
 import { randomUUID } from 'node:crypto';
-import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 
 type ChatRole = 'user' | 'assistant';
