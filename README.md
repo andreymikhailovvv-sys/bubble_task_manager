@@ -39,6 +39,11 @@ TELEGRAM_BOT_USERNAME=your_bot_username_without_at
 TELEGRAM_WEBHOOK_SECRET=your_random_secret
 # Интервал проверки «сияющих» задач в мс (по умолчанию 60000)
 TELEGRAM_POLL_INTERVAL_MS=60000
+# Relay выключен по умолчанию; включайте только на принимающем webhook Render
+TELEGRAM_RELAY_ENABLED=false
+TELEGRAM_RELAY_TARGET_URL=https://planirovych.ru/api/telegram/webhook
+TELEGRAM_RELAY_SOURCE_SECRET=your_relay_source_secret
+TELEGRAM_RELAY_TARGET_SECRET=your_relay_target_secret
 ```
 
 ## Локальный запуск
@@ -144,3 +149,9 @@ curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
 curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 ```
 5. В боте отправьте `/start`, затем нажмите «Войти» и отправьте одним сообщением: `<логин> <пароль>`.
+
+### Relay webhook нового бота через Render
+
+Отдельный endpoint `POST /api/telegram-relay` пересылает update в основной сервис и не вызывает обработчики Telegram-бота. По умолчанию endpoint выключен и отвечает `404`. Для Render задайте `TELEGRAM_RELAY_ENABLED=true`, HTTPS-адрес `TELEGRAM_RELAY_TARGET_URL` и `TELEGRAM_RELAY_SOURCE_SECRET`; при необходимости проверки на целевом webhook также задайте `TELEGRAM_RELAY_TARGET_SECRET`, совпадающий с `TELEGRAM_WEBHOOK_SECRET` на Timeweb. Webhook нового бота регистрируется вручную с `secret_token`, равным `TELEGRAM_RELAY_SOURCE_SECRET`.
+
+На Timeweb `TELEGRAM_RELAY_ENABLED` не задавайте (либо задайте `false`). Relay ждёт ответ целевого сервиса до 12 секунд: целевой `2xx` превращается в `200`, а ошибка соединения, timeout или неуспешный ответ превращается в `5xx`, чтобы Telegram мог повторить доставку.
