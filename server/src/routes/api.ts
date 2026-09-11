@@ -7,6 +7,7 @@ import { taskAttachmentController } from '../controllers/task-attachment.control
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
 import { telegramController } from '../controllers/telegram.controller.js';
+import { telegramRelayController } from '../controllers/telegram-relay.controller.js';
 import { telegramService } from '../services/telegram.service.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
 import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.service.js';
@@ -755,4 +756,5 @@ apiRouter.post('/timeline/ai-optimize', requireAuth, aiController.optimizeTimeli
 apiRouter.post('/timeline/ai-optimize/apply', requireAuth, aiController.applyTimelineOptimization);
 apiRouter.post('/timeline/overdue-postpone-ai', requireAuth, aiController.postponeOverdueWithAi);
 
+apiRouter.post('/telegram-relay', telegramRelayController.webhook);
 apiRouter.post('/telegram/webhook', telegramController.webhook);
