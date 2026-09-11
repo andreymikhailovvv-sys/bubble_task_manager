@@ -27,12 +27,20 @@ PORT=4000
 DATABASE_URL="file:./dev.db"
 CLIENT_DIST_PATH=../client/dist
 OPENAI_API_KEY=your_openai_api_key
+# Опциональный исходящий прокси только для запросов к OpenAI
+# OPENAI_PROXY_URL=http://1.2.3.4:8080
+# OPENAI_PROXY_USERNAME=proxy_user
+# OPENAI_PROXY_PASSWORD=proxy_password
 # Опционально: переопределить модель (по умолчанию gpt-5.4-mini, быстрый режим)
 # OPENAI_MODEL=gpt-5.4-mini
 # Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
 # OPENAI_MODEL_FULL=gpt-5.4
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+# Опциональный исходящий прокси только для Telegram Bot API
+# TELEGRAM_PROXY_URL=http://1.2.3.4:8080
+# TELEGRAM_PROXY_USERNAME=proxy_user
+# TELEGRAM_PROXY_PASSWORD=proxy_password
 # Username бота без @, используется для QR/deep-link подключения аккаунта
 TELEGRAM_BOT_USERNAME=your_bot_username_without_at
 # Опционально, но рекомендуется для защиты webhook
@@ -45,6 +53,13 @@ TELEGRAM_RELAY_TARGET_URL=https://planirovych.ru/api/telegram/webhook
 TELEGRAM_RELAY_SOURCE_SECRET=your_relay_source_secret
 TELEGRAM_RELAY_TARGET_SECRET=your_relay_target_secret
 ```
+
+Если `OPENAI_PROXY_URL` не задан или пуст, запросы к OpenAI выполняются напрямую.
+При заданном URL только обращения к OpenAI отправляются через этот прокси. Если
+`TELEGRAM_PROXY_URL` не задан или пуст, Telegram Bot API и загрузка файлов из
+Telegram также работают напрямую; при заданном URL через него идут только эти
+исходящие запросы. Логин и пароль каждого прокси задаются отдельной парой env,
+а при ошибке прокси автоматического перехода на прямое соединение нет.
 
 ## Локальный запуск
 1. Установка зависимостей:
