@@ -95,6 +95,7 @@ const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-5
 const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
 const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-5.4-nano';
 const OTHER_AI_MODEL = process.env.OPENAI_MODEL_OTHER?.trim() || 'gpt-5-nano';
+export const MAX_ASSISTANT_ACTIONS = 50;
 const SMART_MODEL_FALLBACKS = [FAST_MODEL];
 const AI_CHAT_MODEL_BY_OPTION: Record<AiChatModel, string> = {
   'gpt-5.4-nano': AI_CHAT_MODEL_NANO,
@@ -632,7 +633,7 @@ function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | n
     .slice(0, 6000);
 }
 
-function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
+export function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   const parsed = extractJsonObjectFromText(rawAnswer);
   if (parsed === null) {
     return {
@@ -805,7 +806,7 @@ function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; acti
       return null;
     })
     .filter((action): action is GeneralAssistantAction => Boolean(action))
-    .slice(0, 8);
+    .slice(0, MAX_ASSISTANT_ACTIONS);
 
   return { answer, actions: normalizedActions };
 }
@@ -1436,6 +1437,7 @@ export const aiAssistantService = {
       'Не показывай технические идентификаторы как обычный текст: они разрешены только внутри метки [[task_ref=...]] и внутри массива actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
+      `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
       'Текст пользователю пиши только в answer.'
     ].join(' ');
