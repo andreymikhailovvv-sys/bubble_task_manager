@@ -4990,6 +4990,16 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   color: #f8fafc;
 }
 
+/* Global themed textarea styles add an input background.  The task title and
+   description are intentionally borderless parts of the editor surface. */
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-title-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-description-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-title-input:focus,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-description-input:focus {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .miniapp-shell:not(.miniapp-light) .miniapp-focus-description-surface {
   border-color: rgba(139, 92, 246, 0.3);
   background: rgba(15, 23, 42, 0.68);
