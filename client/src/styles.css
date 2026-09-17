@@ -4962,6 +4962,86 @@ body[data-theme='dark'] .focused-task-editor-shell .focused-subtask-row:hover {
   color: #334155;
 }
 
+/* Mini app dialogs use an explicit light design above.  Keep those rules from
+   leaking into Telegram's dark colour scheme and give every editor the same
+   deep, softly elevated surface. */
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-task-settings-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-create-settings-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel {
+  border-color: rgba(139, 92, 246, 0.42);
+  background: linear-gradient(155deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.99) 62%, rgba(30, 27, 75, 0.96));
+  color: #f8fafc;
+  box-shadow: 0 28px 80px rgba(2, 6, 23, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-task-settings-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-create-settings-panel {
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.76), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px) saturate(1.1);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-title-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-description-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .text-slate-950,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .text-slate-100,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .text-slate-200 {
+  color: #f8fafc;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-description-surface {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(15, 23, 42, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-date-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-task-text-field {
+  border-color: rgba(71, 85, 105, 0.9);
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel label,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .text-slate-300,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .text-slate-400 {
+  color: #cbd5e1;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel input:not([type='color']),
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-field,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-weekday-muted,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-stepper,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-reminder-chip,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-recurrence-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-duration-summary,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .bg-slate-800\/70 {
+  border-color: rgba(71, 85, 105, 0.82);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f1f5f9;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-counter-button,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-add-reminder,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-stepper-button,
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel label[aria-label='Выбрать свой цвет'],
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel button[aria-label='Закрыть окно'] {
+  border-color: rgba(71, 85, 105, 0.9);
+  background: rgba(30, 41, 59, 0.92);
+  color: #e2e8f0;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel .miniapp-habit-duration-option-active {
+  border-color: rgba(52, 211, 153, 0.72);
+  background: rgba(16, 185, 129, 0.18);
+  color: #d1fae5;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-create-task-sticky-action {
+  background: linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.94) 44%, #0f172a 100%);
+}
+
 .timeline-habit-chip:hover {
   background: linear-gradient(135deg, color-mix(in srgb, var(--habit-color, #22c55e) 28%, transparent), var(--timeline-control-bg));
   box-shadow: 0 10px 24px color-mix(in srgb, var(--habit-color, #22c55e) 18%, transparent), inset 0 0 16px color-mix(in srgb, var(--habit-color, #22c55e) 18%, transparent);
@@ -5467,6 +5547,55 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-composer-card .miniapp-
 /* Mini app AI chat refinement after review: compact header, site-like model cap and readable menu cards. */
 .miniapp-ai-chat-header {
   padding-block: 0.65rem !important;
+}
+
+/* Dark AI conversations: separate the thread, messages and composer without
+   introducing bright surfaces that glare inside Telegram's dark chrome. */
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-panel,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-dialog {
+  border-color: rgba(139, 92, 246, 0.32) !important;
+  background: radial-gradient(circle at 85% 0%, rgba(76, 29, 149, 0.2), transparent 32%), #0b1222 !important;
+  color: #f8fafc !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-header {
+  background: rgba(11, 18, 34, 0.72) !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-thread,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-thread {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(8, 15, 30, 0.99)) !important;
+  color: #e2e8f0;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-assistant,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-message-assistant {
+  border-color: rgba(139, 92, 246, 0.28) !important;
+  background: rgba(30, 41, 59, 0.88) !important;
+  color: #f1f5f9 !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-message-user {
+  border-color: rgba(56, 189, 248, 0.26) !important;
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.7), rgba(49, 46, 129, 0.76)) !important;
+  color: #f8fafc !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-composer-card {
+  border-color: rgba(71, 85, 105, 0.76);
+  background: rgba(30, 41, 59, 0.9);
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-input,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-input {
+  color: #f8fafc;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-input::placeholder,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-input::placeholder {
+  color: #94a3b8;
 }
 
 .miniapp-ai-chat-model-cap {
