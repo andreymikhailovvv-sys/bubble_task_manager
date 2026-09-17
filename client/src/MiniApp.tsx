@@ -588,6 +588,7 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
@@ -1239,8 +1240,9 @@ export default function MiniApp() {
     : sphereFilter === 'without-sphere'
       ? 'Без сектора'
       : (spheres.find((sphere) => sphere.id === sphereFilter)?.name ?? 'Без сектора');
-  const toggleDisplayMode = () => {
-    setDisplayMode((prev) => (prev === 'list' ? 'timeline' : 'list'));
+  const selectDisplayMode = (mode: DisplayMode) => {
+    setDisplayMode(mode);
+    setIsDisplayModeMenuOpen(false);
   };
   const efficiencyScore = currentUser?.efficiencyScore ?? 0;
   const formattedEfficiencyScore = efficiencyScore.toFixed(1).replace(/\.0$/, '');
@@ -2435,9 +2437,20 @@ export default function MiniApp() {
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="flex items-center gap-3">
-              <button type="button" onClick={toggleDisplayMode} className="miniapp-mode-switch" aria-label="Переключить на таймлайн">
-                режим: список
-              </button>
+              <div className="miniapp-mode-control">
+                <span>Режим:</span>
+                <div className="relative">
+                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
+                    список <ChevronDown size={13} />
+                  </button>
+                  {isDisplayModeMenuOpen ? (
+                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
+                      <button type="button" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
@@ -2558,9 +2571,20 @@ export default function MiniApp() {
 
           <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
             <div className="flex items-center justify-between gap-3">
-              <button type="button" onClick={toggleDisplayMode} className="miniapp-mode-switch" aria-label="Переключить на список">
-                режим: таймлайн
-              </button>
+              <div className="miniapp-mode-control">
+                <span>Режим:</span>
+                <div className="relative">
+                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
+                    таймлайн <ChevronDown size={13} />
+                  </button>
+                  {isDisplayModeMenuOpen ? (
+                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
+                      <button type="button" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
                 {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
                   <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
