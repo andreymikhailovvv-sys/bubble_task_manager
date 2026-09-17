@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api } from './lib/api';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -588,6 +588,7 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
+  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
@@ -601,7 +602,7 @@ export default function MiniApp() {
   const [hasHomeScreenApi, setHasHomeScreenApi] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
-  const [timelineView, setTimelineView] = useState<TimelineView>('day');
+  const [timelineView, setTimelineView] = useState<TimelineView>('month');
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
@@ -668,6 +669,8 @@ export default function MiniApp() {
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [aiCredits, setAiCredits] = useState(100);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
   const [aiChatDraft, setAiChatDraft] = useState('');
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
@@ -720,6 +723,7 @@ export default function MiniApp() {
         console.info(`[MiniApp] Используем Telegram initData (length=${initData.length})`);
         const { user } = await api.loginTelegramMiniApp({ initData });
         setAiCredits(user.aiCredits ?? 100);
+        setCurrentUser(user);
         tgWindow.Telegram?.WebApp?.ready?.();
         tgWindow.Telegram?.WebApp?.expand?.();
       } else {
@@ -1236,9 +1240,18 @@ export default function MiniApp() {
     : sphereFilter === 'without-sphere'
       ? 'Без сектора'
       : (spheres.find((sphere) => sphere.id === sphereFilter)?.name ?? 'Без сектора');
-  const toggleDisplayMode = () => {
-    setDisplayMode((prev) => (prev === 'list' ? 'timeline' : 'list'));
+  const selectDisplayMode = (mode: DisplayMode) => {
+    setDisplayMode(mode);
+    setIsDisplayModeMenuOpen(false);
   };
+  const efficiencyScore = currentUser?.efficiencyScore ?? 0;
+  const formattedEfficiencyScore = efficiencyScore.toFixed(1).replace(/\.0$/, '');
+  const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
+  const efficiencyGradeMessage = efficiencyScore < 30
+    ? 'Средний рейтинг. Сделайте следующий маленький шаг.'
+    : efficiencyScore < 70
+      ? 'Хороший рейтинг. Так держать.'
+      : 'Отличный рейтинг! Продолжай в том же духе.';
 
   const openTaskModal = (task: Task) => {
     setDraftByTaskId((drafts) => ({
@@ -1614,7 +1627,8 @@ export default function MiniApp() {
 
   const recordMiniAppEfficiencyBonus = async (delta: number) => {
     try {
-      await api.recordEfficiencyEvent({ delta, bucket: 'habit' });
+      const updatedRating = await api.recordEfficiencyEvent({ delta, bucket: 'habit' });
+      setCurrentUser((user) => user ? { ...user, ...updatedRating } : user);
     } catch (error) {
       console.error('Failed to persist mini app efficiency bonus', error);
     }
@@ -2272,16 +2286,16 @@ export default function MiniApp() {
               </div>
               <button
                 type="button"
-                onClick={toggleDisplayMode}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-sky-500/10"
-                aria-label={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
-                title={displayMode === 'list' ? 'Переключить на таймлайн' : 'Переключить на список'}
+                onClick={() => setIsEfficiencyDetailsOpen((open) => !open)}
+                className="miniapp-efficiency-button inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors"
+                aria-label={`Рейтинг эффективности: ${formattedEfficiencyScore} из 100`}
+                aria-expanded={isEfficiencyDetailsOpen}
+                title={`Текущий рейтинг: ${formattedEfficiencyScore}/100`}
               >
-                {displayMode === 'list' ? (
-                  <List size={16} className="text-sky-400" />
-                ) : (
-                  <CalendarDays size={16} className="text-sky-400" />
-                )}
+                <svg width="30" height="30" viewBox="0 0 72 72" aria-hidden="true" className="miniapp-efficiency-orb">
+                  <defs><linearGradient id="miniEffFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="miniEffRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs>
+                  <circle cx="36" cy="36" r="25" fill="url(#miniEffFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.32)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#miniEffRing)" strokeWidth="5" strokeLinecap="round" pathLength="100" strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#miniEffFill)" />
+                </svg>
               </button>
               <button
                 type="button"
@@ -2292,6 +2306,20 @@ export default function MiniApp() {
               >
                 <Settings size={16} className="text-amber-400" />
               </button>
+              {isEfficiencyDetailsOpen ? (
+                <div className="miniapp-efficiency-popover absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border p-4 text-xs shadow-2xl backdrop-blur">
+                  <div className="text-center">
+                    <div className="miniapp-efficiency-score tabular-nums">{formattedEfficiencyScore}/100</div>
+                    <p className="mt-1 text-sm font-semibold">{efficiencyGradeMessage}</p>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    <div className="miniapp-efficiency-row"><span>Задачи</span><b>+{formatRatingDelta(currentUser?.efficiencyTaskScore ?? 0)} рейтинга</b></div>
+                    <div className="miniapp-efficiency-row"><span>Привычки</span><b>+{formatRatingDelta(currentUser?.efficiencyHabitScore ?? 0)} рейтинга</b></div>
+                    <div className="miniapp-efficiency-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
+                    <div className="miniapp-efficiency-row miniapp-efficiency-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(currentUser?.efficiencyFocusScore ?? 0)} рейтинга</b></div>
+                  </div>
+                </div>
+              ) : null}
               {isSettingsOpen ? (
                 <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -2409,7 +2437,20 @@ export default function MiniApp() {
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold tracking-tight">Список задач</h2>
+              <div className="miniapp-mode-control">
+                <span>Режим:</span>
+                <div className="relative">
+                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
+                    список <ChevronDown size={13} />
+                  </button>
+                  {isDisplayModeMenuOpen ? (
+                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
+                      <button type="button" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
@@ -2530,7 +2571,20 @@ export default function MiniApp() {
 
           <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold tracking-tight">Таймлайн задач</h2>
+              <div className="miniapp-mode-control">
+                <span>Режим:</span>
+                <div className="relative">
+                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
+                    таймлайн <ChevronDown size={13} />
+                  </button>
+                  {isDisplayModeMenuOpen ? (
+                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
+                      <button type="button" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
               <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
                 {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
                   <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
