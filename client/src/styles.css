@@ -2105,15 +2105,37 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 .miniapp-efficiency-row-focus { border-color: rgba(244, 114, 182, 0.3); background: rgba(131, 24, 67, 0.18); }
 
 body[data-theme='light'] .miniapp-shell .miniapp-mode-switch,
-.miniapp-shell.miniapp-light .miniapp-mode-switch { border-color: rgba(124, 58, 237, 0.35); color: #6d28d9; background: rgba(237, 233, 254, 0.9); }
+.miniapp-shell.miniapp-light .miniapp-mode-switch {
+  border-color: rgba(109, 40, 217, 0.5);
+  color: #5b21b6 !important;
+  background: #f3e8ff;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-mode-switch:hover,
+.miniapp-shell.miniapp-light .miniapp-mode-switch:hover {
+  color: #4c1d95 !important;
+  background: #e9d5ff !important;
+}
 body[data-theme='light'] .miniapp-shell .miniapp-mode-control,
-.miniapp-shell.miniapp-light .miniapp-mode-control { color: #64748b; }
+.miniapp-shell.miniapp-light .miniapp-mode-control { color: #334155; }
 body[data-theme='light'] .miniapp-shell .miniapp-mode-menu,
-.miniapp-shell.miniapp-light .miniapp-mode-menu { border-color: rgba(139, 92, 246, 0.25); color: #334155; background: rgba(255, 255, 255, 0.98); }
+.miniapp-shell.miniapp-light .miniapp-mode-menu { border-color: rgba(109, 40, 217, 0.32); color: #0f172a; background: rgba(255, 255, 255, 0.99); }
+body[data-theme='light'] .miniapp-shell .miniapp-mode-menu button,
+.miniapp-shell.miniapp-light .miniapp-mode-menu button { color: #0f172a !important; }
+body[data-theme='light'] .miniapp-shell .miniapp-mode-menu button.is-active,
+.miniapp-shell.miniapp-light .miniapp-mode-menu button.is-active {
+  color: #4c1d95 !important;
+  background: #e9d5ff !important;
+}
 body[data-theme='light'] .miniapp-shell .miniapp-efficiency-popover,
-.miniapp-shell.miniapp-light .miniapp-efficiency-popover { border-color: rgba(139, 92, 246, 0.25); color: #1e293b; background: rgba(255, 255, 255, 0.97); }
+.miniapp-shell.miniapp-light .miniapp-efficiency-popover { border-color: rgba(109, 40, 217, 0.32); color: #0f172a; background: rgba(255, 255, 255, 0.99); }
+body[data-theme='light'] .miniapp-shell .miniapp-efficiency-score,
+.miniapp-shell.miniapp-light .miniapp-efficiency-score { color: #6d28d9 !important; text-shadow: none; }
+body[data-theme='light'] .miniapp-shell .miniapp-efficiency-popover p,
+.miniapp-shell.miniapp-light .miniapp-efficiency-popover p { color: #0f172a !important; }
 body[data-theme='light'] .miniapp-shell .miniapp-efficiency-row,
-.miniapp-shell.miniapp-light .miniapp-efficiency-row { border-color: rgba(203, 213, 225, 0.9); background: rgba(248, 250, 252, 0.95); }
+.miniapp-shell.miniapp-light .miniapp-efficiency-row { border-color: #cbd5e1; color: #1e293b; background: #f8fafc; }
+body[data-theme='light'] .miniapp-shell .miniapp-efficiency-row b,
+.miniapp-shell.miniapp-light .miniapp-efficiency-row b { color: #6d28d9 !important; }
 
 .miniapp-timeline-view-switch {
   display: inline-flex;
@@ -2293,15 +2315,17 @@ body[data-theme='light'] .miniapp-shell .miniapp-efficiency-row,
 .miniapp-calendar-more { padding-left: 0.25rem; color: #a78bfa; font-size: 0.6rem; font-weight: 700; }
 
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch { border-color: rgba(203, 213, 225, 0.95); background: rgba(241, 245, 249, 0.9); }
-body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button { color: #64748b; }
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button,
+.miniapp-shell.miniapp-light .miniapp-timeline-view-switch button { color: #334155 !important; opacity: 1; }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active { color: white; }
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active,
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-view-switch button.is-active:hover,
 .miniapp-shell.miniapp-light .miniapp-timeline-view-switch button.is-active,
 .miniapp-shell.miniapp-light .miniapp-timeline-view-switch button.is-active:hover {
   color: #ffffff !important;
-  background: #7c3aed !important;
-  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.3);
+  background: #6d28d9 !important;
+  box-shadow: 0 3px 10px rgba(109, 40, 217, 0.35);
+  opacity: 1;
 }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-day { border-color: rgba(203, 213, 225, 0.9); background: rgba(248, 250, 252, 0.9); }
 body[data-theme='light'] .miniapp-shell .miniapp-calendar-day.is-today { border-color: rgba(124, 58, 237, 0.65); background: rgba(245, 243, 255, 0.95); }
