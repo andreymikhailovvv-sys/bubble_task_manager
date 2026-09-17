@@ -2086,7 +2086,7 @@ body[data-theme='light'] .miniapp-shell button[class*='bg-violet-600'] {
 .miniapp-mode-switch:active { transform: scale(0.97); }
 .miniapp-mode-switch:hover { background: rgba(124, 58, 237, 0.24); box-shadow: 0 4px 14px rgba(124, 58, 237, 0.18); }
 .miniapp-mode-menu { border-color: rgba(139, 92, 246, 0.42); color: #e2e8f0; background: rgba(15, 23, 42, 0.98); }
-.miniapp-mode-menu button { display: block; width: 100%; border-radius: 0.55rem; padding: 0.45rem 0.6rem; text-align: left; font-size: 0.75rem; font-weight: 700; }
+.miniapp-mode-menu button { display: flex; width: 100%; align-items: center; gap: 0.45rem; border-radius: 0.55rem; padding: 0.45rem 0.6rem; text-align: left; font-size: 0.75rem; font-weight: 700; }
 .miniapp-mode-menu button:hover { background: rgba(124, 58, 237, 0.18); }
 .miniapp-mode-menu button.is-active { color: #ddd6fe; background: rgba(124, 58, 237, 0.28); }
 

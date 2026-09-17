@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Smartphone, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -2441,12 +2441,12 @@ export default function MiniApp() {
                 <span>Режим:</span>
                 <div className="relative">
                   <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
-                    список <ChevronDown size={13} />
+                    <List size={14} aria-hidden="true" /> Список <ChevronDown size={13} />
                   </button>
                   {isDisplayModeMenuOpen ? (
                     <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
-                      <button type="button" className="is-active" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
-                      <button type="button" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('list')} role="menuitem"><List size={14} aria-hidden="true" /> Список</button>
+                      <button type="button" onClick={() => selectDisplayMode('timeline')} role="menuitem"><CalendarDays size={14} aria-hidden="true" /> Таймлайн</button>
                     </div>
                   ) : null}
                 </div>
@@ -2575,12 +2575,12 @@ export default function MiniApp() {
                 <span>Режим:</span>
                 <div className="relative">
                   <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
-                    таймлайн <ChevronDown size={13} />
+                    <CalendarDays size={14} aria-hidden="true" /> Таймлайн <ChevronDown size={13} />
                   </button>
                   {isDisplayModeMenuOpen ? (
                     <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
-                      <button type="button" onClick={() => selectDisplayMode('list')} role="menuitem">Список</button>
-                      <button type="button" className="is-active" onClick={() => selectDisplayMode('timeline')} role="menuitem">Таймлайн</button>
+                      <button type="button" onClick={() => selectDisplayMode('list')} role="menuitem"><List size={14} aria-hidden="true" /> Список</button>
+                      <button type="button" className="is-active" onClick={() => selectDisplayMode('timeline')} role="menuitem"><CalendarDays size={14} aria-hidden="true" /> Таймлайн</button>
                     </div>
                   ) : null}
                 </div>
