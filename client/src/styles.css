@@ -3465,7 +3465,7 @@ body[data-theme='light'] .subscription-eyebrow {
 }
 
 .focus-subtask-list {
-  max-height: 16rem;
+  max-height: 19rem;
 }
 
 @media (max-height: 760px) {
@@ -3474,7 +3474,7 @@ body[data-theme='light'] .subscription-eyebrow {
   }
 
   .focus-subtask-list {
-    max-height: 11rem;
+    max-height: 13rem;
   }
 
   .focus-card-peek {

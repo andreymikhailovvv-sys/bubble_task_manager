@@ -807,6 +807,7 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [isAiFileDragActive, setIsAiFileDragActive] = useState(false);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
+  const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatError, setAiChatError] = useState<string | null>(null);
@@ -2322,6 +2323,7 @@ ${allContext}`,
       setAiChatPendingFiles([]);
     }
     setAiChatLoading(true);
+    if (quick) setQuickAiChatLoading(true);
     setAiChatError(null);
     try {
       const attachments = quick ? [] : await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file)));
@@ -2347,6 +2349,7 @@ ${allContext}`,
       setAiChatError(message);
     } finally {
       setAiChatLoading(false);
+      if (quick) setQuickAiChatLoading(false);
     }
   };
 
@@ -3628,7 +3631,10 @@ ${allContext}`,
       }}
     >
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
-        <h1 className="mr-3 text-xl font-semibold">Bubble Task Manager</h1>
+        <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
+          <img src="/favicon.png?v=3" alt="" className="h-7 w-7 rounded-md" />
+          <span>Планировыч AI</span>
+        </h1>
         <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
         {currentUser.username ? (
           <div className="rounded bg-emerald-700/80 px-2 py-1 text-xs">Аккаунт: {currentUser.username}</div>
@@ -6479,7 +6485,7 @@ ${allContext}`,
             </div>
             <div className="flex gap-2">
               <input className="form-field min-w-0 flex-1 rounded-full border px-3 py-2 text-sm transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
-              <button className="rounded-full bg-violet-600 p-2 text-white shadow-lg transition hover:bg-violet-500 hover:shadow-violet-500/30 disabled:opacity-50" disabled={aiChatLoading || !quickAiChatDraft.trim()} onClick={() => void sendAiChatQuestion(true)}><SendHorizontal size={16} /></button>
+              <button className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 p-2 text-white shadow-lg transition hover:bg-violet-500 hover:shadow-violet-500/30 disabled:opacity-50" title={quickAiChatLoading ? 'Ожидание ответа ИИ' : 'Отправить'} aria-label={quickAiChatLoading ? 'Ожидание ответа ИИ' : 'Отправить'} disabled={aiChatLoading || !quickAiChatDraft.trim()} onClick={() => void sendAiChatQuestion(true)}>{quickAiChatLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
           </div>
         </div>
