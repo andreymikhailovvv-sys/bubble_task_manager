@@ -107,6 +107,8 @@ type AdminUser = {
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
+  getSystemNotifications: () => request<{ notifications: Array<{ id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
+  markSystemNotificationsRead: () => request<{ ok: true }>('/api/system-notifications/read', { method: 'POST' }),
   saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
     method: 'PUT',
     body: JSON.stringify({ projects })

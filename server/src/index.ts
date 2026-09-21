@@ -77,13 +77,11 @@ app.get('*', (_, res) => {
 
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
-if (telegramService.isEnabled()) {
-  setInterval(() => {
-    telegramService.notifyShiningTasks().catch((error) => {
-      console.error('[Telegram] notifyShiningTasks failed', error);
-    });
-  }, telegramPollIntervalMs).unref();
-}
+setInterval(() => {
+  telegramService.notifyShiningTasks().catch((error) => {
+    console.error('[Notifications] notifyShiningTasks failed', error);
+  });
+}, telegramPollIntervalMs).unref();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const DEFAULT_CHECKUP_TIME = '10:00';
