@@ -1222,6 +1222,25 @@ body[data-theme='light'] .backdrop-blur-sm {
     background: var(--overlay-bg);
   }
 
+  @keyframes system-notification-toast-life {
+    0% {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+    8%, 82% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(0.25rem);
+    }
+  }
+
+  .system-notification-toast {
+    animation: system-notification-toast-life 5s ease-in-out both;
+  }
+
   .timeline-preview-month-cell-active:hover,
   .timeline-preview-month-cell-selected {
     border-color: color-mix(in srgb, var(--accent) 70%, var(--timeline-grid-border));

@@ -80,6 +80,7 @@ model User {
   taskAttachments TaskAttachment[]
   telegramSessions TelegramSession[]
   habits       Habit[]
+  systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -170,6 +171,20 @@ model GeneralAiMessage {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model SystemNotification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId    String?
+  eventKey  String   @unique
+  content   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
 
 

@@ -723,6 +723,26 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
   res.json({ projects: user?.aiChatProjects ?? null });
 }));
 
+apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {
+  const [notifications, unreadCount] = await Promise.all([
+    prisma.systemNotification.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    }),
+    prisma.systemNotification.count({ where: { userId: req.user!.id, readAt: null } })
+  ]);
+  res.json({ notifications: notifications.reverse(), unreadCount });
+}));
+
+apiRouter.post('/system-notifications/read', requireAuth, asyncHandler(async (req, res) => {
+  await prisma.systemNotification.updateMany({
+    where: { userId: req.user!.id, readAt: null },
+    data: { readAt: new Date() }
+  });
+  res.json({ ok: true });
+}));
+
 apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
   const projects = req.body?.projects;
   if (!Array.isArray(projects)) {

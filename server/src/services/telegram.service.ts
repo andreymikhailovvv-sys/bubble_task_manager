@@ -1645,18 +1645,16 @@ export const telegramService = {
     }
   },
   async notifyShiningTasks() {
-    if (!BOT_TOKEN) return;
-
     const now = new Date();
     const tasks = await prisma.task.findMany({
       where: {
         status: { not: 'DONE' },
         dueDate: { not: null },
         notifyBeforeMinutes: { not: null },
-        user: { telegramChatId: { not: null } }
       },
       select: {
         id: true,
+        title: true,
         parentTaskId: true,
         dueDate: true,
         notifyBeforeMinutes: true,
@@ -1674,9 +1672,31 @@ export const telegramService = {
         ? diffMs <= 0
         : diffMs > 0 && diffMs <= notifyWindowMs;
 
+      const notificationKind = diffMs <= 0 ? 'overdue' : isShining ? 'upcoming' : null;
+      if (notificationKind) {
+        const dueKey = task.dueDate?.toISOString() ?? 'no-date';
+        const totalMinutes = Math.max(1, Math.ceil(diffMs / 60_000));
+        const timeLeft = totalMinutes < 60
+          ? `${totalMinutes} мин.`
+          : `${Math.floor(totalMinutes / 60)} ч.${totalMinutes % 60 ? ` ${totalMinutes % 60} мин.` : ''}`;
+        const content = notificationKind === 'overdue'
+          ? `🚨 Задача «${task.title}» просрочена.`
+          : `⏰ До дедлайна задачи «${task.title}» осталось ${timeLeft}`;
+        await prisma.systemNotification.create({
+          data: {
+            userId: task.userId,
+            taskId: task.id,
+            eventKey: `${task.id}:${dueKey}:${notificationKind}`,
+            content
+          }
+        }).catch((error: unknown) => {
+          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
+        });
+      }
+
       if (isShining && !task.telegramNotifiedAt) {
         const text = await getTaskNotificationText(task.id, task.userId);
-        if (text && task.user.telegramChatId) {
+        if (BOT_TOKEN && text && task.user.telegramChatId) {
           await sendMessage(task.user.telegramChatId, text, keyboardMain(task.parentTaskId ?? task.id));
           await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: now } });
         }
@@ -1687,14 +1707,14 @@ export const telegramService = {
       }
     }
 
-    const habits = await prisma.habit.findMany({
+    const habits = BOT_TOKEN ? await prisma.habit.findMany({
       where: {
         isArchived: false,
         isAutoCompleted: false,
         user: { telegramChatId: { not: null } }
       },
       include: { user: { select: { telegramChatId: true, timeZone: true } } }
-    });
+    }) : [];
 
     for (const habit of habits) {
       const chatId = habit.user.telegramChatId;
