@@ -297,7 +297,8 @@ type GeneralAiUndoOperation = {
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
 };
 type GeneralAiMessage = ChatMessage & { id: string };
-type AiChatMessage = ChatMessage & { id: string };
+type AiChatMessage = ChatMessage & { id: string; createdAt?: string };
+type SystemNotification = { id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
 type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
 type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
@@ -811,6 +812,10 @@ export default function App() {
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatError, setAiChatError] = useState<string | null>(null);
+  const [systemNotifications, setSystemNotifications] = useState<SystemNotification[]>([]);
+  const [unreadSystemNotificationCount, setUnreadSystemNotificationCount] = useState(0);
+  const [systemNotificationToast, setSystemNotificationToast] = useState<SystemNotification | null>(null);
+  const knownSystemNotificationIdsRef = useRef<Set<string>>(new Set());
   const [aiChatProjects, setAiChatProjects] = useState<AiChatProject[]>(() => {
     try {
       const parsedProjects = JSON.parse(localStorage.getItem('btm:ai-chat-projects') || '[]') as Array<Partial<AiChatProject>>;
@@ -2265,6 +2270,48 @@ ${allContext}`,
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
   const quickAiChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
+  const quickAiChatTimeline = useMemo(() => [
+    ...quickAiChatMessages.map((message, index) => ({ kind: 'message' as const, timestamp: message.createdAt ? new Date(message.createdAt).getTime() : index, message })),
+    ...systemNotifications.map((notification) => ({ kind: 'notification' as const, timestamp: new Date(notification.createdAt).getTime(), notification }))
+  ].sort((left, right) => left.timestamp - right.timestamp), [quickAiChatMessages, systemNotifications]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    let toastTimer: number | null = null;
+    const loadNotifications = async () => {
+      try {
+        const result = await api.getSystemNotifications();
+        if (cancelled) return;
+        const newestUnseen = [...result.notifications].reverse().find((notification) => !knownSystemNotificationIdsRef.current.has(notification.id));
+        result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
+        setSystemNotifications(result.notifications);
+        setUnreadSystemNotificationCount(result.unreadCount);
+        if (newestUnseen && newestUnseen.readAt == null) {
+          setSystemNotificationToast(newestUnseen);
+          if (toastTimer !== null) window.clearTimeout(toastTimer);
+          toastTimer = window.setTimeout(() => setSystemNotificationToast(null), 5000);
+        }
+      } catch (error) {
+        console.error('[System notifications] load failed', error);
+      }
+    };
+    void loadNotifications();
+    const interval = window.setInterval(loadNotifications, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      if (toastTimer !== null) window.clearTimeout(toastTimer);
+      knownSystemNotificationIdsRef.current.clear();
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!isAiChatOpen || activeAiChat?.id !== QUICK_AI_CHAT_ID || unreadSystemNotificationCount === 0) return;
+    setUnreadSystemNotificationCount(0);
+    setSystemNotifications((notifications) => notifications.map((notification) => ({ ...notification, readAt: notification.readAt ?? new Date().toISOString() })));
+    void api.markSystemNotificationsRead().catch((error) => console.error('[System notifications] mark read failed', error));
+  }, [isAiChatOpen, activeAiChat?.id, unreadSystemNotificationCount]);
 
   useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
@@ -2294,7 +2341,7 @@ ${allContext}`,
   useEffect(() => {
     const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
     return () => window.cancelAnimationFrame(frameId);
-  }, [quickAiChatMessages.length, aiChatLoading]);
+  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading]);
 
   useEffect(() => {
     aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
@@ -2312,7 +2359,7 @@ ${allContext}`,
     if ((!question && (quick || aiChatPendingFiles.length === 0)) || aiChatLoading) return;
     const fileNames = quick ? [] : aiChatPendingFiles.map((file) => file.name);
     const userContent = fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question;
-    const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent };
+    const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString() };
     const history = quick ? quickAiChatMessages : (activeAiChat?.messages ?? []);
     if (quick) {
       setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, userMessage].slice(-20) } : chat) } : project));
@@ -2339,7 +2386,7 @@ ${allContext}`,
       const serviceReport = result.delegatedToPlanner && actionReports.length > 0
         ? `\n\nОтчёт сервиса:\n- ${actionReports.join('\n- ')}`
         : '';
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}${serviceReport}` };
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString() };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();
@@ -3159,7 +3206,7 @@ ${allContext}`,
       return date.toLocaleString('ru-RU', { timeZone: userTz, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
     const appendSystemGeneralAiMessage = (text: string) => {
-      const systemMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}` };
+      const systemMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `ℹ️ Системное уведомление\n${text}`, createdAt: new Date().toISOString() };
       setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, systemMessage].slice(-20) } : chat) } : project));
     };
     const focusMovedTaskOnTimeline = (taskId: string) => {
@@ -6476,12 +6523,17 @@ ${allContext}`,
         <div className="pointer-events-none absolute bottom-14 right-0 w-80 translate-y-2 opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100">
           <div className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
             <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
-              {quickAiChatMessages.map((message) => (
-                <div key={message.id} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
-                  <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(message.content)}
+              {quickAiChatTimeline.slice(-30).map((item) => item.kind === 'notification' ? (
+                <div key={`notification-${item.notification.id}`} className="mr-6 rounded-2xl border border-amber-300/50 bg-amber-50 px-3 py-2 text-slate-800 shadow-sm">
+                  <b className="mb-0.5 block text-[10px] uppercase tracking-wide text-amber-700">⚙️ Системное уведомление</b>
+                  {item.notification.content}
+                </div>
+              ) : (
+                <div key={`message-${item.message.id}`} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
+                  <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}
                 </div>
               ))}
-              {quickAiChatMessages.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
+              {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
             </div>
             <div className="flex gap-2">
               <input className="form-field min-w-0 flex-1 rounded-full border px-3 py-2 text-sm transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
@@ -6494,8 +6546,18 @@ ${allContext}`,
           className="ai-chat-launcher-button flex h-14 w-14 touch-none select-none items-center justify-center rounded-full text-2xl text-white shadow-2xl transition duration-200 hover:scale-105 hover:shadow-violet-500/40 active:scale-95"
           title="Чат с ИИ"
           onClick={() => { setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}
-        >✦</button>
+        >
+          {unreadSystemNotificationCount > 0 ? <span className="absolute -left-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-bold leading-none text-white shadow-lg">{unreadSystemNotificationCount > 99 ? '99+' : unreadSystemNotificationCount}</span> : null}
+          ✦
+        </button>
       </div>
+
+      {systemNotificationToast ? (
+        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[135] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-amber-300/60 bg-slate-950/95 px-4 py-3 text-left text-sm text-white shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>
+          <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">⚙️ Системное уведомление</span>
+          <span className="leading-snug">{systemNotificationToast.content}</span>
+        </button>
+      ) : null}
 
       {isAiChatProjectDialogOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[145] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiChatProjectDialogOpen(false)}>
@@ -6530,7 +6592,7 @@ ${allContext}`,
                 </div>
                 <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.messages ?? []).map((message) => <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${message.id}`, message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(message.content)}</div></div></div>)}
+                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="max-w-[78%] rounded-3xl rounded-bl-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-slate-800 shadow-lg"><p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed">{item.notification.content}</div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 shadow-lg ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
                 </div>

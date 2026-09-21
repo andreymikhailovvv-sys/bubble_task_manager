@@ -1010,6 +1010,17 @@ export default function MiniApp() {
   };
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
+  const timelinePickerTasks = useMemo(() => tasks.map((task) => {
+    const colorSourceTask = task.parentTaskId ? taskById.get(task.parentTaskId) ?? task : task;
+    return {
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      isSubtask: Boolean(task.parentTaskId),
+      sphereColor: spheres.find((sphere) => sphere.id === colorSourceTask.sphereId)?.color ?? '#64748b',
+      taskType: task.taskType
+    };
+  }), [spheres, taskById, tasks]);
 
   const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && isOverdue(task)), [tasks]);
 
@@ -2937,7 +2948,7 @@ export default function MiniApp() {
                   <DateTimePickerWithApply
                     value={fromInputDateTime(openedTaskDraft.dueDate)}
                     onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
-                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    timelineTasks={timelinePickerTasks}
                     iconOnly
                     detachedPopup
                     buttonClassName="miniapp-focus-icon-button"
@@ -3076,7 +3087,7 @@ export default function MiniApp() {
               <DateTimePickerWithApply
                 value={fromInputDateTime(openedSubtaskDraft.dueDate)}
                 onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })}
-                timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                timelineTasks={timelinePickerTasks}
                 iconOnly
                 detachedPopup
                 buttonClassName="miniapp-focus-icon-button"
@@ -3742,7 +3753,7 @@ export default function MiniApp() {
                   <DateTimePickerWithApply
                     value={fromInputDateTime(createTaskDraft.dueDate)}
                     onChange={(nextValue) => setCreateTaskDraft((prev) => ({ ...prev, dueDate: toInputDateTime(nextValue) }))}
-                    timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                    timelineTasks={timelinePickerTasks}
                     iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button"
                   />
                   <span>{createTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(createTaskDraft.dueDate)}` : 'До дедлайна: выберите дату'}</span>
@@ -3849,7 +3860,7 @@ export default function MiniApp() {
                                   ...prev,
                                   subtasks: (prev.subtasks ?? []).map((item) => item.id === subtask.id ? { ...item, dueDate: toInputDateTime(nextValue) } : item)
                                 }))}
-                                timelineTasks={tasks.map((task) => ({ id: task.id, title: task.title, dueDate: task.dueDate, isSubtask: Boolean(task.parentTaskId), sphereColor: spheres.find((sphere) => sphere.id === task.sphereId)?.color ?? null, taskType: task.taskType }))}
+                                timelineTasks={timelinePickerTasks}
                                 iconOnly
                                 detachedPopup
                                 buttonClassName="miniapp-focus-icon-button"
