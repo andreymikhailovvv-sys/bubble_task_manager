@@ -1252,7 +1252,8 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   .timeline-preview-subtask-pill {
-    background: color-mix(in srgb, var(--muted-bg) 88%, var(--text-subtle));
+    border: 1px solid color-mix(in srgb, var(--text-subtle) 30%, transparent);
+    background: color-mix(in srgb, var(--muted-bg) 82%, transparent);
     color: var(--text-primary);
   }
 
