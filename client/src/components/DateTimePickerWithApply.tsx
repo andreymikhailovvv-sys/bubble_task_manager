@@ -371,7 +371,7 @@ export function DateTimePickerWithApply({
                         {dayTasks.slice(0, 3).map((task) => {
                           const isEvent = task.taskType === 'EVENT';
                           return (
-                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1 py-0.5 text-[9px] leading-tight ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                            <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1 py-0.5 text-[9px] leading-tight ${isEvent ? 'timeline-preview-event-pill' : 'text-white'}`} style={isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                               {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                               {task.title}
                             </div>
@@ -416,7 +416,7 @@ export function DateTimePickerWithApply({
                               {tasks.length === 0 ? <p className="text-xs text-subtle">Свободно</p> : tasks.map((task) => {
                                 const isEvent = task.taskType === 'EVENT';
                                 return (
-                                  <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : task.isSubtask ? 'timeline-preview-subtask-pill' : 'text-white'}`} style={task.isSubtask || isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
+                                  <div key={task.id} className={`timeline-preview-task-pill truncate rounded px-1.5 py-0.5 text-[10px] ${isEvent ? 'timeline-preview-event-pill' : 'text-white'}`} style={isEvent ? undefined : { backgroundColor: task.sphereColor ?? '#334155' }}>
                                     {isEvent ? <Ticket size={10} className="mr-1 inline align-[-2px]" /> : task.isSubtask ? <span className="mr-1 inline-block h-2 w-0.5 rounded-sm align-middle" style={{ backgroundColor: task.sphereColor ?? '#94a3b8' }} /> : null}
                                     {task.title}
                                   </div>
