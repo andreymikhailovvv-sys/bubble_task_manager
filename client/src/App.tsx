@@ -2337,7 +2337,7 @@ ${allContext}`,
   useEffect(() => {
     const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
     return () => window.cancelAnimationFrame(frameId);
-  }, [quickAiChatMessages.length, aiChatLoading]);
+  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading]);
 
   useEffect(() => {
     aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
@@ -6524,7 +6524,13 @@ ${allContext}`,
                   <b>{message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(message.content)}
                 </div>
               ))}
-              {quickAiChatMessages.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
+              {systemNotifications.slice(-10).map((notification) => (
+                <div key={notification.id} className="mr-6 rounded-2xl border border-amber-300/50 bg-amber-50 px-3 py-2 text-slate-800 shadow-sm">
+                  <b className="mb-0.5 block text-[10px] uppercase tracking-wide text-amber-700">⚙️ Системное уведомление</b>
+                  {notification.content}
+                </div>
+              ))}
+              {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
             </div>
             <div className="flex gap-2">
               <input className="form-field min-w-0 flex-1 rounded-full border px-3 py-2 text-sm transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />
@@ -6544,7 +6550,7 @@ ${allContext}`,
       </div>
 
       {systemNotificationToast ? (
-        <button type="button" className="fixed bottom-8 left-6 z-[135] w-[min(22rem,calc(100vw-3rem))] animate-[fadeIn_.2s_ease-out] rounded-2xl border border-amber-300/60 bg-slate-950/95 px-4 py-3 text-left text-sm text-white shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>
+        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[135] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-amber-300/60 bg-slate-950/95 px-4 py-3 text-left text-sm text-white shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>
           <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.16em] text-amber-300">⚙️ Системное уведомление</span>
           <span className="leading-snug">{systemNotificationToast.content}</span>
         </button>
