@@ -2314,6 +2314,44 @@ ${allContext}`,
   }, [isAiChatOpen, activeAiChat?.id, unreadSystemNotificationCount]);
 
   useEffect(() => {
+    if (!currentUser) return;
+    let cancelled = false;
+    let toastTimer: number | null = null;
+    const loadNotifications = async () => {
+      try {
+        const result = await api.getSystemNotifications();
+        if (cancelled) return;
+        const newestUnseen = [...result.notifications].reverse().find((notification) => !knownSystemNotificationIdsRef.current.has(notification.id));
+        result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
+        setSystemNotifications(result.notifications);
+        setUnreadSystemNotificationCount(result.unreadCount);
+        if (newestUnseen && newestUnseen.readAt == null) {
+          setSystemNotificationToast(newestUnseen);
+          if (toastTimer !== null) window.clearTimeout(toastTimer);
+          toastTimer = window.setTimeout(() => setSystemNotificationToast(null), 5000);
+        }
+      } catch (error) {
+        console.error('[System notifications] load failed', error);
+      }
+    };
+    void loadNotifications();
+    const interval = window.setInterval(loadNotifications, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      if (toastTimer !== null) window.clearTimeout(toastTimer);
+      knownSystemNotificationIdsRef.current.clear();
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!isAiChatOpen || activeAiChat?.id !== QUICK_AI_CHAT_ID || unreadSystemNotificationCount === 0) return;
+    setUnreadSystemNotificationCount(0);
+    setSystemNotifications((notifications) => notifications.map((notification) => ({ ...notification, readAt: notification.readAt ?? new Date().toISOString() })));
+    void api.markSystemNotificationsRead().catch((error) => console.error('[System notifications] mark read failed', error));
+  }, [isAiChatOpen, activeAiChat?.id, unreadSystemNotificationCount]);
+
+  useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
