@@ -3709,7 +3709,7 @@ ${allContext}`,
     >
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
-          <img src="/favicon.png?v=3" alt="" className="h-7 w-7 rounded-md" />
+          <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
         </h1>
         <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
@@ -4408,6 +4408,10 @@ ${allContext}`,
                                 ? 'list-task-item-ai'
                                 : ''
                     }`}
+                    style={{
+                      borderLeftWidth: '4px',
+                      borderLeftColor: sphereColor
+                    }}
                     title={taskSphere?.name ?? 'Без сектора'}
                     onContextMenu={(event) => {
                       event.preventDefault();
@@ -4434,7 +4438,7 @@ ${allContext}`,
                     {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
                     <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <span className={`min-w-0 flex-1 truncate font-medium ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
+                        <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
                         </span>
                         {task.isRecurring ? <span title="Повторяющаяся задача"><Repeat size={13} className="list-task-repeat-icon shrink-0" /></span> : null}
