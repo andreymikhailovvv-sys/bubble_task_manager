@@ -1256,9 +1256,10 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   .system-notification-task-button {
-    width: 7rem;
-    max-width: 44%;
+    width: 9.25rem;
+    max-width: 58%;
     min-width: 0;
+    white-space: nowrap;
     vertical-align: middle;
   }
 
