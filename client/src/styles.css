@@ -1255,6 +1255,11 @@ body[data-theme='light'] .backdrop-blur-sm {
     color: #b45309;
   }
 
+  .system-notification-task-button {
+    max-width: min(7.5rem, 48%);
+    vertical-align: middle;
+  }
+
   body[data-theme='dark'] .system-notification-toast,
   body[data-theme='dark'] .system-notification-message {
     border-color: rgba(251, 191, 36, 0.34);

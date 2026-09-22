@@ -310,19 +310,22 @@ function SystemNotificationContent({ notification, tasks, onOpenTask }: { notifi
   if (!task || !notification.content.includes(task.title)) return <>{notification.content}</>;
 
   const [beforeTitle, ...afterTitleParts] = notification.content.split(task.title);
+  const textBeforeButton = beforeTitle.replace(/[«"]\s*$/, '').replace(/^🚨\s*/, '🚨');
+  const textAfterButton = afterTitleParts.join(task.title).replace(/^\s*[»"]\s*/, ' ');
+  const isOverdueNotification = textAfterButton.trimStart().startsWith('просрочена');
   return (
     <>
-      {beforeTitle}
+      {textBeforeButton}
       <button
         type="button"
-        className="inline-flex max-w-full items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 align-middle text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        className="system-notification-task-button inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 align-middle text-[11px] font-semibold text-white transition hover:bg-cyan-500"
         onClick={() => onOpenTask(task.id)}
         title={`Открыть задачу: ${task.title}`}
       >
         <ArrowUpRight size={12} className="shrink-0" />
-        <span className="max-w-40 truncate">{task.title}</span>
+        <span className="min-w-0 truncate">{task.title}</span>
       </button>
-      {afterTitleParts.join(task.title)}
+      {isOverdueNotification ? <><br />{textAfterButton.trimStart()}</> : textAfterButton}
     </>
   );
 }
