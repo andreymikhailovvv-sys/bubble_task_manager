@@ -1239,6 +1239,38 @@ body[data-theme='light'] .backdrop-blur-sm {
 
   .system-notification-toast {
     animation: system-notification-toast-life 5s ease-in-out both;
+    border-color: rgba(217, 119, 6, 0.38);
+    background: rgba(255, 251, 235, 0.97);
+    color: #334155;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
+  }
+
+  .system-notification-message {
+    border-color: rgba(217, 119, 6, 0.34);
+    background: #fffbeb;
+    color: #334155;
+  }
+
+  .system-notification-label {
+    color: #b45309;
+  }
+
+  .system-notification-task-button {
+    width: 7rem;
+    max-width: 44%;
+    min-width: 0;
+    vertical-align: middle;
+  }
+
+  body[data-theme='dark'] .system-notification-toast,
+  body[data-theme='dark'] .system-notification-message {
+    border-color: rgba(251, 191, 36, 0.34);
+    background: rgba(30, 41, 59, 0.97);
+    color: #f8fafc;
+  }
+
+  body[data-theme='dark'] .system-notification-label {
+    color: #fcd34d;
   }
 
   .timeline-preview-month-cell-active:hover,
