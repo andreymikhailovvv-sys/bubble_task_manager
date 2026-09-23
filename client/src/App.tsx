@@ -3765,7 +3765,7 @@ ${allContext}`,
         </button>
       </header>
 
-      <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
+      {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
         <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
           {DISPLAY_MODE_OPTIONS.map((option) => (
             <button
@@ -3952,7 +3952,7 @@ ${allContext}`,
           ) : null}
           </div>
         </div>
-      </section>
+      </section> : null}
 
 
       {isFocusSetupOpen ? (

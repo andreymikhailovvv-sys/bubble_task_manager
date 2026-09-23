@@ -1,6 +1,11 @@
 import { prisma } from '../db/prisma.js';
 
 const MAX_SPHERES = 8;
+const normalizeGeneralPrompt = (value: unknown) => {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') return null;
+  return value.trim().slice(0, 4000) || null;
+};
 
 export const sphereService = {
   list: (userId: string) => prisma.sphere.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -14,6 +19,7 @@ export const sphereService = {
         name: input.name,
         color: input.color ?? '#60a5fa',
         icon: input.icon,
+        generalPrompt: normalizeGeneralPrompt(input.generalPrompt),
         userId
       }
     });
@@ -25,7 +31,8 @@ export const sphereService = {
       data: {
         name: input.name,
         color: input.color,
-        icon: input.icon
+        icon: input.icon,
+        generalPrompt: normalizeGeneralPrompt(input.generalPrompt)
       }
     });
   },
