@@ -30,6 +30,30 @@ enum TelegramSessionMode {
   AI_CHAT
 }
 
+enum TelegramUpdateJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model TelegramUpdateJob {
+  id                  String                  @id @default(cuid())
+  updateId            BigInt                  @unique
+  payload             Json
+  status              TelegramUpdateJobStatus @default(PENDING)
+  attempts            Int                     @default(0)
+  nextAttemptAt       DateTime                @default(now())
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  lastError           String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([status, processingStartedAt])
+}
+
 enum HabitRecurrenceType {
   DAILY
   INTERVAL

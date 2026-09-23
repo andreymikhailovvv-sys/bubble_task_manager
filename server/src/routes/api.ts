@@ -777,4 +777,4 @@ apiRouter.post('/timeline/ai-optimize/apply', requireAuth, aiController.applyTim
 apiRouter.post('/timeline/overdue-postpone-ai', requireAuth, aiController.postponeOverdueWithAi);
 
 apiRouter.post('/telegram-relay', telegramRelayController.webhook);
-apiRouter.post('/telegram/webhook', telegramController.webhook);
+apiRouter.post('/telegram/webhook', asyncHandler(telegramController.webhook));
