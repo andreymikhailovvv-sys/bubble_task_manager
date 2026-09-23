@@ -1,4 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prismaPackage from '@prisma/client';
+
+const { PrismaClient } = prismaPackage;
 
 const isProduction = process.env.NODE_ENV === 'production';
 
