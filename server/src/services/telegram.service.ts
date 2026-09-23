@@ -1642,6 +1642,7 @@ export const telegramService = {
       console.info('[Telegram] ignored update without message/callback_query');
     } catch (error) {
       console.error('[Telegram] Failed to process update', error);
+      throw error;
     }
   },
   async notifyShiningTasks() {

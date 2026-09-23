@@ -10,6 +10,7 @@ import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
 import { aiAssistantService } from './services/ai-assistant.service.js';
+import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -154,3 +155,18 @@ setInterval(() => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server started on http://0.0.0.0:${port}`);
 });
+
+const telegramUpdateWorker = new TelegramUpdateWorker(
+  telegramUpdateQueue,
+  (payload) => telegramService.processWebhookUpdate(payload as Parameters<typeof telegramService.processWebhookUpdate>[0])
+);
+const runTelegramWorker = () => telegramUpdateWorker.drain().catch((error) => {
+  console.error('[TelegramWorker] polling failed', error);
+});
+telegramUpdateQueue.recoverStaleJobs()
+  .then((count) => {
+    if (count > 0) console.info(`[TelegramWorker] recovered jobs=${count}`);
+    return runTelegramWorker();
+  })
+  .catch((error) => console.error('[TelegramWorker] recovery failed', error));
+setInterval(runTelegramWorker, Number(process.env.TELEGRAM_WORKER_POLL_INTERVAL_MS ?? 1_000)).unref();
