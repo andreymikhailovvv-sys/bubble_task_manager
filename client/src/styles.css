@@ -4699,15 +4699,15 @@ body[data-theme='light'] .ai-chat-message-assistant {
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
 }
 
-/* Expanded AI chat stays visually consistent while avoiding large painted
-   shadow areas and backdrop filters during message-list scrolling. */
-.ai-chat-expanded-backdrop {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+/* Keep the expanded chat itself opaque and lightweight while the standard
+   modal backdrop provides visual separation from the page behind it. */
+.ai-chat-expanded {
+  background: linear-gradient(135deg, #ffffff, #f5f3ff 55%, #ede9fe);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
 }
 
-.ai-chat-expanded {
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+body[data-theme='dark'] .ai-chat-expanded {
+  background: radial-gradient(circle at 18% 12%, #312e81, #0f172a 34%, #020617 70%, #1e1b4b);
 }
 
 .ai-chat-expanded .ai-chat-message-bubble,

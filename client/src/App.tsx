@@ -6609,7 +6609,7 @@ ${allContext}`,
       ) : null}
 
       {isAiChatOpen ? (
-        <div className="ai-chat-expanded-backdrop modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4" onClick={() => setIsAiChatOpen(false)}>
+        <div className="modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiChatOpen(false)}>
           <div className="ai-chat-expanded focus-mode-shell grid h-[min(820px,calc(100vh-32px))] w-full max-w-6xl grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-3xl border" onClick={(e) => e.stopPropagation()}>
             <aside className="focus-side-panel flex min-h-0 flex-col gap-3 border-r p-4">
               <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Проекты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-violet-100" onClick={openAiChatProjectDialog}><Plus size={14} /></button></div>
