@@ -435,6 +435,11 @@ apiRouter.get('/subscription-links', async (_req, res) => {
   res.json({ links: Object.fromEntries(SUBSCRIPTION_PLAN_KEYS.map((key) => [key, links.find((link) => link.planKey === key)?.url ?? ''])) });
 });
 
+apiRouter.get('/product-updates', async (_req, res) => {
+  const blocks = await prisma.productUpdateBlock.findMany({ orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] });
+  res.json({ blocks });
+});
+
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
@@ -499,6 +504,23 @@ apiRouter.post('/admin/subscription-links', async (req, res) => {
   })));
 
   res.json({ links });
+});
+
+apiRouter.post('/admin/product-updates', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const rawBlocks = Array.isArray(req.body?.blocks) ? req.body.blocks : [];
+  if (rawBlocks.length > 50) return void res.status(400).json({ error: 'Можно сохранить не более 50 блоков' });
+  const blocks = rawBlocks.map((block: any, position: number) => ({
+    text: String(block?.text ?? '').trim().slice(0, 10_000),
+    imageData: typeof block?.imageData === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(block.imageData) ? block.imageData : null,
+    position
+  }));
+  if (blocks.some((block: { imageData: string | null }) => (block.imageData?.length ?? 0) > 8_000_000)) return void res.status(400).json({ error: 'Изображение слишком большое' });
+  await prisma.$transaction(async (tx) => {
+    await tx.productUpdateBlock.deleteMany();
+    if (blocks.length) await tx.productUpdateBlock.createMany({ data: blocks });
+  });
+  res.json({ blocks: await prisma.productUpdateBlock.findMany({ orderBy: { position: 'asc' } }) });
 });
 
 apiRouter.post('/admin/users/:userId/credits', async (req, res) => {

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { api, type SubscriptionLinks } from './lib/api';
+import { api, type ProductUpdateBlock, type SubscriptionLinks } from './lib/api';
 
 type AdminUser = {
   id: string;
@@ -21,15 +21,18 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState(false);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [subscriptionLinksSaving, setSubscriptionLinksSaving] = useState(false);
+  const [updateBlocks, setUpdateBlocks] = useState<ProductUpdateBlock[]>([]);
+  const [updatesSaving, setUpdatesSaving] = useState(false);
 
   async function loadUsers(event?: FormEvent) {
     event?.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const [response, linksResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks()]);
+      const [response, linksResponse, updatesResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks(), api.getProductUpdates()]);
       setUsers(response.users);
       setSubscriptionLinks(linksResponse.links);
+      setUpdateBlocks(updatesResponse.blocks);
       if (response.users.length > 0 && !selectedUserId) {
         setSelectedUserId(response.users[0].id);
       }
@@ -38,6 +41,21 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveUpdates(event: FormEvent) {
+    event.preventDefault(); setError(''); setUpdatesSaving(true);
+    try { setUpdateBlocks((await api.adminSaveProductUpdates({ password, blocks: updateBlocks })).blocks); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Не удалось сохранить новости'); }
+    finally { setUpdatesSaving(false); }
+  }
+
+  function selectUpdateImage(index: number, file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setError('Можно прикреплять только изображения'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setUpdateBlocks((blocks) => blocks.map((block, i) => i === index ? { ...block, imageData: String(reader.result) } : block));
+    reader.readAsDataURL(file);
   }
 
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
@@ -108,6 +126,12 @@ export default function AdminPage() {
         </form>
 
         {error ? <div className="rounded-md border border-rose-500/60 bg-rose-500/10 p-3 text-sm text-rose-100">{error}</div> : null}
+
+        <form onSubmit={saveUpdates} className="rounded-2xl border border-cyan-400/25 bg-gradient-to-br from-slate-900 to-violet-950/40 p-5 shadow-xl">
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-xl font-black">Новости и изменения</h2><p className="mt-1 text-xs text-slate-400">Каждый блок — отдельный фрагмент текста с необязательным изображением под ним.</p></div><button type="button" className="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-bold" onClick={() => setUpdateBlocks((blocks) => [...blocks, { text: '', imageData: null }])}>+ Добавить блок</button></div>
+          <div className="mt-4 space-y-3">{updateBlocks.map((block, index) => <div key={block.id ?? index} className="rounded-xl border border-white/10 bg-slate-950/50 p-3"><textarea rows={4} className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm" placeholder="Текст новости…" value={block.text} onChange={(event) => setUpdateBlocks((blocks) => blocks.map((item, i) => i === index ? { ...item, text: event.target.value } : item))}/>{block.imageData && <img src={block.imageData} alt="Предпросмотр" className="mt-3 max-h-48 rounded-lg"/>}<div className="mt-3 flex flex-wrap gap-2"><label className="cursor-pointer rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold">Прикрепить изображение<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(event) => selectUpdateImage(index, event.target.files?.[0])}/></label>{block.imageData && <button type="button" className="rounded-lg bg-slate-700 px-3 py-2 text-xs" onClick={() => setUpdateBlocks((blocks) => blocks.map((item, i) => i === index ? { ...item, imageData: null } : item))}>Удалить изображение</button>}<button type="button" className="ml-auto rounded-lg bg-rose-700 px-3 py-2 text-xs" onClick={() => setUpdateBlocks((blocks) => blocks.filter((_, i) => i !== index))}>Удалить блок</button></div></div>)}</div>
+          <button type="submit" disabled={updatesSaving} className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold disabled:opacity-50">{updatesSaving ? 'Сохранение…' : 'Опубликовать изменения'}</button>
+        </form>
 
 
         <form onSubmit={saveSubscriptionLinks} className="rounded-xl border border-fuchsia-400/25 bg-gradient-to-br from-slate-900/90 to-fuchsia-950/30 p-4 shadow-xl">

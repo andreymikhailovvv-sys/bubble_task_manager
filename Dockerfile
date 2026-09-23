@@ -1,18 +1,37 @@
-FROM node:22-slim
+FROM node:22-bookworm-slim AS build
 
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+# Этот слой переиспользуется, пока не изменятся package-манифесты.
+COPY package.json package-lock.json ./
+COPY client/package.json ./client/package.json
+COPY server/package.json ./server/package.json
+RUN npm ci
+
+COPY client ./client
+COPY server ./server
+RUN npm run build
+
+FROM node:22-bookworm-slim AS runtime
+
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY client/package.json ./client/package.json
 COPY server/package.json ./server/package.json
+RUN npm ci --omit=dev \
+  && npm cache clean --force
 
-RUN npm ci
+COPY --from=build /app/server/prisma ./server/prisma
+COPY --from=build /app/server/scripts ./server/scripts
+RUN npm run prisma:generate --workspace server
 
-COPY . .
-
-RUN npm run build
+COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/server/dist ./server/dist
 
 ENV NODE_ENV=production
 ENV PORT=4000
