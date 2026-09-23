@@ -774,6 +774,32 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
+  const prepareUpdatesTour = useCallback((tourMode: string) => {
+    if (tourMode === 'add') setIsAddMenuOpen(true);
+    if (tourMode === 'bubbles') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('bubbles');
+      setTimelineCreateMenu(null);
+    }
+    if (tourMode === 'timeline') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('timeline');
+      setTimelineViewMode('day');
+      const date = new Date();
+      date.setHours(10, 0, 0, 0);
+      setTimelineCreateMenu({
+        x: Math.min(window.innerWidth - 240, 340),
+        y: Math.min(window.innerHeight - 300, 360),
+        date,
+        hour: 10,
+        minute: 0
+      });
+    }
+    if (tourMode === 'ai' || tourMode === 'finish') {
+      setIsAddMenuOpen(false);
+      setTimelineCreateMenu(null);
+    }
+  }, []);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
   const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
