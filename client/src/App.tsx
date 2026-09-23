@@ -4101,7 +4101,7 @@ ${allContext}`,
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
-            <aside className="focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
+            <aside className="ai-chat-lightweight focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
                 <div className="flex items-center gap-1.5">
@@ -4118,15 +4118,15 @@ ${allContext}`,
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
               {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-              <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur"><textarea rows={1} className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
+              <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2"><textarea rows={1} className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
             </aside>
           </div>
         </div>
       ) : null}
 
       {isFocusModeOpen && isFocusAiExpanded && focusActiveTask ? (
-        <div className="fixed inset-0 z-[151] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm" onClick={() => setIsFocusAiExpanded(false)}>
-          <div className="dialog-surface relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[151] flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setIsFocusAiExpanded(false)}>
+          <div className="ai-chat-lightweight ai-chat-lightweight-panel dialog-surface relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноразмерный диалог режима концентрации</p>
@@ -4145,7 +4145,7 @@ ${allContext}`,
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
-            <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+            <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
               <textarea rows={1} className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
               <input ref={focusAiExpandedFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} />
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiExpandedFileInputRef.current?.click()}><Paperclip size={16} /></button>
@@ -5503,7 +5503,7 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+        <aside className="ai-chat-lightweight app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
               <div className="absolute right-4 top-4 z-20 flex items-center gap-1.5">
                 <button
                   className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
@@ -5572,7 +5572,7 @@ ${allContext}`,
                 </div>
               ) : null}
               {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
-              <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2">
               <textarea
                 rows={1}
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -6257,8 +6257,8 @@ ${allContext}`,
       ) : null}
 
       {focusedTask && isAiExpanded ? (
-        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
-          <div className="app-card relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5 shadow-[0_35px_100px_rgba(2,6,23,0.95)]" onClick={(event) => event.stopPropagation()}>
+        <div className="ai-chat-lightweight-backdrop modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setIsAiExpanded(false)}>
+          <div className="ai-chat-lightweight ai-chat-lightweight-panel app-card relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
@@ -6315,7 +6315,7 @@ ${allContext}`,
               {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-muted">ИИ думает…</p> : null}
             </div>
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
-            <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+            <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <textarea rows={1} className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
               <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" type="button" title="Прикрепить файл" onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
