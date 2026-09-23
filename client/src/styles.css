@@ -4699,6 +4699,67 @@ body[data-theme='light'] .ai-chat-message-assistant {
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
 }
 
+/* Expanded AI chat stays visually consistent while avoiding large painted
+   shadow areas and backdrop filters during message-list scrolling. */
+.ai-chat-expanded-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.ai-chat-expanded {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+}
+
+.ai-chat-expanded .ai-chat-message-bubble,
+.ai-chat-expanded .system-notification-message {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1) !important;
+}
+
+.ai-chat-expanded .ai-chat-composer {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.ai-chat-expanded .ai-chat-model-cap-button {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.ai-chat-lightweight-backdrop {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.ai-chat-lightweight-panel {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14) !important;
+}
+
+.ai-chat-lightweight .chat-message {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+
+.ai-chat-lightweight .ai-chat-composer {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.ai-chat-lightweight .ai-chat-model-cap-button {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.focused-task-ai-panel.ai-chat-lightweight {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14) !important;
+}
+
+.ai-chat-lightweight button.bg-violet-600 {
+  box-shadow: 0 1px 3px rgba(76, 29, 149, 0.18) !important;
+}
+
 .ai-chat-message-label-user {
   color: rgba(245, 243, 255, 0.9);
 }
@@ -5426,6 +5487,29 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
   position: relative;
 }
 
+/* Keep the frequently scrolled general chat visually familiar, but avoid
+   expensive layered shadows and live blur repainting on every scroll frame. */
+.miniapp-ai-chat-panel-general,
+.miniapp-ai-chat-panel-task,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-general,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-panel-task,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel-task,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-panel-general {
+  box-shadow: none !important;
+}
+
+.miniapp-ai-chat-message-general,
+.miniapp-ai-chat-message-task {
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.1);
+}
+
+.miniapp-ai-chat-composer-card-general,
+.miniapp-ai-chat-composer-card-task {
+  box-shadow: 0 2px 8px rgba(2, 6, 23, 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .miniapp-ai-chat-header {
   position: absolute;
   top: 0;
@@ -5439,6 +5523,18 @@ body[data-theme='dark'] .focused-task-ai-icon-button-active {
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   transition: transform 220ms ease, opacity 180ms ease;
   will-change: transform;
+}
+
+.miniapp-ai-chat-header-general {
+  background: color-mix(in srgb, var(--app-card-bg, #0f172a) 94%, transparent) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.miniapp-ai-chat-header-task {
+  background: color-mix(in srgb, var(--app-card-bg, #0f172a) 94%, transparent) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .miniapp-ai-chat-header-hidden {
@@ -5506,6 +5602,13 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-header,
 .miniapp-shell.miniapp-light .miniapp-ai-chat-header {
   border: 0 !important;
   background: rgba(255, 255, 255, 0.54) !important;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-header-general,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-header-task,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-header-task,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-header-general {
+  background: rgba(255, 255, 255, 0.96) !important;
 }
 
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-empty,
@@ -5623,6 +5726,14 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-composer-card .miniapp-
 
 .miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-header {
   background: rgba(11, 18, 34, 0.72) !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-header-general {
+  background: rgba(11, 18, 34, 0.96) !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-header-task {
+  background: rgba(11, 18, 34, 0.96) !important;
 }
 
 .miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-thread,
