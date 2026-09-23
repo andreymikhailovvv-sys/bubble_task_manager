@@ -93,6 +93,7 @@ model Sphere {
   name      String
   color     String   @default("#60a5fa")
   icon      String?
+  generalPrompt String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks     Task[]

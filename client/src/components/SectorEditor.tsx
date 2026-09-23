@@ -15,16 +15,18 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
   const [name, setName] = useState('');
   const [color, setColor] = useState(HARMONIOUS_COLORS[0]);
   const [icon, setIcon] = useState('briefcase');
+  const [generalPrompt, setGeneralPrompt] = useState('');
 
   useEffect(() => {
     setName(sphere?.name ?? '');
     setColor(sphere?.color ?? HARMONIOUS_COLORS[0]);
     setIcon(sphere?.icon ?? 'briefcase');
+    setGeneralPrompt(sphere?.generalPrompt ?? '');
   }, [sphere]);
 
   return (
     <div className="modal-backdrop fixed inset-0 z-30 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onCancel}>
-      <aside className="modal-card relative w-full max-w-lg space-y-4 rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
+      <aside className="modal-card relative max-h-[calc(100vh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl border p-4" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={onCancel} aria-label="Закрыть окно"><X size={16} /></button>
         <h3 className="text-lg font-semibold text-primary">Настройка сектора</h3>
         <input className="form-field w-full rounded border p-2 text-sm" placeholder="Название сектора" value={name} onChange={(e) => setName(e.target.value)} />
@@ -56,7 +58,19 @@ export function SectorEditor({ sphere, onCancel, onSave }: Props) {
             ))}
           </div>
         </div>
-        <button className="primary-button w-full rounded px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon })}>Сохранить</button>
+        <div>
+          <label htmlFor="sector-general-prompt" className="mb-2 block text-sm font-medium text-primary">Общий промпт</label>
+          <p className="mb-2 text-xs leading-5 text-muted">Общая установка для общения с ИИ по всем задачам в этом секторе.</p>
+          <textarea
+            id="sector-general-prompt"
+            className="form-field min-h-28 w-full resize-y rounded border p-2 text-sm"
+            placeholder="Например: отвечай сжато, кратко и по делу."
+            value={generalPrompt}
+            maxLength={4000}
+            onChange={(e) => setGeneralPrompt(e.target.value)}
+          />
+        </div>
+        <button className="primary-button w-full rounded px-3 py-2 text-sm" onClick={() => onSave({ name, color, icon, generalPrompt: generalPrompt.trim() || null })}>Сохранить</button>
       </aside>
     </div>
   );

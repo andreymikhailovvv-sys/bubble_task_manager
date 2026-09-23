@@ -3,6 +3,7 @@ export type Sphere = {
   name: string;
   color: string;
   icon?: string | null;
+  generalPrompt?: string | null;
 };
 
 export type Task = {

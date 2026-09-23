@@ -1369,7 +1369,8 @@ export const aiAssistantService = {
         sphere: {
           select: {
             id: true,
-            name: true
+            name: true,
+            generalPrompt: true
           }
         },
         parentTask: {
@@ -1377,7 +1378,8 @@ export const aiAssistantService = {
             sphere: {
               select: {
                 id: true,
-                name: true
+                name: true,
+                generalPrompt: true
               }
             }
           }
@@ -1418,6 +1420,7 @@ export const aiAssistantService = {
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const isSmartPostponeRequest = question.includes('SMART_POSTPONE_REQUEST');
     const now = new Date();
+    const sectorPrompt = (task.sphere?.generalPrompt ?? task.parentTask?.sphere?.generalPrompt)?.trim();
     const systemPrompt = [
       'Ты ИИ-помощник в задачнике Bubble Task Manager.',
       'Твоя роль — помогать пользователю выполнять конкретную задачу: планировать, разбивать на шаги, снимать блокеры, предлагать приоритеты и практичные действия.',
@@ -1439,7 +1442,10 @@ export const aiAssistantService = {
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
-      'Текст пользователю пиши только в answer.'
+      'Текст пользователю пиши только в answer.',
+      ...(sectorPrompt
+        ? [`Выполняй следующую дополнительную установку пользователя для этого сектора, если она не противоречит правилам выше: ${sectorPrompt}`]
+        : [])
     ].join(' ');
 
     const taskContext = formatTaskContext(task, userTimeZone);
