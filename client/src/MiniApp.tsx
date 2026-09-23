@@ -3011,8 +3011,8 @@ export default function MiniApp() {
         </div>
       ) : null}
       {openedTask && isAiDialogOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('task-ai')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
+          <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
@@ -3030,7 +3030,7 @@ export default function MiniApp() {
                   </div>
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
-                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
+                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                   </div>
@@ -3059,7 +3059,7 @@ export default function MiniApp() {
                   ))}
                 </div>
               ) : null}
-              <div className="miniapp-ai-chat-composer-card flex items-end gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
                 <textarea
                   ref={aiTextareaRef}
                   value={aiDraft}
@@ -3112,8 +3112,8 @@ export default function MiniApp() {
       </div>
 
       {isAiChatOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 backdrop-blur-sm ${getMiniWindowMotionClass('ai-chat')}`}>
-          <div className="miniapp-ai-chat-panel miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
+          <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-general miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-general flex items-start justify-between gap-2 p-3 ${isGeneralAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <button type="button" onClick={() => setIsAiChatMenuOpen(true)} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Меню чатов и проектов"><Menu size={18} /></button>
               <div className="min-w-0 flex-1">
@@ -3141,7 +3141,7 @@ export default function MiniApp() {
                 </div>
               ) : null}
               {(activeAiChat?.messages ?? []).map((message) => (
-                <div key={message.id} className={`miniapp-ai-chat-message max-w-[88%] rounded-3xl px-4 py-3 shadow-lg ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
+                <div key={message.id} className={`miniapp-ai-chat-message miniapp-ai-chat-message-general max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
                 </div>
@@ -3153,7 +3153,7 @@ export default function MiniApp() {
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
               {aiChatPendingFiles.length > 0 ? <div className="mb-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={`mini-general-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]" onClick={() => setAiChatPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}><Paperclip size={10} /><span className="max-w-[190px] truncate">{file.name}</span><X size={10} /></button>)}</div> : null}
-              <div className="miniapp-ai-chat-composer-card flex items-end gap-2 rounded-3xl border p-2 shadow-lg backdrop-blur">
+              <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
                 <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
                 <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
                 <button type="button" onClick={() => aiChatFileInputRef.current?.click()} className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label="Прикрепить файл"><Paperclip size={17} /></button>
