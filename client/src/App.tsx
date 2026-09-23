@@ -1,6 +1,6 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Menu, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -16,6 +16,7 @@ import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
+import { UpdatesDrawer } from './components/UpdatesDrawer';
 
 const MAX_SPHERES = 8;
 
@@ -696,6 +697,7 @@ export default function App() {
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
 
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
   const copiedAiMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -772,6 +774,33 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
+  // Должен оставаться вместе с хуками выше условных return authLoading/currentUser.
+  const prepareUpdatesTour = useCallback((tourMode: string) => {
+    if (tourMode === 'add') setIsAddMenuOpen(true);
+    if (tourMode === 'bubbles') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('bubbles');
+      setTimelineCreateMenu(null);
+    }
+    if (tourMode === 'timeline') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('timeline');
+      setTimelineViewMode('day');
+      const date = new Date();
+      date.setHours(10, 0, 0, 0);
+      setTimelineCreateMenu({
+        x: Math.min(window.innerWidth - 240, 340),
+        y: Math.min(window.innerHeight - 300, 360),
+        date,
+        hour: 10,
+        minute: 0
+      });
+    }
+    if (tourMode === 'ai' || tourMode === 'finish') {
+      setIsAddMenuOpen(false);
+      setTimelineCreateMenu(null);
+    }
+  }, []);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
   const [listTaskContextMenu, setListTaskContextMenu] = useState<{ x: number; y: number; taskId: string } | null>(null);
   const [listTaskPostponeSubmenuOpen, setListTaskPostponeSubmenuOpen] = useState(false);
@@ -3766,7 +3795,8 @@ ${allContext}`,
       </header>
 
       {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
-        <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
+        <button type="button" onClick={() => setIsUpdatesOpen(true)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/30 bg-gradient-to-br from-violet-600 to-cyan-500 text-white shadow-lg transition hover:scale-105" title="Обновления и изменения" aria-label="Открыть меню обновлений"><Menu size={20}/></button>
+        <div className="display-mode-toggle-group ml-1 inline-flex shrink-0 items-center rounded-xl border p-1">
           {DISPLAY_MODE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -3847,7 +3877,7 @@ ${allContext}`,
           <button type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => setIsAddMenuOpen(false)}>
             <button className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
-            {isAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
+            {isAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button data-tour="new-task" className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button data-tour="new-event" className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button data-tour="new-sector" className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
           </div>
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
@@ -4886,6 +4916,7 @@ ${allContext}`,
                         {hourGroup.quarters.map((quarter) => (
                           <div
                             key={`${hourGroup.hour}-${quarter.minute}`}
+                            data-tour={hourGroup.hour === 10 && quarter.minute === 0 ? 'timeline-slot' : undefined}
                             className={`timeline-day-quarter-slot group relative px-2 transition-colors ${quarter.tasks.length > 0 ? 'timeline-day-quarter-slot-filled py-1.5' : 'timeline-day-quarter-slot-empty'} ${isTimelineDragging ? 'timeline-drop-target timeline-day-quarter-slot-drag-ready' : ''} ${activeTimelineDropSlot?.hour === hourGroup.hour && activeTimelineDropSlot.minute === quarter.minute ? 'timeline-day-quarter-slot-drag-active' : ''}`}
                             title={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
                             aria-label={`Слот ${String(hourGroup.hour).padStart(2, '0')}:${String(quarter.minute).padStart(2, '0')}`}
@@ -6550,6 +6581,7 @@ ${allContext}`,
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
       <div
+        data-tour="quick-ai"
         className="ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px]"
         onMouseEnter={() => { scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
         onFocus={scheduleQuickAiChatScrollToBottom}
@@ -6677,6 +6709,7 @@ ${allContext}`,
           </div>
         </div>
       ) : null}
+      <UpdatesDrawer open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} prepareTour={prepareUpdatesTour}/>
 </main>
   );
 }
