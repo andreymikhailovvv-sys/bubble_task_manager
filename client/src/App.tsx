@@ -3687,6 +3687,33 @@ ${allContext}`,
     } finally { setTimelineOptimizeLoading(false); }
   };
 
+  const prepareUpdatesTour = useCallback((tourMode: string) => {
+    if (tourMode === 'add') setIsAddMenuOpen(true);
+    if (tourMode === 'bubbles') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('bubbles');
+      setTimelineCreateMenu(null);
+    }
+    if (tourMode === 'timeline') {
+      setIsAddMenuOpen(false);
+      setDisplayMode('timeline');
+      setTimelineViewMode('day');
+      const date = new Date();
+      date.setHours(10, 0, 0, 0);
+      setTimelineCreateMenu({
+        x: Math.min(window.innerWidth - 240, 340),
+        y: Math.min(window.innerHeight - 300, 360),
+        date,
+        hour: 10,
+        minute: 0
+      });
+    }
+    if (tourMode === 'ai' || tourMode === 'finish') {
+      setIsAddMenuOpen(false);
+      setTimelineCreateMenu(null);
+    }
+  }, []);
+
   const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; minute?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
     if (!taskId) return;
