@@ -1472,6 +1472,7 @@ export default function App() {
     [subtaskMap, subtaskFilterMode]
   );
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT'), [rootTasks]);
+  const activeTimelineItems = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const focusCandidateTasks = useMemo(
     () => [...activeTasks].sort((a, b) => getTaskCoefficient(b) - getTaskCoefficient(a)),
     [activeTasks]
@@ -2740,7 +2741,7 @@ ${allContext}`,
 
   const visibleTasks = useMemo(
     () =>
-      activeTasks.filter((task) => {
+      (isTimelineMode ? activeTimelineItems : activeTasks).filter((task) => {
         const taskSubtasks = subtaskMap[task.id] ?? [];
         const parseDate = (value?: string | null) => {
           if (!value) return null;
@@ -2780,7 +2781,6 @@ ${allContext}`,
           return date >= start && date < end;
         };
 
-        if (!isTimelineMode && task.taskType === 'EVENT') return false;
         if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
@@ -2800,7 +2800,7 @@ ${allContext}`,
         }
         return true;
       }),
-    [activeTasks, effectiveTimeFilter, isTimelineMode, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
+    [activeTasks, activeTimelineItems, effectiveTimeFilter, isTimelineMode, search, selectedSphereIds, shouldApplySphereFilter, spheres.length, subtaskMap]
   );
   const visibleSpheres = useMemo(() => {
     if (selectedSphereIds.length === 0) return spheres;
