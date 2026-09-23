@@ -2947,8 +2947,8 @@ ${allContext}`,
     void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
     unmarkTaskAsClosing(task.id);
-    setEditorState(null);
-    setFocusedTaskId(null);
+    setEditorState((current) => current?.task?.id === task.id ? null : current);
+    setFocusedTaskId((current) => current === task.id ? null : current);
     await load();
   };
 
@@ -3022,13 +3022,13 @@ ${allContext}`,
         if (shouldCloseParent) {
           await api.updateTask(subtask.parentTaskId, { status: 'DONE' });
           void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
+          if (focusedTaskId === subtask.parentTaskId) {
+            setFocusedTaskId(null);
+            setFocusedDraft(null);
+          }
         }
       }
       await maybeSuggestParentDeadlineShift(subtask.parentTaskId);
-      if (parentCompleted && focusedTaskId === subtask.parentTaskId) {
-        setFocusedTaskId(null);
-        setFocusedDraft(null);
-      }
     }
     await load();
     unmarkTaskAsClosing(subtask.id);
