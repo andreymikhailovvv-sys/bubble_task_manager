@@ -6257,7 +6257,7 @@ ${allContext}`,
       ) : null}
 
       {focusedTask && isAiExpanded ? (
-        <div className="ai-chat-lightweight-backdrop modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setIsAiExpanded(false)}>
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
           <div className="ai-chat-lightweight ai-chat-lightweight-panel app-card relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <div>
