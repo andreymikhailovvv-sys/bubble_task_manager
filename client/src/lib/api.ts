@@ -93,6 +93,7 @@ export type CurrentUser = {
   efficiencyLastActivityAt?: string | Date | null;
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
+export type ProductUpdateBlock = { id?: string; text: string; imageData?: string | null; position?: number };
 
 type AdminUser = {
   id: string;
@@ -251,6 +252,7 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
+  getProductUpdates: () => request<{ blocks: ProductUpdateBlock[] }>('/api/product-updates'),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {
       method: 'POST',
@@ -261,6 +263,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  adminSaveProductUpdates: (payload: { password: string; blocks: ProductUpdateBlock[] }) =>
+    request<{ blocks: ProductUpdateBlock[] }>('/api/admin/product-updates', { method: 'POST', body: JSON.stringify(payload) }),
   adminAddCredits: (payload: { password: string; userId: string; creditsToAdd: number }) =>
     request<{ user: { id: string; aiCredits: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
       method: 'POST',
