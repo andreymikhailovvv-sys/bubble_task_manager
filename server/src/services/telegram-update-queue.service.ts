@@ -1,4 +1,4 @@
-import type { Prisma, TelegramUpdateJob } from '@prisma/client';
+import { Prisma, TelegramUpdateJob, TelegramUpdateJobStatus } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 
 export const TELEGRAM_JOB_MAX_ATTEMPTS = 3;
@@ -66,7 +66,7 @@ export class TelegramUpdateQueue {
       data: { status: 'PROCESSING', processingStartedAt: now, attempts: { increment: 1 }, lastError: null }
     });
     if (claimed.count === 0) return null;
-    return { ...candidate, status: 'PROCESSING', attempts: candidate.attempts + 1, processingStartedAt: now };
+    return { ...candidate, status: TelegramUpdateJobStatus.PROCESSING, attempts: candidate.attempts + 1, processingStartedAt: now };
   }
 
   async complete(job: TelegramUpdateJob): Promise<void> {

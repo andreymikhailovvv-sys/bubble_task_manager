@@ -1,8 +1,5 @@
-import prismaPackage from '@prisma/client';
-import type { Prisma as PrismaTypes } from '@prisma/client';
+import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-
-const { Prisma } = prismaPackage;
 
 interface TaskInput {
   title?: string;
@@ -188,7 +185,7 @@ export const taskService = {
     const currentTask = await prisma.task.findFirstOrThrow({
       where: { id, userId }
     });
-    const patch: PrismaTypes.TaskUpdateInput = {};
+    const patch: Prisma.TaskUpdateInput = {};
 
     if (input.title !== undefined) {
       patch.title = input.title;
