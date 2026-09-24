@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Menu, Edit3, Maximize2, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
@@ -3660,33 +3660,6 @@ ${allContext}`,
     } finally { setTimelineOptimizeLoading(false); }
   };
 
-  const prepareUpdatesTour = useCallback((tourMode: string) => {
-    if (tourMode === 'add') setIsAddMenuOpen(true);
-    if (tourMode === 'bubbles') {
-      setIsAddMenuOpen(false);
-      setDisplayMode('bubbles');
-      setTimelineCreateMenu(null);
-    }
-    if (tourMode === 'timeline') {
-      setIsAddMenuOpen(false);
-      setDisplayMode('timeline');
-      setTimelineViewMode('day');
-      const date = new Date();
-      date.setHours(10, 0, 0, 0);
-      setTimelineCreateMenu({
-        x: Math.min(window.innerWidth - 240, 340),
-        y: Math.min(window.innerHeight - 300, 360),
-        date,
-        hour: 10,
-        minute: 0
-      });
-    }
-    if (tourMode === 'ai' || tourMode === 'finish') {
-      setIsAddMenuOpen(false);
-      setTimelineCreateMenu(null);
-    }
-  }, []);
-
   const handleTimelineTaskDrop = async (target: { date: Date; hour?: number; minute?: number; keepOriginalTime?: boolean }) => {
     const taskId = draggedTimelineTaskId;
     if (!taskId) return;
@@ -6709,7 +6682,17 @@ ${allContext}`,
           </div>
         </div>
       ) : null}
-      <UpdatesDrawer open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} prepareTour={prepareUpdatesTour}/>
+      <UpdatesDrawer open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} prepareTour={(tourMode) => {
+        if (tourMode === 'add') setIsAddMenuOpen(true);
+        if (tourMode === 'bubbles') { setIsAddMenuOpen(false); setDisplayMode('bubbles'); }
+        if (tourMode === 'timeline') {
+          setIsAddMenuOpen(false); setDisplayMode('timeline'); setTimelineViewMode('day');
+          const date = new Date(); date.setHours(10, 0, 0, 0);
+          setTimelineCreateMenu({ x: Math.min(window.innerWidth - 240, 340), y: Math.min(window.innerHeight - 300, 360), date, hour: 10, minute: 0 });
+        }
+        if (tourMode === 'ai' || tourMode === 'finish') setIsAddMenuOpen(false);
+        if (tourMode === 'ai' || tourMode === 'finish' || tourMode === 'bubbles') setTimelineCreateMenu(null);
+      }}/>
 </main>
   );
 }
