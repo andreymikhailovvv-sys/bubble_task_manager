@@ -774,7 +774,6 @@ export default function App() {
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
-  // Должен оставаться вместе с хуками выше условных return authLoading/currentUser.
   const prepareUpdatesTour = useCallback((tourMode: string) => {
     if (tourMode === 'add') setIsAddMenuOpen(true);
     if (tourMode === 'bubbles') {
