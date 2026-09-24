@@ -26,12 +26,10 @@ COPY server/package.json ./server/package.json
 RUN npm ci --omit=dev \
   && npm cache clean --force
 
-COPY --from=build /app/server/prisma ./server/prisma
-COPY --from=build /app/server/scripts ./server/scripts
-RUN npm run prisma:generate --workspace server
-
 COPY --from=build /app/client/dist ./client/dist
 COPY --from=build /app/server/dist ./server/dist
+COPY --from=build /app/server/prisma ./server/prisma
+COPY --from=build /app/server/scripts ./server/scripts
 
 ENV NODE_ENV=production
 ENV PORT=4000

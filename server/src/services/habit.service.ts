@@ -1,8 +1,5 @@
-import prismaPackage from '@prisma/client';
-import type { HabitRecurrenceType, HabitDurationMode, Prisma as PrismaTypes } from '@prisma/client';
+import { Prisma, HabitRecurrenceType, HabitDurationMode } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
-
-const { Prisma } = prismaPackage;
 
 const DEFAULT_HABIT_COLOR = '#22c55e';
 const DEFAULT_HABIT_ICON = '✨';
@@ -258,7 +255,7 @@ export const habitService = {
   update: async (id: string, userId: string, input: HabitInput) => {
     const current = await prisma.habit.findFirstOrThrow({ where: { id, userId } });
     const recurrenceType = input.recurrenceType !== undefined ? normalizeRecurrenceType(input.recurrenceType) : current.recurrenceType;
-    const patch: PrismaTypes.HabitUpdateInput = {};
+    const patch: Prisma.HabitUpdateInput = {};
 
     if (input.name !== undefined) patch.name = normalizeName(input.name, current.name);
     if (input.icon !== undefined) patch.icon = normalizeIcon(input.icon);
