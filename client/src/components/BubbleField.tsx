@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
@@ -330,7 +330,7 @@ export function BubbleField({
   };
 
   const tourContextMenuTask = tasks.find((task) => task.status !== 'DONE') ?? tasks[0] ?? null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!forceTaskContextMenuOpen || !tourContextMenuTask) return;
     const frame = requestAnimationFrame(() => {
       const bubble = document.querySelector<SVGGElement>(`[data-bubble-task-id="${CSS.escape(tourContextMenuTask.id)}"]`);
@@ -344,7 +344,11 @@ export function BubbleField({
       });
       setContextPostponeSubmenuOpen(false);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      setContextMenu(null);
+      setContextPostponeSubmenuOpen(false);
+    };
   }, [forceTaskContextMenuOpen, spheres, tourContextMenuTask]);
 
   const runQuickPostpone = (task: Task, option: PostponeOption) => {
