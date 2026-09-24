@@ -780,10 +780,9 @@ export default function App() {
     if (activeTourStep === 'sphere-add') {
       setIsAddMenuOpen(false);
       setDisplayMode('bubbles');
-    } else if (activeTourStep === 'timeline-create') {
+    } else if (activeTourStep === 'task-context-menu') {
       setIsAddMenuOpen(false);
-      setDisplayMode('timeline');
-      setTimelineViewMode('day');
+      setDisplayMode('bubbles');
     }
   }, [activeTourStep]);
 
@@ -4413,6 +4412,7 @@ ${allContext}`,
             onAddTaskToSphere={(sphere) => setEditorState({ initialSphereId: sphere.id })}
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
             onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
+            forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
             />
           </div>
         ) : displayMode === 'list' ? (

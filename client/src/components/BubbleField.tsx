@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
@@ -32,6 +32,7 @@ type Props = {
   onRenameSphere?: (sphere: Sphere) => void;
   onAddTaskToSphere?: (sphere: Sphere) => void;
   onRescheduleTask?: (task: Task) => void;
+  forceTaskContextMenuOpen?: boolean;
   themeMode?: 'dark' | 'light';
   className?: string;
 };
@@ -260,6 +261,7 @@ export function BubbleField({
   onRenameSphere,
   onAddTaskToSphere,
   onRescheduleTask,
+  forceTaskContextMenuOpen = false,
   themeMode = 'dark',
   className
 }: Props) {
@@ -327,6 +329,28 @@ export function BubbleField({
     setContextPostponeSubmenuOpen(false);
   };
 
+  const tourContextMenuTask = tasks.find((task) => task.status !== 'DONE') ?? tasks[0] ?? null;
+  useLayoutEffect(() => {
+    if (!forceTaskContextMenuOpen || !tourContextMenuTask) return;
+    const frame = requestAnimationFrame(() => {
+      const bubble = document.querySelector<SVGGElement>(`[data-bubble-task-id="${CSS.escape(tourContextMenuTask.id)}"]`);
+      const bubbleRect = bubble?.getBoundingClientRect();
+      const anchorX = bubbleRect ? bubbleRect.left + bubbleRect.width / 2 : window.innerWidth / 2;
+      const anchorY = bubbleRect ? bubbleRect.top + bubbleRect.height / 2 : window.innerHeight / 2;
+      setContextMenu({
+        ...getViewportSafeContextMenuPosition(anchorX, anchorY),
+        task: tourContextMenuTask,
+        sphere: spheres.find((sphere) => sphere.id === tourContextMenuTask.sphereId) ?? spheres[0] ?? null
+      });
+      setContextPostponeSubmenuOpen(false);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      setContextMenu(null);
+      setContextPostponeSubmenuOpen(false);
+    };
+  }, [forceTaskContextMenuOpen, spheres, tourContextMenuTask]);
+
   const runQuickPostpone = (task: Task, option: PostponeOption) => {
     if (option === 'smart') {
       setSmartPostponeTaskId(task.id);
@@ -355,7 +379,8 @@ export function BubbleField({
   };
 
   useEffect(() => {
-    if (!contextMenu) return;
+    // Во время тура меню должно оставаться целью до срабатывания onClick кнопки «Дальше».
+    if (!contextMenu || forceTaskContextMenuOpen) return;
     const close = () => {
       setContextMenu(null);
       setContextPostponeSubmenuOpen(false);
@@ -366,7 +391,7 @@ export function BubbleField({
       window.removeEventListener('mousedown', close);
       window.removeEventListener('scroll', close, true);
     };
-  }, [contextMenu]);
+  }, [contextMenu, forceTaskContextMenuOpen]);
 
   const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
@@ -587,6 +612,7 @@ export function BubbleField({
     return (
       <motion.g
         key={bubble.task.id}
+        data-bubble-task-id={bubble.task.id}
         initial={false}
         animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? BUBBLE_HOVER_SCALE : 1, x: displayPoint.x, y: displayPoint.y }}
         exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
@@ -1067,6 +1093,7 @@ export function BubbleField({
       </svg>
       {contextMenu ? createPortal(
         <div
+          data-tour={forceTaskContextMenuOpen ? 'bubble-task-context-menu' : undefined}
           className="fixed z-[130]"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onMouseDown={(event) => event.stopPropagation()}
