@@ -17,7 +17,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
-import { TASK_TOUR_STEPS, TourOverlay, type TaskTourStep } from './components/TourOverlay';
+import { AI_TOUR_STEPS, TASK_TOUR_STEPS, TourOverlay, type AiTourStep, type TaskTourStep } from './components/TourOverlay';
 
 const MAX_SPHERES = 8;
 
@@ -762,7 +762,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
-  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep>(null);
+  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep>(null);
   const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
@@ -785,6 +785,24 @@ export default function App() {
       setDisplayMode('bubbles');
     }
   }, [activeTourStep]);
+
+  useEffect(() => {
+    if (activeTourStep === 'ai-full-chat') {
+      setIsAiChatOpen(true);
+    } else if (activeTourStep === 'ai-task-help') {
+      setIsAiChatOpen(false);
+      setEditorState(null);
+      setFocusedTaskId((current) => current ?? tasks.find((task) => !task.parentTaskId)?.id ?? null);
+    } else if (activeTourStep === 'ai-recurrence') {
+      setIsAiChatOpen(false);
+      setFocusedTaskId(null);
+      setEditorState({ initialSphereId: spheres[0]?.id });
+    } else if (activeTourStep === 'ai-optimize') {
+      setEditorState(null);
+      setFocusedTaskId(null);
+      setDisplayMode('timeline');
+    }
+  }, [activeTourStep, tasks, spheres]);
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
@@ -3715,10 +3733,18 @@ ${allContext}`,
     setIsUpdatesOpen(false);
     setActiveTourStep(TASK_TOUR_STEPS[0].id);
   };
+  const startAiTour = () => {
+    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    setIsUpdatesOpen(false);
+    setActiveTourStep(AI_TOUR_STEPS[0].id);
+  };
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);
     setIsAddMenuOpen(false);
+    setIsAiChatOpen(false);
+    setEditorState(null);
+    setFocusedTaskId(null);
     if (restore) {
       setDisplayMode(restore.displayMode);
       setTimelineViewMode(restore.timelineViewMode);
@@ -3727,13 +3753,14 @@ ${allContext}`,
     tourRestoreStateRef.current = null;
   };
   const advanceTaskTour = () => {
-    const index = TASK_TOUR_STEPS.findIndex((step) => step.id === activeTourStep);
-    const next = TASK_TOUR_STEPS[index + 1];
+    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : TASK_TOUR_STEPS;
+    const index = steps.findIndex((step) => step.id === activeTourStep);
+    const next = steps[index + 1];
     if (next) setActiveTourStep(next.id);
     else finishTaskTour();
   };
   const isTourAddMenuOpen = activeTourStep === 'create-task' || activeTourStep === 'create-event' || activeTourStep === 'create-sector';
-  const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai';
+  const forceQuickAiPreviewOpen = activeTourStep === 'quick-ai' || activeTourStep === 'ai-quick-chat';
 
   return (
     <main
@@ -3747,8 +3774,8 @@ ${allContext}`,
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartTaskTour={startTaskTour} />
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} />
+      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
@@ -4672,7 +4699,7 @@ ${allContext}`,
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-cyan-300 bg-cyan-700/60 text-cyan-50' : currentOptimizeState.plan.length>0 ? 'timeline-nav-button' : 'timeline-nav-button opacity-50'}`} disabled={currentOptimizeState.plan.length===0} onClick={() => setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: !prev[timelineViewMode] }))} title="Показать/скрыть ИИ-расклад"><Eye size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-emerald-300 bg-emerald-700/70 text-emerald-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Принять ИИ-оптимизацию" onClick={async () => { await api.applyTimelineOptimization({ plan: currentOptimizeState.plan }); setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); await load(); }}><Check size={14} /></button>
                     <button type="button" className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-xs ${isTimelineOptimizePreviewEnabled ? 'border-rose-300 bg-rose-700/70 text-rose-50' : 'timeline-nav-button opacity-50'}`} disabled={!isTimelineOptimizePreviewEnabled} title="Отменить ИИ-оптимизацию" onClick={() => { setTimelineOptimizePreviewEnabledByMode((prev)=>({ ...prev, [timelineViewMode]: false })); setTimelineOptimizeStateByMode((prev)=>({ ...prev, [timelineViewMode]: { plan: [], summary: '' } })); }}><X size={14} /></button>
-                    <button type="button" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
+                    <button type="button" data-tour="ai-optimize" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
                       {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
                     </button>
                     <div className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
@@ -5548,7 +5575,7 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="ai-chat-lightweight app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+        <aside data-tour="ai-task-help" className="ai-chat-lightweight app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
               <div className="absolute right-4 top-4 z-20 flex items-center gap-1.5">
                 <button
                   className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
@@ -6655,7 +6682,7 @@ ${allContext}`,
 
       {isAiChatOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiChatOpen(false)}>
-          <div className="ai-chat-expanded focus-mode-shell grid h-[min(820px,calc(100vh-32px))] w-full max-w-6xl grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-3xl border" onClick={(e) => e.stopPropagation()}>
+          <div data-tour="ai-full-chat" className="ai-chat-expanded focus-mode-shell grid h-[min(820px,calc(100vh-32px))] w-full max-w-6xl grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-3xl border" onClick={(e) => e.stopPropagation()}>
             <aside className="focus-side-panel flex min-h-0 flex-col gap-3 border-r p-4">
               <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Проекты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-violet-100" onClick={openAiChatProjectDialog}><Plus size={14} /></button></div>
               <div className="space-y-2 overflow-y-auto pr-1">{aiChatProjects.map((project) => <div key={project.id} onContextMenu={(event) => openAiChatItemContextMenu(event, 'project', project.id)} className={`group/project flex w-full items-center gap-2 rounded-2xl border px-2.5 py-2 text-left text-sm shadow-sm transition hover:bg-violet-500/10 ${project.id === activeAiChatProject?.id ? 'border-white/50 text-white' : 'surface-muted text-primary hover:shadow-lg'}`} style={project.id === activeAiChatProject?.id ? { background: `linear-gradient(135deg, ${project.color}, #7c3aed)` } : undefined}><button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-base">{project.icon}</span><span className="min-w-0 flex-1 truncate font-semibold">{project.title}</span></button><button className="rounded-full p-1 opacity-60 transition hover:bg-rose-500/15 hover:text-rose-300 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={aiChatProjects.length <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatProject(project.id); }} title="Удалить проект"><Trash2 size={13} /></button></div>)}</div>
