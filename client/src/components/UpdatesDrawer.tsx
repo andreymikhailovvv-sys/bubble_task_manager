@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { ArrowRight, BookOpen, Newspaper, Sparkles, X } from 'lucide-react';
 import { api, type ProductUpdateBlock } from '../lib/api';
 
@@ -16,20 +16,18 @@ export function UpdatesDrawer({ open, onClose, prepareTour }: { open: boolean; o
   const [news, setNews] = useState<ProductUpdateBlock[]>([]);
   const [step, setStep] = useState<number | null>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const prepareTourRef = useRef(prepareTour);
 
   useEffect(() => { if (open) void api.getProductUpdates().then((result) => setNews(result.blocks)).catch(() => setNews([])); }, [open]);
-  useEffect(() => { prepareTourRef.current = prepareTour; }, [prepareTour]);
   useLayoutEffect(() => {
     if (step === null) return;
-    prepareTourRef.current(steps[step].setup);
+    prepareTour(steps[step].setup);
     const timer = window.setTimeout(() => {
       const element = document.querySelector(steps[step].selector);
       element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
       setRect(element?.getBoundingClientRect() ?? null);
     }, 180);
     return () => clearTimeout(timer);
-  }, [step]);
+  }, [step, prepareTour]);
 
   const finish = () => { setStep(null); setRect(null); prepareTour('finish'); };
   return <>
