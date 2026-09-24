@@ -379,7 +379,8 @@ export function BubbleField({
   };
 
   useEffect(() => {
-    if (!contextMenu) return;
+    // Во время тура меню должно оставаться целью до срабатывания onClick кнопки «Дальше».
+    if (!contextMenu || forceTaskContextMenuOpen) return;
     const close = () => {
       setContextMenu(null);
       setContextPostponeSubmenuOpen(false);
@@ -390,7 +391,7 @@ export function BubbleField({
       window.removeEventListener('mousedown', close);
       window.removeEventListener('scroll', close, true);
     };
-  }, [contextMenu]);
+  }, [contextMenu, forceTaskContextMenuOpen]);
 
   const sourceTaskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const getSourceTask = (task: Task) => sourceTaskById.get(task.id) ?? task;
