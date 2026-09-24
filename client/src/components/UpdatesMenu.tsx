@@ -5,9 +5,10 @@ type UpdatesMenuProps = {
   open: boolean;
   onClose: () => void;
   onStartTaskTour: () => void;
+  onStartAiTour: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   useEffect(() => {
@@ -34,13 +35,13 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour }: UpdatesMenuProps
           <div className="mt-5 space-y-3">
             <p className="text-sm text-muted">Короткие интерактивные уроки по возможностям сервиса.</p>
             {[
-              { title: 'Работа с задачами', description: 'Создание задач, секторы, таймлайн и быстрый ИИ.', active: true },
-              { title: 'Возможности ИИ', description: 'Персональные помощники и работа с чатами.', active: false },
-              { title: 'Фишки и интеграции', description: 'Полезные сценарии и внешние сервисы.', active: false }
+              { title: 'Работа с задачами', description: 'Создание задач, секторы, таймлайн и быстрый ИИ.', onStart: onStartTaskTour },
+              { title: 'Возможности ИИ', description: 'Персональные помощники и работа с чатами.', onStart: onStartAiTour },
+              { title: 'Фишки и интеграции', description: 'Полезные сценарии и внешние сервисы.', onStart: null }
             ].map((lesson) => (
               <article key={lesson.title} className="updates-lesson rounded-2xl border p-4">
                 <div className="flex items-start gap-3"><span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Sparkles size={17} /></span><div><h3 className="font-semibold text-primary">{lesson.title}</h3><p className="mt-1 text-xs leading-relaxed text-muted">{lesson.description}</p></div></div>
-                <button type="button" disabled={!lesson.active} className="mt-4 w-full rounded-xl px-3 py-2 text-sm font-semibold updates-lesson-button disabled:cursor-not-allowed disabled:opacity-45" onClick={lesson.active ? onStartTaskTour : undefined}>{lesson.active ? 'Пройти' : 'Скоро'}</button>
+                <button type="button" disabled={!lesson.onStart} className="mt-4 w-full rounded-xl px-3 py-2 text-sm font-semibold updates-lesson-button disabled:cursor-not-allowed disabled:opacity-45" onClick={lesson.onStart ?? undefined}>{lesson.onStart ? 'Пройти' : 'Скоро'}</button>
               </article>
             ))}
           </div>
