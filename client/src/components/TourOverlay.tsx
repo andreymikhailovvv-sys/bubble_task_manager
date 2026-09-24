@@ -4,8 +4,10 @@ import { MousePointer2, X } from 'lucide-react';
 
 export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'task-context-menu' | 'quick-ai' | null;
 export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | null;
+export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | null;
 export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string };
 export type AiTourConfig = { id: Exclude<AiTourStep, null>; selector: string; text: string };
+export type FeatureTourConfig = { id: Exclude<FeatureTourStep, null>; selector: string; text: string };
 
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
   { id: 'create-task', selector: '[data-tour="create-task"]', text: 'Здесь вы можете добавить новую задачу и настроить ее.' },
@@ -24,10 +26,21 @@ export const AI_TOUR_STEPS: AiTourConfig[] = [
   { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' }
 ];
 
+export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
+  { id: 'feature-rating', selector: '[data-tour="feature-rating"]', text: 'Это ваш рейтинг продуктивности. Для его увеличения вам нужно закрывать задачи и привычки, общаться с ИИ, а также использовать режим концентрации. Подробнее об этом режиме в следующем шаге.' },
+  { id: 'feature-focus-button', selector: '[data-tour="feature-focus-button"]', text: 'Нажмите кнопку «Фокус» для запуска режима концентрации. Этот режим позволит вам сосредоточиться на важных задачах и увеличит вашу мотивацию к выполнению задач.' },
+  { id: 'feature-focus-setup', selector: '[data-tour="feature-focus-setup"]', text: 'Выберите от 1 до 5 задач для работы в этом режиме. Вы сможете быстро переключаться между ними, но при открытии других задач вы получите предупреждающее уведомление.' },
+  { id: 'feature-focus-timer', selector: '[data-tour="feature-focus-timer"]', text: 'Установите таймер. В течение этого времени вам нужно будет максимально сконцентрироваться на задачах. Если вы закроете это окно, таймер продолжит идти в виде иконки на главном экране.' },
+  { id: 'feature-focus-task', selector: '[data-tour="feature-focus-task"]', text: 'Переключайтесь между задачами по необходимости. За закрытие задач и подзадач вы получите дополнительный бонус к рейтингу. Уведомление об этом вы получите слева, над таймером.' },
+  { id: 'feature-focus-ai', selector: '[data-tour="feature-focus-ai"]', text: 'Это чат с ИИ по выбранным задачам. При переключении задачи ИИ перестраивается на контекст новой задачи. Историю запросов вы можете посмотреть в чате с ИИ в окне «Фокус задачи».' },
+  { id: 'feature-telegram-button', selector: '[data-tour="feature-telegram-button"]', text: 'Для использования мобильной версии «Планировыча» и получения уведомлений о задачах на телефон, вы можете подключить телеграм-бота.' },
+  { id: 'feature-telegram-qr', selector: '[data-tour="feature-telegram-qr"]', text: 'Отсканируйте QR-код камерой телефона и вы автоматически авторизуетесь в телеграм-боте. Если авторизация не удалась, вы можете вручную ввести логин и пароль в боте @planirovych_bot.' }
+];
+
 const PADDING = 8;
 const MAX_SEARCH_FRAMES = 180;
 
-export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFinish }: { activeStep: Exclude<TaskTourStep | AiTourStep, null>; steps?: Array<TaskTourConfig | AiTourConfig>; onNext: () => void; onFinish: () => void }) {
+export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFinish }: { activeStep: Exclude<TaskTourStep | AiTourStep | FeatureTourStep, null>; steps?: Array<TaskTourConfig | AiTourConfig | FeatureTourConfig>; onNext: () => void; onFinish: () => void }) {
   const config = steps.find((step) => step.id === activeStep)!;
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [targetResolved, setTargetResolved] = useState(false);
