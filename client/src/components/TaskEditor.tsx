@@ -1012,7 +1012,7 @@ export function TaskEditor({
               ) : null}
               {!isSubtask ? (
                 <div className="task-edit-checkbox-row mt-3 flex flex-wrap gap-3 text-sm">
-                  <label className="inline-flex items-center gap-2">
+                  <label data-tour="ai-recurrence" className="inline-flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={isRecurring}
