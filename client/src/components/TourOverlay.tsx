@@ -1,16 +1,16 @@
 import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, FileText, MousePointer2, X } from 'lucide-react';
+import { MousePointer2, X } from 'lucide-react';
 
-export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'timeline-create' | 'quick-ai' | null;
+export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'task-context-menu' | 'quick-ai' | null;
 export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string };
 
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
   { id: 'create-task', selector: '[data-tour="create-task"]', text: 'Здесь вы можете добавить новую задачу и настроить ее.' },
-  { id: 'create-event', selector: '[data-tour="create-event"]', text: 'Создайте событие, чтобы всегда помнить о важных делах. Чтобы получать уведомления о задачах и событиях на телефон — подключите нашего телеграм-бота. Подробнее об этом в уроке «Фишки и интеграции».' },
+  { id: 'create-event', selector: '[data-tour="create-event"]', text: 'Создавайте события, чтобы всегда помнить о важных делах. Чтобы получать уведомления о задачах и событиях на телефон — подключите нашего телеграм-бота. Подробнее об этом в уроке «Фишки и интеграции».' },
   { id: 'create-sector', selector: '[data-tour="create-sector"]', text: 'Вы можете добавлять новые сектора, а также редактировать стандартные. Для каждого сектора вы можете задать общий промпт, который будет учитываться во всех задачах этого сектора.' },
   { id: 'sphere-add', selector: '[data-tour="sphere-add"]', text: 'Чтобы сразу добавить задачу в нужный сектор, нажмите эту иконку в режиме «Пузыри».' },
-  { id: 'timeline-create', selector: '[data-tour="timeline-hour"]', text: 'Чтобы добавить задачу на конкретное время нажмите правую кнопку мыши в режиме таймлайна и нажмите «Добавить задачу».' },
+  { id: 'task-context-menu', selector: '[data-tour="bubble-task-context-menu"]', text: 'Нажмите правую кнопку мыши, чтобы открыть контекстное меню. С помощью него вы можете быстрее управлять задачами: добавлять, переносить, выполнять и так далее.' },
   { id: 'quick-ai', selector: '[data-tour="quick-ai"]', text: 'Также вы можете попросить создать, удалить или перенести задачу ИИ в чате быстрых запросов или других чатах с ИИ.' }
 ];
 
@@ -68,7 +68,6 @@ export function TourOverlay({ activeStep, onNext, onFinish }: { activeStep: Excl
       <div className="tour-ring fixed" style={{ left: hole.left, top: hole.top, width: hole.right - hole.left, height: hole.bottom - hole.top }} />
     </> : <div className="tour-dim fixed inset-0" />}
     <div className="tour-click-shield fixed inset-0" />
-    {activeStep === 'timeline-create' && hole ? <div className="tour-timeline-demo fixed rounded-xl border p-1.5 shadow-2xl" style={{ left: Math.min(hole.right + 12, innerWidth - 210), top: Math.min(hole.top + 24, innerHeight - 120) }}><div><FileText size={14} />Добавить задачу</div><div><CalendarDays size={14} />Добавить событие</div></div> : null}
     {activeStep === 'quick-ai' && hole ? <MousePointer2 className="tour-pointer fixed" style={{ left: Math.max(8, hole.left - 12), top: hole.bottom - 8 }} size={30} /> : null}
     {targetResolved ? <section className="tour-card fixed w-[min(360px,calc(100vw-32px))] rounded-2xl border p-4 shadow-2xl" style={cardStyle}>
       <div className="flex items-start justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-400">Шаг {TASK_TOUR_STEPS.findIndex((item) => item.id === activeStep) + 1} из {TASK_TOUR_STEPS.length}</span><button type="button" onClick={onFinish} aria-label="Завершить обучение" className="rounded-full p-1 text-muted"><X size={17} /></button></div>
