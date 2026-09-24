@@ -17,7 +17,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
-import { AI_TOUR_STEPS, TASK_TOUR_STEPS, TourOverlay, type AiTourStep, type TaskTourStep } from './components/TourOverlay';
+import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep } from './components/TourOverlay';
 
 const MAX_SPHERES = 8;
 
@@ -762,7 +762,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
-  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep>(null);
+  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep>(null);
   const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
@@ -803,6 +803,27 @@ export default function App() {
       setDisplayMode('timeline');
     }
   }, [activeTourStep, tasks, spheres]);
+
+  useEffect(() => {
+    if (activeTourStep === 'feature-rating') {
+      setIsEfficiencyDetailsOpen(true);
+      setIsFocusSetupOpen(false);
+      setIsFocusModeOpen(false);
+      setIsTelegramModalOpen(false);
+    } else if (activeTourStep === 'feature-focus-button') {
+      setIsEfficiencyDetailsOpen(false);
+      setIsFocusSetupOpen(false);
+    } else if (activeTourStep === 'feature-focus-setup') {
+      setFocusSelectedTaskIds(visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id));
+      setIsFocusSetupOpen(true);
+      setIsFocusModeOpen(false);
+    } else if (activeTourStep === 'feature-telegram-button') {
+      setIsFocusModeOpen(false);
+      setIsTelegramModalOpen(false);
+    } else if (activeTourStep === 'feature-telegram-qr') {
+      setIsTelegramModalOpen(true);
+    }
+  }, [activeTourStep]);
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
@@ -3738,6 +3759,30 @@ ${allContext}`,
     setIsUpdatesOpen(false);
     setActiveTourStep(AI_TOUR_STEPS[0].id);
   };
+  const startFeatureTour = () => {
+    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    setIsUpdatesOpen(false);
+    setActiveTourStep(FEATURE_TOUR_STEPS[0].id);
+  };
+  const openTelegramLinkModal = async () => {
+    setIsTelegramModalOpen(true);
+    setTelegramLinkError(null);
+    setIsTelegramLinkLoading(true);
+    try {
+      const result = await api.createTelegramLinkToken();
+      setTelegramLinkUrl(result.deepLinkUrl);
+      setTelegramLinkExpiresIn(result.expiresInSeconds);
+    } catch (error) {
+      const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
+      const message = messageRaw.includes('Telegram link login is not configured')
+        ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_BOT_TOKEN и/или TELEGRAM_BOT_USERNAME.'
+        : messageRaw;
+      setTelegramLinkError(message);
+      setTelegramLinkUrl(null);
+    } finally {
+      setIsTelegramLinkLoading(false);
+    }
+  };
   const finishTaskTour = () => {
     const restore = tourRestoreStateRef.current;
     setActiveTourStep(null);
@@ -3745,6 +3790,10 @@ ${allContext}`,
     setIsAiChatOpen(false);
     setEditorState(null);
     setFocusedTaskId(null);
+    setIsEfficiencyDetailsOpen(false);
+    setIsFocusSetupOpen(false);
+    setIsFocusModeOpen(false);
+    setIsTelegramModalOpen(false);
     if (restore) {
       setDisplayMode(restore.displayMode);
       setTimelineViewMode(restore.timelineViewMode);
@@ -3753,9 +3802,18 @@ ${allContext}`,
     tourRestoreStateRef.current = null;
   };
   const advanceTaskTour = () => {
-    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : TASK_TOUR_STEPS;
+    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
+      ? AI_TOUR_STEPS
+      : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
+        ? FEATURE_TOUR_STEPS
+        : TASK_TOUR_STEPS;
     const index = steps.findIndex((step) => step.id === activeTourStep);
     const next = steps[index + 1];
+    if (next?.id === 'feature-focus-timer') {
+      const selectedIds = focusSelectedTaskIds.length > 0 ? focusSelectedTaskIds : visibleFocusCandidateTasks.slice(0, 3).map((task) => task.id);
+      startFocusSession(selectedIds);
+    }
+    if (next?.id === 'feature-telegram-qr') void openTelegramLinkModal();
     if (next) setActiveTourStep(next.id);
     else finishTaskTour();
   };
@@ -3774,8 +3832,8 @@ ${allContext}`,
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} />
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} />
+      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
@@ -3789,28 +3847,11 @@ ${allContext}`,
         )}
         <button
           type="button"
+          data-tour="feature-telegram-button"
           className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-cyan-400/40 bg-slate-900/85 text-cyan-200 transition hover:border-cyan-300 light-icon-button"
           aria-label="Подключить Telegram"
           title="Подключить Telegram"
-          onClick={async () => {
-            setIsTelegramModalOpen(true);
-            setTelegramLinkError(null);
-            setIsTelegramLinkLoading(true);
-            try {
-              const result = await api.createTelegramLinkToken();
-              setTelegramLinkUrl(result.deepLinkUrl);
-              setTelegramLinkExpiresIn(result.expiresInSeconds);
-            } catch (error) {
-              const messageRaw = error instanceof Error ? error.message : 'Не удалось создать ссылку';
-              const message = messageRaw.includes('Telegram link login is not configured')
-                ? 'Telegram не настроен на сервере: отсутствуют TELEGRAM_BOT_TOKEN и/или TELEGRAM_BOT_USERNAME.'
-                : messageRaw;
-              setTelegramLinkError(message);
-              setTelegramLinkUrl(null);
-            } finally {
-              setIsTelegramLinkLoading(false);
-            }
-          }}
+          onClick={() => void openTelegramLinkModal()}
         >
           <Smartphone size={18} />
         </button>
@@ -3908,12 +3949,12 @@ ${allContext}`,
             <svg width="54" height="54" viewBox="0 0 72 72" role="img" aria-label="Рейтинг эффективности" className="efficiency-orb-icon"><defs><linearGradient id="effOrbFill" x1="10" y1="10" x2="62" y2="62"><stop offset="0%" stopColor="#38bdf8" /><stop offset="45%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#f472b6" /></linearGradient><linearGradient id="effOrbRing" x1="12" y1="58" x2="60" y2="14"><stop offset="0%" stopColor="#22d3ee" /><stop offset="55%" stopColor="#a78bfa" /><stop offset="100%" stopColor="#fb7185" /></linearGradient></defs><circle cx="36" cy="36" r="25" fill="url(#effOrbFill)" opacity="0.18" /><circle cx="36" cy="36" r="26" fill="none" stroke="rgba(148,163,184,0.28)" strokeWidth="5" /><circle cx="36" cy="36" r="26" fill="none" stroke="url(#effOrbRing)" strokeWidth="5" strokeLinecap="round" pathLength={100} strokeDasharray={`${efficiencyScore} 100`} transform="rotate(-90 36 36)" /><path d="M36 17l5.4 12.1 13.1 1.4-9.8 8.8 2.8 12.9L36 45.5l-11.5 6.7 2.8-12.9-9.8-8.8 13.1-1.4L36 17z" fill="url(#effOrbFill)" /></svg>
           </button>
           {isEfficiencyDetailsOpen ? (
-            <div className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div>
+            <div data-tour="feature-rating" className="efficiency-details-popover efficiency-details-popover-modern absolute left-1/2 top-[calc(100%+8px)] z-40 w-80 -translate-x-1/2 rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur"><div className="text-center"><div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div><p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p></div><div className="mt-4 space-y-2"><div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(efficiencyTaskRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(efficiencyHabitRating)} рейтинга</b></div><div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(efficiencyAiRating)} рейтинга</b></div><div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(efficiencyFocusRating)} рейтинга</b></div></div></div>
           ) : null}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <button type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
+          <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
           <button type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
@@ -4027,7 +4068,7 @@ ${allContext}`,
 
       {isFocusSetupOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[135] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsFocusSetupOpen(false)}>
-          <div className="focus-setup-modal dialog-surface flex max-h-[calc(100vh-32px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div data-tour="feature-focus-setup" className="focus-setup-modal dialog-surface flex max-h-[calc(100vh-32px)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Bot size={14} /> Режим концентрации</div>
@@ -4082,7 +4123,7 @@ ${allContext}`,
       {isFocusModeOpen && focusActiveTask ? (
         <div className="modal-backdrop fixed inset-0 z-[134] flex items-center justify-center p-3 backdrop-blur-sm">
           <div className="focus-mode-shell relative grid h-[min(760px,calc(100vh-24px))] w-full max-w-[1500px] gap-4 overflow-hidden rounded-3xl border p-4 shadow-2xl lg:grid-cols-[260px_minmax(360px,1fr)_430px]" onClick={(event) => event.stopPropagation()}>
-            <aside className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
+            <aside data-tour="feature-focus-timer" className="focus-side-panel flex min-h-0 flex-col overflow-y-auto rounded-3xl border p-4">
               <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус-сессия</p>
               <div className="flex min-h-0 flex-1 flex-col justify-center">
                 <div className="mb-4 mt-6 space-y-2">{(['time', 'ai', 'subtask', 'task'] as const).map((type) => focusBonusEvents[type] ? <div key={focusBonusEvents[type]!.id} className={`focus-bonus-message focus-bonus-${type}`}>{focusBonusEvents[type]!.message}</div> : null)}</div><div className="my-6 text-center text-5xl font-black tabular-nums text-slate-900">{formatFocusTime(focusRemainingSeconds)}</div>
@@ -4104,7 +4145,7 @@ ${allContext}`,
                 {isFocusSessionFinished ? <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p className="font-semibold">Резюме сессии</p><p className="mt-1">Закрыто подзадач: {focusCompletedSubtasksCount}</p><p>Запросов к ИИ: {focusSessionAiRequestCount}</p><p>Заработано рейтинга: +{focusSessionRatingEarned.toFixed(1).replace(/\.0$/, '')}</p></div> : null}
               </div>
             </aside>
-            <main className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
+            <main data-tour="feature-focus-task" className="focus-task-stack relative flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden">
               <div className="focus-card-peek -mb-1">{focusTasks[(focusActiveIndex - 1 + focusTasks.length) % focusTasks.length]?.title}</div>
               <button className="focus-stack-arrow absolute top-[4.25rem] z-10" onClick={() => switchFocusTask(-1)}><ChevronUp size={22} /></button>
               <motion.article key={focusActiveTask.id} initial={{ opacity: 0, y: 44, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="focus-main-card flex min-h-0 w-full max-w-2xl flex-1 flex-col overflow-hidden rounded-[2rem] border p-6 shadow-xl">
@@ -4171,7 +4212,7 @@ ${allContext}`,
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
               <div className="focus-card-peek -mt-1">{focusTasks[(focusActiveIndex + 1) % focusTasks.length]?.title}</div>
             </main>
-            <aside className="ai-chat-lightweight focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
+            <aside data-tour="feature-focus-ai" className="ai-chat-lightweight focus-ai-panel relative flex min-h-0 flex-col rounded-3xl border p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2"><Bot size={18} className="text-violet-600" /><h3 className="font-semibold text-primary">ИИ в контексте фокуса</h3></div>
                 <div className="flex items-center gap-1.5">
@@ -4355,7 +4396,7 @@ ${allContext}`,
 
       {isTelegramModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsTelegramModalOpen(false)}>
-          <div className="telegram-qr-modal relative w-full max-w-md rounded-2xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div data-tour="feature-telegram-qr" className="telegram-qr-modal relative w-full max-w-md rounded-2xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="surface-muted absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:brightness-110" onClick={() => setIsTelegramModalOpen(false)} aria-label="Закрыть окно"><X size={16} /></button>
             <div className="mb-3 pr-10">
               <h2 className="telegram-qr-modal-title text-lg font-semibold">Вход в Telegram-бот</h2>
