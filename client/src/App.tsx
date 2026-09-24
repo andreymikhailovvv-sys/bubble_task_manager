@@ -1415,6 +1415,7 @@ export default function App() {
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
+      if (activeTourStep === 'feature-rating') return;
       const target = event.target as Node | null;
       if (isEfficiencyDetailsOpen && efficiencyDetailsRef.current && target && !efficiencyDetailsRef.current.contains(target)) {
         setIsEfficiencyDetailsOpen(false);
@@ -1422,7 +1423,7 @@ export default function App() {
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [isEfficiencyDetailsOpen]);
+  }, [activeTourStep, isEfficiencyDetailsOpen]);
 
   useEffect(() => {
     if (!currentUser) {
