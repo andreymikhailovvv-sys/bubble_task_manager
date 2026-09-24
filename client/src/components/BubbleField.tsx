@@ -848,7 +848,7 @@ export function BubbleField({
                   </div>
                 </foreignObject>
                 <foreignObject x={-12} y={20} width={24} height={24}>
-                  <button data-tour="sphere-add" className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-primary" onClick={() => onAddTaskToSphere?.(item.sphere)}>
+                  <button className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-primary" onClick={() => onAddTaskToSphere?.(item.sphere)}>
                     <Plus size={14} />
                   </button>
                 </foreignObject>
