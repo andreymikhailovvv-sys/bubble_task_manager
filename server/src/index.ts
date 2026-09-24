@@ -33,11 +33,6 @@ const allowedCorsOrigins = new Set([
   ...URL_ENV_KEYS.flatMap((key) => parseOriginList(process.env[key]))
 ]);
 
-// Эти маршруты не зависят от БД, авторизации и статических файлов. Оркестратор
-// получает ответ сразу после того, как HTTP-сервер начал принимать соединения.
-app.get('/health', (_, res) => res.status(200).type('text/plain').send('ok'));
-app.get('/api/health', (_, res) => res.json({ ok: true, service: 'bubble-task-manager', date: new Date().toISOString() }));
-
 app.use(cors((req, callback) => {
   callback(null, {
     credentials: true,
@@ -157,20 +152,9 @@ setInterval(() => {
   });
 }, CHECKUP_POLL_INTERVAL_MS).unref();
 
-const server = app.listen(port, '0.0.0.0', () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Server started on http://0.0.0.0:${port}`);
 });
-
-const shutdown = (signal: NodeJS.Signals) => {
-  console.info(`[startup] received ${signal}, stopping HTTP server`);
-  server.close(() => {
-    void prisma.$disconnect().finally(() => process.exit(0));
-  });
-  setTimeout(() => process.exit(1), 10_000).unref();
-};
-
-process.once('SIGTERM', () => shutdown('SIGTERM'));
-process.once('SIGINT', () => shutdown('SIGINT'));
 
 const telegramUpdateWorker = new TelegramUpdateWorker(
   telegramUpdateQueue,
