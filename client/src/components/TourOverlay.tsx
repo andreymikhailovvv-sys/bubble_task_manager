@@ -65,7 +65,8 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
     return () => window.removeEventListener('keydown', handleKey);
   }, [onFinish]);
 
-  const hole = targetResolved && rect ? { left: Math.max(0, rect.left - PADDING), top: Math.max(0, rect.top - PADDING), right: Math.min(innerWidth, rect.right + PADDING), bottom: Math.min(innerHeight, rect.bottom + PADDING) } : null;
+  const verticalOffset = activeStep === 'ai-recurrence' ? -8 : 0;
+  const hole = targetResolved && rect ? { left: Math.max(0, rect.left - PADDING), top: Math.max(0, rect.top - PADDING + verticalOffset), right: Math.min(innerWidth, rect.right + PADDING), bottom: Math.min(innerHeight, rect.bottom + PADDING + verticalOffset) } : null;
   const cardStyle: CSSProperties = hole ? { left: Math.min(Math.max(16, hole.left), innerWidth - Math.min(360, innerWidth - 32)), top: hole.bottom + 16 < innerHeight - 210 ? hole.bottom + 16 : Math.max(16, hole.top - 190) } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
   const last = activeStep === steps[steps.length - 1]?.id;
 
