@@ -6158,3 +6158,24 @@ body[data-theme='dark'] .light-credit-badge:hover {
   border-color: transparent;
   background-clip: padding-box;
 }
+
+/* Обучение и меню обновлений */
+.updates-menu-backdrop { background: rgba(2, 6, 23, 0.7); backdrop-filter: blur(2px); }
+.updates-menu-panel { background: color-mix(in srgb, var(--panel-bg, #0f172a) 96%, transparent); border-color: var(--panel-border, rgba(148,163,184,.25)); animation: updates-menu-in .22s ease-out; }
+@keyframes updates-menu-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.updates-menu-close:hover, .updates-menu-trigger:hover { background: rgba(139, 92, 246, .14); }
+.updates-menu-trigger { color: var(--text-primary); border-color: var(--panel-border); background: var(--surface-muted); }
+.updates-menu-tabs { background: rgba(100, 116, 139, .12); }
+.updates-menu-tab-active { color: white; background: linear-gradient(135deg, #7c3aed, #4f46e5); box-shadow: 0 6px 18px rgba(124,58,237,.25); }
+.updates-lesson { border-color: var(--panel-border); background: rgba(100,116,139,.08); }
+.updates-lesson-icon { color: #c4b5fd; background: rgba(124,58,237,.18); }
+.updates-lesson-button { color: white; background: linear-gradient(135deg, #7c3aed, #4f46e5); }
+.updates-lesson-button:disabled { color: var(--text-muted); background: rgba(100,116,139,.18); }
+.tour-dim { background: rgba(2, 6, 23, .82); }
+.tour-ring { border: 3px solid #a78bfa; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,255,255,.65), 0 0 24px rgba(167,139,250,.8); pointer-events: none; }
+.tour-click-shield { pointer-events: auto; }
+.tour-card { z-index: 2; background: color-mix(in srgb, var(--panel-bg, #111827) 96%, transparent); border-color: rgba(167,139,250,.7); backdrop-filter: blur(18px); }
+.tour-timeline-demo { z-index: 2; width: 198px; color: var(--text-primary); background: var(--panel-bg, #111827); border-color: var(--panel-border); pointer-events: none; }
+.tour-timeline-demo div { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.tour-timeline-demo div + div { margin-top: 2px; }
+.tour-pointer { z-index: 2; color: #f8fafc; fill: #7c3aed; filter: drop-shadow(0 3px 5px rgba(0,0,0,.5)); pointer-events: none; }
