@@ -38,7 +38,4 @@ ENV PORT=4000
 
 EXPOSE 4000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=6 \
-  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 4000) + '/api/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
-
-CMD ["sh", "server/scripts/docker-entrypoint.sh"]
+CMD ["npm", "run", "start"]

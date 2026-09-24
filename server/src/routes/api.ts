@@ -311,6 +311,8 @@ const ensureDeviceUser = async (req: any, res: any) => {
   return user;
 };
 
+apiRouter.get('/health', (_, res) => res.json({ ok: true, service: 'bubble-task-manager', date: new Date().toISOString() }));
+
 apiRouter.post('/client-errors', async (req, res) => {
   const source = typeof req.body?.source === 'string' ? req.body.source : 'unknown';
   const message = typeof req.body?.message === 'string' ? req.body.message : 'empty-message';
