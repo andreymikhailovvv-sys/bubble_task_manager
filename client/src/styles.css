@@ -6175,8 +6175,8 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
 .updates-lesson-button:disabled { color: var(--text-muted); background: rgba(100,116,139,.18); }
 .updates-lesson-reward { border-radius: 1rem; padding: .38rem .6rem; font-size: .7rem; font-weight: 800; line-height: 1.2; color: #047857; background: linear-gradient(135deg, #dcfce7, #ccfbf1); box-shadow: 0 8px 20px rgba(5,150,105,.1); }
 .updates-lesson-button-completed { background: linear-gradient(135deg, #16a34a, #059669); }
-.training-reward-toast { position: fixed; z-index: 300; top: 1.5rem; left: 50%; width: max-content; max-width: calc(100vw - 2rem); transform: translateX(-50%); text-align: center; animation: training-reward-pop .28s ease-out; }
-@keyframes training-reward-pop { from { opacity: 0; transform: translate(-50%, 6px) scale(.98); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+.training-reward-toast { position: fixed; z-index: 300; top: 50%; left: 50%; width: max-content; max-width: calc(100vw - 2rem); transform: translate(-50%, -50%); text-align: center; animation: training-reward-pop .28s ease-out; }
+@keyframes training-reward-pop { from { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.98); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 .tour-dim { background: rgba(2, 6, 23, .82); }
 .tour-ring { border: 3px solid #a78bfa; border-radius: 14px; box-shadow: 0 0 0 1px rgba(255,255,255,.65), 0 0 24px rgba(167,139,250,.8); pointer-events: none; }
 .tour-click-shield { pointer-events: auto; }
