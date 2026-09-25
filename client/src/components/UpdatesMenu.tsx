@@ -8,9 +8,10 @@ type UpdatesMenuProps = {
   onStartAiTour: () => void;
   onStartFeatureTour: () => void;
   onStartWorkspaceTour: () => void;
+  completedLessonIds: string[];
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   useEffect(() => {
@@ -37,14 +38,14 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           <div className="mt-5 space-y-3">
             <p className="text-sm text-muted">Короткие интерактивные уроки по возможностям сервиса.</p>
             {[
-              { title: 'Рабочее пространство', description: 'Режимы отображения, фильтры, таймлайн и ИИ-кредиты.', onStart: onStartWorkspaceTour },
-              { title: 'Работа с задачами', description: 'Создание задач, секторы, таймлайн и быстрый ИИ.', onStart: onStartTaskTour },
-              { title: 'Возможности ИИ', description: 'Персональные помощники и работа с чатами.', onStart: onStartAiTour },
-              { title: 'Фишки и интеграции', description: 'Рейтинг, режим концентрации и подключение Telegram.', onStart: onStartFeatureTour }
+              { id: 'workspace', title: 'Рабочее пространство', description: 'Режимы отображения, фильтры, таймлайн и ИИ-кредиты.', onStart: onStartWorkspaceTour },
+              { id: 'tasks', title: 'Работа с задачами', description: 'Создание задач, секторы, таймлайн и быстрый ИИ.', onStart: onStartTaskTour },
+              { id: 'ai', title: 'Возможности ИИ', description: 'Персональные помощники и работа с чатами.', onStart: onStartAiTour },
+              { id: 'features', title: 'Фишки и интеграции', description: 'Рейтинг, режим концентрации и подключение Telegram.', onStart: onStartFeatureTour }
             ].map((lesson) => (
               <article key={lesson.title} className="updates-lesson rounded-2xl border p-4">
-                <div className="flex items-start gap-3"><span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Sparkles size={17} /></span><div><h3 className="font-semibold text-primary">{lesson.title}</h3><p className="mt-1 text-xs leading-relaxed text-muted">{lesson.description}</p></div></div>
-                <button type="button" className="mt-4 w-full rounded-xl px-3 py-2 text-sm font-semibold updates-lesson-button" onClick={lesson.onStart}>Пройти</button>
+                <div className="flex items-start gap-3"><span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Sparkles size={17} /></span><div><h3 className="font-semibold text-primary">{lesson.title}</h3><p className="mt-1 text-xs leading-relaxed text-muted">{lesson.description}</p><span className="updates-lesson-reward mt-2 inline-flex">Награда +5 рейтинга</span></div></div>
+                <button type="button" className={`mt-4 w-full rounded-xl px-3 py-2 text-sm font-semibold updates-lesson-button ${completedLessonIds.includes(lesson.id) ? 'updates-lesson-button-completed' : ''}`} onClick={lesson.onStart}>{completedLessonIds.includes(lesson.id) ? 'Пройдено' : 'Пройти'}</button>
               </article>
             ))}
           </div>
