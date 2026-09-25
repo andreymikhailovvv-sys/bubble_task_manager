@@ -3837,13 +3837,14 @@ ${allContext}`,
     tourRestoreStateRef.current = null;
   };
   const advanceTaskTour = () => {
-    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
+    const configuredSteps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
       ? WORKSPACE_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
       ? AI_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
         ? FEATURE_TOUR_STEPS
         : TASK_TOUR_STEPS;
+    const steps = configuredSteps.filter((step, stepIndex) => configuredSteps.findIndex((item) => item.id === step.id) === stepIndex);
     const index = steps.findIndex((step) => step.id === activeTourStep);
     const next = steps[index + 1];
     if (next?.id === 'feature-focus-timer') {
