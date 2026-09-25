@@ -17,7 +17,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
-import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep } from './components/TourOverlay';
+import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 
 const MAX_SPHERES = 8;
 
@@ -762,7 +762,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
-  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep>(null);
+  const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
   const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
   const [activeTimelineDropSlot, setActiveTimelineDropSlot] = useState<{ hour: number; minute: number } | null>(null);
@@ -775,6 +775,18 @@ export default function App() {
   const [timelineOverdueBulkPostponeLoading, setTimelineOverdueBulkPostponeLoading] = useState<null | 'normal' | 'ai'>(null);
   const [timelineOptimizePreviewEnabledByMode, setTimelineOptimizePreviewEnabledByMode] = useState<Record<'day'|'week'|'month', boolean>>({ day: false, week: false, month: false });
   const [timelineOptimizeStateByMode, setTimelineOptimizeStateByMode] = useState<Record<'day'|'week'|'month',{ plan: Array<{ taskId: string; dueDate: string | null }>; summary: string }>>({ day:{plan:[],summary:''}, week:{plan:[],summary:''}, month:{plan:[],summary:''} });
+
+  useEffect(() => {
+    if (!activeTourStep?.startsWith('workspace-')) return;
+    if (['workspace-overview', 'workspace-display-modes', 'workspace-bubbles', 'workspace-bubble-layout'].includes(activeTourStep)) {
+      setDisplayMode('bubbles');
+    } else if (activeTourStep === 'workspace-list') {
+      setDisplayMode('list');
+    } else if (['workspace-timeline', 'workspace-timeline-range', 'workspace-credits'].includes(activeTourStep)) {
+      setDisplayMode('timeline');
+    }
+    if (activeTourStep === 'workspace-timeline-range') setIsTimelineToolbarHidden(false);
+  }, [activeTourStep]);
 
   useEffect(() => {
     if (activeTourStep === 'sphere-add') {
@@ -3755,6 +3767,12 @@ ${allContext}`,
     setIsUpdatesOpen(false);
     setActiveTourStep(TASK_TOUR_STEPS[0].id);
   };
+  const startWorkspaceTour = () => {
+    tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
+    setIsUpdatesOpen(false);
+    setDisplayMode('bubbles');
+    setActiveTourStep(WORKSPACE_TOUR_STEPS[0].id);
+  };
   const startAiTour = () => {
     tourRestoreStateRef.current = { displayMode, timelineViewMode, timelineAnchorDate: new Date(timelineAnchorDate) };
     setIsUpdatesOpen(false);
@@ -3803,7 +3821,9 @@ ${allContext}`,
     tourRestoreStateRef.current = null;
   };
   const advanceTaskTour = () => {
-    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
+    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
+      ? WORKSPACE_TOUR_STEPS
+      : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
       ? AI_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
         ? FEATURE_TOUR_STEPS
@@ -3833,8 +3853,8 @@ ${allContext}`,
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} />
-      {activeTourStep ? <TourOverlay key={activeTourStep} activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} />
+      {activeTourStep ? <TourOverlay key={activeTourStep} activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
@@ -3878,7 +3898,7 @@ ${allContext}`,
 
       {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
         <button type="button" className="updates-menu-trigger inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" onClick={() => setIsUpdatesOpen(true)} aria-label="Открыть обновления и обучение" title="Обновления и обучение"><Menu size={20} /></button>
-        <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
+        <div data-tour="display-modes" className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
           {DISPLAY_MODE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -3894,7 +3914,7 @@ ${allContext}`,
           ))}
         </div>
 
-        <div className="top-filter-cluster flex flex-wrap items-center gap-2 md:ml-4">
+        <div data-tour="workspace-filters" className="top-filter-cluster flex flex-wrap items-center gap-2 md:ml-4">
           <div className="relative min-w-48" data-sphere-filter-root="true">
             <button
               className={`topbar-select-button light-sector-filter-trigger flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm ${
@@ -3956,7 +3976,7 @@ ${allContext}`,
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
-          <button type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
+          <button data-tour="credits" type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
             {isAddMenuOpen || isTourAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button data-tour="create-event" className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button data-tour="create-sector" className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
@@ -4420,10 +4440,10 @@ ${allContext}`,
         </div>
       ) : null}
 
-      <div className="workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]">
+      <div data-tour="workspace" className="workspace-shell relative min-h-0 flex-1 overflow-hidden pr-[360px]">
         {displayMode === 'bubbles' ? (
-          <div className="relative h-full">
-            <div className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
+          <div data-tour="bubbles-workspace" className="relative h-full">
+            <div data-tour="bubble-layout" className="bubble-layout-toggle absolute right-4 top-4 z-30 flex items-center gap-1 rounded-full border p-1 shadow-xl backdrop-blur" role="group" aria-label="Режим отображения баблов">
               <button
                 type="button"
                 className={`bubble-layout-toggle-button inline-flex h-9 w-9 items-center justify-center rounded-full transition ${mode === 'global' ? 'bubble-layout-toggle-button-active' : ''}`}
@@ -4485,7 +4505,7 @@ ${allContext}`,
             />
           </div>
         ) : displayMode === 'list' ? (
-          <div ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
+          <div data-tour="list-workspace" ref={timelineScrollContainerRef} onWheel={(event) => { if (draggedTimelineTaskId !== null) { event.currentTarget.scrollTop += event.deltaY; } }} className="list-mode-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <ul className="space-y-3 pr-1">
               {activeListTasks.length === 0 ? (
                 <li className="list-empty-state rounded-xl border px-4 py-3 text-sm">
@@ -4683,7 +4703,7 @@ ${allContext}`,
             })(), document.body) : null}
           </div>
         ) : (
-          <div ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
+          <div data-tour="timeline-workspace" ref={timelineScrollContainerRef} className="timeline-canvas h-full overflow-y-auto rounded-[2.2rem] border p-4 backdrop-blur-sm">
             <div className="space-y-4 pr-1">
               <section className={`timeline-toolbar sticky top-0 z-20 rounded-3xl border px-3 py-3 shadow-2xl backdrop-blur-xl transition-all duration-300 ease-out sm:px-4 ${isTimelineToolbarHidden && !isTimelineOverdueModalOpen ? 'timeline-toolbar-hidden' : 'timeline-toolbar-visible'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4744,7 +4764,7 @@ ${allContext}`,
                     <button type="button" data-tour="ai-optimize" className="rounded-md border border-rose-400 bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500" onClick={() => setIsTimelineOptimizeModalOpen(true)} disabled={timelineOptimizeLoading}>
                       {timelineOptimizeLoading ? <Loader2 size={14} className="animate-spin" /> : 'Оптимизировать ✨'}
                     </button>
-                    <div className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
+                    <div data-tour="timeline-range" className="timeline-mode-switch flex items-center gap-1 rounded-lg border p-1">
                       {([
                         { key: 'day', label: 'День' },
                         { key: 'week', label: 'Неделя' },
