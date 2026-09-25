@@ -62,7 +62,7 @@ export const aiController = {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
       if (!question.trim()) { res.status(400).json({ error: 'question is required' }); return; }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
-      const requestedModel = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'].includes(req.body?.model) ? req.body.model as 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4' : undefined;
+      const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const projectTitle = typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined;
       const chatTitle = typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined;
@@ -184,7 +184,7 @@ export const aiController = {
         question?: string;
         userMessage?: string;
         mode?: 'fast' | 'smart';
-        model?: 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4';
+        model?: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol';
         attachments?: ChatAttachment[];
         skipEfficiencyBonus?: boolean;
       };
@@ -195,7 +195,7 @@ export const aiController = {
       }
 
       const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
-      const model = ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4'].includes(req.body?.model) ? req.body.model as 'gpt-5.4-nano' | 'gpt-5.4-mini' | 'gpt-5.4' : undefined;
+      const model = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
       console.info('[AI] /tasks/:id/ai-chat request received', {
         userId: req.user!.id,
         taskId: req.params.id,

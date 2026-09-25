@@ -1035,7 +1035,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         userId: session.userId,
         question: transcript,
         history,
-        model: 'gpt-5.4-nano',
+        model: 'gpt-6-luna',
         projectTitle: 'Личный проект',
         chatTitle: 'Быстрые запросы'
       });
@@ -1084,7 +1084,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       userId: session.userId,
       question: descriptionText,
       history,
-      model: 'gpt-5.4-nano',
+      model: 'gpt-6-luna',
       projectTitle: 'Личный проект',
       chatTitle: 'Быстрые запросы'
     });
