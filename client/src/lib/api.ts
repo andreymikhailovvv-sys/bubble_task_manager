@@ -91,6 +91,7 @@ export type CurrentUser = {
   efficiencyAiScore?: number;
   efficiencyFocusScore?: number;
   efficiencyLastActivityAt?: string | Date | null;
+  completedLessonIds?: string[];
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
 
@@ -137,6 +138,8 @@ export const api = {
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
     request<Pick<CurrentUser, 'efficiencyScore' | 'efficiencyTaskScore' | 'efficiencyHabitScore' | 'efficiencyAiScore' | 'efficiencyFocusScore' | 'efficiencyLastActivityAt'>>('/api/efficiency/events', { method: 'POST', body: JSON.stringify(payload) }),
+  completeTrainingLesson: (lessonId: string) =>
+    request<{ awarded: boolean; reward: number; user: CurrentUser }>(`/api/training/lessons/${lessonId}/complete`, { method: 'POST' }),
   getHabits: () => request<Habit[]>('/api/habits'),
   createHabit: (payload: Partial<Habit>) => request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(payload) }),
   updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),

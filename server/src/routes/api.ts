@@ -52,6 +52,8 @@ const EFFICIENCY_BONUSES = {
   completedHabit: 20.1,
   createdTask: 1
 } as const;
+const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'ai', 'features'] as const;
+const TRAINING_LESSON_REWARD = 5;
 
 const currentCreditsPeriod = () => {
   const now = new Date();
@@ -80,6 +82,7 @@ const toAuthUser = (user: {
   efficiencyAiScore?: number;
   efficiencyFocusScore?: number;
   efficiencyLastActivityAt?: Date | string | null;
+  completedLessonIds?: string[];
 }) => ({
   id: user.id,
   email: user.email,
@@ -101,7 +104,8 @@ const toAuthUser = (user: {
   efficiencyHabitScore: Math.max(0, user.efficiencyHabitScore ?? 0),
   efficiencyAiScore: Math.max(0, user.efficiencyAiScore ?? 0),
   efficiencyFocusScore: Math.max(0, user.efficiencyFocusScore ?? 0),
-  efficiencyLastActivityAt: user.efficiencyLastActivityAt ?? null
+  efficiencyLastActivityAt: user.efficiencyLastActivityAt ?? null,
+  completedLessonIds: user.completedLessonIds ?? []
 });
 
 
@@ -585,7 +589,8 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       efficiencyHabitScore: true,
       efficiencyAiScore: true,
       efficiencyFocusScore: true,
-      efficiencyLastActivityAt: true
+      efficiencyLastActivityAt: true,
+      completedLessonIds: true
     }
   });
 
@@ -613,6 +618,38 @@ apiRouter.post('/efficiency/events', requireAuth, async (req, res) => {
   }
 
   res.json(efficiencyState);
+});
+
+apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, res) => {
+  const lessonId = req.params.lessonId;
+  if (!(TRAINING_LESSON_IDS as readonly string[]).includes(lessonId)) {
+    res.status(400).json({ error: 'Неизвестный урок' });
+    return;
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Сериализуем награждения пользователя, чтобы параллельные запросы не дали награду дважды.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${req.user!.id}))`;
+    const user = await tx.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) return null;
+    if (user.completedLessonIds.includes(lessonId)) return { awarded: false, user };
+
+    const now = new Date();
+    const scores = applyEfficiencyPenalty(getEfficiencyBuckets(user), (user.efficiencyLastActivityAt ?? now).getTime(), now.getTime(), user.timeZone ?? DEFAULT_TIMEZONE);
+    const available = 100 - sumEfficiencyBuckets(scores);
+    scores.task = clampBucketScore(scores.task + Math.min(TRAINING_LESSON_REWARD, Math.max(0, available)));
+    const updated = await tx.user.update({
+      where: { id: user.id },
+      data: { ...buildEfficiencyUpdateData(scores, now), completedLessonIds: [...user.completedLessonIds, lessonId] }
+    });
+    return { awarded: true, user: updated };
+  });
+
+  if (!result) {
+    res.status(404).json({ error: 'Пользователь не найден' });
+    return;
+  }
+  res.json({ awarded: result.awarded, reward: result.awarded ? TRAINING_LESSON_REWARD : 0, user: toAuthUser(result.user) });
 });
 
 apiRouter.get('/auth/me', async (req, res) => {
