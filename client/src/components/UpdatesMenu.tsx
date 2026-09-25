@@ -7,9 +7,10 @@ type UpdatesMenuProps = {
   onStartTaskTour: () => void;
   onStartAiTour: () => void;
   onStartFeatureTour: () => void;
+  onStartWorkspaceTour: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           <div className="mt-5 space-y-3">
             <p className="text-sm text-muted">Короткие интерактивные уроки по возможностям сервиса.</p>
             {[
+              { title: 'Рабочее пространство', description: 'Режимы отображения, фильтры, таймлайн и ИИ-кредиты.', onStart: onStartWorkspaceTour },
               { title: 'Работа с задачами', description: 'Создание задач, секторы, таймлайн и быстрый ИИ.', onStart: onStartTaskTour },
               { title: 'Возможности ИИ', description: 'Персональные помощники и работа с чатами.', onStart: onStartAiTour },
               { title: 'Фишки и интеграции', description: 'Рейтинг, режим концентрации и подключение Telegram.', onStart: onStartFeatureTour }
