@@ -104,6 +104,7 @@ const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-im
 const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
 const getThemeStorageKey = (userId: string) => `btm:${userId}:theme-mode`;
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
+const getOnboardingOfferStorageKey = (userId: string) => `btm:${userId}:onboarding-offer-seen`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
@@ -762,6 +763,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
   const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
   const [draggedTimelineTaskId, setDraggedTimelineTaskId] = useState<string | null>(null);
@@ -785,6 +787,7 @@ export default function App() {
     } else if (['workspace-timeline', 'workspace-timeline-range', 'workspace-credits'].includes(activeTourStep)) {
       setDisplayMode('timeline');
     }
+    setIsSettingsOpen(activeTourStep === 'workspace-settings');
     if (activeTourStep === 'workspace-timeline-range') setIsTimelineToolbarHidden(false);
   }, [activeTourStep]);
 
@@ -813,6 +816,11 @@ export default function App() {
       setEditorState(null);
       setFocusedTaskId(null);
       setDisplayMode('timeline');
+    } else if (activeTourStep === 'ai-checkup' || activeTourStep === 'ai-notifications') {
+      setIsAiChatOpen(false);
+      setEditorState(null);
+      setFocusedTaskId(null);
+      setIsSettingsOpen(true);
     }
   }, [activeTourStep, tasks, spheres]);
 
@@ -1169,6 +1177,13 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     void load();
+  }, [currentUser?.id]);
+  useEffect(() => {
+    if (!currentUser) {
+      setIsOnboardingOfferOpen(false);
+      return;
+    }
+    setIsOnboardingOfferOpen(localStorage.getItem(getOnboardingOfferStorageKey(currentUser.id)) !== '1');
   }, [currentUser?.id]);
   useEffect(() => {
     if (!currentUser) return;
@@ -3813,6 +3828,7 @@ ${allContext}`,
     setIsFocusSetupOpen(false);
     setIsFocusModeOpen(false);
     setIsTelegramModalOpen(false);
+    setIsSettingsOpen(false);
     if (restore) {
       setDisplayMode(restore.displayMode);
       setTimelineViewMode(restore.timelineViewMode);
@@ -3821,13 +3837,14 @@ ${allContext}`,
     tourRestoreStateRef.current = null;
   };
   const advanceTaskTour = () => {
-    const steps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
+    const configuredSteps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
       ? WORKSPACE_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
       ? AI_TOUR_STEPS
       : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
         ? FEATURE_TOUR_STEPS
         : TASK_TOUR_STEPS;
+    const steps = configuredSteps.filter((step, stepIndex) => configuredSteps.findIndex((item) => item.id === step.id) === stepIndex);
     const index = steps.findIndex((step) => step.id === activeTourStep);
     const next = steps[index + 1];
     if (next?.id === 'feature-focus-timer') {
@@ -3854,7 +3871,19 @@ ${allContext}`,
       }}
     >
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} />
-      {activeTourStep ? <TourOverlay key={activeTourStep} activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
+      {isOnboardingOfferOpen ? (
+        <div className="modal-backdrop fixed inset-0 z-[240] flex items-center justify-center p-4 backdrop-blur-md">
+          <section className="surface-popover w-full max-w-lg rounded-3xl border p-6 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="onboarding-offer-title">
+            <h2 id="onboarding-offer-title" className="text-xl font-bold text-primary">Добро пожаловать в «Планировыч»!</h2>
+            <p className="mt-4 text-sm leading-relaxed text-muted">Пройдите обучение по использованию «Планировыча» и заработайте свой первый рейтинг.</p>
+            <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+              <button type="button" className="surface-muted rounded-xl px-5 py-2.5 text-sm font-medium text-muted transition hover:text-primary" onClick={() => { localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1'); setIsOnboardingOfferOpen(false); }}>Нет, спасибо</button>
+              <button type="button" className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500" onClick={() => { localStorage.setItem(getOnboardingOfferStorageKey(currentUser.id), '1'); setIsOnboardingOfferOpen(false); setIsUpdatesOpen(true); }}>Пройти обучение</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
@@ -3984,7 +4013,7 @@ ${allContext}`,
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
             {isSettingsOpen ? (
-            <div className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
+            <div data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
               <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
                 <div className="grid grid-cols-2 gap-1 rounded-lg surface-muted p-1 text-xs">
@@ -4025,7 +4054,7 @@ ${allContext}`,
                 Сбросить на Москву
               </button>
 
-              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+              <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
                   <span>Утренний ИИ-чекап</span>
                   <span className="ai-checkup-credit-badge inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
@@ -4063,7 +4092,7 @@ ${allContext}`,
                 </label>
               </div>
               {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
-              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+              <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
                   <span>Уведомления от ИИ</span>
                   <span
@@ -5173,6 +5202,7 @@ ${allContext}`,
         ) : null}
 
         <aside
+          data-tour="workspace-side-rail"
           className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain py-0 pl-5 pr-0"
           data-no-field-zoom="true"
           onWheel={(event) => {

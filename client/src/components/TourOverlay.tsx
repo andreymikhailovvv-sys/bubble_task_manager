@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { MousePointer2, X } from 'lucide-react';
 
 export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'task-context-menu' | 'quick-ai' | null;
-export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | null;
+export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | 'ai-checkup' | 'ai-notifications' | null;
 export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | null;
-export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | null;
-export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string; combineTargets?: boolean };
-export type AiTourConfig = { id: Exclude<AiTourStep, null>; selector: string; text: string; combineTargets?: boolean };
-export type FeatureTourConfig = { id: Exclude<FeatureTourStep, null>; selector: string; text: string; combineTargets?: boolean };
-export type WorkspaceTourConfig = { id: Exclude<WorkspaceTourStep, null>; selector: string; text: string; combineTargets?: boolean };
+export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | 'workspace-settings' | 'workspace-side-rail' | null;
+type TourConfigBase = { selector: string; text: string; combineTargets?: boolean; cardOffsetY?: number };
+export type TaskTourConfig = TourConfigBase & { id: Exclude<TaskTourStep, null> };
+export type AiTourConfig = TourConfigBase & { id: Exclude<AiTourStep, null> };
+export type FeatureTourConfig = TourConfigBase & { id: Exclude<FeatureTourStep, null> };
+export type WorkspaceTourConfig = TourConfigBase & { id: Exclude<WorkspaceTourStep, null> };
 
 export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-overview', selector: '[data-tour="workspace"]', text: 'Это ваша рабочая область. В ней вы можете видеть ваши задачи и управлять ими. Вы можете выбрать разные режимы отображения – давайте посмотрим какие.' },
@@ -19,7 +20,9 @@ export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-list', selector: '[data-tour="list-workspace"], [data-tour="workspace-filters"]', text: 'В режиме «Список» вы видите задачи последовательно, как в бумажном ежедневнике. В этом режиме можно управлять всеми фильтрами и подобрать список под себя.', combineTargets: true },
   { id: 'workspace-timeline', selector: '[data-tour="timeline-workspace"]', text: '«Таймлайн» позволяет увидеть распределение задач и подзадач в календаре.' },
   { id: 'workspace-timeline-range', selector: '[data-tour="timeline-range"]', text: 'Здесь вы можете переключать промежутки времени таймлайна – день, неделя или месяц.' },
-  { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' }
+  { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' },
+  { id: 'workspace-settings', selector: '[data-tour="settings-panel"]', text: 'Здесь находятся основные настройки сервиса. Вы можете выбрать себе тему, часовой пояс, а также настроить ИИ-чекап и уведомления от ИИ. Подробнее об этих функциях в уроке «Возможности ИИ».' },
+  { id: 'workspace-side-rail', selector: '[data-tour="workspace-side-rail"]', text: 'В этой области вам доступны: «Ближайшие подзадачи» — блок, в котором вы можете отследить подзадачи. В «Выполненных заданиях» вы можете вернуть задачу, которую уже закрыли. В блоке «Фон рабочего пространства» можно выбрать обои (но только в тёмной теме), а «Управление секторами» позволяет настроить или удалить ваши сектора по задачам.' }
 ];
 
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
@@ -36,7 +39,9 @@ export const AI_TOUR_STEPS: AiTourConfig[] = [
   { id: 'ai-full-chat', selector: '[data-tour="ai-full-chat"]', text: 'Это развернутый чат с ИИ. В нем вы можете разделять запросы по проектам, чатам, а также выбирать разные модели ИИ. Разные модели тратят разное количество кредитов. В любой момент вы можете переключиться на работу с своими задачами и чат вызовет «ИИ-планировщик».' },
   { id: 'ai-task-help', selector: '[data-tour="ai-task-help"]', text: 'Внутри каждой задачи есть свой чат с ИИ, в котором вы можете отправлять запросы по этой задаче. Вы можете попросить ИИ создавать и редактировать подзадачи/описания, настройки и так далее. История чата будет сохранена до тех пор, пока вы не завершите/удалите задачу или не очистите ее вручную.' },
   { id: 'ai-recurrence', selector: '[data-tour="ai-recurrence"]', text: 'ИИ может создать расписание для вашей задачи. Для этого нажмите чекбокс «Повторить» и опишите как должна повторяться задача, например «Каждый понедельник и среду. В понедельник в 12, в среду в 14:00».' },
-  { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' }
+  { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' },
+  { id: 'ai-checkup', selector: '[data-tour="ai-checkup-settings"]', text: 'Вы можете включить ИИ-чекап в настройках. В выбранное время ИИ будет делать сводку по вашим задачам: перечислять ближайшие и просроченные задачи, указывать на конфликты в расписании и предлагать исправления.' },
+  { id: 'ai-notifications', selector: '[data-tour="ai-notifications-settings"]', cardOffsetY: -72, text: 'Вы также можете по умолчанию включить уведомления от ИИ по вашим задачам. Тогда сервис будет не просто напоминать о ваших задачах, но и сразу предлагать ближайшие шаги по их решению.' }
 ];
 
 export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
@@ -54,7 +59,10 @@ const PADDING = 8;
 const MAX_SEARCH_FRAMES = 180;
 
 export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFinish }: { activeStep: Exclude<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep, null>; steps?: Array<TaskTourConfig | AiTourConfig | FeatureTourConfig | WorkspaceTourConfig>; onNext: () => void; onFinish: () => void }) {
-  const config = steps.find((step) => step.id === activeStep)!;
+  // Не показываем один и тот же шаг повторно, даже если конфигурации урока
+  // случайно склеились при обновлении приложения.
+  const uniqueSteps = steps.filter((step, index) => steps.findIndex((item) => item.id === step.id) === index);
+  const config = uniqueSteps.find((step) => step.id === activeStep)!;
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [targetResolved, setTargetResolved] = useState(false);
 
@@ -81,7 +89,9 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
       if (!targets.length && attempts++ < MAX_SEARCH_FRAMES) { frame = requestAnimationFrame(findTarget); return; }
       if (!targets.length) { setRect(null); setTargetResolved(true); return; }
       const firstRect = targets[0].getBoundingClientRect();
-      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Мгновенная прокрутка не даёт карточке сначала отрисоваться у старой
+      // позиции цели, а затем визуально повториться после плавного скролла.
+      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'auto', block: 'center' });
       measure();
       setTargetResolved(true);
       observer = new ResizeObserver(measure);
@@ -103,10 +113,11 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
 
   const verticalOffset = activeStep === 'ai-recurrence' ? -8 : 0;
   const hole = targetResolved && rect ? { left: Math.max(0, rect.left - PADDING), top: Math.max(0, rect.top - PADDING + verticalOffset), right: Math.min(innerWidth, rect.right + PADDING), bottom: Math.min(innerHeight, rect.bottom + PADDING + verticalOffset) } : null;
-  const cardStyle: CSSProperties = hole ? { left: Math.min(Math.max(16, hole.left), innerWidth - Math.min(360, innerWidth - 32)), top: hole.bottom + 16 < innerHeight - 210 ? hole.bottom + 16 : Math.max(16, hole.top - 190) } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
-  const last = activeStep === steps[steps.length - 1]?.id;
+  const defaultCardTop = hole ? (hole.bottom + 16 < innerHeight - 210 ? hole.bottom + 16 : Math.max(16, hole.top - 190)) : 0;
+  const cardStyle: CSSProperties = hole ? { left: Math.min(Math.max(16, hole.left), innerWidth - Math.min(360, innerWidth - 32)), top: Math.max(16, defaultCardTop + (config.cardOffsetY ?? 0)) } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
+  const last = activeStep === uniqueSteps[uniqueSteps.length - 1]?.id;
 
-  return createPortal(<div className="tour-root fixed inset-0 z-[250] pointer-events-auto" aria-live="polite">
+  return createPortal(<div id="active-product-tour" className="tour-root fixed inset-0 z-[250] pointer-events-auto" aria-live="polite">
     {hole ? <>
       <div className="tour-dim fixed left-0 right-0 top-0" style={{ height: hole.top }} />
       <div className="tour-dim fixed left-0" style={{ top: hole.top, width: hole.left, height: hole.bottom - hole.top }} />
@@ -117,7 +128,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
     <div className="tour-click-shield fixed inset-0" />
     {(activeStep === 'quick-ai' || activeStep === 'ai-quick-chat') && hole ? <MousePointer2 className="tour-pointer fixed" style={{ left: Math.max(8, hole.left - 12), top: hole.bottom - 8 }} size={30} /> : null}
     {targetResolved ? <section className="tour-card fixed w-[min(360px,calc(100vw-32px))] rounded-2xl border p-4 shadow-2xl" style={cardStyle}>
-      <div className="flex items-start justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-400">Шаг {steps.findIndex((item) => item.id === activeStep) + 1} из {steps.length}</span><button type="button" onClick={onFinish} aria-label="Завершить обучение" className="rounded-full p-1 text-muted"><X size={17} /></button></div>
+      <div className="flex items-start justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-400">Шаг {uniqueSteps.findIndex((item) => item.id === activeStep) + 1} из {uniqueSteps.length}</span><button type="button" onClick={onFinish} aria-label="Завершить обучение" className="rounded-full p-1 text-muted"><X size={17} /></button></div>
       <p className="mt-3 text-sm leading-relaxed text-primary">{config.text}</p>
       {!rect ? <p className="mt-2 text-xs text-muted">Элемент пока недоступен — можно продолжить обучение.</p> : null}
       <div className="mt-4 flex items-center justify-between gap-2"><button type="button" className="rounded-lg px-3 py-2 text-xs text-muted hover:text-primary" onClick={onFinish}>Завершить</button><button type="button" className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-500" onClick={last ? onFinish : onNext}>{last ? 'Готово' : 'Дальше'}</button></div>
