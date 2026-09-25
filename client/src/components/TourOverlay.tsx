@@ -6,17 +6,17 @@ export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 's
 export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | null;
 export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | null;
 export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | null;
-export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string };
-export type AiTourConfig = { id: Exclude<AiTourStep, null>; selector: string; text: string };
-export type FeatureTourConfig = { id: Exclude<FeatureTourStep, null>; selector: string; text: string };
-export type WorkspaceTourConfig = { id: Exclude<WorkspaceTourStep, null>; selector: string; text: string };
+export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string; combineTargets?: boolean };
+export type AiTourConfig = { id: Exclude<AiTourStep, null>; selector: string; text: string; combineTargets?: boolean };
+export type FeatureTourConfig = { id: Exclude<FeatureTourStep, null>; selector: string; text: string; combineTargets?: boolean };
+export type WorkspaceTourConfig = { id: Exclude<WorkspaceTourStep, null>; selector: string; text: string; combineTargets?: boolean };
 
 export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-overview', selector: '[data-tour="workspace"]', text: 'Это ваша рабочая область. В ней вы можете видеть ваши задачи и управлять ими. Вы можете выбрать разные режимы отображения – давайте посмотрим какие.' },
   { id: 'workspace-display-modes', selector: '[data-tour="display-modes"]', text: 'Переключаться между режимами отображения можно здесь. Разные режимы отображения позволяют концентрироваться на разной информации.' },
   { id: 'workspace-bubbles', selector: '[data-tour="bubbles-workspace"]', text: 'Режим «Пузыри» позволяет визуально выделить самые важные и срочные задачи. Чем больше коэффициент важности задачи – тем больше она визуально.' },
   { id: 'workspace-bubble-layout', selector: '[data-tour="bubble-layout"]', text: 'Здесь вы можете отключить деление на сектора и отправить пузыри в свободный полет.' },
-  { id: 'workspace-list', selector: '[data-tour="list-workspace"], [data-tour="workspace-filters"]', text: 'В режиме «Список» вы видите задачи последовательно, как в бумажном ежедневнике. В этом режиме можно управлять всеми фильтрами и подобрать список под себя.' },
+  { id: 'workspace-list', selector: '[data-tour="list-workspace"], [data-tour="workspace-filters"]', text: 'В режиме «Список» вы видите задачи последовательно, как в бумажном ежедневнике. В этом режиме можно управлять всеми фильтрами и подобрать список под себя.', combineTargets: true },
   { id: 'workspace-timeline', selector: '[data-tour="timeline-workspace"]', text: '«Таймлайн» позволяет увидеть распределение задач и подзадач в календаре.' },
   { id: 'workspace-timeline-range', selector: '[data-tour="timeline-range"]', text: 'Здесь вы можете переключать промежутки времени таймлайна – день, неделя или месяц.' },
   { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' }
@@ -75,7 +75,9 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
     };
     const findTarget = () => {
       if (stopped) return;
-      targets = Array.from(document.querySelectorAll<HTMLElement>(config.selector));
+      targets = config.combineTargets
+        ? Array.from(document.querySelectorAll<HTMLElement>(config.selector))
+        : [document.querySelector<HTMLElement>(config.selector)].filter((target): target is HTMLElement => target !== null);
       if (!targets.length && attempts++ < MAX_SEARCH_FRAMES) { frame = requestAnimationFrame(findTarget); return; }
       if (!targets.length) { setRect(null); setTargetResolved(true); return; }
       const firstRect = targets[0].getBoundingClientRect();
@@ -91,7 +93,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
     return () => { stopped = true; cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure, true); };
-  }, [config.selector]);
+  }, [config.combineTargets, config.selector]);
 
   useLayoutEffect(() => {
     const handleKey = (event: KeyboardEvent) => event.key === 'Escape' && onFinish();
