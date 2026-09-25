@@ -31,10 +31,10 @@ OPENAI_API_KEY=your_openai_api_key
 # OPENAI_PROXY_URL=http://1.2.3.4:8080
 # OPENAI_PROXY_USERNAME=proxy_user
 # OPENAI_PROXY_PASSWORD=proxy_password
-# Опционально: переопределить модель (по умолчанию gpt-5.4-mini, быстрый режим)
-# OPENAI_MODEL=gpt-5.4-mini
-# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4)
-# OPENAI_MODEL_FULL=gpt-5.4
+# Опционально: переопределить модель (по умолчанию gpt-6-luna, быстрый режим)
+# OPENAI_MODEL=gpt-6-luna
+# Опционально: модель для режима "Полный ответ" (по умолчанию gpt-5.4-mini)
+# OPENAI_MODEL_FULL=gpt-5.4-mini
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 # Опциональный исходящий прокси только для Telegram Bot API

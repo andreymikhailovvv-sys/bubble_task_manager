@@ -22,15 +22,15 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 const MAX_SPHERES = 8;
 
 const AI_CHAT_MODEL_CREDITS: Record<AiChatModel, number> = {
-  'gpt-5.4-nano': 2,
+  'gpt-6-luna': 2,
   'gpt-5.4-mini': 5,
-  'gpt-5.4': 8
+  'gpt-6-sol': 8
 };
 
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
-  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4-nano'] },
+  { value: 'gpt-6-luna', label: 'GPT-6 Luna', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-6-luna'] },
   { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4-mini'] },
-  { value: 'gpt-5.4', label: 'GPT-5.4', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4'] }
+  { value: 'gpt-6-sol', label: 'GPT-6 Sol', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-6-sol'] }
 ];
 
 const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
@@ -1335,8 +1335,17 @@ export default function App() {
     const raw = localStorage.getItem('btm:task-ai-mode-map');
     if (!raw) return;
     try {
-      const parsed = JSON.parse(raw) as Record<string, AiChatModel | 'fast' | 'smart'>;
-      setAiModelByTask(Object.fromEntries(Object.entries(parsed).map(([taskId, model]) => [taskId, model === 'fast' ? 'gpt-5.4-nano' : model === 'smart' ? 'gpt-5.4-mini' : model])) as Record<string, AiChatModel>);
+      const parsed = JSON.parse(raw) as Record<string, AiChatModel | 'gpt-5.4-nano' | 'gpt-5.4' | 'fast' | 'smart'>;
+      setAiModelByTask(Object.fromEntries(Object.entries(parsed).map(([taskId, model]) => [
+        taskId,
+        model === 'fast' || model === 'gpt-5.4-nano'
+          ? 'gpt-6-luna'
+          : model === 'gpt-5.4'
+            ? 'gpt-6-sol'
+            : model === 'smart'
+              ? 'gpt-5.4-mini'
+              : model
+      ])) as Record<string, AiChatModel>);
     } catch {
       // ignore invalid storage
     }
@@ -2494,7 +2503,7 @@ ${allContext}`,
       const result = await api.askAiChat({
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
-        model: quick ? 'gpt-5.4-nano' : selectedAiChatModel,
+        model: quick ? 'gpt-6-luna' : selectedAiChatModel,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         attachments
@@ -3371,7 +3380,7 @@ ${allContext}`,
       `subtasks=${JSON.stringify(taskSubtasks.map((subtask) => ({ status: subtask.status, dueDate: subtask.dueDate ?? null })))}`,
       `nearby=${JSON.stringify(nearbyTasks.map((item) => ({ dueDate: item.dueDate })))}`
     ].join('\n');
-    const result = await askTaskAssistant(task.id, { question: prompt, model: 'gpt-5.4-nano' });
+    const result = await askTaskAssistant(task.id, { question: prompt, model: 'gpt-6-luna' });
     const jsonMatch = result.answer.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]) as { dueDate?: string };

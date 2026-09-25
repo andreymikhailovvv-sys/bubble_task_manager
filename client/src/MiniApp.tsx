@@ -124,9 +124,9 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
   return normalized;
 }
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
-  { value: 'gpt-5.4-nano', label: 'GPT-5.4 Nano', creditsCost: 2 },
+  { value: 'gpt-6-luna', label: 'GPT-6 Luna', creditsCost: 2 },
   { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: 5 },
-  { value: 'gpt-5.4', label: 'GPT-5.4', creditsCost: 8 }
+  { value: 'gpt-6-sol', label: 'GPT-6 Sol', creditsCost: 8 }
 ];
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
 const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];
@@ -1828,7 +1828,7 @@ export default function MiniApp() {
       const result = await api.askAiChat({
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
-        model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-5.4-nano' : selectedAiChatModel,
+        model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-6-luna' : selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         attachments: attachmentsPayload
@@ -2080,7 +2080,7 @@ export default function MiniApp() {
       const result = await api.askTaskAssistant(openedTask.id, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage,
-        mode: selectedAiChatModel === 'gpt-5.4' ? 'smart' : 'fast',
+        mode: selectedAiChatModel === 'gpt-6-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
         attachments: attachmentsPayload
       });
