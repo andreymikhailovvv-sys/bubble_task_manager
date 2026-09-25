@@ -58,7 +58,7 @@ export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
 const PADDING = 8;
 const MAX_SEARCH_FRAMES = 180;
 
-export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFinish }: { activeStep: Exclude<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep, null>; steps?: Array<TaskTourConfig | AiTourConfig | FeatureTourConfig | WorkspaceTourConfig>; onNext: () => void; onFinish: () => void }) {
+export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFinish, onComplete }: { activeStep: Exclude<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep, null>; steps?: Array<TaskTourConfig | AiTourConfig | FeatureTourConfig | WorkspaceTourConfig>; onNext: () => void; onFinish: () => void; onComplete: () => void }) {
   // Не показываем один и тот же шаг повторно, даже если конфигурации урока
   // случайно склеились при обновлении приложения.
   const uniqueSteps = steps.filter((step, index) => steps.findIndex((item) => item.id === step.id) === index);
@@ -131,7 +131,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
       <div className="flex items-start justify-between gap-3"><span className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-400">Шаг {uniqueSteps.findIndex((item) => item.id === activeStep) + 1} из {uniqueSteps.length}</span><button type="button" onClick={onFinish} aria-label="Завершить обучение" className="rounded-full p-1 text-muted"><X size={17} /></button></div>
       <p className="mt-3 text-sm leading-relaxed text-primary">{config.text}</p>
       {!rect ? <p className="mt-2 text-xs text-muted">Элемент пока недоступен — можно продолжить обучение.</p> : null}
-      <div className="mt-4 flex items-center justify-between gap-2"><button type="button" className="rounded-lg px-3 py-2 text-xs text-muted hover:text-primary" onClick={onFinish}>Завершить</button><button type="button" className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-500" onClick={last ? onFinish : onNext}>{last ? 'Готово' : 'Дальше'}</button></div>
+      <div className="mt-4 flex items-center justify-between gap-2"><button type="button" className="rounded-lg px-3 py-2 text-xs text-muted hover:text-primary" onClick={onFinish}>Завершить</button><button type="button" className="rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-500" onClick={last ? onComplete : onNext}>{last ? 'Готово' : 'Дальше'}</button></div>
     </section> : null}
   </div>, document.body);
 }
