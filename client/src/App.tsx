@@ -1432,13 +1432,16 @@ export default function App() {
       if (isSphereFilterOpen && targetElement && !targetElement.closest('[data-sphere-filter-root="true"]')) {
         setIsSphereFilterOpen(false);
       }
-      if (isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
+      const tourKeepsSettingsOpen = activeTourStep === 'workspace-settings'
+        || activeTourStep === 'ai-checkup'
+        || activeTourStep === 'ai-notifications';
+      if (!tourKeepsSettingsOpen && isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
         setIsSettingsOpen(false);
       }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [isSettingsOpen, isSphereFilterOpen]);
+  }, [activeTourStep, isSettingsOpen, isSphereFilterOpen]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
