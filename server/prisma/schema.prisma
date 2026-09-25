@@ -96,6 +96,7 @@ model User {
   efficiencyAiScore Float @default(0)
   efficiencyFocusScore Float @default(0)
   efficiencyLastActivityAt DateTime?
+  completedLessonIds String[] @default([])
   spheres      Sphere[]
   tasks        Task[]
   aiMessages   TaskAiMessage[]

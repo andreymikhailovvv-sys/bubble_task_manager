@@ -698,6 +698,7 @@ export default function App() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
   const [rankingMode, setRankingMode] = useState<BubbleRankingMode>('urgency');
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
+  const [trainingRewardMessage, setTrainingRewardMessage] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('bubbles');
 
   const [copiedAiMessageKey, setCopiedAiMessageKey] = useState<string | null>(null);
@@ -3839,6 +3840,22 @@ ${allContext}`,
     }
     tourRestoreStateRef.current = null;
   };
+  const completeTaskTour = () => {
+    const lessonId = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
+      ? 'workspace'
+      : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-')
+        ? 'ai'
+        : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-')
+          ? 'features'
+          : 'tasks';
+    finishTaskTour();
+    void api.completeTrainingLesson(lessonId).then(({ awarded, reward, user }) => {
+      setCurrentUser(user);
+      if (!awarded) return;
+      setTrainingRewardMessage(`Урок пройден — +${reward} рейтинга!`);
+      window.setTimeout(() => setTrainingRewardMessage(null), 4000);
+    }).catch((error) => console.error('Failed to complete training lesson', error));
+  };
   const advanceTaskTour = () => {
     const configuredSteps = typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-')
       ? WORKSPACE_TOUR_STEPS
@@ -3873,7 +3890,8 @@ ${allContext}`,
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} />
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} />
+      {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {isOnboardingOfferOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[240] flex items-center justify-center p-4 backdrop-blur-md">
           <section className="surface-popover w-full max-w-lg rounded-3xl border p-6 text-center shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="onboarding-offer-title">
@@ -3886,7 +3904,7 @@ ${allContext}`,
           </section>
         </div>
       ) : null}
-      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} /> : null}
+      {activeTourStep ? <TourOverlay activeStep={activeTourStep} steps={typeof activeTourStep === 'string' && activeTourStep.startsWith('workspace-') ? WORKSPACE_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('ai-') ? AI_TOUR_STEPS : typeof activeTourStep === 'string' && activeTourStep.startsWith('feature-') ? FEATURE_TOUR_STEPS : TASK_TOUR_STEPS} onNext={advanceTaskTour} onFinish={finishTaskTour} onComplete={completeTaskTour} /> : null}
       <header className="surface-topbar light-glass-topbar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-3 backdrop-blur">
         <h1 className="mr-3 flex items-center gap-2 text-xl font-semibold">
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
