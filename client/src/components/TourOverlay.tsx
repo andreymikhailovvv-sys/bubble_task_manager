@@ -89,7 +89,9 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
       if (!targets.length && attempts++ < MAX_SEARCH_FRAMES) { frame = requestAnimationFrame(findTarget); return; }
       if (!targets.length) { setRect(null); setTargetResolved(true); return; }
       const firstRect = targets[0].getBoundingClientRect();
-      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Мгновенная прокрутка не даёт карточке сначала отрисоваться у старой
+      // позиции цели, а затем визуально повториться после плавного скролла.
+      if (firstRect.top < 0 || firstRect.bottom > window.innerHeight) targets[0].scrollIntoView({ behavior: 'auto', block: 'center' });
       measure();
       setTargetResolved(true);
       observer = new ResizeObserver(measure);
@@ -115,7 +117,7 @@ export function TourOverlay({ activeStep, steps = TASK_TOUR_STEPS, onNext, onFin
   const cardStyle: CSSProperties = hole ? { left: Math.min(Math.max(16, hole.left), innerWidth - Math.min(360, innerWidth - 32)), top: Math.max(16, defaultCardTop + (config.cardOffsetY ?? 0)) } : { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' };
   const last = activeStep === uniqueSteps[uniqueSteps.length - 1]?.id;
 
-  return createPortal(<div className="tour-root fixed inset-0 z-[250] pointer-events-auto" aria-live="polite">
+  return createPortal(<div id="active-product-tour" className="tour-root fixed inset-0 z-[250] pointer-events-auto" aria-live="polite">
     {hole ? <>
       <div className="tour-dim fixed left-0 right-0 top-0" style={{ height: hole.top }} />
       <div className="tour-dim fixed left-0" style={{ top: hole.top, width: hole.left, height: hole.bottom - hole.top }} />
