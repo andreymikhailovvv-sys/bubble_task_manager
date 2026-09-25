@@ -25,7 +25,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
 
   return (
     <div className="updates-menu-backdrop fixed inset-0 z-[180]" onMouseDown={onClose}>
-      <aside className="updates-menu-panel fixed inset-y-0 left-0 flex w-[min(390px,92vw)] flex-col border-r p-5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="updates-menu-title">
+      <aside className="updates-menu-panel fixed inset-y-0 left-0 flex w-[min(480px,94vw)] flex-col border-r p-5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="updates-menu-title">
         <div className="flex items-start justify-between gap-3">
           <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Планировыч AI</p><h2 id="updates-menu-title" className="mt-1 text-xl font-bold text-primary">Обновления и изменения</h2></div>
           <button type="button" className="updates-menu-close rounded-full p-2 text-muted" onClick={onClose} aria-label="Закрыть меню"><X size={19} /></button>
