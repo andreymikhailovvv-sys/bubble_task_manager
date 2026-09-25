@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { MousePointer2, X } from 'lucide-react';
 
 export type TaskTourStep = 'create-task' | 'create-event' | 'create-sector' | 'sphere-add' | 'task-context-menu' | 'quick-ai' | null;
-export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | null;
+export type AiTourStep = 'ai-quick-chat' | 'ai-full-chat' | 'ai-task-help' | 'ai-recurrence' | 'ai-optimize' | 'ai-checkup' | 'ai-notifications' | null;
 export type FeatureTourStep = 'feature-rating' | 'feature-focus-button' | 'feature-focus-setup' | 'feature-focus-timer' | 'feature-focus-task' | 'feature-focus-ai' | 'feature-telegram-button' | 'feature-telegram-qr' | null;
-export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | null;
+export type WorkspaceTourStep = 'workspace-overview' | 'workspace-display-modes' | 'workspace-bubbles' | 'workspace-bubble-layout' | 'workspace-list' | 'workspace-timeline' | 'workspace-timeline-range' | 'workspace-credits' | 'workspace-settings' | 'workspace-side-rail' | null;
 export type TaskTourConfig = { id: Exclude<TaskTourStep, null>; selector: string; text: string; combineTargets?: boolean };
 export type AiTourConfig = { id: Exclude<AiTourStep, null>; selector: string; text: string; combineTargets?: boolean };
 export type FeatureTourConfig = { id: Exclude<FeatureTourStep, null>; selector: string; text: string; combineTargets?: boolean };
@@ -19,7 +19,9 @@ export const WORKSPACE_TOUR_STEPS: WorkspaceTourConfig[] = [
   { id: 'workspace-list', selector: '[data-tour="list-workspace"], [data-tour="workspace-filters"]', text: 'В режиме «Список» вы видите задачи последовательно, как в бумажном ежедневнике. В этом режиме можно управлять всеми фильтрами и подобрать список под себя.', combineTargets: true },
   { id: 'workspace-timeline', selector: '[data-tour="timeline-workspace"]', text: '«Таймлайн» позволяет увидеть распределение задач и подзадач в календаре.' },
   { id: 'workspace-timeline-range', selector: '[data-tour="timeline-range"]', text: 'Здесь вы можете переключать промежутки времени таймлайна – день, неделя или месяц.' },
-  { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' }
+  { id: 'workspace-credits', selector: '[data-tour="credits"]', text: 'Здесь отображается ваше количество кредитов. Они необходимы для использования ИИ. Каждый месяц вам бесплатно дается 100 кредитов – чтобы получить больше можно приобрести подписку. О стоимости использования разных видов ИИ вы можете подробнее узнать в справке.' },
+  { id: 'workspace-settings', selector: '[data-tour="settings-panel"]', text: 'Здесь находятся основные настройки сервиса. Вы можете выбрать себе тему, часовой пояс, а также настроить ИИ-чекап и уведомления от ИИ. Подробнее об этих функциях в уроке «Возможности ИИ».' },
+  { id: 'workspace-side-rail', selector: '[data-tour="workspace-side-rail"]', text: 'В этой области вам доступны: «Ближайшие подзадачи» — блок, в котором вы можете отследить подзадачи. В «Выполненных заданиях» вы можете вернуть задачу, которую уже закрыли. В блоке «Фон рабочего пространства» можно выбрать обои (но только в тёмной теме), а «Управление секторами» позволяет настроить или удалить ваши сектора по задачам.' }
 ];
 
 export const TASK_TOUR_STEPS: TaskTourConfig[] = [
@@ -36,7 +38,9 @@ export const AI_TOUR_STEPS: AiTourConfig[] = [
   { id: 'ai-full-chat', selector: '[data-tour="ai-full-chat"]', text: 'Это развернутый чат с ИИ. В нем вы можете разделять запросы по проектам, чатам, а также выбирать разные модели ИИ. Разные модели тратят разное количество кредитов. В любой момент вы можете переключиться на работу с своими задачами и чат вызовет «ИИ-планировщик».' },
   { id: 'ai-task-help', selector: '[data-tour="ai-task-help"]', text: 'Внутри каждой задачи есть свой чат с ИИ, в котором вы можете отправлять запросы по этой задаче. Вы можете попросить ИИ создавать и редактировать подзадачи/описания, настройки и так далее. История чата будет сохранена до тех пор, пока вы не завершите/удалите задачу или не очистите ее вручную.' },
   { id: 'ai-recurrence', selector: '[data-tour="ai-recurrence"]', text: 'ИИ может создать расписание для вашей задачи. Для этого нажмите чекбокс «Повторить» и опишите как должна повторяться задача, например «Каждый понедельник и среду. В понедельник в 12, в среду в 14:00».' },
-  { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' }
+  { id: 'ai-optimize', selector: '[data-tour="ai-optimize"]', text: 'ИИ может оптимизировать ваше расписание. Для этого откройте режим таймлайна и нажмите кнопку «Оптимизировать». Вы можете ввести пожелания к оптимизации, например: «Распредели задачи равномерно, но не переноси их позже 18:00». ИИ оптимизирует тот промежуток времени, который у вас активен в момент нажатия кнопки «Оптимизировать» – «День/неделя/месяц».' },
+  { id: 'ai-checkup', selector: '[data-tour="ai-checkup-settings"]', text: 'Вы можете включить ИИ-чекап в настройках. В выбранное время ИИ будет делать сводку по вашим задачам: перечислять ближайшие и просроченные задачи, указывать на конфликты в расписании и предлагать исправления.' },
+  { id: 'ai-notifications', selector: '[data-tour="ai-notifications-settings"]', text: 'Вы также можете по умолчанию включить уведомления от ИИ по вашим задачам. Тогда сервис будет не просто напоминать о ваших задачах, но и сразу предлагать ближайшие шаги по их решению.' }
 ];
 
 export const FEATURE_TOUR_STEPS: FeatureTourConfig[] = [
