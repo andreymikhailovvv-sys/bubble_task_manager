@@ -5,6 +5,7 @@ import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
+import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -717,7 +718,7 @@ const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMes
   await sendMessage(task.user.telegramChatId, lines.join('\n'), keyboardMain(task.id));
 };
 
-const setSession = async (chatId: string, patch: { userId?: string | null; mode?: string; activeTaskId?: string | null }) => {
+const setSession = async (chatId: string, patch: { userId?: string | null; mode?: string; activeTaskId?: string | null; registrationLogin?: string | null; registrationPasswordHash?: string | null }) => {
   const update: Prisma.TelegramSessionUpdateInput = {};
   if (patch.userId !== undefined) {
     update.user = patch.userId ? { connect: { id: patch.userId } } : { disconnect: true };
@@ -728,6 +729,8 @@ const setSession = async (chatId: string, patch: { userId?: string | null; mode?
   if (patch.activeTaskId !== undefined) {
     update.activeTaskId = patch.activeTaskId;
   }
+  if (patch.registrationLogin !== undefined) update.registrationLogin = patch.registrationLogin;
+  if (patch.registrationPasswordHash !== undefined) update.registrationPasswordHash = patch.registrationPasswordHash;
 
   await prisma.telegramSession.upsert({
     where: { chatId },
@@ -736,7 +739,9 @@ const setSession = async (chatId: string, patch: { userId?: string | null; mode?
       chatId,
       userId: patch.userId ?? null,
       mode: patch.mode ?? 'IDLE',
-      activeTaskId: patch.activeTaskId ?? null
+      activeTaskId: patch.activeTaskId ?? null,
+      registrationLogin: patch.registrationLogin ?? null,
+      registrationPasswordHash: patch.registrationPasswordHash ?? null
     }
   });
 };
@@ -745,7 +750,60 @@ const resetBotMenuState = async (chatId: string) => {
   listTaskIdsByChatId.delete(chatId);
   pendingAiAttachmentByChatId.delete(chatId);
   quickAiHistoryByChatId.delete(chatId);
-  await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
+  await setSession(chatId, { mode: 'IDLE', activeTaskId: null, registrationLogin: null, registrationPasswordHash: null });
+};
+
+const handleRegistrationInput = async (chatId: string, text: string, session: { mode: string; registrationLogin: string | null; registrationPasswordHash: string | null }) => {
+  if (session.mode === 'AWAITING_REGISTRATION_LOGIN') {
+    try {
+      const login = validateAccountLogin(text);
+      if (!(await accountRegistrationService.isLoginAvailable(login))) throw new AccountRegistrationError('LOGIN_TAKEN');
+      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_PASSWORD', registrationLogin: login, registrationPasswordHash: null });
+      await sendMessage(chatId, '🔑 Введите пароль (минимум 6 символов):');
+    } catch (error) {
+      const message = error instanceof AccountRegistrationError && error.code === 'LOGIN_TAKEN'
+        ? '❌ Этот логин уже занят. Введите другой логин:'
+        : '⚠️ Логин должен содержать минимум 3 символа. Введите другой логин:';
+      await sendMessage(chatId, message);
+    }
+    return;
+  }
+
+  if (session.mode === 'AWAITING_REGISTRATION_PASSWORD') {
+    try {
+      validateAccountPassword(text);
+      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_NAME', registrationPasswordHash: authService.hashPassword(text) });
+      await sendMessage(chatId, '👤 Введите имя:');
+    } catch {
+      await sendMessage(chatId, '⚠️ Пароль должен содержать минимум 6 символов. Введите другой пароль:');
+    }
+    return;
+  }
+
+  if (!session.registrationLogin || !session.registrationPasswordHash) {
+    await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', registrationLogin: null, registrationPasswordHash: null });
+    await sendMessage(chatId, '⚠️ Не удалось продолжить регистрацию. Введите логин заново:');
+    return;
+  }
+
+  try {
+    const user = await accountRegistrationService.register({
+      login: session.registrationLogin,
+      passwordHash: session.registrationPasswordHash,
+      name: text,
+      telegramChatId: chatId
+    });
+    await resetBotMenuState(chatId);
+    await setSession(chatId, { userId: user.id });
+    await sendMessage(chatId, `✅ <b>Аккаунт создан.</b>\nДобро пожаловать, ${escapeHtml(user.name ?? user.username ?? '')}! Аккаунт доступен и в Telegram, и в веб-версии.`, keyboardReplyMain);
+  } catch (error) {
+    if (error instanceof AccountRegistrationError && error.code === 'LOGIN_TAKEN') {
+      await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', registrationLogin: null, registrationPasswordHash: null });
+      await sendMessage(chatId, '❌ Этот логин уже занят. Введите другой логин:');
+      return;
+    }
+    throw error;
+  }
 };
 
 const handleLoginInput = async (chatId: string, text: string) => {
@@ -996,9 +1054,12 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     await resetBotMenuState(chatId);
     await sendMessage(
       chatId,
-      '👋 <b>Bubble Task Manager Bot</b>\n\nЧтобы подключить аккаунт, нажмите кнопку ниже и отправьте <b>логин пароль</b> одним сообщением.',
+      '👋 <b>Bubble Task Manager Bot</b>\n\nВойдите в существующий аккаунт или создайте новый.',
       {
-        inline_keyboard: [[{ text: '🔐 Войти', callback_data: 'auth_login' }]]
+        inline_keyboard: [[
+          { text: '🔐 Войти', callback_data: 'auth_login' },
+          { text: '✨ Создать аккаунт', callback_data: 'auth_register' }
+        ]]
       }
     );
     return;
@@ -1006,6 +1067,11 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
 
   if (session?.mode === 'AWAITING_LINK_CREDENTIALS') {
     await handleLoginInput(chatId, descriptionText);
+    return;
+  }
+
+  if (session && ['AWAITING_REGISTRATION_LOGIN', 'AWAITING_REGISTRATION_PASSWORD', 'AWAITING_REGISTRATION_NAME'].includes(session.mode)) {
+    await handleRegistrationInput(chatId, descriptionText, session);
     return;
   }
 
@@ -1270,6 +1336,13 @@ const handleCallback = async (update: TelegramUpdate) => {
     await setSession(chatId, { mode: 'AWAITING_LINK_CREDENTIALS', activeTaskId: null });
     await answerCallback(callback.id);
     await sendMessage(chatId, '🔐 Отправьте одним сообщением: <b>логин пароль</b>.\n\nПример:\n<code>ivan qwerty123</code>', keyboardReplyMain);
+    return;
+  }
+
+  if (data === 'auth_register') {
+    await setSession(chatId, { mode: 'AWAITING_REGISTRATION_LOGIN', activeTaskId: null, registrationLogin: null, registrationPasswordHash: null });
+    await answerCallback(callback.id);
+    await sendMessage(chatId, '✨ <b>Создание аккаунта</b>\n\nВведите логин (минимум 3 символа):');
     return;
   }
 
