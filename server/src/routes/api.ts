@@ -15,6 +15,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { calendarExportController } from '../controllers/calendar-export.controller.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -740,6 +741,8 @@ apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
+apiRouter.post('/tasks/:id/calendar/ics-link', requireAuth, asyncHandler(calendarExportController.createLink));
+apiRouter.get('/calendar/ics/export', asyncHandler(calendarExportController.exportIcs));
 apiRouter.get('/habits', requireAuth, asyncHandler(habitController.list));
 apiRouter.post('/habits', requireAuth, asyncHandler(habitController.create));
 apiRouter.patch('/habits/:id', requireAuth, asyncHandler(habitController.update));

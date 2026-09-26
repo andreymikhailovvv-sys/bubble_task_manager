@@ -5367,6 +5367,27 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   border-color: rgba(139, 92, 246, 0.28);
 }
 
+.miniapp-calendar-export-panel {
+  color: #0f172a;
+}
+
+.miniapp-calendar-export-field {
+  border-color: rgba(139, 92, 246, 0.38) !important;
+  background: rgba(248, 250, 252, 0.96) !important;
+  color: #334155 !important;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-calendar-export-panel {
+  background: #111827;
+  color: #f8fafc;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-calendar-export-field {
+  border-color: rgba(139, 92, 246, 0.52) !important;
+  background: rgba(15, 23, 42, 0.9) !important;
+  color: #e2e8f0 !important;
+}
+
 .miniapp-light .miniapp-focus-subtasks {
   border-color: rgba(196, 181, 253, 0.5);
 }
