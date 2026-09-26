@@ -27,6 +27,9 @@ PORT=4000
 DATABASE_URL="file:./dev.db"
 CLIENT_DIST_PATH=../client/dist
 OPENAI_API_KEY=your_openai_api_key
+# Новый tool-based planner для обычного AI-чата.
+# По умолчанию выключен для безопасного rollout.
+AI_CHAT_PLANNER_TOOLS_ENABLED=false
 # Опциональный исходящий прокси только для запросов к OpenAI
 # OPENAI_PROXY_URL=http://1.2.3.4:8080
 # OPENAI_PROXY_USERNAME=proxy_user
@@ -53,6 +56,11 @@ TELEGRAM_RELAY_TARGET_URL=https://planirovych.ru/api/telegram/webhook
 TELEGRAM_RELAY_SOURCE_SECRET=your_relay_source_secret
 TELEGRAM_RELAY_TARGET_SECRET=your_relay_target_secret
 ```
+
+`AI_CHAT_PLANNER_TOOLS_ENABLED=false` сохраняет старую маршрутизацию по
+`TASK_INTENT_PATTERN` в `askGeneralAssistant`. Значение `true` включает для
+обычного AI-чата Responses API function calling и серверные planner tools.
+Для мгновенного отката без revert достаточно снова задать `false`.
 
 Если `OPENAI_PROXY_URL` не задан или пуст, запросы к OpenAI выполняются напрямую.
 При заданном URL только обращения к OpenAI отправляются через этот прокси. Если

@@ -2,6 +2,7 @@ import { prisma } from '../db/prisma.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -949,7 +950,8 @@ export const aiAssistantService = {
   async askAiChat(input: AskAiChatInput) {
     const question = input.question.trim();
     if (!question) throw new TypeError('Question is required');
-    if (TASK_INTENT_PATTERN.test(question)) {
+    const plannerToolsEnabled = process.env.AI_CHAT_PLANNER_TOOLS_ENABLED?.trim().toLowerCase() === 'true';
+    if (!plannerToolsEnabled && TASK_INTENT_PATTERN.test(question)) {
       const delegated = await this.askGeneralAssistant({
         userId: input.userId,
         question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${question}`,
@@ -967,6 +969,28 @@ export const aiAssistantService = {
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const history = normalizeGeneralHistory(input.history).slice(-24);
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    if (plannerToolsEnabled) {
+      const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
+        {
+          role: 'system',
+          content: [
+            'Ты универсальный AI-чат Планировыча. Отвечай на русском языке.',
+            'Ты видишь историю текущего разговора, но не знаешь реальные задачи пользователя заранее.',
+            'Если пользователь спрашивает о своих задачах, сроках, расписании, секторах, событиях или просит изменить их, используй planner tools.',
+            'Для ссылок «это», «её», «первую», «ту презентацию» используй весь диалог и формируй 1–4 отличительные поисковые фразы и до 10 смысловых keywords.',
+            'Включай тему, объект, проект, человека, мероприятие и сектор. Не используй бесполезные теги вроде «задача», «сделать», «это», «она», «дело».',
+            'Никогда не придумывай ID. Перед изменением существующего объекта сначала найди его tool-ом.',
+            'Если search вернул ambiguous=true и несколько правдоподобных объектов, не изменяй ничего: выполни максимум один более точный search или задай короткий уточняющий вопрос.',
+            'Если обычный вопрос не связан с данными Планировыча, не вызывай planner tools.'
+          ].join(' ')
+        },
+        { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
+        ...history,
+        { role: 'user', content: question },
+        ...(attachmentsMessage ? [attachmentsMessage] : [])
+      ];
+      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey });
+    }
     const response = await openAiFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
