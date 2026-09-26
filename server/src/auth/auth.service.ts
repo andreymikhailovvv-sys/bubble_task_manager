@@ -60,7 +60,11 @@ export const authService = {
     return jwt.sign(payload, getJwtSecret(), { expiresIn: '30d' });
   },
   verify(token: string) {
-    return jwt.verify(token, getJwtSecret()) as AuthTokenPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as Partial<AuthTokenPayload>;
+    if (typeof payload.sub !== 'string' || !payload.sub) {
+      throw new Error('Invalid authentication token purpose');
+    }
+    return payload as AuthTokenPayload;
   },
   cookieOptions() {
     return {
