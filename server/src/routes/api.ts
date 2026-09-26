@@ -16,6 +16,7 @@ import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { calendarExportController } from '../controllers/calendar-export.controller.js';
+import { AccountRegistrationError, accountRegistrationService, normalizeAccountLogin } from '../services/account-registration.service.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -23,7 +24,7 @@ const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
 
 
-const sanitizeLogin = (value: string) => value.trim().toLowerCase();
+const sanitizeLogin = normalizeAccountLogin;
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const normalizeTimeZone = (candidate: string): string | null => {
@@ -341,36 +342,20 @@ apiRouter.post('/auth/register', async (req, res) => {
   const nameRaw = String(req.body?.name ?? '').trim();
 
   const login = sanitizeLogin(loginRaw);
-  if (!login || login.length < 3) {
-    console.warn(`[Auth] register validation failed reason=invalid_login ${authRequestContext(req)}`);
-    res.status(400).json({ error: 'Логин должен содержать минимум 3 символа' });
+  let user;
+  try {
+    user = await accountRegistrationService.register({ login, password: passwordRaw, name: nameRaw });
+  } catch (error) {
+    if (!(error instanceof AccountRegistrationError)) throw error;
+    const response = error.code === 'INVALID_LOGIN'
+      ? { status: 400, message: 'Логин должен содержать минимум 3 символа' }
+      : error.code === 'INVALID_PASSWORD'
+        ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
+        : { status: 409, message: 'Логин уже занят' };
+    console.warn(`[Auth] register failed reason=${error.code.toLowerCase()} login=${login || 'empty'} ${authRequestContext(req)}`);
+    res.status(response.status).json({ error: response.message });
     return;
   }
-  if (!passwordRaw || passwordRaw.length < 6) {
-    console.warn(`[Auth] register validation failed reason=invalid_password login=${login || 'empty'} ${authRequestContext(req)}`);
-    res.status(400).json({ error: 'Пароль должен содержать минимум 6 символов' });
-    return;
-  }
-
-  const exists = await prisma.user.findUnique({ where: { username: login } });
-  if (exists) {
-    console.warn(`[Auth] register conflict login=${login} ${authRequestContext(req)}`);
-    res.status(409).json({ error: 'Логин уже занят' });
-    return;
-  }
-
-  const passwordHash = authService.hashPassword(passwordRaw);
-  const user = await prisma.$transaction(async (tx) => {
-    const createdUser = await tx.user.create({
-      data: {
-        username: login,
-        passwordHash,
-        name: nameRaw || login
-      }
-    });
-    await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
-    return createdUser;
-  });
 
   setAuthCookies(res, user);
   console.info(`[Auth] register success userId=${user.id} login=${login} ${authRequestContext(req)}`);
