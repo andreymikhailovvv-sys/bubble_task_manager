@@ -6,6 +6,7 @@ import {
   Heading1,
   Heading2,
   Italic,
+  CalendarPlus,
   Loader2,
   Maximize2,
   Paperclip,
@@ -28,6 +29,7 @@ import { api } from "../lib/api";
 import { noteHtmlToPlainText } from "../lib/notes";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
+import { CalendarExportDialog } from "./CalendarExportDialog";
 
 type Props = {
   task?: Task;
@@ -59,6 +61,7 @@ type Props = {
     isSubtask?: boolean;
     sphereColor?: string | null;
   }>;
+  timeZone?: string;
 };
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -294,6 +297,7 @@ export function TaskEditor({
   defaultAiNotificationsEnabled,
   timelineTasks = [],
   editorType,
+  timeZone = "Europe/Moscow",
 }: Props) {
   const isEditing = Boolean(task?.id);
   const isEventEditor = editorType === "event" || task?.taskType === "EVENT";
@@ -326,6 +330,7 @@ export function TaskEditor({
   const [isAddingDraftSubtask, setIsAddingDraftSubtask] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
   const [isTitleSingleLine, setIsTitleSingleLine] = useState(true);
+  const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -633,6 +638,16 @@ export function TaskEditor({
     onCancel();
   };
 
+  const flushEditorAutosave = async () => {
+    if (!onAutoSave) return false;
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = null;
+    }
+    await onAutoSave(form);
+    return true;
+  };
+
   const submitManualSave = async () => {
     if (!(form.title ?? "").trim()) {
       setTitleError(
@@ -672,6 +687,7 @@ export function TaskEditor({
   );
 
   return (
+    <>
     <div
       className="modal-backdrop fixed inset-0 z-[180] flex items-center justify-center p-3 backdrop-blur-sm"
       onClick={() => void closeEditor()}
@@ -688,6 +704,7 @@ export function TaskEditor({
         >
           <X size={18} />
         </button>
+        {isEditing && task?.id ? <button type="button" className="absolute right-14 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsCalendarExportOpen(true)} title="Добавить в календарь" aria-label="Добавить задачу в календарь"><CalendarPlus size={17} /></button> : null}
         <main className="focus-main-card task-edit-card flex h-full min-h-0 flex-col overflow-hidden rounded-[2rem] bg-white p-3">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">
             {isEventEditor
@@ -1253,5 +1270,7 @@ export function TaskEditor({
         </main>
       </aside>
     </div>
+    {isEditing && task?.id ? <CalendarExportDialog item={{ id: task.id, title: form.title ?? task.title, description: form.description, location: form.location, dueDate: form.dueDate }} isOpen={isCalendarExportOpen} onClose={() => setIsCalendarExportOpen(false)} onSaveBeforeExport={flushEditorAutosave} openExternalUrl={(url) => window.open(url, '_blank', 'noopener,noreferrer')} timeZone={timeZone} timelineTasks={timelineTasks} /> : null}
+    </>
   );
 }
