@@ -12,7 +12,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:deploy": "node scripts/migrate-deploy.mjs",
     "prebuild": "npm run prisma:generate"
   },
   "dependencies": {
