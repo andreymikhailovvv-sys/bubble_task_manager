@@ -74,7 +74,7 @@ function PrivacyPage() {
     <PublicLayout>
       <article className="legal-document mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
         <header>
-          <h1>Политика в отношении обработки персональных данных</h1>
+          <h1>Политика в отношении обработки персональных данных интернет-сервиса «Планировыч»</h1>
           <p className="legal-revision">Редакция от {PRIVACY_POLICY_REVISION_DATE}</p>
         </header>
         <PrivacyPolicyContent />
