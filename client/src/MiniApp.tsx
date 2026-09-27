@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -44,7 +44,13 @@ type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
 type DisplayMode = 'list' | 'timeline';
 type TimelineView = 'day' | 'week' | 'month';
 type ListSortMode = 'importance' | 'urgency';
+type SubtaskFilterMode = 'none' | 'urgency' | 'importance';
 type MiniThemeMode = 'dark' | 'light';
+const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> = [
+  { mode: 'urgency', label: 'По срочности' },
+  { mode: 'importance', label: 'По важности' },
+  { mode: 'none', label: 'Без фильтра' }
+];
 const MAX_SHINE_WINDOW_MINUTES = 180;
 const HOURS_IN_DAY = 24;
 const TIMELINE_QUARTERS_PER_HOUR = 4;
@@ -587,6 +593,9 @@ export default function MiniApp() {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
+  const [hideClosedOpenedTaskSubtasks, setHideClosedOpenedTaskSubtasks] = useState(true);
+  const [openedTaskSubtaskFilterMode, setOpenedTaskSubtaskFilterMode] = useState<SubtaskFilterMode>('urgency');
+  const [isOpenedTaskSubtaskFilterOpen, setIsOpenedTaskSubtaskFilterOpen] = useState(false);
   const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
@@ -1732,7 +1741,34 @@ export default function MiniApp() {
       dueDate: toInputDateTime(openedTask.dueDate)
     })
     : null;
-  const openedTaskSubtasks = openedTask ? (subtasksByParent[openedTask.id] ?? []) : [];
+  const openedTaskSubtasks = useMemo(() => {
+    if (!openedTask) return [];
+    const createdAtTimestamp = (task: Task) => {
+      if (!task.createdAt) return 0;
+      const parsed = new Date(task.createdAt).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+    const dueDateTimestamp = (task: Task) => {
+      if (!task.dueDate) return Number.POSITIVE_INFINITY;
+      const parsed = new Date(task.dueDate).getTime();
+      return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+    };
+    return [...(subtasksByParent[openedTask.id] ?? [])]
+      .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE')
+      .sort((a, b) => {
+        const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
+        if (statusDiff !== 0) return statusDiff;
+        if (openedTaskSubtaskFilterMode === 'importance') {
+          const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
+          if (importanceDiff !== 0) return importanceDiff;
+        }
+        if (openedTaskSubtaskFilterMode !== 'none') {
+          const dueDateDiff = dueDateTimestamp(a) - dueDateTimestamp(b);
+          if (dueDateDiff !== 0) return dueDateDiff;
+        }
+        return createdAtTimestamp(a) - createdAtTimestamp(b);
+      });
+  }, [hideClosedOpenedTaskSubtasks, openedTask, openedTaskSubtaskFilterMode, subtasksByParent]);
   const openedSubtask = openedSubtaskId
     ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
     : null;
@@ -2977,12 +3013,49 @@ export default function MiniApp() {
 
                 {openedTask.taskType !== 'EVENT' ? <div className="miniapp-focus-subtasks mt-4 flex min-h-0 flex-col space-y-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold">Подзадачи</h3>
-                    <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-action-pill">
-                      <Plus size={13} /> Добавить
-                    </button>
+                    <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+                      Подзадачи
+                      <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-subtask-icon-button" title="Добавить подзадачу" aria-label="Добавить подзадачу">
+                        <Plus size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHideClosedOpenedTaskSubtasks((current) => !current)}
+                        className={`miniapp-focus-subtask-visibility-button ${hideClosedOpenedTaskSubtasks ? 'miniapp-focus-subtask-visibility-button-active' : ''}`}
+                        title={hideClosedOpenedTaskSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
+                        aria-label={hideClosedOpenedTaskSubtasks ? 'Показывать закрытые подзадачи' : 'Скрывать закрытые подзадачи'}
+                      >
+                        {hideClosedOpenedTaskSubtasks ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </h3>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className={`miniapp-focus-action-pill ${openedTaskSubtaskFilterMode !== 'none' ? 'miniapp-focus-action-pill-active' : ''}`}
+                        onClick={() => setIsOpenedTaskSubtaskFilterOpen((current) => !current)}
+                        aria-haspopup="menu"
+                        aria-expanded={isOpenedTaskSubtaskFilterOpen}
+                      >
+                        Фильтровать
+                      </button>
+                      {isOpenedTaskSubtaskFilterOpen ? <div className="miniapp-subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border p-1.5 shadow-2xl" role="menu">
+                        {SUBTASK_FILTER_OPTIONS.map((option) => <button
+                          key={option.mode}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={openedTaskSubtaskFilterMode === option.mode}
+                          className={`miniapp-subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${openedTaskSubtaskFilterMode === option.mode ? 'miniapp-subtask-filter-item-active' : ''}`}
+                          onClick={() => {
+                            setOpenedTaskSubtaskFilterMode(option.mode);
+                            setIsOpenedTaskSubtaskFilterOpen(false);
+                          }}
+                        >
+                          {option.label}
+                        </button>)}
+                      </div> : null}
+                    </div>
                   </div>
-                  {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">Пока нет подзадач</p> : null}
+                  {openedTaskSubtasks.length === 0 ? <p className="text-xs text-slate-400">{hideClosedOpenedTaskSubtasks ? 'Активных подзадач пока нет' : 'Пока нет подзадач'}</p> : null}
                   <div className="space-y-2">
                     {openedTaskSubtasks.map((subtask) => {
                       return (
