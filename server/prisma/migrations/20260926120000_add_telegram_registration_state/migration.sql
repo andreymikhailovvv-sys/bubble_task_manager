@@ -1,3 +1,3 @@
 ALTER TABLE "TelegramSession"
-ADD COLUMN "registrationLogin" TEXT,
-ADD COLUMN "registrationPasswordHash" TEXT;
+ADD COLUMN IF NOT EXISTS "registrationLogin" TEXT,
+ADD COLUMN IF NOT EXISTS "registrationPasswordHash" TEXT;
