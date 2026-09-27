@@ -3956,6 +3956,7 @@ ${allContext}`,
         </button>
 
         <input className="surface-input light-search-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <button className="rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setAuthModalMode('login')}>Войти</button>
         <button className="rounded bg-indigo-700 px-3 py-2 text-sm light-secondary-action" onClick={() => setAuthModalMode('register')}>Регистрация</button>
         <button
@@ -4488,6 +4489,9 @@ ${allContext}`,
               <button className={`flex-1 rounded px-3 py-2 text-sm ${authModalMode === 'login' ? 'bg-cyan-700 light-primary-action' : 'bg-indigo-700 light-secondary-action'}`} onClick={submitAuth}>
                 {authModalMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
               </button>
+            </div>
+            <div className="mt-4 text-center">
+              <a className="public-secondary-link text-xs" href="/legal/privacy">Политика обработки персональных данных</a>
             </div>
           </div>
         </div>
