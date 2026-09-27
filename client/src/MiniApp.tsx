@@ -1756,13 +1756,17 @@ export default function MiniApp() {
     return [...(subtasksByParent[openedTask.id] ?? [])]
       .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE')
       .sort((a, b) => {
+        if (openedTaskSubtaskFilterMode === 'urgency') {
+          const aDueDate = dueDateTimestamp(a);
+          const bDueDate = dueDateTimestamp(b);
+          if (aDueDate !== bDueDate) return aDueDate - bDueDate;
+          return createdAtTimestamp(a) - createdAtTimestamp(b);
+        }
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
         if (openedTaskSubtaskFilterMode === 'importance') {
           const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
           if (importanceDiff !== 0) return importanceDiff;
-        }
-        if (openedTaskSubtaskFilterMode !== 'none') {
           const dueDateDiff = dueDateTimestamp(a) - dueDateTimestamp(b);
           if (dueDateDiff !== 0) return dueDateDiff;
         }
