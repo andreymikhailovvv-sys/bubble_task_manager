@@ -4490,8 +4490,9 @@ ${allContext}`,
                 {authModalMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
               </button>
             </div>
-            <div className="mt-4 text-center">
+            <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-center">
               <a className="public-secondary-link text-xs" href="/legal/privacy">Политика обработки персональных данных</a>
+              <a className="public-secondary-link text-xs" href="/legal/cookies">Политика cookies</a>
             </div>
           </div>
         </div>
