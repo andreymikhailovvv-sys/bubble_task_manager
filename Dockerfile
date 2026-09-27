@@ -1,40 +1,20 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim
 
 WORKDIR /app
-
-# Keep dependency installation cached until a package manifest changes.
-COPY package.json package-lock.json ./
-COPY client/package.json ./client/package.json
-COPY server/package.json ./server/package.json
-RUN npm ci
-
-COPY client ./client
-COPY server ./server
-RUN npm run build
-
-FROM node:22-bookworm-slim AS runtime
 
 RUN apt-get update -y \
   && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+COPY . .
 
-COPY package.json package-lock.json ./
-COPY client/package.json ./client/package.json
-COPY server/package.json ./server/package.json
-RUN npm ci --omit=dev \
+RUN npm ci \
+  && npm run build \
+  && npm prune --omit=dev \
   && npm cache clean --force
 
-COPY --from=build /app/server/prisma ./server/prisma
-RUN npm run prisma:generate --workspace server
-
-COPY --from=build /app/client/dist ./client/dist
-COPY --from=build /app/server/dist ./server/dist
-COPY --from=build /app/server/scripts ./server/scripts
-
-ENV NODE_ENV=production
-ENV PORT=4000
+ENV NODE_ENV=production \
+  PORT=4000
 
 EXPOSE 4000
 
