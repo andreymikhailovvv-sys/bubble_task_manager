@@ -1,7 +1,7 @@
 import { CalendarPlus, Loader2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { buildGoogleCalendarUrl, buildOutlookCalendarUrl, type CalendarDurationMinutes, type CalendarExportProvider } from '../lib/calendar';
+import { buildGoogleCalendarMobileWebUrl, buildGoogleCalendarWebUrl, buildOutlookCalendarUrl, type CalendarDurationMinutes, type CalendarExportProvider } from '../lib/calendar';
 import type { Task } from '../lib/types';
 import { CustomSelect } from './CustomSelect';
 import { DateTimePickerWithApply } from './DateTimePickerWithApply';
@@ -16,6 +16,7 @@ type Props = {
   openExternalUrl: (url: string) => void;
   providers?: CalendarExportProvider[];
   timeZone?: string;
+  googleUrlMode?: 'web' | 'mobile-web';
   timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null }>;
   variant?: 'web' | 'miniapp';
 };
@@ -26,7 +27,7 @@ const providerLabels: Record<CalendarExportProvider, { title: string; subtitle: 
   ics: { title: 'Системный / другой календарь', subtitle: 'Универсальный файл .ics' },
 };
 
-export function CalendarExportDialog({ item, isOpen, onClose, onSaveBeforeExport, openExternalUrl, providers = ['google', 'outlook', 'ics'], timeZone = 'Europe/Moscow', timelineTasks = [], variant = 'web' }: Props) {
+export function CalendarExportDialog({ item, isOpen, onClose, onSaveBeforeExport, openExternalUrl, providers = ['google', 'outlook', 'ics'], timeZone = 'Europe/Moscow', googleUrlMode = 'web', timelineTasks = [], variant = 'web' }: Props) {
   const [startAt, setStartAt] = useState<string | null>(item.dueDate ?? null);
   const [durationMinutes, setDurationMinutes] = useState<CalendarDurationMinutes>(60);
   const [reminderMinutes, setReminderMinutes] = useState<10 | 30 | 60 | null>(30);
@@ -55,7 +56,10 @@ export function CalendarExportDialog({ item, isOpen, onClose, onSaveBeforeExport
       const saved = await onSaveBeforeExport();
       if (saved === false) throw new Error('Не удалось сохранить актуальные данные. Исправьте ошибку сохранения и попробуйте снова.');
       let url: string;
-      if (provider === 'google') url = buildGoogleCalendarUrl(item, startAt, durationMinutes, timeZone || 'Europe/Moscow');
+      if (provider === 'google') {
+        const buildGoogleUrl = googleUrlMode === 'mobile-web' ? buildGoogleCalendarMobileWebUrl : buildGoogleCalendarWebUrl;
+        url = buildGoogleUrl(item, startAt, durationMinutes, timeZone || 'Europe/Moscow');
+      }
       else if (provider === 'outlook') url = buildOutlookCalendarUrl(item, startAt, durationMinutes);
       else url = (await api.createTaskCalendarIcsLink(item.id, { startAt: new Date(startAt).toISOString(), durationMinutes, reminderMinutes })).url;
       openExternalUrl(url);

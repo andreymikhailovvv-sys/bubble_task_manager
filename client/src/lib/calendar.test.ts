@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildGoogleCalendarUrl, buildOutlookCalendarUrl } from './calendar.js';
+import { buildGoogleCalendarMobileWebUrl, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from './calendar.js';
 
 const item = { title: 'Подготовить презентацию', description: 'Выступление для руководства', location: 'ВДНХ' };
 const start = '2026-09-30T12:00:00.000Z';
 
 test('Google URL содержит заполненные и корректно закодированные параметры', () => {
   const url = new URL(buildGoogleCalendarUrl(item, start, 60, 'Europe/Moscow'));
+  assert.equal(url.origin, 'https://calendar.google.com');
+  assert.equal(url.pathname, '/calendar/r/eventedit');
   assert.equal(url.searchParams.get('action'), 'TEMPLATE');
   assert.equal(url.searchParams.get('text'), item.title);
   assert.equal(url.searchParams.get('details'), item.description);
@@ -14,6 +16,21 @@ test('Google URL содержит заполненные и корректно �
   assert.equal(url.searchParams.get('dates'), '20260930T120000Z/20260930T130000Z');
   assert.equal(url.searchParams.get('stz'), 'Europe/Moscow');
   assert.equal(url.searchParams.get('etz'), 'Europe/Moscow');
+  assert.match(url.toString(), /%D0%9F/);
+});
+
+test('мобильный Google Web URL содержит шаблон события и часовой пояс', () => {
+  const url = new URL(buildGoogleCalendarMobileWebUrl(item, start, 60, 'Europe/Moscow'));
+  assert.equal(url.origin, 'https://www.google.com');
+  assert.equal(url.pathname, '/calendar/render');
+  assert.equal(url.searchParams.get('action'), 'TEMPLATE');
+  assert.equal(url.searchParams.get('text'), item.title);
+  assert.equal(url.searchParams.get('dates'), '20260930T120000Z/20260930T130000Z');
+  assert.equal(url.searchParams.get('details'), item.description);
+  assert.equal(url.searchParams.get('location'), item.location);
+  assert.equal(url.searchParams.get('ctz'), 'Europe/Moscow');
+  assert.equal(url.searchParams.has('stz'), false);
+  assert.equal(url.searchParams.has('etz'), false);
   assert.match(url.toString(), /%D0%9F/);
 });
 

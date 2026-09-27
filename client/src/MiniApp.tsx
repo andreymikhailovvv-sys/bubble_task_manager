@@ -3033,6 +3033,7 @@ export default function MiniApp() {
         onSaveBeforeExport={() => saveTask(calendarExportTask.id)}
         openExternalUrl={(url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); }}
         timeZone={currentUser?.timeZone?.trim() || 'Europe/Moscow'}
+        googleUrlMode="mobile-web"
         timelineTasks={timelinePickerTasks}
         variant="miniapp"
       /> : null}

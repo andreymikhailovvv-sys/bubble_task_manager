@@ -24,16 +24,29 @@ function calendarRange(startAt: string, durationMinutes: CalendarDurationMinutes
   return { start, end: new Date(start.getTime() + durationMinutes * 60_000) };
 }
 
-export function buildGoogleCalendarUrl(item: CalendarUrlItem, startAt: string, durationMinutes: CalendarDurationMinutes, timeZone: string) {
+function buildGoogleCalendarTemplateUrl(baseUrl: string, item: CalendarUrlItem, startAt: string, durationMinutes: CalendarDurationMinutes) {
   const { start, end } = calendarRange(startAt, durationMinutes);
-  const url = new URL('https://calendar.google.com/calendar/r/eventedit');
+  const url = new URL(baseUrl);
   url.searchParams.set('action', 'TEMPLATE');
   url.searchParams.set('text', item.title);
   url.searchParams.set('dates', `${formatCalendarUtcDate(start)}/${formatCalendarUtcDate(end)}`);
   url.searchParams.set('details', truncateCalendarDescription(item.description));
   if (item.location?.trim()) url.searchParams.set('location', item.location.trim());
+  return url;
+}
+
+export function buildGoogleCalendarWebUrl(item: CalendarUrlItem, startAt: string, durationMinutes: CalendarDurationMinutes, timeZone: string) {
+  const url = buildGoogleCalendarTemplateUrl('https://calendar.google.com/calendar/r/eventedit', item, startAt, durationMinutes);
   url.searchParams.set('stz', timeZone);
   url.searchParams.set('etz', timeZone);
+  return url.toString();
+}
+
+export const buildGoogleCalendarUrl = buildGoogleCalendarWebUrl;
+
+export function buildGoogleCalendarMobileWebUrl(item: CalendarUrlItem, startAt: string, durationMinutes: CalendarDurationMinutes, timeZone = 'Europe/Moscow') {
+  const url = buildGoogleCalendarTemplateUrl('https://www.google.com/calendar/render', item, startAt, durationMinutes);
+  url.searchParams.set('ctz', timeZone);
   return url.toString();
 }
 
