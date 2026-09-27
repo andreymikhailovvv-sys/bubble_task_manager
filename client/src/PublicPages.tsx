@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { PrivacyPolicyContent, PRIVACY_POLICY_REVISION_DATE } from './legal/privacy';
+import { CookiePolicyContent, COOKIE_POLICY_REVISION_DATE } from './legal/cookies';
 
 function PublicLayout({ children }: PropsWithChildren) {
   return (
@@ -21,9 +22,12 @@ function PublicLayout({ children }: PropsWithChildren) {
       {children}
 
       <footer className="border-t border-slate-200/80">
-        <div className="mx-auto flex w-full max-w-5xl px-4 py-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-5xl flex-wrap gap-x-5 gap-y-2 px-4 py-6 sm:px-6">
           <a href="/legal/privacy" className="public-secondary-link text-sm">
             Политика обработки персональных данных
+          </a>
+          <a href="/legal/cookies" className="public-secondary-link text-sm">
+            Политика cookies
           </a>
         </div>
       </footer>
@@ -62,6 +66,7 @@ function AboutPage() {
           <h2>Правовая информация</h2>
           <ul className="public-link-list">
             <li><a href="/legal/privacy">Политика обработки персональных данных</a></li>
+            <li><a href="/legal/cookies">Политика cookies</a></li>
           </ul>
         </section>
       </article>
@@ -83,6 +88,22 @@ function PrivacyPage() {
   );
 }
 
+function CookiesPage() {
+  return (
+    <PublicLayout>
+      <article className="legal-document mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+        <header>
+          <h1>Политика использования cookies и локального хранилища</h1>
+          <p className="legal-revision">Редакция от {COOKIE_POLICY_REVISION_DATE}</p>
+        </header>
+        <CookiePolicyContent />
+      </article>
+    </PublicLayout>
+  );
+}
+
 export default function PublicPages() {
-  return window.location.pathname === '/legal/privacy' ? <PrivacyPage /> : <AboutPage />;
+  if (window.location.pathname === '/legal/privacy') return <PrivacyPage />;
+  if (window.location.pathname === '/legal/cookies') return <CookiesPage />;
+  return <AboutPage />;
 }
