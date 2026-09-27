@@ -77,6 +77,23 @@ test('валидный token возвращает VEVENT, заголовки, UT
   assert.ok(ics.endsWith('\r\n'));
 });
 
+test('существующий endpoint экспортирует подзадачу по её id', async () => {
+  const subtask = { id: 'subtask-1', userId: 'user-1', parentTaskId: 'task-1', title: 'Подзадача', description: 'Описание подзадачи', location: null };
+  const repo = repository(subtask as never);
+  const link = response();
+  await createCalendarExportController(repo).createLink(createRequest({ params: { id: subtask.id } }) as never, link.res as never);
+  assert.equal(link.result.status, 200);
+  assert.deepEqual(repo.calls[0].where, { id: subtask.id, userId: subtask.userId });
+
+  const token = new URL((link.result.body as { url: string }).url).searchParams.get('token');
+  assert.ok(token);
+  const exported = response();
+  await createCalendarExportController(repository(subtask as never)).exportIcs(exportRequest(token) as never, exported.res as never);
+  const ics = String(exported.result.body);
+  assert.match(ics, /SUMMARY:Подзадача/);
+  assert.match(ics, /DESCRIPTION:Описание подзадачи/);
+});
+
 test('reminder=null не создаёт VALARM', () => {
   const ics = createTaskIcs(ownTask, { startAt: '2026-09-27T12:00:00.000Z', durationMinutes: 30, reminderMinutes: null });
   assert.doesNotMatch(ics, /VALARM|TRIGGER/);

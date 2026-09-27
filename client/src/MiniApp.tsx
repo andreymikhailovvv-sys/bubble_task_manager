@@ -6,6 +6,7 @@ import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
+import { CalendarExportDialog } from './components/CalendarExportDialog';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
@@ -599,12 +600,7 @@ export default function MiniApp() {
   const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
-  const [calendarStartAt, setCalendarStartAt] = useState<string | null>(null);
-  const [calendarDurationMinutes, setCalendarDurationMinutes] = useState<30 | 60 | 90 | 120>(60);
-  const [calendarReminderMinutes, setCalendarReminderMinutes] = useState<10 | 30 | 60 | null>(30);
-  const [calendarExportLoading, setCalendarExportLoading] = useState(false);
-  const [calendarExportError, setCalendarExportError] = useState<string | null>(null);
-  const [calendarExportPrepared, setCalendarExportPrepared] = useState(false);
+  const [calendarExportTaskId, setCalendarExportTaskId] = useState<string | null>(null);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -1224,11 +1220,7 @@ export default function MiniApp() {
     }
     setClosingMiniWindow(null);
     setIsCalendarExportOpen(false);
-    setCalendarStartAt(task.dueDate ?? null);
-    setCalendarDurationMinutes(60);
-    setCalendarReminderMinutes(30);
-    setCalendarExportError(null);
-    setCalendarExportPrepared(false);
+    setCalendarExportTaskId(null);
     setOpenedTaskId(task.id);
   };
 
@@ -1261,9 +1253,7 @@ export default function MiniApp() {
     setNewSubtaskDraft(null);
     setIsTaskSettingsOpen(false);
     setIsCalendarExportOpen(false);
-    setCalendarExportLoading(false);
-    setCalendarExportError(null);
-    setCalendarExportPrepared(false);
+    setCalendarExportTaskId(null);
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
     setIsAiDialogOpen(false);
@@ -1786,6 +1776,8 @@ export default function MiniApp() {
       dueDate: toInputDateTime(openedSubtask.dueDate)
     })
     : null);
+  const calendarExportTask = calendarExportTaskId ? tasks.find((task) => task.id === calendarExportTaskId) ?? null : null;
+  const calendarExportDraft = calendarExportTask ? draftByTaskId[calendarExportTask.id] : null;
   const subtaskEditorId = openedSubtask?.id ?? 'new-subtask';
   const isCreatingNewSubtask = newSubtaskDraft !== null;
   const changeSubtaskDraft = (patch: Partial<TaskDraft>) => {
@@ -1796,54 +1788,9 @@ export default function MiniApp() {
     if (openedSubtask) onChangeDraft(openedSubtask.id, patch);
   };
   const openedTaskAiDialog = openedTask ? (aiDialogByTask[openedTask.id] ?? []) : [];
-  const telegramPlatform = (window as TelegramWindow).Telegram?.WebApp?.platform;
-  const calendarPlatformHint = telegramPlatform === 'ios'
-    ? 'Откроем системный календарь iPhone'
-    : telegramPlatform === 'android'
-      ? 'Откроем календарь, поддерживающий .ics на устройстве'
-      : 'Откроем или скачаем файл календаря';
-
-  const openCalendarExport = () => {
-    if (!openedTask) return;
-    setCalendarStartAt(openedTask.dueDate ?? null);
-    setCalendarDurationMinutes(60);
-    setCalendarReminderMinutes(30);
-    setCalendarExportError(null);
-    setCalendarExportPrepared(false);
+  const openCalendarExport = (taskId: string) => {
+    setCalendarExportTaskId(taskId);
     setIsCalendarExportOpen(true);
-  };
-
-  const exportTaskToCalendar = async () => {
-    if (!openedTask || !calendarStartAt || calendarExportLoading) return;
-    setCalendarExportLoading(true);
-    setCalendarExportError(null);
-    setCalendarExportPrepared(false);
-    try {
-      const saved = await saveTask(openedTask.id);
-      if (!saved) {
-        setCalendarExportError('Не удалось сохранить актуальные данные задачи. Исправьте ошибку сохранения и попробуйте снова.');
-        return;
-      }
-      const { url } = await api.createTaskCalendarIcsLink(openedTask.id, {
-        startAt: new Date(calendarStartAt).toISOString(),
-        durationMinutes: calendarDurationMinutes,
-        reminderMinutes: calendarReminderMinutes
-      });
-      const webApp = (window as TelegramWindow).Telegram?.WebApp;
-      try {
-        if (!webApp?.openLink) throw new Error('Telegram openLink is unavailable');
-        webApp.openLink(url);
-      } catch {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-      setCalendarExportPrepared(true);
-    } catch (exportError) {
-      setCalendarExportError(exportError instanceof Error && exportError.message.trim()
-        ? exportError.message
-        : 'Не удалось подготовить событие календаря.');
-    } finally {
-      setCalendarExportLoading(false);
-    }
   };
 
   useLayoutEffect(() => {
@@ -2822,7 +2769,7 @@ export default function MiniApp() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={openCalendarExport} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
+                  <button type="button" onClick={() => openCalendarExport(openedTask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
                     <CalendarPlus size={16} />
                   </button>
                   <button type="button" onClick={() => setIsTaskSettingsOpen((prev) => !prev)} className="miniapp-focus-icon-button" title="Настройки задачи" aria-label="Открыть настройки задачи">
@@ -3079,48 +3026,16 @@ export default function MiniApp() {
           </div>
         </div>
       ) : null}
-      {openedTask && openedTaskDraft && isCalendarExportOpen ? (
-        <div className="miniapp-calendar-export-backdrop fixed inset-0 z-[130] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => { if (!calendarExportLoading) setIsCalendarExportOpen(false); }}>
-          <div className="miniapp-focus-panel miniapp-calendar-export-panel w-full rounded-t-[2rem] border p-5 shadow-2xl sm:max-w-md sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-labelledby="calendar-export-title" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3">
-              <h2 id="calendar-export-title" className="text-lg font-bold">Добавить в календарь</h2>
-              <button type="button" className="miniapp-focus-icon-button" disabled={calendarExportLoading} onClick={() => setIsCalendarExportOpen(false)} aria-label="Закрыть окно добавления в календарь"><X size={16} /></button>
-            </div>
-            <p className="mt-2 break-words text-sm font-semibold text-violet-600">{openedTaskDraft.title.trim() || openedTask.title}</p>
-            <div className="mt-5 space-y-4">
-              <label className="block text-xs font-semibold text-slate-500">
-                <span className="mb-1.5 block">Дата и время</span>
-                <DateTimePickerWithApply
-                  value={calendarStartAt}
-                  onChange={setCalendarStartAt}
-                  title="Выбрать дату и время события"
-                  timelineTasks={timelinePickerTasks}
-                  detachedPopup
-                  buttonClassName="miniapp-calendar-export-field"
-                />
-              </label>
-              <label className="block text-xs font-semibold text-slate-500">
-                <span className="mb-1.5 block">Продолжительность</span>
-                <CustomSelect value={String(calendarDurationMinutes)} onChange={(value) => setCalendarDurationMinutes(Number(value) as 30 | 60 | 90 | 120)} ariaLabel="Продолжительность события" buttonClassName="miniapp-calendar-export-field" options={[
-                  { value: '30', label: '30 минут' }, { value: '60', label: '1 час' }, { value: '90', label: '1 час 30 минут' }, { value: '120', label: '2 часа' }
-                ]} />
-              </label>
-              <label className="block text-xs font-semibold text-slate-500">
-                <span className="mb-1.5 block">Напоминание</span>
-                <CustomSelect value={calendarReminderMinutes === null ? 'none' : String(calendarReminderMinutes)} onChange={(value) => setCalendarReminderMinutes(value === 'none' ? null : Number(value) as 10 | 30 | 60)} ariaLabel="Напоминание календаря" buttonClassName="miniapp-calendar-export-field" options={[
-                  { value: 'none', label: 'Без напоминания' }, { value: '10', label: 'За 10 минут' }, { value: '30', label: 'За 30 минут' }, { value: '60', label: 'За 1 час' }
-                ]} />
-              </label>
-            </div>
-            <p className="mt-4 text-xs text-slate-500">{calendarPlatformHint}</p>
-            {calendarExportError ? <p className="mt-3 text-sm font-medium text-rose-600" role="alert">{calendarExportError}</p> : null}
-            {calendarExportPrepared ? <p className="mt-3 text-sm font-medium text-emerald-600" role="status">Событие подготовлено. Подтвердите добавление в приложении календаря.</p> : null}
-            <button type="button" className="miniapp-focus-success-button mt-5 w-full" disabled={!calendarStartAt || calendarExportLoading} onClick={() => void exportTaskToCalendar()}>
-              {calendarExportLoading ? <><Loader2 size={15} className="animate-spin" /> Подготавливаем…</> : <><CalendarPlus size={15} /> Добавить в календарь</>}
-            </button>
-          </div>
-        </div>
-      ) : null}
+      {calendarExportTask ? <CalendarExportDialog
+        item={{ id: calendarExportTask.id, title: calendarExportDraft?.title ?? calendarExportTask.title, description: calendarExportDraft?.description ?? calendarExportTask.description, location: calendarExportTask.location, dueDate: calendarExportDraft ? fromInputDateTime(calendarExportDraft.dueDate) : calendarExportTask.dueDate }}
+        isOpen={isCalendarExportOpen}
+        onClose={() => { setIsCalendarExportOpen(false); setCalendarExportTaskId(null); }}
+        onSaveBeforeExport={() => saveTask(calendarExportTask.id)}
+        openExternalUrl={(url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); }}
+        timeZone={currentUser?.timeZone?.trim() || 'Europe/Moscow'}
+        timelineTasks={timelinePickerTasks}
+        variant="miniapp"
+      /> : null}
       {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-[100] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
           <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
@@ -3129,9 +3044,12 @@ export default function MiniApp() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{isCreatingNewSubtask ? 'Создание подзадачи' : 'Редактирование подзадачи'}</p>
                 <p className="mt-1 text-xs text-slate-400">Минимальная карточка с описанием и сроком</p>
               </div>
-              <button type="button" onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')} disabled={!isCreatingNewSubtask && savingId === subtaskEditorId} className="miniapp-focus-icon-button" aria-label={isCreatingNewSubtask ? 'Отменить создание подзадачи' : 'Сохранить и закрыть окно подзадачи'}>
-                {!isCreatingNewSubtask && savingId === subtaskEditorId ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
-              </button>
+              <div className="flex items-center gap-2">
+                {openedSubtask ? <button type="button" onClick={() => openCalendarExport(openedSubtask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить подзадачу в календарь"><CalendarPlus size={16} /></button> : null}
+                <button type="button" onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')} disabled={!isCreatingNewSubtask && savingId === subtaskEditorId} className="miniapp-focus-icon-button" aria-label={isCreatingNewSubtask ? 'Отменить создание подзадачи' : 'Сохранить и закрыть окно подзадачи'}>
+                  {!isCreatingNewSubtask && savingId === subtaskEditorId ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                </button>
+              </div>
             </div>
             <textarea
               ref={subtaskTitleInputRef}

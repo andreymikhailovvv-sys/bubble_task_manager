@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -17,6 +17,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
+import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 
 const MAX_SPHERES = 8;
@@ -866,6 +867,7 @@ export default function App() {
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
   const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
+  const [isFocusedCalendarExportOpen, setIsFocusedCalendarExportOpen] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
   const [isFocusedTitleSingleLine, setIsFocusedTitleSingleLine] = useState(true);
@@ -1789,10 +1791,9 @@ export default function App() {
     };
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
-  const closeFocusedTask = async () => {
+  const flushFocusedTaskSave = async () => {
     if (!focusedTask || !focusedDraft) {
-      setFocusedTaskId(null);
-      return;
+      return false;
     }
     if (focusedAutosaveTimeoutRef.current) {
       clearTimeout(focusedAutosaveTimeoutRef.current);
@@ -1806,6 +1807,24 @@ export default function App() {
     };
     const score = calcScore(normalized.importance, normalized.urgency);
     await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
+    focusedAutosaveSignatureRef.current = JSON.stringify({
+      title: normalized.title ?? '', description: normalized.description ?? '', sphereId: normalized.sphereId ?? null,
+      dueDate: normalized.dueDate ?? null, notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
+      isRecurring: normalized.isRecurring ?? false, recurrenceText: normalized.recurrenceText ?? null,
+      recurrenceJson: normalized.recurrenceJson ?? null, recurrenceSummary: normalized.recurrenceSummary ?? null,
+      recurrenceUntil: normalized.recurrenceUntil ?? null,
+      aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled,
+      importance: normalized.importance, urgency: normalized.urgency, status: normalized.status
+    });
+    return true;
+  };
+
+  const closeFocusedTask = async () => {
+    if (!focusedTask || !focusedDraft) {
+      setFocusedTaskId(null);
+      return;
+    }
+    await flushFocusedTaskSave();
     setFocusedTaskId(null);
     await load();
   };
@@ -5576,6 +5595,7 @@ ${allContext}`,
           initialSphereId={editorState.initialSphereId}
           spheres={spheres}
           defaultAiNotificationsEnabled={isAiNotificationsDefaultEnabled}
+          timeZone={userTimeZone}
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
@@ -5594,6 +5614,16 @@ ${allContext}`,
           } : undefined}
         />
       ) : null}
+
+      {focusedTask && focusedDraft ? <CalendarExportDialog
+        item={{ id: focusedTask.id, title: focusedDraft.title ?? focusedTask.title, description: focusedDraft.description, location: focusedDraft.location, dueDate: focusedDraft.dueDate }}
+        isOpen={isFocusedCalendarExportOpen}
+        onClose={() => setIsFocusedCalendarExportOpen(false)}
+        onSaveBeforeExport={flushFocusedTaskSave}
+        openExternalUrl={(url) => window.open(url, '_blank', 'noopener,noreferrer')}
+        timeZone={userTimeZone}
+        timelineTasks={timelinePickerTasks}
+      /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
         <div className={`fixed inset-0 ${isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
@@ -5900,7 +5930,8 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-16 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-24 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="absolute right-14 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
             <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
