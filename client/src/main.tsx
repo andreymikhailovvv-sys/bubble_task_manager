@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import MiniApp from './MiniApp';
 import AdminPage from './AdminPage';
+import PublicPages from './PublicPages';
 import { api } from './lib/api';
 import './styles.css';
 
@@ -67,11 +68,12 @@ window.addEventListener('unhandledrejection', (event) => {
 
 const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isAdminRoute = window.location.pathname === '/admin556215';
+const isPublicRoute = window.location.pathname === '/about' || window.location.pathname === '/legal/privacy';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {isAdminRoute ? <AdminPage /> : isMiniAppRoute ? <MiniApp /> : <App />}
+      {isAdminRoute ? <AdminPage /> : isMiniAppRoute ? <MiniApp /> : isPublicRoute ? <PublicPages /> : <App />}
     </AppErrorBoundary>
   </React.StrictMode>
 );
