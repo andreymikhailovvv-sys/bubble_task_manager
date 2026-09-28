@@ -73,7 +73,8 @@ const isPublicRoute = window.location.pathname === '/about'
   || window.location.pathname === '/legal/privacy'
   || window.location.pathname === '/legal/cookies'
   || window.location.pathname === '/legal/terms'
-  || window.location.pathname === '/legal/consent';
+  || window.location.pathname === '/legal/consent'
+  || window.location.pathname === '/legal/offer';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
