@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
@@ -187,11 +188,8 @@ async function recordAiEfficiencyBonus(userId: string, delta: number) {
   for (let index = 1; index <= penaltyHours; index += 1) {
     const penaltyAtMs = fromMs + (3 + index) * hourMs;
     const hour = localHour(penaltyAtMs, user.timeZone || 'Europe/Moscow');
-    const penalty = hour >= 0 && hour < 8 ? 0.5 : 1;
-    scores.task = clampEfficiencyBucket(scores.task - penalty);
-    scores.habit = clampEfficiencyBucket(scores.habit - penalty);
-    scores.ai = clampEfficiencyBucket(scores.ai - penalty);
-    scores.focus = clampEfficiencyBucket(scores.focus - penalty);
+    const bucketPenalty = hour >= 0 && hour < 8 ? 0.5 : 1;
+    Object.assign(scores, deductEfficiencyPenalty(scores, bucketPenalty * 4));
   }
   if (efficiencyTotal(scores) < 100) scores.ai = clampEfficiencyBucket(scores.ai + Math.min(delta, 100 - efficiencyTotal(scores)));
   await prisma.user.update({
