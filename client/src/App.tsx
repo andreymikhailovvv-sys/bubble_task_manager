@@ -432,6 +432,7 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   content,
   tasks,
   onOpenTask,
+  onOpenTaskReference,
   showTaskReferenceButtons = false,
   closeGeneralAiFullscreenOnOpen,
   setGeneralAiFullscreen
@@ -439,6 +440,7 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   content: string;
   tasks: Task[];
   onOpenTask?: (taskId: string) => void;
+  onOpenTaskReference?: (task: Task) => void;
   showTaskReferenceButtons?: boolean;
   closeGeneralAiFullscreenOnOpen?: boolean;
   setGeneralAiFullscreen?: (value: boolean) => void;
@@ -447,7 +449,11 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   const normalizedContent = useMemo(() => normalizeAiMessageContent(content), [content]);
 
   const openTask = (taskId: string, matchedTask?: Task | null) => {
-    onOpenTask?.(showTaskReferenceButtons ? (matchedTask?.id ?? taskId) : (matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId));
+    if (matchedTask && onOpenTaskReference) {
+      onOpenTaskReference(matchedTask);
+    } else {
+      onOpenTask?.(showTaskReferenceButtons ? (matchedTask?.id ?? taskId) : (matchedTask?.parentTaskId ?? matchedTask?.id ?? taskId));
+    }
     if (closeGeneralAiFullscreenOnOpen && setGeneralAiFullscreen) {
       setGeneralAiFullscreen(false);
     }
@@ -2275,6 +2281,14 @@ export default function App() {
     }
     if (task.taskType === 'EVENT' || task.parentTaskId) setEditorState({ task });
     else setFocusedTaskId(task.id);
+  };
+
+  const openTaskReferenceFromAi = (task: Task) => {
+    if (task.parentTaskId) {
+      setEditorState({ task });
+      return;
+    }
+    setFocusedTaskId(task.id);
   };
 
   const persistEfficiencyBonus = async (delta: number, bucket: 'task' | 'habit' | 'ai' | 'focus') => {
@@ -6794,7 +6808,7 @@ ${allContext}`,
                 </div>
               ) : (
                 <div key={`message-${item.message.id}`} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
-                  <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}
+                  <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}
                 </div>
               ))}
               {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
@@ -6856,7 +6870,7 @@ ${allContext}`,
                 </div>
                 <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
+                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
                 </div>
