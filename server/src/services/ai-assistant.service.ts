@@ -1472,8 +1472,15 @@ export const aiAssistantService = {
         : [])
     ].join(' ');
 
-    const taskContext = formatTaskContext(task, userTimeZone);
-    const attachmentsMessage = buildAttachmentsPromptMessage([...(task.attachments ?? []), ...(input.attachments ?? [])]);
+    const taskContext = formatTaskContext(
+      task.parentTaskId ? { ...task, attachments: [] } : task,
+      userTimeZone
+    );
+    // Files stored on a subtask are user-only reference materials. They are
+    // deliberately excluded from the assistant context; the user must attach
+    // a file to the chat explicitly when they want the model to process it.
+    const storedAttachments = task.parentTaskId ? [] : (task.attachments ?? []);
+    const attachmentsMessage = buildAttachmentsPromptMessage([...storedAttachments, ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
     const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
