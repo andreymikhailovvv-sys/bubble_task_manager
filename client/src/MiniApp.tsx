@@ -1242,6 +1242,14 @@ export default function MiniApp() {
     setOpenedSubtaskId(subtask.id);
   };
 
+  const openAiTaskReference = (task: Task) => {
+    if (task.parentTaskId) {
+      openSubtaskModal(task);
+      return;
+    }
+    openTaskModal(task);
+  };
+
   useEffect(() => {
     if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
     const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
@@ -3186,7 +3194,7 @@ export default function MiniApp() {
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
+                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : renderMiniAiMessageContent(message.content)}</div>
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
@@ -3297,7 +3305,7 @@ export default function MiniApp() {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message miniapp-ai-chat-message-general max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openTaskModal} /> : renderMiniAiMessageContent(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : renderMiniAiMessageContent(message.content)}</div>
                 </div>
               ))}
               {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}

@@ -703,8 +703,9 @@ const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMes
 
   const description = escapeTaskDescription(task.description);
   const lines = [
-    `🧩 <b>${escapeHtml(task.title)}</b>`,
-    '🚨 <b>Просрочена</b>'
+    `📅 <b>${escapeHtml(task.title)}</b>`,
+    '',
+    '⏰ <b>Напоминание о задаче</b>'
   ];
 
   if (description) {
@@ -1754,7 +1755,7 @@ export const telegramService = {
           ? `${totalMinutes} мин.`
           : `${Math.floor(totalMinutes / 60)} ч.${totalMinutes % 60 ? ` ${totalMinutes % 60} мин.` : ''}`;
         const content = notificationKind === 'overdue'
-          ? `🚨 Задача «${task.title}» просрочена.`
+          ? `⏰Напоминание о задаче «${task.title}»`
           : `⏰ До дедлайна задачи «${task.title}» осталось ${timeLeft}`;
         await prisma.systemNotification.create({
           data: {
