@@ -71,7 +71,8 @@ const isMiniAppRoute = window.location.pathname.startsWith('/miniapp');
 const isAdminRoute = window.location.pathname === '/admin556215';
 const isPublicRoute = window.location.pathname === '/about'
   || window.location.pathname === '/legal/privacy'
-  || window.location.pathname === '/legal/cookies';
+  || window.location.pathname === '/legal/cookies'
+  || window.location.pathname === '/legal/terms';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

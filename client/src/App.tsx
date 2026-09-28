@@ -766,6 +766,7 @@ export default function App() {
   const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [isTimelineToolbarHidden, setIsTimelineToolbarHidden] = useState(false);
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
@@ -953,7 +954,9 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(() => (
+    new URLSearchParams(window.location.search).get('auth') === 'login' ? 'login' : null
+  ));
   const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1084,6 +1087,27 @@ export default function App() {
       setSettingsError(error instanceof Error ? error.message : 'Не удалось сохранить настройки');
     } finally {
       setSettingsSavingKey(null);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (!currentUser || isDeletingAccount) return;
+    const confirmed = window.confirm('Вы уверены, что хотите удалить аккаунт?\n\nВсе данные аккаунта будут удалены. Это действие нельзя отменить.');
+    if (!confirmed) return;
+
+    setIsDeletingAccount(true);
+    setSettingsError(null);
+    try {
+      const userId = currentUser.id;
+      await api.deleteAccount();
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith(`btm:${userId}:`) || key.startsWith(`btm:focus-bonus-total:${userId}:`))
+        .forEach((key) => localStorage.removeItem(key));
+      clearUserState();
+      window.location.assign('/?auth=login');
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Не удалось удалить аккаунт');
+      setIsDeletingAccount(false);
     }
   };
 
@@ -4173,6 +4197,18 @@ ${allContext}`,
                   ariaLabel="Уведомления от ИИ"
                 />
               </div>
+              <div className="mt-3 border-t border-rose-500/30 pt-3">
+                <div className="mb-1 text-xs font-semibold text-rose-300">Удаление аккаунта</div>
+                <p className="mb-2 text-[11px] leading-snug text-subtle">Аккаунт и связанные с ним данные будут удалены без возможности восстановления.</p>
+                <button
+                  type="button"
+                  className="danger-button w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isDeletingAccount}
+                  onClick={() => void deleteAccount()}
+                >
+                  {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
+                </button>
+              </div>
             </div>
           ) : null}
           </div>
@@ -4507,6 +4543,7 @@ ${allContext}`,
             <div className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-2 text-center">
               <a className="public-secondary-link text-xs" href="/legal/privacy">Политика обработки персональных данных</a>
               <a className="public-secondary-link text-xs" href="/legal/cookies">Политика cookies</a>
+              <a className="public-secondary-link text-xs" href="/legal/terms">Пользовательское соглашение</a>
             </div>
           </div>
         </div>

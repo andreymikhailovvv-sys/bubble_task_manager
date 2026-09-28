@@ -427,6 +427,13 @@ apiRouter.post('/auth/logout', (_req, res) => {
   res.json({ ok: true });
 });
 
+apiRouter.delete('/user/account', requireAuth, async (req, res) => {
+  await prisma.user.delete({ where: { id: req.user!.id } });
+  res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
+  res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
+  res.json({ ok: true });
+});
+
 const requireAdminPassword = (req: any, res: any): boolean => {
   const configuredPassword = process.env[ADMIN_PANEL_PASSWORD_ENV]?.trim();
   if (!configuredPassword) {
