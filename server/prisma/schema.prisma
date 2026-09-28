@@ -324,3 +324,15 @@ model SubscriptionLink {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model CreditPack {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  name          String
+  creditsAmount Int
+  price         Int
+  paymentUrl    String   @default("")
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
