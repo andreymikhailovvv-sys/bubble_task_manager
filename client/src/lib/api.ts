@@ -126,6 +126,7 @@ export const api = {
     window.location.href = '/api/auth/google';
   },
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
+  deleteAccount: () => request<{ ok: true }>('/api/user/account', { method: 'DELETE' }),
   createTelegramLinkToken: () =>
     request<{ deepLinkUrl: string; expiresInSeconds: number }>('/api/telegram/link-token', { method: 'POST' }),
   getSpheres: () => request<Sphere[]>('/api/spheres'),
