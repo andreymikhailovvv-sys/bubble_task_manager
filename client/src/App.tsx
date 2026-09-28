@@ -953,6 +953,7 @@ export default function App() {
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
+  const [personalDataConsentAccepted, setPersonalDataConsentAccepted] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(() => (
     new URLSearchParams(window.location.search).get('auth') === 'login' ? 'login' : null
@@ -3291,17 +3292,23 @@ ${allContext}`,
   const closeAuthModal = () => {
     setAuthModalMode(null);
     setAuthError(null);
+    setPersonalDataConsentAccepted(false);
   };
 
   const submitAuth = async () => {
     if (!authModalMode) return;
+    if (authModalMode === 'register' && !personalDataConsentAccepted) {
+      setAuthError('Необходимо согласиться на обработку персональных данных.');
+      return;
+    }
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin, password: authPassword })
-        : await api.register({ login: authLogin, password: authPassword, name: authName });
+        : await api.register({ login: authLogin, password: authPassword, name: authName, consentAccepted: personalDataConsentAccepted });
       setCurrentUser(result.user);
       setAuthError(null);
       setAuthModalMode(null);
+      setPersonalDataConsentAccepted(false);
     } catch {
       setAuthError(
         authModalMode === 'login'
@@ -4530,7 +4537,27 @@ ${allContext}`,
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
               {authModalMode === 'register' ? (
-                <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
+                <>
+                  <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
+                  <div className="flex items-start gap-2 pt-2 text-xs leading-5 text-secondary">
+                    <input
+                      id="personal-data-consent"
+                      className="mt-1 h-4 w-4 shrink-0 accent-indigo-600"
+                      type="checkbox"
+                      checked={personalDataConsentAccepted}
+                      onChange={(event) => {
+                        setPersonalDataConsentAccepted(event.target.checked);
+                        if (event.target.checked && authError === 'Необходимо согласиться на обработку персональных данных.') setAuthError(null);
+                      }}
+                    />
+                    <span>
+                      <label className="cursor-pointer" htmlFor="personal-data-consent">Я согласен на обработку персональных данных</label>.{' '}
+                      <a className="public-secondary-link underline" href="/legal/consent" target="_blank" rel="noreferrer">
+                        Согласие на обработку персональных данных
+                      </a>
+                    </span>
+                  </div>
+                </>
               ) : null}
               {authError ? <div className="text-xs text-rose-300">{authError}</div> : null}
             </div>
@@ -4544,6 +4571,7 @@ ${allContext}`,
               <a className="public-secondary-link text-xs" href="/legal/privacy">Политика обработки персональных данных</a>
               <a className="public-secondary-link text-xs" href="/legal/cookies">Политика cookies</a>
               <a className="public-secondary-link text-xs" href="/legal/terms">Пользовательское соглашение</a>
+              <a className="public-secondary-link text-xs" href="/legal/consent">Согласие на обработку персональных данных</a>
             </div>
           </div>
         </div>

@@ -37,6 +37,10 @@ enum TelegramUpdateJobStatus {
   FAILED
 }
 
+enum UserConsentType {
+  PERSONAL_DATA_PROCESSING
+}
+
 model TelegramUpdateJob {
   id                  String                  @id @default(cuid())
   updateId            BigInt                  @unique
@@ -107,10 +111,24 @@ model User {
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
+  consents     UserConsent[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+model UserConsent {
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       UserConsentType
+  version    String
+  acceptedAt DateTime        @default(now())
+  ipAddress  String?
+
+  @@unique([userId, type, version])
+  @@index([userId])
 }
 
 model Sphere {
