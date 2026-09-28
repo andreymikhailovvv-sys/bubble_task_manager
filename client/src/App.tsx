@@ -5935,9 +5935,9 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="absolute right-24 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
-            <button type="button" className="absolute right-14 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
-            <button type="button" className="absolute right-5 top-3 z-20 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-24 top-3 z-20 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-14 top-3 z-20" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
                 <div
@@ -6033,7 +6033,7 @@ ${allContext}`,
                       title="Добавить файлы к задаче"
                       aria-label="Добавить файлы к задаче"
                     >
-                      <Plus size={15} />
+                      <Paperclip size={15} />
                     </button>
                     {focusedTaskAttachments.map((attachment) => (
                       <div key={attachment.id} className="task-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">

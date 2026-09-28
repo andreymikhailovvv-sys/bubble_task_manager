@@ -647,6 +647,8 @@ export default function MiniApp() {
   const [isSubtaskNotesEditorOpen, setIsSubtaskNotesEditorOpen] = useState(false);
   const [taskAttachments, setTaskAttachments] = useState<TaskAttachment[]>([]);
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
+  const [subtaskAttachments, setSubtaskAttachments] = useState<TaskAttachment[]>([]);
+  const [isUploadingSubtaskAttachment, setIsUploadingSubtaskAttachment] = useState(false);
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const fullscreenAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -690,6 +692,7 @@ export default function MiniApp() {
   const [isGeneralAiChatHeaderHidden, setIsGeneralAiChatHeaderHidden] = useState(false);
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const subtaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1988,6 +1991,16 @@ export default function MiniApp() {
   }, [openedSubtaskId]);
 
   useEffect(() => {
+    setSubtaskAttachments([]);
+    if (!openedSubtaskId) return;
+    let isCancelled = false;
+    void api.getTaskAttachments(openedSubtaskId)
+      .then((attachments) => { if (!isCancelled) setSubtaskAttachments(attachments); })
+      .catch((e) => { if (!isCancelled) setError(e instanceof Error ? e.message : 'Не удалось загрузить файлы подзадачи'); });
+    return () => { isCancelled = true; };
+  }, [openedSubtaskId]);
+
+  useEffect(() => {
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
     setTaskAttachments([]);
@@ -2063,6 +2076,40 @@ export default function MiniApp() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const uploadSubtaskAttachmentFiles = async (files: File[]) => {
+    if (!openedSubtask || files.length === 0) return;
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    if (normalized.length !== files.length) setError('Для подзадачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+    if (normalized.length === 0) return;
+    const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
+    if (oversized) { setError(`Файл ${oversized.name} превышает лимит 8MB.`); return; }
+    setIsUploadingSubtaskAttachment(true);
+    try {
+      for (const file of normalized) await api.createTaskAttachment(openedSubtask.id, await fileToAttachmentPayload(file));
+      setSubtaskAttachments(await api.getTaskAttachments(openedSubtask.id));
+      setError(null);
+      window.alert('Вложения подзадачи недоступны для ИИ. Чтобы ИИ обработал файл, отправьте его отдельно в чат.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к подзадаче');
+    } finally {
+      setIsUploadingSubtaskAttachment(false);
+    }
+  };
+
+  const removeSubtaskAttachment = async (attachmentId: string) => {
+    if (!openedSubtask) return;
+    await api.deleteTaskAttachment(openedSubtask.id, attachmentId);
+    setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+  };
+
+  const downloadSubtaskAttachment = (attachment: TaskAttachment) => {
+    if (!openedSubtask) return;
+    const link = document.createElement('a');
+    link.href = api.getTaskAttachmentDownloadUrl(openedSubtask.id, attachment.id);
+    link.download = attachment.name;
+    link.click();
   };
 
   useEffect(() => {
@@ -2929,7 +2976,7 @@ export default function MiniApp() {
                     title="Добавить файлы к задаче"
                     aria-label="Добавить файлы к задаче"
                   >
-                    <Plus size={15} />
+                      <Paperclip size={15} />
                   </button>
                 </div>
                 <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
@@ -3060,6 +3107,10 @@ export default function MiniApp() {
               rows={isSubtaskTitleSingleLine ? 1 : 2}
               placeholder="Название подзадачи"
             />
+            <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">
+              <DateTimePickerWithApply value={fromInputDateTime(openedSubtaskDraft.dueDate)} onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })} timelineTasks={timelinePickerTasks} iconOnly detachedPopup buttonClassName="miniapp-focus-icon-button" />
+              <span>{openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
+            </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
               <textarea
                 value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
@@ -3085,20 +3136,12 @@ export default function MiniApp() {
               </button>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <DateTimePickerWithApply
-                value={fromInputDateTime(openedSubtaskDraft.dueDate)}
-                onChange={(nextValue) => changeSubtaskDraft({ dueDate: toInputDateTime(nextValue) })}
-                timelineTasks={timelinePickerTasks}
-                iconOnly
-                detachedPopup
-                buttonClassName="miniapp-focus-icon-button"
-              />
-              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-violet-500">
-                {openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}
-              </span>
               <button type="button" className="miniapp-focus-icon-button" onClick={() => setIsSubtaskNotesEditorOpen(true)} title="Открыть заметки" aria-label="Открыть заметки">
                 <Maximize2 size={15} />
               </button>
+              {openedSubtask ? <button type="button" className="miniapp-focus-icon-button" disabled={isUploadingSubtaskAttachment} onClick={() => subtaskAttachmentInputRef.current?.click()} title="Добавить вложение" aria-label="Добавить вложение к подзадаче"><Paperclip size={15} /></button> : null}
+              {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
+              {subtaskAttachments.map((attachment) => <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]"><button type="button" className="inline-flex min-w-0 items-center gap-1" onClick={() => downloadSubtaskAttachment(attachment)}><Paperclip size={11} /><span className="truncate">{attachment.name}</span></button><button type="button" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeSubtaskAttachment(attachment.id)}><X size={11} /></button></div>)}
             </div>
             {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
             {isCreatingNewSubtask && openedTask ? (
