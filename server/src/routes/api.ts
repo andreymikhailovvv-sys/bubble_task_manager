@@ -17,6 +17,7 @@ import { onboardingService } from '../services/onboarding.service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { calendarExportController } from '../controllers/calendar-export.controller.js';
 import { AccountRegistrationError, accountRegistrationService, normalizeAccountLogin } from '../services/account-registration.service.js';
+import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -43,9 +44,7 @@ const EFFICIENCY_NIGHT_START_HOUR = 0;
 const EFFICIENCY_NIGHT_END_HOUR = 8;
 const EFFICIENCY_DAY_BUCKET_PENALTY = 1;
 const EFFICIENCY_NIGHT_BUCKET_PENALTY = 0.5;
-const EFFICIENCY_BUCKET_KEYS = ['task', 'habit', 'ai', 'focus'] as const;
-type EfficiencyBucketKey = typeof EFFICIENCY_BUCKET_KEYS[number];
-type EfficiencyBucketScores = Record<EfficiencyBucketKey, number>;
+const EFFICIENCY_BUCKET_KEYS = EFFICIENCY_BUCKET_ORDER;
 const EFFICIENCY_BONUSES = {
   doneTask: 5,
   doneSubtask: 2,
@@ -157,13 +156,11 @@ const applyEfficiencyPenalty = (scores: EfficiencyBucketScores, fromMs: number, 
   const hourMs = 60 * 60 * 1000;
   const penaltyHours = Math.floor((toMs - fromMs) / hourMs) - EFFICIENCY_INACTIVITY_GRACE_HOURS;
   if (penaltyHours <= 0) return scores;
-  const next = { ...scores };
+  let next = { ...scores };
   for (let index = 1; index <= penaltyHours; index += 1) {
     const penaltyAtMs = fromMs + (EFFICIENCY_INACTIVITY_GRACE_HOURS + index) * hourMs;
-    const penalty = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_NIGHT_BUCKET_PENALTY : EFFICIENCY_DAY_BUCKET_PENALTY;
-    for (const bucket of EFFICIENCY_BUCKET_KEYS) {
-      next[bucket] = clampBucketScore(next[bucket] - penalty);
-    }
+    const bucketPenalty = isNightHour(penaltyAtMs, timeZone) ? EFFICIENCY_NIGHT_BUCKET_PENALTY : EFFICIENCY_DAY_BUCKET_PENALTY;
+    next = deductEfficiencyPenalty(next, bucketPenalty * EFFICIENCY_BUCKET_KEYS.length);
   }
   return next;
 };
