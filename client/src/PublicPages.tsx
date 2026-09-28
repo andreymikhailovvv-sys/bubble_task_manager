@@ -3,6 +3,7 @@ import { PrivacyPolicyContent, PRIVACY_POLICY_REVISION_DATE } from './legal/priv
 import { CookiePolicyContent, COOKIE_POLICY_REVISION_DATE } from './legal/cookies';
 import { TermsContent, TERMS_REVISION_DATE } from './legal/terms';
 import { PersonalDataConsentContent, PERSONAL_DATA_CONSENT_REVISION_DATE } from './legal/consent';
+import { PublicOfferContent, PUBLIC_OFFER_REVISION_DATE } from './legal/offer';
 
 function PublicLayout({ children }: PropsWithChildren) {
   return (
@@ -36,6 +37,9 @@ function PublicLayout({ children }: PropsWithChildren) {
           </a>
           <a href="/legal/consent" className="public-secondary-link text-sm">
             Согласие на обработку персональных данных
+          </a>
+          <a href="/legal/offer" className="public-secondary-link text-sm">
+            Публичная оферта
           </a>
         </div>
       </footer>
@@ -77,6 +81,7 @@ function AboutPage() {
             <li><a href="/legal/cookies">Политика cookies</a></li>
             <li><a href="/legal/terms">Пользовательское соглашение</a></li>
             <li><a href="/legal/consent">Согласие на обработку персональных данных</a></li>
+            <li><a href="/legal/offer">Публичная оферта</a></li>
           </ul>
         </section>
       </article>
@@ -140,10 +145,25 @@ function ConsentPage() {
   );
 }
 
+function OfferPage() {
+  return (
+    <PublicLayout>
+      <article className="legal-document mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+        <header>
+          <h1>Публичная оферта о заключении договора на предоставление доступа к платным функциям интернет-сервиса «Планировыч»</h1>
+          <p className="legal-revision">Редакция от {PUBLIC_OFFER_REVISION_DATE}</p>
+        </header>
+        <PublicOfferContent />
+      </article>
+    </PublicLayout>
+  );
+}
+
 export default function PublicPages() {
   if (window.location.pathname === '/legal/privacy') return <PrivacyPage />;
   if (window.location.pathname === '/legal/cookies') return <CookiesPage />;
   if (window.location.pathname === '/legal/terms') return <TermsPage />;
   if (window.location.pathname === '/legal/consent') return <ConsentPage />;
+  if (window.location.pathname === '/legal/offer') return <OfferPage />;
   return <AboutPage />;
 }

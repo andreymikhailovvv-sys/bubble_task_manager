@@ -4522,6 +4522,12 @@ ${allContext}`,
                 );
               })}
             </div>
+            <p className="px-4 pb-5 text-center text-xs leading-5 text-muted sm:px-6 sm:pb-6">
+              Приобретая платные функции Сервиса, вы принимаете условия{' '}
+              <a className="public-secondary-link underline" href="/legal/offer" target="_blank" rel="noreferrer">
+                Публичной оферты
+              </a>.
+            </p>
           </div>
         </div>
       ) : null}
@@ -4572,6 +4578,7 @@ ${allContext}`,
               <a className="public-secondary-link text-xs" href="/legal/cookies">Политика cookies</a>
               <a className="public-secondary-link text-xs" href="/legal/terms">Пользовательское соглашение</a>
               <a className="public-secondary-link text-xs" href="/legal/consent">Согласие на обработку персональных данных</a>
+              <a className="public-secondary-link text-xs" href="/legal/offer">Публичная оферта</a>
             </div>
           </div>
         </div>
