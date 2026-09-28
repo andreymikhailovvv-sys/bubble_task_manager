@@ -2090,7 +2090,7 @@ export default function MiniApp() {
       for (const file of normalized) await api.createTaskAttachment(openedSubtask.id, await fileToAttachmentPayload(file));
       setSubtaskAttachments(await api.getTaskAttachments(openedSubtask.id));
       setError(null);
-      window.alert('Вложения подзадачи недоступны для ИИ. Чтобы ИИ обработал файл, отправьте его отдельно в чат.');
+      window.alert('Вы можете добавть вложение для подзадачи, но ИИ не увидит его. Если хотите, что ИИ прочитал вложение прикрепите его в чат');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к подзадаче');
     } finally {
@@ -2983,12 +2983,12 @@ export default function MiniApp() {
                 {taskAttachments.length > 0 ? (
                   <div className="mt-2 flex flex-wrap items-start gap-2">
                     {taskAttachments.map((attachment) => (
-                      <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
-                        <button type="button" title={`${attachment.name} • скачать`} onClick={() => downloadTaskAttachment(attachment)} className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5">
+                      <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] cursor-pointer items-center gap-1 rounded-xl border px-2 py-1 text-[11px]" role="button" tabIndex={0} title={`${attachment.name} • скачать`} onClick={() => downloadTaskAttachment(attachment)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') downloadTaskAttachment(attachment); }}>
+                        <span className="inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5">
                           <FileText size={12} className="shrink-0" />
                           <span className="truncate">{attachment.name}</span>
-                        </button>
-                        <button type="button" title="Удалить файл" onClick={() => void removeTaskAttachment(attachment.id)} className="rounded-md p-0.5 hover:bg-rose-600/80 hover:text-white">
+                        </span>
+                        <button type="button" title="Удалить файл" onClick={(event) => { event.stopPropagation(); void removeTaskAttachment(attachment.id); }} className="rounded-md p-0.5 hover:bg-rose-600/80 hover:text-white">
                           <X size={11} className="shrink-0" />
                         </button>
                       </div>
@@ -3141,7 +3141,7 @@ export default function MiniApp() {
               </button>
               {openedSubtask ? <button type="button" className="miniapp-focus-icon-button" disabled={isUploadingSubtaskAttachment} onClick={() => subtaskAttachmentInputRef.current?.click()} title="Добавить вложение" aria-label="Добавить вложение к подзадаче"><Paperclip size={15} /></button> : null}
               {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
-              {subtaskAttachments.map((attachment) => <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]"><button type="button" className="inline-flex min-w-0 items-center gap-1" onClick={() => downloadSubtaskAttachment(attachment)}><Paperclip size={11} /><span className="truncate">{attachment.name}</span></button><button type="button" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeSubtaskAttachment(attachment.id)}><X size={11} /></button></div>)}
+              {subtaskAttachments.map((attachment) => <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] cursor-pointer items-center gap-1 rounded-xl border px-2 py-1 text-[11px]" role="button" tabIndex={0} title={`${attachment.name} • скачать`} onClick={() => downloadSubtaskAttachment(attachment)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') downloadSubtaskAttachment(attachment); }}><span className="inline-flex min-w-0 items-center gap-1"><Paperclip size={11} /><span className="truncate">{attachment.name}</span></span><button type="button" aria-label={`Удалить ${attachment.name}`} onClick={(event) => { event.stopPropagation(); void removeSubtaskAttachment(attachment.id); }}><X size={11} /></button></div>)}
             </div>
             {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
             {isCreatingNewSubtask && openedTask ? (

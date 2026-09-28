@@ -585,7 +585,7 @@ export function TaskEditor({
       for (const file of normalized) await api.createTaskAttachment(task.id, await fileToAttachmentPayload(file));
       setSubtaskAttachments(await api.getTaskAttachments(task.id));
       setAiError(null);
-      window.alert("Вложения подзадачи недоступны для ИИ. Чтобы ИИ обработал файл, отправьте его отдельно в чат.");
+      window.alert("Вы можете добавть вложение для подзадачи, но ИИ не увидит его. Если хотите, что ИИ прочитал вложение прикрепите его в чат");
     } catch (error) {
       setAiError(error instanceof Error ? error.message : "Не удалось загрузить файл к подзадаче");
     } finally {
