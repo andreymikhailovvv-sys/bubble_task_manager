@@ -16,7 +16,7 @@ import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { calendarExportController } from '../controllers/calendar-export.controller.js';
-import { AccountRegistrationError, accountRegistrationService, normalizeAccountLogin } from '../services/account-registration.service.js';
+import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistrationService, normalizeAccountLogin, validatePersonalDataConsent } from '../services/account-registration.service.js';
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 
 export const apiRouter = Router();
@@ -341,14 +341,25 @@ apiRouter.post('/auth/register', async (req, res) => {
   const login = sanitizeLogin(loginRaw);
   let user;
   try {
-    user = await accountRegistrationService.register({ login, password: passwordRaw, name: nameRaw });
+    validatePersonalDataConsent(req.body?.consentAccepted);
+    user = await accountRegistrationService.register({
+      login,
+      password: passwordRaw,
+      name: nameRaw,
+      personalDataConsent: {
+        version: PERSONAL_DATA_CONSENT_VERSION,
+        ipAddress: req.ip
+      }
+    });
   } catch (error) {
     if (!(error instanceof AccountRegistrationError)) throw error;
     const response = error.code === 'INVALID_LOGIN'
       ? { status: 400, message: 'Логин должен содержать минимум 3 символа' }
       : error.code === 'INVALID_PASSWORD'
         ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
-        : { status: 409, message: 'Логин уже занят' };
+        : error.code === 'CONSENT_REQUIRED'
+          ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
+          : { status: 409, message: 'Логин уже занят' };
     console.warn(`[Auth] register failed reason=${error.code.toLowerCase()} login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(response.status).json({ error: response.message });
     return;

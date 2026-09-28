@@ -2,6 +2,7 @@ import type { PropsWithChildren } from 'react';
 import { PrivacyPolicyContent, PRIVACY_POLICY_REVISION_DATE } from './legal/privacy';
 import { CookiePolicyContent, COOKIE_POLICY_REVISION_DATE } from './legal/cookies';
 import { TermsContent, TERMS_REVISION_DATE } from './legal/terms';
+import { PersonalDataConsentContent, PERSONAL_DATA_CONSENT_REVISION_DATE } from './legal/consent';
 
 function PublicLayout({ children }: PropsWithChildren) {
   return (
@@ -32,6 +33,9 @@ function PublicLayout({ children }: PropsWithChildren) {
           </a>
           <a href="/legal/terms" className="public-secondary-link text-sm">
             Пользовательское соглашение
+          </a>
+          <a href="/legal/consent" className="public-secondary-link text-sm">
+            Согласие на обработку персональных данных
           </a>
         </div>
       </footer>
@@ -72,6 +76,7 @@ function AboutPage() {
             <li><a href="/legal/privacy">Политика обработки персональных данных</a></li>
             <li><a href="/legal/cookies">Политика cookies</a></li>
             <li><a href="/legal/terms">Пользовательское соглашение</a></li>
+            <li><a href="/legal/consent">Согласие на обработку персональных данных</a></li>
           </ul>
         </section>
       </article>
@@ -121,9 +126,24 @@ function TermsPage() {
   );
 }
 
+function ConsentPage() {
+  return (
+    <PublicLayout>
+      <article className="legal-document mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
+        <header>
+          <h1>Согласие на обработку персональных данных</h1>
+          <p className="legal-revision">Редакция от {PERSONAL_DATA_CONSENT_REVISION_DATE}</p>
+        </header>
+        <PersonalDataConsentContent />
+      </article>
+    </PublicLayout>
+  );
+}
+
 export default function PublicPages() {
   if (window.location.pathname === '/legal/privacy') return <PrivacyPage />;
   if (window.location.pathname === '/legal/cookies') return <CookiesPage />;
   if (window.location.pathname === '/legal/terms') return <TermsPage />;
+  if (window.location.pathname === '/legal/consent') return <ConsentPage />;
   return <AboutPage />;
 }
