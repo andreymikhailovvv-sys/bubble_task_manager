@@ -94,6 +94,9 @@ export type CurrentUser = {
   completedLessonIds?: string[];
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
+export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
+export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; paymentUrl: string; isActive: boolean };
+export type CreditPackLinks = Record<CreditPackKey, string>;
 
 type AdminUser = {
   id: string;
@@ -257,6 +260,7 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
+  getCreditPacks: () => request<{ packs: CreditPack[] }>('/api/credit-packs'),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {
       method: 'POST',
@@ -264,6 +268,11 @@ export const api = {
     }),
   adminSaveSubscriptionLinks: (payload: { password: string; links: SubscriptionLinks }) =>
     request<{ links: SubscriptionLinks }>('/api/admin/subscription-links', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  adminSaveCreditPackLinks: (payload: { password: string; links: CreditPackLinks }) =>
+    request<{ links: CreditPackLinks }>('/api/admin/credit-packs', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),

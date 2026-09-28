@@ -23,6 +23,12 @@ export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
+const CREDIT_PACKS = [
+  { key: 'credit_start', name: 'Старт', creditsAmount: 1000, price: 199 },
+  { key: 'credit_pro', name: 'Про', creditsAmount: 5000, price: 690 },
+  { key: 'credit_max', name: 'Макс', creditsAmount: 15000, price: 1490 }
+] as const;
+type CreditPackKey = typeof CREDIT_PACKS[number]['key'];
 
 
 const sanitizeLogin = normalizeAccountLogin;
@@ -433,6 +439,19 @@ apiRouter.get('/subscription-links', async (_req, res) => {
   res.json({ links: Object.fromEntries(SUBSCRIPTION_PLAN_KEYS.map((key) => [key, links.find((link) => link.planKey === key)?.url ?? ''])) });
 });
 
+apiRouter.get('/credit-packs', async (_req, res) => {
+  const storedPacks = await prisma.creditPack.findMany({
+    where: { key: { in: CREDIT_PACKS.map((pack) => pack.key) } },
+    select: { key: true, paymentUrl: true, isActive: true }
+  });
+  res.json({
+    packs: CREDIT_PACKS.map((pack) => {
+      const stored = storedPacks.find((candidate) => candidate.key === pack.key);
+      return { ...pack, paymentUrl: stored?.paymentUrl ?? '', isActive: stored?.isActive ?? true };
+    })
+  });
+});
+
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
@@ -501,6 +520,29 @@ apiRouter.post('/admin/subscription-links', async (req, res) => {
     where: { planKey: key },
     create: { planKey: key, url: links[key] },
     update: { url: links[key] }
+  })));
+
+  res.json({ links });
+});
+
+apiRouter.post('/admin/credit-packs', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+
+  const rawLinks = req.body?.links ?? {};
+  const links = Object.fromEntries(CREDIT_PACKS.map((pack) => [pack.key, ''])) as Record<CreditPackKey, string>;
+  for (const pack of CREDIT_PACKS) {
+    const value = String(rawLinks?.[pack.key] ?? '').trim();
+    if (value && !/^https?:\/\//i.test(value)) {
+      res.status(400).json({ error: `Ссылка для пакета ${pack.name} должна начинаться с http:// или https://` });
+      return;
+    }
+    links[pack.key] = value;
+  }
+
+  await Promise.all(CREDIT_PACKS.map((pack) => prisma.creditPack.upsert({
+    where: { key: pack.key },
+    create: { ...pack, paymentUrl: links[pack.key] },
+    update: { name: pack.name, creditsAmount: pack.creditsAmount, price: pack.price, paymentUrl: links[pack.key] }
   })));
 
   res.json({ links });

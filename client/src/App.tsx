@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CurrentUser, type SubscriptionLinks } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment } from './lib/types';
@@ -746,6 +746,7 @@ export default function App() {
   const [focusSessionAiRequestCount, setFocusSessionAiRequestCount] = useState(0);
   const [focusDistractionTaskId, setFocusDistractionTaskId] = useState<string | null>(null);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
+  const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramLinkUrl, setTelegramLinkUrl] = useState<string | null>(null);
@@ -997,6 +998,14 @@ export default function App() {
       .then((response) => setSubscriptionLinks(response.links))
       .catch(() => {
         // Не блокируем приложение, если ссылки временно недоступны.
+      });
+  }, []);
+
+  useEffect(() => {
+    api.getCreditPacks()
+      .then((response) => setCreditPacks(response.packs))
+      .catch(() => {
+        // Не блокируем приложение, если пакеты временно недоступны.
       });
   }, []);
 
@@ -4484,7 +4493,7 @@ ${allContext}`,
 
       {isSubscriptionModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[130] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div className="subscription-modal dialog-surface w-full max-w-5xl overflow-hidden rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="subscription-modal dialog-surface max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="subscription-hero relative p-5 sm:p-6">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
@@ -4522,6 +4531,25 @@ ${allContext}`,
                 );
               })}
             </div>
+            <section className="border-t border-white/10 px-4 pb-2 pt-6 sm:px-6">
+              <h3 className="text-xl font-bold text-primary">Дополнительные AI-кредиты</h3>
+              <p className="mt-1 text-sm text-muted">Разовая покупка кредитов без изменения текущей подписки.</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                {creditPacks.filter((pack) => pack.isActive).map((pack) => {
+                  const link = pack.paymentUrl.trim();
+                  return (
+                    <article key={pack.key} className="subscription-plan-card flex flex-col rounded-2xl border p-4 shadow-xl">
+                      <h4 className="text-lg font-bold text-primary">{pack.name}</h4>
+                      <div className="mt-3 text-2xl font-bold text-fuchsia-300">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div>
+                      <div className="mt-2 text-lg font-semibold text-secondary">{pack.price.toLocaleString('ru-RU')} ₽</div>
+                      <a href={link || undefined} target={link ? '_blank' : undefined} rel={link ? 'noreferrer' : undefined} aria-disabled={!link} onClick={(event) => { if (!link) event.preventDefault(); }} className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-cyan-600 to-fuchsia-600 text-white hover:-translate-y-0.5' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}>
+                        {link ? 'Купить' : 'Скоро'}
+                      </a>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
             <p className="px-4 pb-5 text-center text-xs leading-5 text-muted sm:px-6 sm:pb-6">
               Приобретая платные функции Сервиса, вы принимаете условия{' '}
               <a className="public-secondary-link underline" href="/legal/offer" target="_blank" rel="noreferrer">
