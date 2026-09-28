@@ -2541,14 +2541,17 @@ export default function MiniApp() {
                     <div className="min-w-0 flex-1 pr-5">
                       <h3 className="truncate font-semibold">{task.title}</h3>
                       {listSortMode === 'importance' ? (
-                        <span
-                          className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
-                          style={{ backgroundColor: importanceBadgeColor }}
-                          title={`Рейтинг важности: ${importanceRating.toFixed(1)}`}
-                        >
-                          <Gauge size={13} />
-                          {importanceRating.toFixed(1)}
-                        </span>
+                        <>
+                          <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                          <span
+                            className="miniapp-importance-rating mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold"
+                            style={{ backgroundColor: importanceBadgeColor }}
+                            title={`Рейтинг важности: ${importanceRating.toFixed(1)}`}
+                          >
+                            <Gauge size={13} />
+                            {importanceRating.toFixed(1)}
+                          </span>
+                        </>
                       ) : (
                         <>
                           <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
