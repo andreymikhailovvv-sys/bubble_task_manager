@@ -309,27 +309,27 @@ type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: 
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
 type TaskAiMessage = ChatMessage & { id: string };
 
-function SystemNotificationContent({ notification, tasks, onOpenTask }: { notification: SystemNotification; tasks: Task[]; onOpenTask: (taskId: string) => void }) {
+function SystemNotificationContent({ notification, tasks, onOpenTask }: { notification: SystemNotification; tasks: Task[]; onOpenTask: (task: Task) => void }) {
   const task = notification.taskId ? tasks.find((item) => item.id === notification.taskId) : undefined;
   if (!task || !notification.content.includes(task.title)) return <>{notification.content}</>;
 
   const [beforeTitle, ...afterTitleParts] = notification.content.split(task.title);
   const textBeforeButton = beforeTitle.replace(/[«"]\s*$/, '').replace(/^🚨\s*/, '🚨');
   const textAfterButton = afterTitleParts.join(task.title).replace(/^\s*[»"]\s*/, ' ');
-  const isOverdueNotification = textAfterButton.trimStart().startsWith('просрочена');
+  const isOverdueNotification = /просрочена/i.test(notification.content);
   return (
     <>
-      {textBeforeButton}
+      {isOverdueNotification ? '⏰Напоминание о задаче ' : textBeforeButton}
       <button
         type="button"
         className="system-notification-task-button inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 align-middle text-[11px] font-semibold text-white transition hover:bg-cyan-500"
-        onClick={() => onOpenTask(task.id)}
+        onClick={() => onOpenTask(task)}
         title={`Открыть задачу: ${task.title}`}
       >
         <ArrowUpRight size={12} className="shrink-0" />
         <span className="min-w-0 truncate">{task.title}</span>
       </button>
-      {isOverdueNotification ? <><br />{textAfterButton.trimStart()}</> : textAfterButton}
+      {isOverdueNotification ? null : textAfterButton}
     </>
   );
 }
@@ -6804,7 +6804,7 @@ ${allContext}`,
               {quickAiChatTimeline.slice(-30).map((item) => item.kind === 'notification' ? (
                 <div key={`notification-${item.notification.id}`} className="system-notification-message mr-6 rounded-2xl border px-3 py-2 shadow-sm">
                   <b className="system-notification-label mb-0.5 block text-[10px] uppercase tracking-wide">⚙️ Системное уведомление</b>
-                  <SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} />
+                  <SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} />
                 </div>
               ) : (
                 <div key={`message-${item.message.id}`} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
@@ -6870,7 +6870,7 @@ ${allContext}`,
                 </div>
                 <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
+                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
                 </div>
