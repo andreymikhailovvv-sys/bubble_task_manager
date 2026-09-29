@@ -4493,28 +4493,28 @@ ${allContext}`,
 
       {isSubscriptionModalOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[130] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div className="subscription-modal dialog-surface max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="subscription-hero relative p-5 sm:p-6">
+          <div className="subscription-modal dialog-surface max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl sm:overflow-hidden" onClick={(event) => event.stopPropagation()}>
+            <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
-              <h2 className="mt-4 max-w-2xl text-2xl font-bold text-primary sm:text-3xl">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
+              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted">Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.</p>
             </div>
-            <div className="grid gap-4 p-4 sm:grid-cols-3 sm:p-6">
+            <div className="grid gap-3 p-4 sm:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const link = subscriptionLinks[plan.key]?.trim();
                 return (
-                  <article key={plan.key} className="subscription-plan-card flex min-h-full flex-col rounded-2xl border p-4 shadow-xl">
+                  <article key={plan.key} className="subscription-plan-card flex min-h-full flex-col rounded-2xl border p-4 shadow-xl sm:p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-300">{plan.badge}</div>
-                        <h3 className="mt-2 text-xl font-bold text-primary">{plan.name}</h3>
+                        <h3 className="mt-1 text-xl font-bold text-primary">{plan.name}</h3>
                       </div>
-                      <div className="flex h-12 min-w-[92px] items-center justify-center whitespace-nowrap rounded-2xl bg-gradient-to-br from-fuchsia-500 to-rose-500 px-3 text-sm font-bold text-white shadow-lg">{plan.price}</div>
+                      <div className="flex h-10 min-w-[92px] items-center justify-center whitespace-nowrap rounded-2xl bg-gradient-to-br from-fuchsia-500 to-rose-500 px-3 text-sm font-bold text-white shadow-lg">{plan.price}</div>
                     </div>
-                    <ul className="mt-4 flex-1 space-y-2 text-sm text-secondary">
+                    <ul className="mt-3 flex-1 space-y-1.5 text-sm text-secondary">
                       {plan.features.map((feature) => (
-                        <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-2"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
+                        <li key={feature} className="subscription-feature-pill flex items-start gap-2 rounded-xl px-3 py-1.5"><Check size={15} className="mt-0.5 shrink-0 text-emerald-300" /> <span>{feature}</span></li>
                       ))}
                     </ul>
                     <a
@@ -4523,7 +4523,7 @@ ${allContext}`,
                       rel={link ? 'noreferrer' : undefined}
                       aria-disabled={!link}
                       onClick={(event) => { if (!link) event.preventDefault(); }}
-                      className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white hover:-translate-y-0.5 hover:shadow-fuchsia-500/25' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}
+                      className={`mt-3 rounded-xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-fuchsia-600 to-rose-600 text-white hover:-translate-y-0.5 hover:shadow-fuchsia-500/25' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}
                     >
                       Купить подписку
                     </a>
@@ -4531,18 +4531,17 @@ ${allContext}`,
                 );
               })}
             </div>
-            <section className="border-t border-white/10 px-4 pb-2 pt-6 sm:px-6">
+            <section className="border-t border-white/10 px-4 pb-2 pt-4 sm:px-5">
               <h3 className="text-xl font-bold text-primary">Дополнительные AI-кредиты</h3>
               <p className="mt-1 text-sm text-muted">Разовая покупка кредитов без изменения текущей подписки.</p>
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {creditPacks.filter((pack) => pack.isActive).map((pack) => {
                   const link = pack.paymentUrl.trim();
                   return (
-                    <article key={pack.key} className="subscription-plan-card flex flex-col rounded-2xl border p-4 shadow-xl">
-                      <h4 className="text-lg font-bold text-primary">{pack.name}</h4>
-                      <div className="mt-3 text-2xl font-bold text-fuchsia-300">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div>
-                      <div className="mt-2 text-lg font-semibold text-secondary">{pack.price.toLocaleString('ru-RU')} ₽</div>
-                      <a href={link || undefined} target={link ? '_blank' : undefined} rel={link ? 'noreferrer' : undefined} aria-disabled={!link} onClick={(event) => { if (!link) event.preventDefault(); }} className={`mt-4 rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-cyan-600 to-fuchsia-600 text-white hover:-translate-y-0.5' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}>
+                    <article key={pack.key} className="subscription-plan-card flex flex-col rounded-2xl border p-3 shadow-xl">
+                      <div className="text-xl font-bold text-fuchsia-300">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div>
+                      <div className="mt-1 text-base font-semibold text-secondary">{pack.price.toLocaleString('ru-RU')} ₽</div>
+                      <a href={link || undefined} target={link ? '_blank' : undefined} rel={link ? 'noreferrer' : undefined} aria-disabled={!link} onClick={(event) => { if (!link) event.preventDefault(); }} className={`mt-2 rounded-xl px-4 py-2 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-cyan-600 to-fuchsia-600 text-white hover:-translate-y-0.5' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}>
                         {link ? 'Купить' : 'Скоро'}
                       </a>
                     </article>
@@ -4550,7 +4549,7 @@ ${allContext}`,
                 })}
               </div>
             </section>
-            <p className="px-4 pb-5 text-center text-xs leading-5 text-muted sm:px-6 sm:pb-6">
+            <p className="px-4 pb-4 text-center text-xs leading-5 text-muted sm:px-5 sm:pb-4">
               Приобретая платные функции Сервиса, вы принимаете условия{' '}
               <a className="public-secondary-link underline" href="/legal/offer" target="_blank" rel="noreferrer">
                 Публичной оферты
