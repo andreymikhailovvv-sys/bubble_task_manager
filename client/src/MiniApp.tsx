@@ -578,7 +578,6 @@ export default function MiniApp() {
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
-  const [isDisplayModeMenuOpen, setIsDisplayModeMenuOpen] = useState(false);
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
@@ -1178,10 +1177,6 @@ export default function MiniApp() {
     : sphereFilter === 'without-sphere'
       ? 'Без сектора'
       : (spheres.find((sphere) => sphere.id === sphereFilter)?.name ?? 'Без сектора');
-  const selectDisplayMode = (mode: DisplayMode) => {
-    setDisplayMode(mode);
-    setIsDisplayModeMenuOpen(false);
-  };
   const efficiencyScore = currentUser?.efficiencyScore ?? 0;
   const formattedEfficiencyScore = efficiencyScore.toFixed(1).replace(/\.0$/, '');
   const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
@@ -2450,19 +2445,15 @@ export default function MiniApp() {
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="flex items-center gap-3">
-              <div className="miniapp-mode-control">
-                <span>Режим:</span>
-                <div className="relative">
-                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
-                    <List size={14} aria-hidden="true" /> Список <ChevronDown size={13} />
-                  </button>
-                  {isDisplayModeMenuOpen ? (
-                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
-                      <button type="button" className="is-active" onClick={() => selectDisplayMode('list')} role="menuitem"><List size={14} aria-hidden="true" /> Список</button>
-                      <button type="button" onClick={() => selectDisplayMode('timeline')} role="menuitem"><CalendarDays size={14} aria-hidden="true" /> Таймлайн</button>
-                    </div>
-                  ) : null}
-                </div>
+              <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
+                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="true">
+                  <List size={16} className="text-violet-300" aria-hidden="true" />
+                  <span>Список</span>
+                </button>
+                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="false">
+                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
+                  <span>Таймлайн</span>
+                </button>
               </div>
               <button
                 type="button"
@@ -2587,19 +2578,15 @@ export default function MiniApp() {
 
           <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
             <div className="flex items-center justify-between gap-3">
-              <div className="miniapp-mode-control">
-                <span>Режим:</span>
-                <div className="relative">
-                  <button type="button" onClick={() => setIsDisplayModeMenuOpen((open) => !open)} className="miniapp-mode-switch" aria-haspopup="menu" aria-expanded={isDisplayModeMenuOpen}>
-                    <CalendarDays size={14} aria-hidden="true" /> Таймлайн <ChevronDown size={13} />
-                  </button>
-                  {isDisplayModeMenuOpen ? (
-                    <div className="miniapp-mode-menu absolute left-0 top-[calc(100%+5px)] z-40 min-w-32 rounded-xl border p-1 shadow-xl" role="menu">
-                      <button type="button" onClick={() => selectDisplayMode('list')} role="menuitem"><List size={14} aria-hidden="true" /> Список</button>
-                      <button type="button" className="is-active" onClick={() => selectDisplayMode('timeline')} role="menuitem"><CalendarDays size={14} aria-hidden="true" /> Таймлайн</button>
-                    </div>
-                  ) : null}
-                </div>
+              <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
+                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="false">
+                  <List size={16} className="text-violet-300" aria-hidden="true" />
+                  <span>Список</span>
+                </button>
+                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="true">
+                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
+                  <span>Таймлайн</span>
+                </button>
               </div>
               <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
                 {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
@@ -3025,7 +3012,7 @@ export default function MiniApp() {
                     <h3 className="flex items-center gap-1.5 text-sm font-semibold">
                       Подзадачи
                       <button type="button" onClick={openCreateSubtaskModal} className="miniapp-focus-subtask-icon-button" title="Добавить подзадачу" aria-label="Добавить подзадачу">
-                        <Plus size={15} />
+                        <Plus size={17} />
                       </button>
                       <button
                         type="button"
