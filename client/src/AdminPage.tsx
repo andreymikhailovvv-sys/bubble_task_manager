@@ -7,10 +7,6 @@ type AdminUser = {
   email?: string | null;
   username?: string | null;
   aiCredits: number;
-  aiCreditsMilli: number;
-  aiIncludedCreditsMilli: number;
-  aiBonusCreditsMilli: number;
-  aiPurchasedCreditsMilli: number;
   aiCreditsPeriod: string;
   createdAt: string;
 };
@@ -212,8 +208,7 @@ export default function AdminPage() {
                   <div>Имя: {selectedUser.name || '—'}</div>
                   <div>Логин: {selectedUser.username || '—'}</div>
                   <div>Email: {selectedUser.email || '—'}</div>
-                  <div className="font-semibold">Общий баланс: {selectedUser.aiCredits}</div>
-                  <div className="text-xs text-slate-400">Включено: {selectedUser.aiIncludedCreditsMilli / 1000} · Бонус: {selectedUser.aiBonusCreditsMilli / 1000} · Куплено: {selectedUser.aiPurchasedCreditsMilli / 1000}</div>
+                  <div>Текущие кредиты: {selectedUser.aiCredits}</div>
                 </div>
                 <form onSubmit={addCredits} className="mt-4 flex items-end gap-3">
                   <label className="text-sm">
