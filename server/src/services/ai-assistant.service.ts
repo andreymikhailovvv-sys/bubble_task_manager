@@ -5,12 +5,14 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
+import { executeBilledOpenAiResponse } from './ai-billing.service.js';
 
 type ChatRole = 'user' | 'assistant';
 
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  creditsSpentMilli?: number | null;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -289,7 +291,7 @@ async function chargeSingleAiNotificationCredit(userId: string, options?: { skip
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
   return history
     .filter((message) => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-    .map((message) => ({ role: message.role, content: message.content.trim() }))
+    .map((message) => ({ role: message.role, content: message.content.trim(), creditsSpentMilli: message.creditsSpentMilli ?? null }))
     .filter((message) => message.content.length > 0)
     .slice(-20);
 }
@@ -1337,12 +1339,13 @@ export const aiAssistantService = {
     const messages = await prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId, userId: input.userId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { role: true, content: true }
+      select: { role: true, content: true, creditsSpentMilli: true }
     });
 
     return messages.map((message) => ({
       role: message.role,
-      content: message.content
+      content: message.content,
+      creditsSpentMilli: message.creditsSpentMilli
     }));
   },
 
@@ -1365,6 +1368,7 @@ export const aiAssistantService = {
         userId: input.userId,
         role: message.role,
         content: message.content,
+        creditsSpentMilli: message.role === 'assistant' ? message.creditsSpentMilli ?? null : null,
         createdAt: new Date(appendStartedAt + index)
       }))
     });
@@ -1539,12 +1543,7 @@ export const aiAssistantService = {
 
     let lastError: Error | null = null;
     const modelAttemptErrors: Array<{ model: string; status: number | 'exception' | 'empty_response'; message: string }> = [];
-    const creditReservation = input.skipCreditsCharge
-      ? null
-      : await chargeAiCredits(input.userId, modelCandidates[0], {
-        skipEfficiencyBonus: input.skipEfficiencyBonus,
-        deferEfficiencyBonus: true
-      });
+    let creditsSpentMilli = 0;
 
     for (const model of modelCandidates) {
       try {
@@ -1557,64 +1556,33 @@ export const aiAssistantService = {
           userId: input.userId
         });
 
-        const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
+        const billed = await executeBilledOpenAiResponse({
+          userId: input.userId,
+          actionId: modelCandidates.length === 1 ? requestId : `${requestId}:${model}`,
+          taskId: input.taskId,
+          feature: 'task_chat',
+          apiKey,
+          payload: {
             model,
             input: messages,
             ...(supportsReasoningEffort(model) ? { reasoning: { effort: reasoningEffort } } : {})
-          })
-        }, { requestId, model });
+          }
+        });
+        creditsSpentMilli += billed.billing.creditsSpentMilli;
         const latencyMs = Date.now() - startedAt;
 
         console.info('[AI] OpenAI response received', {
           requestId,
           mode: input.mode ?? 'fast',
           model,
-          status: openAiResponse.status,
-          ok: openAiResponse.ok,
+          status: 200,
+          ok: true,
           latencyMs,
           taskId: input.taskId,
           userId: input.userId
         });
 
-        if (!openAiResponse.ok) {
-          const errorText = await openAiResponse.text();
-          console.error('[AI] OpenAI request failed', {
-            requestId,
-            mode: input.mode ?? 'fast',
-            model,
-            status: openAiResponse.status,
-            taskId: input.taskId,
-            userId: input.userId,
-            errorText: errorText.slice(0, 2000)
-          });
-
-          const errorMessage = `OpenAI request failed for model "${model}": ${openAiResponse.status}`;
-          modelAttemptErrors.push({
-            model,
-            status: openAiResponse.status,
-            message: `${errorMessage}. ${sanitizeUpstreamErrorText(errorText)}`
-          });
-          lastError = new Error(errorMessage);
-          if (model === FULL_MODEL && modelCandidates.length > 1) {
-            console.warn('[AI] primary model failed, trying fallback', {
-              requestId,
-              mode: input.mode ?? 'fast',
-              primaryModel: FULL_MODEL,
-              fallbackModels: modelCandidates.slice(1),
-              taskId: input.taskId,
-              userId: input.userId
-            });
-          }
-          continue;
-        }
-
-        const responseJson = await openAiResponse.json();
+        const responseJson = billed.response;
         const rawAnswer = extractOutputText(responseJson);
         if (!rawAnswer) {
           console.error('[AI] OpenAI returned empty response', {
@@ -1622,8 +1590,7 @@ export const aiAssistantService = {
             mode: input.mode ?? 'fast',
             model,
             taskId: input.taskId,
-            userId: input.userId,
-            responseJson
+            userId: input.userId
           });
 
           const errorMessage = `OpenAI returned empty response for model "${model}"`;
@@ -1686,7 +1653,6 @@ export const aiAssistantService = {
             model,
             taskId: input.taskId,
             userId: input.userId,
-            answerPreview: parsed.answer.slice(0, 280),
             hasJsonObjectInAnswer: Boolean(rawJsonMatch),
             parsedDueDate,
             parsedDueDateValid,
@@ -1873,9 +1839,8 @@ ${parsed.answer}`
           actionReports
         });
 
-        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation);
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports };
+        return { model, answer, actionReports, billing: { creditsSpentMilli } };
       } catch (error) {
         const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
         lastError = normalizedError;
@@ -1912,11 +1877,9 @@ ${parsed.answer}`
       const attemptsSummary = modelAttemptErrors
         .map((attempt) => `${attempt.model} [${attempt.status}]: ${attempt.message}`)
         .join(' | ');
-      if (creditReservation) await refundAiCreditReservation(input.userId, creditReservation, requestId);
       throw new Error(`Smart mode failed for all model attempts: ${attemptsSummary}`);
     }
 
-    if (creditReservation) await refundAiCreditReservation(input.userId, creditReservation, requestId);
     throw lastError ?? new Error('OpenAI request failed without details');
   },
 
@@ -2464,13 +2427,11 @@ ${parsed.answer}`
     }
 
     try {
-      await chargeSingleAiNotificationCredit(input.userId);
       const result = await aiAssistantService.askTaskAssistant({
         userId: input.userId,
         taskId: input.taskId,
         history: [],
         mode: 'fast',
-        skipCreditsCharge: true,
         question: [
           'Задача только что стала просроченной.',
           'Проанализируй контекст и предложи пользователю максимально конкретный следующий шаг, который можно сделать прямо сейчас.',
@@ -2482,7 +2443,7 @@ ${parsed.answer}`
       await aiAssistantService.appendTaskDialogMessages({
         userId: input.userId,
         taskId: input.taskId,
-        messages: [{ role: 'assistant', content: result.answer }]
+        messages: [{ role: 'assistant', content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli }]
       });
 
       return {
