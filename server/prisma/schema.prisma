@@ -90,10 +90,7 @@ model User {
   lastMorningAiCheckupDate String?
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
-  aiCredits    Int      @default(100) // legacy, retained only for rollback compatibility
-  aiIncludedCreditsMilli Int @default(100000)
-  aiPurchasedCreditsMilli Int @default(0)
-  aiBonusCreditsMilli Int @default(0)
+  aiCredits    Int      @default(100)
   aiCreditsPeriod String @default("")
   aiEfficiencyCreditsSpent Int @default(0)
   aiEfficiencyCreditsPeriod String @default("")
@@ -115,8 +112,6 @@ model User {
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
   consents     UserConsent[]
-  aiUsageTransactions AiUsageTransaction[]
-  aiCreditReservations AiCreditReservation[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -200,7 +195,6 @@ model TaskAiMessage {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      AiMessageRole
   content   String
-  creditsSpentMilli Int?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -216,7 +210,6 @@ model GeneralAiMessage {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      AiMessageRole
   content   String
-  creditsSpentMilli Int?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -342,44 +335,4 @@ model CreditPack {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-}
-
-model AiUsageTransaction {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  actionId String @unique
-  feature String
-  provider String @default("openai")
-  primaryModel String
-  inputTokens Int
-  cachedInputTokens Int
-  cacheWriteTokens Int
-  outputTokens Int
-  reasoningTokens Int
-  providerCallCount Int @default(1)
-  providerCostNanoUsd BigInt
-  creditsChargedMilli Int
-  includedCreditsSpentMilli Int
-  bonusCreditsSpentMilli Int
-  purchasedCreditsSpentMilli Int
-  pricingVersion String
-  usageDetails Json?
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-}
-
-model AiCreditReservation {
-  id String @id @default(cuid())
-  actionId String @unique
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  includedMilli Int
-  bonusMilli Int
-  purchasedMilli Int
-  reservedMilli Int
-  createdAt DateTime @default(now())
-
-  @@index([userId])
 }

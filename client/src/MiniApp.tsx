@@ -9,7 +9,6 @@ import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
-import { formatAiCreditBalance } from './lib/aiBilling';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -133,10 +132,10 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
   };
   return normalized;
 }
-const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
-  { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol' }
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
+  { value: 'gpt-6-luna', label: 'GPT-6 Luna', creditsCost: 2 },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: 5 },
+  { value: 'gpt-6-sol', label: 'GPT-6 Sol', creditsCost: 8 }
 ];
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
 const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];
@@ -2302,7 +2301,7 @@ export default function MiniApp() {
             <div className="relative inline-flex shrink-0 items-center gap-1">
               <div className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Доступные ИИ-кредиты" aria-label={`ИИ-кредиты: ${aiCredits}`}>
                 <Coins size={15} />
-                <span>{formatAiCreditBalance(aiCredits)}</span>
+                <span>{aiCredits}</span>
               </div>
               <button
                 type="button"
