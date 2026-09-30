@@ -78,6 +78,7 @@ export type CurrentUser = {
   googleSub?: string | null;
   deviceId?: string | null;
   aiCredits?: number;
+  aiCreditsMilli?: number;
   aiCreditsPeriod?: string;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
@@ -277,7 +278,7 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   adminAddCredits: (payload: { password: string; userId: string; creditsToAdd: number }) =>
-    request<{ user: { id: string; aiCredits: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
+    request<{ user: { id: string; aiCredits: number; aiCreditsMilli: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
       method: 'POST',
       body: JSON.stringify({ password: payload.password, creditsToAdd: payload.creditsToAdd })
     })

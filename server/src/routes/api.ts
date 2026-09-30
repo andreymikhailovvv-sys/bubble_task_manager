@@ -18,6 +18,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { calendarExportController } from '../controllers/calendar-export.controller.js';
 import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistrationService, normalizeAccountLogin, validatePersonalDataConsent } from '../services/account-registration.service.js';
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
+import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -62,11 +63,6 @@ const EFFICIENCY_BONUSES = {
 const TRAINING_LESSON_IDS = ['workspace', 'tasks', 'ai', 'features'] as const;
 const TRAINING_LESSON_REWARD = 5;
 
-const currentCreditsPeriod = () => {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-};
-
 const toAuthUser = (user: {
   id: string;
   email?: string | null;
@@ -77,6 +73,9 @@ const toAuthUser = (user: {
   deviceId?: string | null;
   aiCredits?: number;
   aiCreditsPeriod?: string;
+  aiIncludedCreditsMilli?: number;
+  aiBonusCreditsMilli?: number;
+  aiPurchasedCreditsMilli?: number;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
@@ -90,7 +89,11 @@ const toAuthUser = (user: {
   efficiencyFocusScore?: number;
   efficiencyLastActivityAt?: Date | string | null;
   completedLessonIds?: string[];
-}) => ({
+}) => {
+  const aiCreditsMilli = (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
+    + (user.aiBonusCreditsMilli ?? 0)
+    + (user.aiPurchasedCreditsMilli ?? 0);
+  return ({
   id: user.id,
   email: user.email,
   username: user.username,
@@ -98,7 +101,8 @@ const toAuthUser = (user: {
   avatarUrl: user.avatarUrl,
   googleSub: user.googleSub,
   deviceId: user.deviceId,
-  aiCredits: user.aiCredits ?? 100,
+  aiCredits: Math.floor(aiCreditsMilli / 1000),
+  aiCreditsMilli,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
   aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
@@ -113,7 +117,8 @@ const toAuthUser = (user: {
   efficiencyFocusScore: Math.max(0, user.efficiencyFocusScore ?? 0),
   efficiencyLastActivityAt: user.efficiencyLastActivityAt ?? null,
   completedLessonIds: user.completedLessonIds ?? []
-});
+  });
+};
 
 
 
@@ -494,6 +499,9 @@ apiRouter.post('/admin/users', async (req, res) => {
       username: true,
       aiCredits: true,
       aiCreditsPeriod: true,
+      aiIncludedCreditsMilli: true,
+      aiBonusCreditsMilli: true,
+      aiPurchasedCreditsMilli: true,
       createdAt: true
     }
   });
@@ -566,17 +574,14 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
     return;
   }
 
-  const updatedUser = await prisma.user.update({
-    where: { id: userId },
-    data: { aiCredits: { increment: creditsToAdd } },
-    select: {
-      id: true,
-      aiCredits: true,
-      aiCreditsPeriod: true
-    }
-  });
+  const updatedUser = await grantBonusCreditsMilli(userId, creditsToMilli(creditsToAdd));
 
-  res.json({ user: updatedUser });
+  res.json({ user: {
+    id: updatedUser.id,
+    aiCredits: updatedUser.aiCredits,
+    aiCreditsMilli: updatedUser.aiIncludedCreditsMilli + updatedUser.aiBonusCreditsMilli + updatedUser.aiPurchasedCreditsMilli,
+    aiCreditsPeriod: updatedUser.aiCreditsPeriod
+  } });
 });
 
 
@@ -622,6 +627,9 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       deviceId: true,
       aiCredits: true,
       aiCreditsPeriod: true,
+      aiIncludedCreditsMilli: true,
+      aiBonusCreditsMilli: true,
+      aiPurchasedCreditsMilli: true,
       aiEfficiencyCreditsSpent: true,
       aiEfficiencyCreditsPeriod: true,
       timeZone: true,
@@ -681,6 +689,7 @@ apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, 
     const scores = applyEfficiencyPenalty(getEfficiencyBuckets(user), (user.efficiencyLastActivityAt ?? now).getTime(), now.getTime(), user.timeZone ?? DEFAULT_TIMEZONE);
     const available = 100 - sumEfficiencyBuckets(scores);
     scores.task = clampBucketScore(scores.task + Math.min(TRAINING_LESSON_REWARD, Math.max(0, available)));
+    await grantBonusCreditsMilliInTransaction(user.id, creditsToMilli(TRAINING_LESSON_REWARD), tx);
     const updated = await tx.user.update({
       where: { id: user.id },
       data: { ...buildEfficiencyUpdateData(scores, now), completedLessonIds: [...user.completedLessonIds, lessonId] }
@@ -698,6 +707,7 @@ apiRouter.post('/training/lessons/:lessonId/complete', requireAuth, async (req, 
 apiRouter.get('/auth/me', async (req, res) => {
   if (req.user?.id) {
     await persistEfficiencyDelta(req.user.id, 0);
+    await getAiCreditWallet(req.user.id);
     const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (freshUser) {
       console.info(`[Auth] me success userId=${freshUser.id} source=cookie ${authRequestContext(req)}`);
