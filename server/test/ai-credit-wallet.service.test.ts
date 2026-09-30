@@ -54,9 +54,9 @@ const wallet = (overrides: Partial<State> = {}) => new FakeWalletDatabase({
 
 test('migration сохраняет 36 legacy credits как 36000 bonus milli', async () => {
   const sql = await readFile(new URL('../prisma/migrations/20260930200000_add_ai_credit_wallet/migration.sql', import.meta.url), 'utf8');
-  assert.match(sql, /"aiBonusCreditsMilli" = "aiCredits" \* 1000/);
+  assert.match(sql, /"aiBonusCreditsMilli" = \("aiCredits"::bigint \* 1000\)::integer/);
   assert.match(sql, /"aiIncludedCreditsMilli" = 0/);
-  assert.match(sql, /RAISE EXCEPTION 'AI credit wallet migration sanity check failed'/);
+  assert.match(sql, /RAISE EXCEPTION 'AI credit wallet migration sanity check failed/);
   assert.equal(36 * 1000, 36_000);
 });
 
