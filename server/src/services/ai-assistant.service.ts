@@ -5,6 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
+import { recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 
 type ChatRole = 'user' | 'assistant';
 
@@ -1614,7 +1615,20 @@ export const aiAssistantService = {
           continue;
         }
 
-        const responseJson = await openAiResponse.json();
+        const responseJson = await openAiResponse.json() as {
+          id?: unknown;
+          usage?: import('./ai-usage-metering.service.js').OpenAiUsage;
+          [key: string]: unknown;
+        };
+        await recordOpenAiUsageShadow({
+          userId: input.userId,
+          taskId: input.taskId,
+          requestId,
+          feature: 'task_chat',
+          model,
+          openAiResponseId: typeof responseJson?.id === 'string' ? responseJson.id : null,
+          usage: responseJson?.usage
+        });
         const rawAnswer = extractOutputText(responseJson);
         if (!rawAnswer) {
           console.error('[AI] OpenAI returned empty response', {

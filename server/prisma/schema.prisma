@@ -112,10 +112,35 @@ model User {
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
   consents     UserConsent[]
+  aiUsageEvents AiUsageEvent[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+model AiUsageEvent {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId             String
+  feature               String
+  model                 String
+  openAiResponseId      String?
+  inputTokens           Int
+  cachedInputTokens     Int
+  cacheWriteTokens      Int
+  outputTokens          Int
+  reasoningTokens       Int
+  totalTokens           Int
+  providerCostNanoUsd   BigInt?
+  estimatedCreditsMilli Int?
+  pricingVersion        String
+  billingMode           String   @default("SHADOW")
+  createdAt             DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([requestId])
 }
 
 model UserConsent {
