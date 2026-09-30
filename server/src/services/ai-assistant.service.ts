@@ -983,6 +983,7 @@ export const aiAssistantService = {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
+    const actionRequestId = randomUUID();
     return withAiCreditReservation(input.userId, model, async () => {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
@@ -1008,7 +1009,7 @@ export const aiAssistantService = {
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
-      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey });
+      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId });
     }
     const response = await openAiFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -1025,7 +1026,9 @@ export const aiAssistantService = {
       })
     });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const answer = extractOutputText(await response.json()).trim();
+    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: actionRequestId, requestId: actionRequestId, providerCallIndex: 1, feature: 'ai_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
+    const answer = extractOutputText(responseJson).trim();
     if (!answer) throw new Error('Empty AI response');
     return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
     });
@@ -1035,6 +1038,7 @@ export const aiAssistantService = {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
     const model = OTHER_AI_MODEL || RECURRENCE_MODEL;
+    const requestId = randomUUID();
     return withAiCreditReservation(input.userId, model, async () => {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
@@ -1060,7 +1064,9 @@ export const aiAssistantService = {
       })
     });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const raw = extractOutputText(await response.json());
+    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'recurrence', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
+    const raw = extractOutputText(responseJson);
     if (!raw) throw new Error('Empty AI response');
     const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
     return {
@@ -1547,8 +1553,10 @@ export const aiAssistantService = {
         deferEfficiencyBonus: true
       });
 
+    let providerCallIndex = 0;
     for (const model of modelCandidates) {
       try {
+        providerCallIndex += 1;
         const startedAt = Date.now();
         console.info('[AI] Sending OpenAI request', {
           requestId,
@@ -1623,7 +1631,9 @@ export const aiAssistantService = {
         await recordOpenAiUsageShadow({
           userId: input.userId,
           taskId: input.taskId,
-          requestId,
+          actionId: requestId,
+          requestId: modelCandidates.length === 1 ? requestId : `${requestId}:model:${providerCallIndex}`,
+          providerCallIndex,
           feature: 'task_chat',
           model,
           openAiResponseId: typeof responseJson?.id === 'string' ? responseJson.id : null,
@@ -2034,6 +2044,7 @@ ${parsed.answer}`
       { role: 'user', content: question }
     ];
 
+    const requestId = randomUUID();
     await chargeAiCredits(input.userId, GENERAL_CHAT_MODEL);
     const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -2053,7 +2064,8 @@ ${parsed.answer}`
       throw new Error(`OpenAI request failed: ${openAiResponse.status}. ${sanitizeUpstreamErrorText(errorText)}`);
     }
 
-    const responseJson = await openAiResponse.json();
+    const responseJson = await openAiResponse.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'general_assistant', model: GENERAL_CHAT_MODEL, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
     const rawAnswer = extractOutputText(responseJson);
     if (!rawAnswer) {
       throw new Error('OpenAI returned empty response');
@@ -2514,6 +2526,7 @@ ${parsed.answer}`
   },
 
   optimizeTimelineSchedule: async (input: { userId: string; scope: TimelineOptimizationScope; periodStartIso: string; periodEndIso: string; userNote?: string; userTimeZone?: string }) => {
+    const requestId = randomUUID();
     const periodStart = new Date(input.periodStartIso);
     const periodEnd = new Date(input.periodEndIso);
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
@@ -2530,7 +2543,9 @@ ${parsed.answer}`
     await chargeAiCredits(input.userId, OTHER_AI_MODEL);
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: OTHER_AI_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
+    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'optimize_timeline', model: OTHER_AI_MODEL, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
+    const parsed = parseTimelineOptimizationPlan(extractOutputText(responseJson));
     const taskById = new Map(tasks.map((task) => [task.id, task]));
     const normalizedPlan = parsed.tasks
       .map((item) => {
@@ -2555,6 +2570,7 @@ ${parsed.answer}`
 
 
   postponeOverdueWithAi: async (input: { userId: string; userTimeZone?: string }) => {
+    const requestId = randomUUID();
     const now = new Date();
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
@@ -2571,7 +2587,9 @@ ${parsed.answer}`
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}, body: JSON.stringify({ model: OTHER_AI_MODEL, input:[{ role:'system', content:'Ты помощник планировщик. Верни только JSON.'},{ role:'user', content:`Перераспредели только просроченные задачи и подзадачи по ближайшим окнам: сначала сегодня, если окон нет — завтра. Учитывай паттерны недели пользователя (время задач по секторам). Верни JSON {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO"}]}. Переноси только taskId из списка overdueIds. now=${now.toISOString()} overdueIds=${JSON.stringify(overdueIds)} weekTasks:
 ${lines}`}] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const parsed = parseTimelineOptimizationPlan(extractOutputText(await response.json()));
+    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'overdue_postpone', model: OTHER_AI_MODEL, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
+    const parsed = parseTimelineOptimizationPlan(extractOutputText(responseJson));
     const map = new Map(overdue.map((t)=>[t.id,t]));
     const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
     await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.update({ where:{id:u.taskId}, data:{dueDate:u.dueDate} }); }});
@@ -2687,7 +2705,8 @@ ${lines}`}] }) });
       throw new Error('Не удалось получить подзадачи от ИИ');
     }
 
-    const payload = await response.json();
+    const payload = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'generate_subtasks', model: modelForSubtasks, openAiResponseId: typeof payload.id === 'string' ? payload.id : null, usage: payload.usage });
     const rawAnswer = extractOutputText(payload);
     if (!rawAnswer) {
       throw new Error('ИИ вернул пустой ответ для подзадач');
@@ -2731,6 +2750,7 @@ ${lines}`}] }) });
     const now = new Date();
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
     const modelForPrompt = attachmentsMessage ? ATTACHMENTS_MODEL : FAST_MODEL;
+    const requestId = randomUUID();
     const userSpheres = input.autoAssignSphere
       ? await prisma.sphere.findMany({
         where: { userId: input.userId },
@@ -2794,7 +2814,8 @@ ${lines}`}] }) });
       throw new Error('Не удалось получить структуру задачи от ИИ');
     }
 
-    const payload = await response.json();
+    const payload = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'generate_task', model: modelForPrompt, openAiResponseId: typeof payload.id === 'string' ? payload.id : null, usage: payload.usage });
     const rawAnswer = extractOutputText(payload);
     if (!rawAnswer) {
       throw new Error('ИИ вернул пустой ответ для генерации задачи');
