@@ -20,7 +20,7 @@ import { UpdatesMenu } from './components/UpdatesMenu';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
-import { formatAiCreditBalance, formatAiCreditsSpent } from './lib/aiBilling';
+import { formatAiCreditBalance } from './lib/aiBilling';
 
 const MAX_SPHERES = 8;
 
@@ -359,9 +359,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
 
 function areTaskAiMessagesEqual(a: TaskAiMessage[], b: TaskAiMessage[]) {
   if (a.length !== b.length) return false;
-  return a.every((message, index) => message.role === b[index]?.role
-    && message.content === b[index]?.content
-    && message.creditsSpentMilli === b[index]?.creditsSpentMilli);
+  return a.every((message, index) => message.role === b[index]?.role && message.content === b[index]?.content);
 }
 
 type AiTaskReference = {
@@ -1725,7 +1723,7 @@ export default function App() {
   }, [generalAiMessages, generalAiSearchQuery, isGeneralAiSearchOpen]);
 
   const normalizeTaskAiMessages = (messages: ChatMessage[]): TaskAiMessage[] =>
-    messages.map((message, index) => ({ id: `${index}-${message.role}-${message.content}`, role: message.role, content: message.content, creditsSpentMilli: message.creditsSpentMilli }));
+    messages.map((message, index) => ({ id: `${index}-${message.role}-${message.content}`, role: message.role, content: message.content }));
 
   useEffect(() => {
     if (!focusedTask) {
@@ -2047,9 +2045,8 @@ export default function App() {
       });
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]
       }));
-      await refreshAiCredits();
       try {
         await load();
       } catch (loadError) {
@@ -5888,7 +5885,6 @@ ${allContext}`,
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>
-                    {message.role === 'assistant' && formatAiCreditsSpent(message.creditsSpentMilli) ? <p className="mt-1 text-[10px] text-muted opacity-70">{formatAiCreditsSpent(message.creditsSpentMilli)}</p> : null}
                   </div>
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
@@ -6650,7 +6646,6 @@ ${allContext}`,
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>
-                  {message.role === 'assistant' && formatAiCreditsSpent(message.creditsSpentMilli) ? <p className="mt-1 text-[10px] text-muted opacity-70">{formatAiCreditsSpent(message.creditsSpentMilli)}</p> : null}
                 </div>
               ))}
               {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-muted">ИИ думает…</p> : null}

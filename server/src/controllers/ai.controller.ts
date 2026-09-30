@@ -229,11 +229,11 @@ export const aiController = {
         taskId: req.params.id,
         messages: normalizedUserMessage
           ? [
-            { role: 'user', content: normalizedUserMessage, creditsSpentMilli: null },
-            { role: 'assistant', content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli }
+            { role: 'user', content: normalizedUserMessage },
+            { role: 'assistant', content: result.answer }
           ]
           : [
-            { role: 'assistant', content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli }
+            { role: 'assistant', content: result.answer }
           ]
       });
 
@@ -242,8 +242,7 @@ export const aiController = {
         taskId: req.params.id,
         mode,
         model: result.model,
-        answerLength: result.answer.length,
-        creditsSpentMilli: result.billing.creditsSpentMilli
+        answerLength: result.answer.length
       });
 
       res.json(result);

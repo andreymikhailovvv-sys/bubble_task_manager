@@ -105,7 +105,6 @@ type OpenAiResponsePayload = { usage?: OpenAiUsage; [key: string]: unknown };
 export async function executeBilledOpenAiResponse(input: {
   userId: string;
   actionId: string;
-  taskId?: string;
   feature: AiFeature;
   apiKey: string;
   payload: Record<string, unknown> & { model: string };
@@ -130,26 +129,6 @@ export async function executeBilledOpenAiResponse(input: {
     const responsePayload = await response.json() as OpenAiResponsePayload;
     if (!responsePayload.usage) throw new Error('OpenAI response did not include billable usage');
     const billing = await settleAiReservation({ actionId: input.actionId, feature: input.feature, model: payload.model, usage: responsePayload.usage, usageDetails: [{ model: payload.model, usage: responsePayload.usage }] });
-    const usage = calculateOpenAiBilling(payload.model, responsePayload.usage);
-    const balance = await prisma.user.findUnique({
-      where: { id: input.userId },
-      select: { aiIncludedCreditsMilli: true, aiBonusCreditsMilli: true, aiPurchasedCreditsMilli: true }
-    });
-    console.info('[AI billing] settled', {
-      userId: input.userId,
-      taskId: input.taskId,
-      actionId: input.actionId,
-      feature: input.feature,
-      model: payload.model,
-      inputTokens: usage.inputTokens,
-      cachedInputTokens: usage.cachedInputTokens,
-      cacheWriteTokens: usage.cacheWriteTokens,
-      outputTokens: usage.outputTokens,
-      providerCostNanoUsd: usage.providerCostNanoUsd.toString(),
-      creditsSpentMilli: billing.creditsSpentMilli,
-      balanceAfterMilli: balance ? balance.aiIncludedCreditsMilli + balance.aiBonusCreditsMilli + balance.aiPurchasedCreditsMilli : null,
-      pricingVersion: PRICING_VERSION
-    });
     return { response: responsePayload, billing };
   } catch (error) {
     await releaseAiReservation(input.actionId);
