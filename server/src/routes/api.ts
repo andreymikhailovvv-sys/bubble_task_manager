@@ -24,9 +24,9 @@ const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
 const CREDIT_PACKS = [
-  { key: 'credit_start', name: 'Старт', creditsAmount: 1000, price: 199 },
-  { key: 'credit_pro', name: 'Про', creditsAmount: 5000, price: 690 },
-  { key: 'credit_max', name: 'Макс', creditsAmount: 15000, price: 1490 }
+  { key: 'credit_start', name: '1800 AI-кредитов', creditsAmount: 1800, price: 199 },
+  { key: 'credit_pro', name: '6200 AI-кредитов', creditsAmount: 6200, price: 690 },
+  { key: 'credit_max', name: '14000 AI-кредитов', creditsAmount: 14000, price: 1490 }
 ] as const;
 type CreditPackKey = typeof CREDIT_PACKS[number]['key'];
 
@@ -76,6 +76,9 @@ const toAuthUser = (user: {
   googleSub?: string | null;
   deviceId?: string | null;
   aiCredits?: number;
+  aiIncludedCreditsMilli?: number;
+  aiPurchasedCreditsMilli?: number;
+  aiBonusCreditsMilli?: number;
   aiCreditsPeriod?: string;
   aiEfficiencyCreditsSpent?: number;
   aiEfficiencyCreditsPeriod?: string;
@@ -98,7 +101,11 @@ const toAuthUser = (user: {
   avatarUrl: user.avatarUrl,
   googleSub: user.googleSub,
   deviceId: user.deviceId,
-  aiCredits: user.aiCredits ?? 100,
+  aiCreditsMilli: (user.aiIncludedCreditsMilli ?? 100000) + (user.aiBonusCreditsMilli ?? 0) + (user.aiPurchasedCreditsMilli ?? 0),
+  aiCredits: ((user.aiIncludedCreditsMilli ?? 100000) + (user.aiBonusCreditsMilli ?? 0) + (user.aiPurchasedCreditsMilli ?? 0)) / 1000,
+  aiIncludedCreditsMilli: user.aiIncludedCreditsMilli ?? 100000,
+  aiBonusCreditsMilli: user.aiBonusCreditsMilli ?? 0,
+  aiPurchasedCreditsMilli: user.aiPurchasedCreditsMilli ?? 0,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
   aiEfficiencyCreditsSpent: user.aiEfficiencyCreditsSpent ?? 0,
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
@@ -492,13 +499,15 @@ apiRouter.post('/admin/users', async (req, res) => {
       name: true,
       email: true,
       username: true,
-      aiCredits: true,
+      aiIncludedCreditsMilli: true,
+      aiBonusCreditsMilli: true,
+      aiPurchasedCreditsMilli: true,
       aiCreditsPeriod: true,
       createdAt: true
     }
   });
 
-  res.json({ users });
+  res.json({ users: users.map(toAuthUser) });
 });
 
 
@@ -568,15 +577,17 @@ apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
 
   const updatedUser = await prisma.user.update({
     where: { id: userId },
-    data: { aiCredits: { increment: creditsToAdd } },
+    data: { aiBonusCreditsMilli: { increment: creditsToAdd * 1000 } },
     select: {
       id: true,
-      aiCredits: true,
+      aiIncludedCreditsMilli: true,
+      aiBonusCreditsMilli: true,
+      aiPurchasedCreditsMilli: true,
       aiCreditsPeriod: true
     }
   });
 
-  res.json({ user: updatedUser });
+  res.json({ user: toAuthUser(updatedUser) });
 });
 
 
@@ -620,7 +631,9 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       avatarUrl: true,
       googleSub: true,
       deviceId: true,
-      aiCredits: true,
+      aiIncludedCreditsMilli: true,
+      aiBonusCreditsMilli: true,
+      aiPurchasedCreditsMilli: true,
       aiCreditsPeriod: true,
       aiEfficiencyCreditsSpent: true,
       aiEfficiencyCreditsPeriod: true,

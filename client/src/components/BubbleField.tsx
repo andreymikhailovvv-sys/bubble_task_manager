@@ -73,7 +73,6 @@ const SUBTASK_REMINDER_GLOW_STYLE =
 const SUBTASK_OVERDUE_GLOW_STYLE =
   '0 0 0 1px rgba(239,68,68,0.28), inset 0 0 12px rgba(239,68,68,0.3)';
 const MAX_SHINE_WINDOW_MINUTES = 180;
-const SMART_POSTPONE_CREDITS_COST = 1;
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WITH_SUBMENU_WIDTH = 416;
 const CONTEXT_MENU_HEIGHT = 188;
@@ -1167,7 +1166,7 @@ export function BubbleField({
                     }}
                   >
                     <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                    {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
+                    {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="text-rose-300" aria-label="Стоимость рассчитывается по фактическому использованию ИИ" /></span> : null}
                   </button>
                 ))}
               </div>
