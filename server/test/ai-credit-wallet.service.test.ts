@@ -10,7 +10,9 @@ import {
   grantBonusCreditsMilli,
   grantPurchasedCreditsMilli,
   refundAiCreditReservation,
-  reserveAiCreditsMilli
+  reserveAiCreditsMilli,
+  reserveAiCreditsMilliUpTo,
+  settleAiCreditReservation
 } from '../src/services/ai-credit-wallet.service.js';
 
 type State = {
@@ -114,4 +116,19 @@ test('параллельные debit сериализуются и не допу
 
 test('старые fixed цены переводятся в milli без динамического billing', () => {
   assert.deepEqual([creditsToMilli(2), creditsToMilli(5), creditsToMilli(8)], [2_000, 5_000, 8_000]);
+});
+
+test('range reservation ограничивается балансом и settlement возвращает остаток в исходные buckets', async () => {
+  const db = wallet({ aiCredits: 10, aiIncludedCreditsMilli: 1_000, aiBonusCreditsMilli: 9_000 });
+  const reservation = await reserveAiCreditsMilliUpTo('user-1', 4_000, 12_000, db as any);
+  assert.deepEqual([reservation.includedMilli, reservation.bonusMilli, reservation.totalMilli], [1_000, 9_000, 10_000]);
+  const settlement = await settleAiCreditReservation(reservation, 1_500, db as any);
+  assert.deepEqual(settlement, { chargedMilli: 1_500, refundedMilli: 8_500, totalAfterMilli: 8_500 });
+  assert.deepEqual([db.state?.aiIncludedCreditsMilli, db.state?.aiBonusCreditsMilli, db.state?.aiPurchasedCreditsMilli], [0, 8_500, 0]);
+});
+
+test('range reservation атомарно отклоняет недостаточный minimum', async () => {
+  const db = wallet({ aiCredits: 3, aiIncludedCreditsMilli: 3_999 });
+  await assert.rejects(reserveAiCreditsMilliUpTo('user-1', 4_000, 8_000, db as any), /Недостаточно AI кредитов/);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 3_999);
 });

@@ -106,6 +106,29 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
   });
 }
 
+export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
+  if (!Number.isSafeInteger(minimumMilli) || minimumMilli <= 0 || !Number.isSafeInteger(desiredMilli) || desiredMilli < minimumMilli) {
+    throw new TypeError('Invalid AI credit reservation range');
+  }
+  return db.$transaction(async (tx) => {
+    const row = await selectWalletForUpdate(tx, userId);
+    if (!row) throw new Error('User not found');
+    const period = currentAiCreditsPeriod();
+    const wallet = await refreshLockedWallet(tx, row, period);
+    const balance = getTotalAiCreditsMilli(wallet);
+    if (balance < minimumMilli) throw new Error('Недостаточно AI кредитов');
+    const amountMilli = Math.min(balance, desiredMilli);
+    const debit = calculateDebitBreakdown(wallet, amountMilli)!;
+    const next = {
+      aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
+      aiBonusCreditsMilli: wallet.aiBonusCreditsMilli - debit.bonusMilli,
+      aiPurchasedCreditsMilli: wallet.aiPurchasedCreditsMilli - debit.purchasedMilli
+    };
+    await updateWallet(tx, userId, next, period);
+    return { userId, period, ...debit };
+  });
+}
+
 export const debitAiCreditsMilli = reserveAiCreditsMilli;
 
 export async function refundAiCreditReservation(reservation: AiCreditReservation, db: WalletDatabase = prisma) {
@@ -121,6 +144,26 @@ export async function refundAiCreditReservation(reservation: AiCreditReservation
     console.info('[AI wallet] refunded', { userId: reservation.userId, amountMilli: reservation.totalMilli, totalAfterMilli: getTotalAiCreditsMilli(next) });
     return updated;
   });
+}
+
+export async function settleAiCreditReservation(reservation: AiCreditReservation, actualCreditsMilli: number, db: WalletDatabase = prisma) {
+  if (!Number.isSafeInteger(actualCreditsMilli) || actualCreditsMilli < 0) throw new TypeError('actualCreditsMilli must be a non-negative safe integer');
+  const chargedMilli = Math.min(actualCreditsMilli, reservation.totalMilli);
+  const charged = calculateDebitBreakdown({
+    aiIncludedCreditsMilli: reservation.includedMilli,
+    aiBonusCreditsMilli: reservation.bonusMilli,
+    aiPurchasedCreditsMilli: reservation.purchasedMilli
+  }, chargedMilli || 1);
+  const spent = chargedMilli === 0 ? { includedMilli: 0, bonusMilli: 0, purchasedMilli: 0 } : charged!;
+  const refund: AiCreditReservation = {
+    ...reservation,
+    includedMilli: reservation.includedMilli - spent.includedMilli,
+    bonusMilli: reservation.bonusMilli - spent.bonusMilli,
+    purchasedMilli: reservation.purchasedMilli - spent.purchasedMilli,
+    totalMilli: reservation.totalMilli - chargedMilli
+  };
+  const updated = refund.totalMilli > 0 ? await refundAiCreditReservation(refund, db) : await getAiCreditWallet(reservation.userId, db);
+  return { chargedMilli, refundedMilli: refund.totalMilli, totalAfterMilli: getTotalAiCreditsMilli(updated) };
 }
 
 async function grantCreditsMilli(userId: string, amountMilli: number, bucket: 'bonus' | 'purchased', db: WalletDatabase = prisma) {

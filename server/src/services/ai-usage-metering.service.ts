@@ -38,6 +38,7 @@ export type RecordOpenAiUsageInput = {
   model: string;
   openAiResponseId?: string | null;
   usage?: OpenAiUsage | null;
+  billingMode?: 'SHADOW' | 'DYNAMIC';
 };
 
 type UsageEventRepository = {
@@ -87,13 +88,30 @@ export function calculateOpenAiUsageCost(model: string, usage: OpenAiUsage): Ope
   };
 }
 
+export function calculateMaximumRequestCreditsMilli(input: { model: string; inputTokens: number; maxOutputTokens: number }) {
+  const rates = resolveOpenAiTokenRates(input.model, input.inputTokens);
+  if (!rates) throw new Error(`Unknown OpenAI pricing for model "${input.model}"`);
+  const inputRate = [rates.inputNanoUsdPerMillion, rates.cachedInputNanoUsdPerMillion, rates.cacheWriteNanoUsdPerMillion ?? rates.inputNanoUsdPerMillion]
+    .reduce((maximum, rate) => rate > maximum ? rate : maximum);
+  const toMilli = (tokens: number, rate: bigint) => Number(((BigInt(tokens) * rate + TOKENS_PER_MILLION - 1n) / TOKENS_PER_MILLION + NANO_USD_PER_MILLICREDIT - 1n) / NANO_USD_PER_MILLICREDIT);
+  const inputCreditsMilli = toMilli(input.inputTokens, inputRate);
+  const outputCreditsMilli = toMilli(input.maxOutputTokens, rates.outputNanoUsdPerMillion);
+  return { inputCreditsMilli, outputCreditsMilli, totalCreditsMilli: inputCreditsMilli + outputCreditsMilli, outputNanoUsdPerMillion: rates.outputNanoUsdPerMillion };
+}
+
+export function calculateAffordableOutputTokens(model: string, inputTokens: number, outputBudgetMilli: number) {
+  const rates = resolveOpenAiTokenRates(model, inputTokens);
+  if (!rates || outputBudgetMilli <= 0) return 0;
+  return Number((BigInt(outputBudgetMilli) * NANO_USD_PER_MILLICREDIT * TOKENS_PER_MILLION) / rates.outputNanoUsdPerMillion);
+}
+
 const formatNanoUsd = (value: bigint) => `${value / 1_000_000_000n}.${(value % 1_000_000_000n).toString().padStart(9, '0')}`;
 
 export async function recordOpenAiUsageShadow(
   input: RecordOpenAiUsageInput,
   repository: UsageEventRepository = prisma.aiUsageEvent
 ): Promise<void> {
-  if (process.env.AI_USAGE_SHADOW_ENABLED?.trim().toLowerCase() === 'false') return;
+  if (input.billingMode !== 'DYNAMIC' && process.env.AI_USAGE_SHADOW_ENABLED?.trim().toLowerCase() === 'false') return;
 
   if (!input.usage) {
     console.warn('[AI shadow usage] missing usage', {
@@ -145,6 +163,7 @@ export async function recordOpenAiUsageShadow(
         totalTokens: metering.totalTokens,
         providerCostNanoUsd: metering.providerCostNanoUsd,
         estimatedCreditsMilli: metering.estimatedCreditsMilli,
+        billingMode: input.billingMode ?? 'SHADOW',
         pricingVersion: OPENAI_PRICING_VERSION
       }
     });

@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   calculateOpenAiUsageCost,
+  calculateMaximumRequestCreditsMilli,
   normalizeOpenAiUsage,
   recordOpenAiUsageShadow
 } from '../src/services/ai-usage-metering.service.js';
+
+test('maximum reservation использует дорогую cache-write ставку и output budget', () => {
+  const result = calculateMaximumRequestCreditsMilli({ model: 'gpt-6-luna', inputTokens: 1_000, maxOutputTokens: 1_000 });
+  assert.deepEqual(result, { inputCreditsMilli: 209, outputCreditsMilli: 834, totalCreditsMilli: 1043, outputNanoUsdPerMillion: 500_000_000n });
+});
 
 test('считает обычные input и output токены в nanoUSD и millicredits', () => {
   const result = calculateOpenAiUsageCost('gpt-6-luna', { input_tokens: 1_000, output_tokens: 100 });
