@@ -32,6 +32,8 @@ export type RecordOpenAiUsageInput = {
   userId: string;
   taskId?: string;
   requestId: string;
+  actionId?: string | null;
+  providerCallIndex?: number | null;
   feature: string;
   model: string;
   openAiResponseId?: string | null;
@@ -96,7 +98,9 @@ export async function recordOpenAiUsageShadow(
   if (!input.usage) {
     console.warn('[AI shadow usage] missing usage', {
       userId: input.userId,
+      actionId: input.actionId ?? null,
       requestId: input.requestId,
+      providerCallIndex: input.providerCallIndex ?? null,
       feature: input.feature,
       model: input.model,
       openAiResponseId: input.openAiResponseId ?? null
@@ -127,7 +131,9 @@ export async function recordOpenAiUsageShadow(
     await repository.create({
       data: {
         userId: input.userId,
+        actionId: input.actionId ?? null,
         requestId: input.requestId,
+        providerCallIndex: input.providerCallIndex ?? null,
         feature: input.feature,
         model: input.model,
         openAiResponseId: input.openAiResponseId ?? null,
@@ -146,7 +152,9 @@ export async function recordOpenAiUsageShadow(
     console.info('[AI shadow usage] recorded', {
       userId: input.userId,
       taskId: input.taskId,
+      actionId: input.actionId ?? null,
       requestId: input.requestId,
+      providerCallIndex: input.providerCallIndex ?? null,
       feature: input.feature,
       model: input.model,
       openAiResponseId: input.openAiResponseId ?? null,
@@ -166,7 +174,9 @@ export async function recordOpenAiUsageShadow(
     console.warn('[AI shadow usage] recording failed', {
       userId: input.userId,
       taskId: input.taskId,
+      actionId: input.actionId ?? null,
       requestId: input.requestId,
+      providerCallIndex: input.providerCallIndex ?? null,
       feature: input.feature,
       model: input.model,
       openAiResponseId: input.openAiResponseId ?? null,

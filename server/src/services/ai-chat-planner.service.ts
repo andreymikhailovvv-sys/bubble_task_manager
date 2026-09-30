@@ -1,6 +1,6 @@
-import { randomUUID } from 'node:crypto';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { plannerToolsService, type PlannerActionInput, type PlannerSearchInput } from './planner-tools.service.js';
+import { recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 
 export const MAX_TOOL_ROUNDS = 6;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
@@ -35,7 +35,7 @@ export const PLANNER_OPENAI_TOOLS = [
 ] as const;
 
 type OpenAiOutputItem = Record<string, unknown>;
-type ToolResponse = { output?: OpenAiOutputItem[]; output_text?: string };
+type ToolResponse = { id?: unknown; usage?: OpenAiUsage; output?: OpenAiOutputItem[]; output_text?: string };
 type ToolLoopOptions = {
   initialInput: unknown[];
   request: (input: unknown[]) => Promise<ToolResponse>;
@@ -78,19 +78,24 @@ export async function runPlannerToolLoop(options: ToolLoopOptions) {
   throw new Error('Превышен лимит planner tools.');
 }
 
-export async function askAiChatWithPlannerTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string }) {
-  const requestId = randomUUID(); const startedAt = Date.now();
+export async function askAiChatWithPlannerTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string }) {
+  const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let usedPlannerTools = false;
+  let providerCallCount = 0;
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
     const loop = await runPlannerToolLoop({
       initialInput: input.messages,
       request: async (requestInput) => {
+        const providerCallIndex = providerCallCount + 1;
         const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify({ model: input.model, input: requestInput, tools: PLANNER_OPENAI_TOOLS, tool_choice: 'auto', parallel_tool_calls: false }) });
         if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-        return response.json() as Promise<ToolResponse>;
+        const payload = await response.json() as ToolResponse;
+        providerCallCount = providerCallIndex;
+        await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId: `${requestId}:planner:${providerCallIndex}`, providerCallIndex, feature: 'ai_chat_planner', model: input.model, openAiResponseId: typeof payload.id === 'string' ? payload.id : null, usage: payload.usage });
+        return payload;
       },
       executeTool: async (name, value, round) => {
         usedPlannerTools = true;

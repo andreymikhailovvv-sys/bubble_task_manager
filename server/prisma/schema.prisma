@@ -124,6 +124,8 @@ model AiUsageEvent {
   userId                String
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   requestId             String
+  actionId              String?
+  providerCallIndex     Int?
   feature               String
   model                 String
   openAiResponseId      String?
@@ -141,6 +143,7 @@ model AiUsageEvent {
 
   @@index([userId, createdAt])
   @@index([requestId])
+  @@index([actionId])
 }
 
 model UserConsent {

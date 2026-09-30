@@ -94,6 +94,18 @@ test('неизвестная модель сохраняет usage с пусто
   assert.equal(data?.estimatedCreditsMilli, null);
 });
 
+test('сохраняет идентификатор действия и номер provider-вызова', async () => {
+  let data: Record<string, unknown> | undefined;
+  await recordOpenAiUsageShadow({
+    userId: 'user-1', actionId: 'action-1', requestId: 'action-1:planner:2',
+    providerCallIndex: 2, feature: 'ai_chat_planner', model: 'gpt-5.4-mini',
+    usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 }
+  }, { create: async (args) => { data = args.data; } });
+  assert.equal(data?.actionId, 'action-1');
+  assert.equal(data?.requestId, 'action-1:planner:2');
+  assert.equal(data?.providerCallIndex, 2);
+});
+
 test('отсутствующий usage не создаёт событие и не ломает flow', async () => {
   let calls = 0;
   await recordOpenAiUsageShadow({
