@@ -7,6 +7,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
+import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
@@ -693,7 +694,6 @@ export default function MiniApp() {
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const subtaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const aiTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSubtaskTitleFocusIdRef = useRef<string | null>(null);
@@ -2229,13 +2229,6 @@ export default function MiniApp() {
   };
 
   useEffect(() => {
-    const textarea = aiTextareaRef.current;
-    if (!textarea) return;
-    textarea.style.height = '0px';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
-  }, [aiDraft, isAiDialogOpen, openedTaskId]);
-
-  useEffect(() => {
     if (!isAiDialogOpen) return;
     const scrollToBottom = (container: HTMLDivElement | null) => {
       if (!container) return;
@@ -3209,12 +3202,10 @@ export default function MiniApp() {
                 </div>
               ) : null}
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
-                <textarea
-                  ref={aiTextareaRef}
+                <AutoGrowingTextarea
                   value={aiDraft}
                   onChange={(event) => setAiDraft(event.target.value)}
                   placeholder="Напишите сообщение…"
-                  rows={1}
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                   className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0"
                   onKeyDown={(event) => {
@@ -3303,7 +3294,7 @@ export default function MiniApp() {
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
               {aiChatPendingFiles.length > 0 ? <div className="mb-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={`mini-general-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]" onClick={() => setAiChatPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}><Paperclip size={10} /><span className="max-w-[190px] truncate">{file.name}</span><X size={10} /></button>)}</div> : null}
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
-                <textarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} rows={1} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
+                <AutoGrowingTextarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
                 <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
                 <button type="button" onClick={() => aiChatFileInputRef.current?.click()} className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label="Прикрепить файл"><Paperclip size={17} /></button>
                 <button type="button" onClick={() => void sendAiChatQuestion()} disabled={aiChatLoading || (!aiChatDraft.trim() && aiChatPendingFiles.length === 0)} className="miniapp-ai-chat-send flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50" aria-label="Отправить сообщение"><SendHorizontal size={17} /></button>
