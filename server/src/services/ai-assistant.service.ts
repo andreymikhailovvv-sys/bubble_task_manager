@@ -5,12 +5,14 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
-import { recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
+import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
   refundAiCreditReservation as refundWalletReservation,
   reserveAiCreditsMilli,
+  reserveAiCreditsMilliUpTo,
+  settleAiCreditReservation,
   type AiCreditReservation as WalletReservation
 } from './ai-credit-wallet.service.js';
 
@@ -33,6 +35,14 @@ type OpenAiUserAttachmentMessage = {
   >;
 };
 
+export function createTaskChatOpenAiPayload(model: string, messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage>, maxOutputTokens?: number) {
+  return {
+    model,
+    input: messages.map((message) => ({ role: message.role, content: message.content })),
+    ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
+  };
+}
+
 type AskTaskAssistantInput = {
   userId: string;
   taskId: string;
@@ -44,7 +54,11 @@ type AskTaskAssistantInput = {
   userTimeZone?: string;
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
+  billingMode?: 'legacy' | 'dynamic';
 };
+
+export const TASK_CHAT_MAX_OUTPUT_TOKENS = 4096;
+export const TASK_CHAT_MIN_OUTPUT_TOKENS = 512;
 
 type GenerateSubtasksInput = {
   userId: string;
@@ -1527,7 +1541,8 @@ export const aiAssistantService = {
 
     let lastError: Error | null = null;
     const modelAttemptErrors: Array<{ model: string; status: number | 'exception' | 'empty_response'; message: string }> = [];
-    const creditReservation = input.skipCreditsCharge
+    const dynamicBilling = input.billingMode === 'dynamic';
+    const creditReservation = input.skipCreditsCharge || dynamicBilling
       ? null
       : await chargeAiCredits(input.userId, modelCandidates[0], {
         skipEfficiencyBonus: input.skipEfficiencyBonus,
@@ -1536,6 +1551,7 @@ export const aiAssistantService = {
 
     let providerCallIndex = 0;
     for (const model of modelCandidates) {
+      let dynamicReservation: WalletReservation | null = null;
       try {
         providerCallIndex += 1;
         const startedAt = Date.now();
@@ -1547,6 +1563,30 @@ export const aiAssistantService = {
           userId: input.userId
         });
 
+        let maxOutputTokens: number | undefined;
+        let reservedInputCostMilli = 0;
+        if (dynamicBilling && !input.skipCreditsCharge) {
+          const providerRequestId = `${requestId}:tokens:${providerCallIndex}`;
+          const preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify(createTaskChatOpenAiPayload(model, messages))
+          }, { requestId: providerRequestId, model });
+          if (!preflight.ok) {
+            const errorText = (await preflight.text()).slice(0, 2000);
+            console.error('[AI dynamic billing] input token preflight failed', { requestId, model, status: preflight.status, errorText });
+            throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
+          }
+          const tokenPayload = await preflight.json() as { input_tokens?: unknown };
+          const inputTokens = typeof tokenPayload.input_tokens === 'number' && tokenPayload.input_tokens >= 0 ? Math.floor(tokenPayload.input_tokens) : null;
+          if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
+          const minimum = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MIN_OUTPUT_TOKENS });
+          const desired = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MAX_OUTPUT_TOKENS });
+          reservedInputCostMilli = desired.inputCreditsMilli;
+          dynamicReservation = await reserveAiCreditsMilliUpTo(input.userId, minimum.totalCreditsMilli, desired.totalCreditsMilli);
+          maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - reservedInputCostMilli));
+          if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
+        }
+
         const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -1554,8 +1594,7 @@ export const aiAssistantService = {
             Authorization: `Bearer ${apiKey}`
           },
           body: JSON.stringify({
-            model,
-            input: messages,
+            ...createTaskChatOpenAiPayload(model, messages, maxOutputTokens),
             ...(supportsReasoningEffort(model) ? { reasoning: { effort: reasoningEffort } } : {})
           })
         }, { requestId, model });
@@ -1591,6 +1630,10 @@ export const aiAssistantService = {
             message: `${errorMessage}. ${sanitizeUpstreamErrorText(errorText)}`
           });
           lastError = new Error(errorMessage);
+          if (dynamicReservation) {
+            await refundWalletReservation(dynamicReservation);
+            dynamicReservation = null;
+          }
           if (model === FULL_MODEL && modelCandidates.length > 1) {
             console.warn('[AI] primary model failed, trying fallback', {
               requestId,
@@ -1618,10 +1661,16 @@ export const aiAssistantService = {
           feature: 'task_chat',
           model,
           openAiResponseId: typeof responseJson?.id === 'string' ? responseJson.id : null,
-          usage: responseJson?.usage
+          usage: responseJson?.usage,
+          billingMode: dynamicBilling ? 'DYNAMIC' : 'SHADOW'
         });
+        const usageCost = dynamicBilling ? calculateOpenAiUsageCost(model, responseJson.usage ?? {}) : null;
         const rawAnswer = extractOutputText(responseJson);
         if (!rawAnswer) {
+          if (dynamicReservation) {
+            await refundWalletReservation(dynamicReservation);
+            dynamicReservation = null;
+          }
           console.error('[AI] OpenAI returned empty response', {
             requestId,
             mode: input.mode ?? 'fast',
@@ -1879,10 +1928,39 @@ ${parsed.answer}`
         });
 
         if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation);
+        let creditsSpentMilli = creditReservation?.totalMilli ?? 0;
+        if (dynamicBilling && dynamicReservation) {
+          const dynamicUsageCost = usageCost!;
+          const actualCreditsMilli = dynamicUsageCost.estimatedCreditsMilli;
+          if (actualCreditsMilli === null || actualCreditsMilli === undefined) throw new Error(`Unknown OpenAI pricing for model "${model}"`);
+          if (actualCreditsMilli > dynamicReservation.totalMilli) console.error('[AI dynamic billing] reservation underrun', { requestId, model, reservedMilli: dynamicReservation.totalMilli, actualMilli: actualCreditsMilli, underchargedMilli: actualCreditsMilli - dynamicReservation.totalMilli });
+          const settledReservation = dynamicReservation;
+          const settlement = await settleAiCreditReservation(settledReservation, actualCreditsMilli);
+          dynamicReservation = null;
+          creditsSpentMilli = settlement.chargedMilli;
+          if (!input.skipEfficiencyBonus) {
+            try {
+              await recordAiEfficiencyBonus(input.userId, creditsSpentMilli / 1000 * AI_CREDIT_EFFICIENCY_BONUS);
+            } catch (error) {
+              console.error('[AI dynamic billing] efficiency bonus failed', { requestId, userId: input.userId, error: error instanceof Error ? error.message : 'Unknown error' });
+            }
+          }
+          console.info('[AI dynamic billing] settled', {
+            userId: input.userId, taskId: input.taskId, requestId, model,
+            inputTokens: dynamicUsageCost.inputTokens, outputTokens: dynamicUsageCost.outputTokens, cachedInputTokens: dynamicUsageCost.cachedInputTokens, cacheWriteTokens: dynamicUsageCost.cacheWriteTokens,
+            reservedMilli: settledReservation.totalMilli, chargedMilli: settlement.chargedMilli, refundedMilli: settlement.refundedMilli,
+            providerCostNanoUsd: dynamicUsageCost.providerCostNanoUsd?.toString() ?? null, totalAfterMilli: settlement.totalAfterMilli
+          });
+        }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports };
+        return { model, answer, actionReports, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
+        if (dynamicReservation) {
+          await refundWalletReservation(dynamicReservation);
+          dynamicReservation = null;
+        }
         const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
+        if (normalizedError.message.startsWith('AI_DYNAMIC_PREFLIGHT_FAILED:')) throw normalizedError;
         lastError = normalizedError;
         modelAttemptErrors.push({
           model,

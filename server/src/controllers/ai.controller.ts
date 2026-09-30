@@ -12,6 +12,12 @@ type ChatAttachment = {
 };
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
+export const isDynamicTaskChatBillingEnabled = (userId: string) => {
+  if (process.env.AI_DYNAMIC_TASK_CHAT_BILLING_ENABLED?.trim().toLowerCase() !== 'true') return false;
+  const allowlist = (process.env.AI_DYNAMIC_TASK_CHAT_BILLING_USER_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+  return allowlist.length === 0 || allowlist.includes(userId);
+};
+
 const INSUFFICIENT_AI_CREDITS_ERROR = 'Недостаточно AI кредитов';
 const INSUFFICIENT_AI_CREDITS_SYSTEM_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
 const sendAiError = (res: Response, error: unknown, fallback = 'Unknown AI error') => {
@@ -220,6 +226,7 @@ export const aiController = {
         model,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         userTimeZone,
+        billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
       });
 
