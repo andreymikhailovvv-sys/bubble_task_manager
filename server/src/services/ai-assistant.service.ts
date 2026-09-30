@@ -3,6 +3,7 @@ import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 
 type ChatRole = 'user' | 'assistant';
@@ -130,10 +131,6 @@ function resolveReasoningEffort(mode: AskTaskAssistantInput['mode']): ReasoningE
 }
 
 
-function supportsReasoningEffort(model: string) {
-  return model.startsWith('gpt-5');
-}
-
 const resolveModelCredits = (model: string): number => {
   const normalized = model.trim().toLowerCase();
   if (normalized.includes('gpt-5.4-mini')) return 5;
@@ -210,58 +207,81 @@ async function clampUserEfficiencyScore(userId: string, score: number) {
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore: 100 } });
 }
 
-async function chargeAiCredits(userId: string, model: string, options?: { skipEfficiencyBonus?: boolean }) {
+type AiCreditReservation = { cost: number; period: string; skipEfficiencyBonus: boolean };
+
+async function chargeAiCredits(userId: string, model: string, options?: { skipEfficiencyBonus?: boolean; deferEfficiencyBonus?: boolean }): Promise<AiCreditReservation> {
   const cost = resolveModelCredits(model);
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({ where: { id: userId, aiCreditsPeriod: { not: period } }, data: { aiCredits: 100, aiCreditsPeriod: period } });
+    const reserved = await tx.user.updateMany({
+      where: { id: userId, aiCreditsPeriod: period, aiCredits: { gte: cost } },
+      data: { aiCredits: { decrement: cost } }
+    });
+    if (reserved.count === 0) return { reserved: false, exists: Boolean(await tx.user.findUnique({ where: { id: userId }, select: { id: true } })) };
+    return { reserved: true, exists: true };
+  });
+  if (!result.exists) throw new Error('User not found');
+  if (!result.reserved) throw new Error('Недостаточно AI кредитов');
+  if (!options?.deferEfficiencyBonus) await commitAiCreditReservation(userId, { cost, period, skipEfficiencyBonus: Boolean(options?.skipEfficiencyBonus) });
+  return { cost, period, skipEfficiencyBonus: Boolean(options?.skipEfficiencyBonus) };
+}
+
+async function commitAiCreditReservation(userId: string, reservation: AiCreditReservation) {
+  if (reservation.skipEfficiencyBonus) return;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
-  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
-  if (credits < cost) {
-    throw new Error('Недостаточно AI кредитов');
-  }
   const updated = await prisma.user.update({
     where: { id: userId },
-    data: {
-      aiCredits: credits - cost,
-      aiCreditsPeriod: period,
-      ...aiCreditEfficiencyData(cost, period, user.aiEfficiencyCreditsPeriod, options)
-    },
+    data: aiCreditEfficiencyData(reservation.cost, reservation.period, user.aiEfficiencyCreditsPeriod),
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
-  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, cost * AI_CREDIT_EFFICIENCY_BONUS);
+  await recordAiEfficiencyBonus(userId, reservation.cost * AI_CREDIT_EFFICIENCY_BONUS);
+}
+
+async function refundAiCreditReservation(userId: string, reservation: AiCreditReservation, requestId?: string) {
+  await prisma.user.updateMany({
+    where: { id: userId, aiCreditsPeriod: reservation.period },
+    data: { aiCredits: { increment: reservation.cost } }
+  });
+  console.info('[AI] AI credits refunded', { requestId, userId, credits: reservation.cost });
+}
+
+async function withAiCreditReservation<T>(userId: string, model: string, operation: () => Promise<T>, options?: { skipEfficiencyBonus?: boolean; requestId?: string }): Promise<T> {
+  const reservation = await chargeAiCredits(userId, model, { skipEfficiencyBonus: options?.skipEfficiencyBonus, deferEfficiencyBonus: true });
+  try {
+    const result = await operation();
+    await commitAiCreditReservation(userId, reservation);
+    return result;
+  } catch (error) {
+    await refundAiCreditReservation(userId, reservation, options?.requestId);
+    throw error;
+  }
 }
 
 async function chargeFixedAiCredits(userId: string, cost: number, options?: { skipEfficiencyBonus?: boolean }) {
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
-  if (!user) throw new Error('User not found');
-  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
-  if (credits < cost) throw new Error('Недостаточно AI кредитов');
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: { aiCredits: credits - cost, aiCreditsPeriod: period, ...aiCreditEfficiencyData(cost, period, user.aiEfficiencyCreditsPeriod, options) },
-    select: { efficiencyScore: true }
+  const reserved = await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({ where: { id: userId, aiCreditsPeriod: { not: period } }, data: { aiCredits: 100, aiCreditsPeriod: period } });
+    return tx.user.updateMany({ where: { id: userId, aiCreditsPeriod: period, aiCredits: { gte: cost } }, data: { aiCredits: { decrement: cost } } });
   });
+  if (reserved.count === 0) throw new Error('Недостаточно AI кредитов');
+  const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
+  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod, options), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
   if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, cost * AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 async function chargeSingleAiNotificationCredit(userId: string, options?: { skipEfficiencyBonus?: boolean }) {
   const period = currentCreditsPeriod();
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiCredits: true, aiCreditsPeriod: true, aiEfficiencyCreditsPeriod: true } });
-  if (!user) throw new Error('User not found');
-  const credits = user.aiCreditsPeriod === period ? user.aiCredits : 100;
-  if (credits < 1) throw new Error('Недостаточно AI кредитов');
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: {
-      aiCredits: credits - 1,
-      aiCreditsPeriod: period,
-      ...aiCreditEfficiencyData(1, period, user.aiEfficiencyCreditsPeriod, options)
-    },
-    select: { efficiencyScore: true }
+  const reserved = await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({ where: { id: userId, aiCreditsPeriod: { not: period } }, data: { aiCredits: 100, aiCreditsPeriod: period } });
+    return tx.user.updateMany({ where: { id: userId, aiCreditsPeriod: period, aiCredits: { gte: 1 } }, data: { aiCredits: { decrement: 1 } } });
   });
+  if (reserved.count === 0) throw new Error('Недостаточно AI кредитов');
+  const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
+  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod, options), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
   if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, AI_CREDIT_EFFICIENCY_BONUS);
 }
@@ -962,7 +982,7 @@ export const aiAssistantService = {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
-    await chargeAiCredits(input.userId, model);
+    return withAiCreditReservation(input.userId, model, async () => {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const history = normalizeGeneralHistory(input.history).slice(-24);
@@ -1007,13 +1027,14 @@ export const aiAssistantService = {
     const answer = extractOutputText(await response.json()).trim();
     if (!answer) throw new Error('Empty AI response');
     return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
+    });
   },
 
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
     const model = OTHER_AI_MODEL || RECURRENCE_MODEL;
-    await chargeAiCredits(input.userId, model);
+    return withAiCreditReservation(input.userId, model, async () => {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const localNowFormatted = new Intl.DateTimeFormat('sv-SE', {
@@ -1050,6 +1071,7 @@ export const aiAssistantService = {
       },
       model
     };
+    });
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
@@ -1517,6 +1539,12 @@ export const aiAssistantService = {
 
     let lastError: Error | null = null;
     const modelAttemptErrors: Array<{ model: string; status: number | 'exception' | 'empty_response'; message: string }> = [];
+    const creditReservation = input.skipCreditsCharge
+      ? null
+      : await chargeAiCredits(input.userId, modelCandidates[0], {
+        skipEfficiencyBonus: input.skipEfficiencyBonus,
+        deferEfficiencyBonus: true
+      });
 
     for (const model of modelCandidates) {
       try {
@@ -1529,9 +1557,6 @@ export const aiAssistantService = {
           userId: input.userId
         });
 
-        if (!input.skipCreditsCharge) {
-          await chargeAiCredits(input.userId, model, { skipEfficiencyBonus: input.skipEfficiencyBonus });
-        }
         const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
           method: 'POST',
           headers: {
@@ -1543,7 +1568,7 @@ export const aiAssistantService = {
             input: messages,
             ...(supportsReasoningEffort(model) ? { reasoning: { effort: reasoningEffort } } : {})
           })
-        });
+        }, { requestId, model });
         const latencyMs = Date.now() - startedAt;
 
         console.info('[AI] OpenAI response received', {
@@ -1848,6 +1873,8 @@ ${parsed.answer}`
           actionReports
         });
 
+        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation);
+        console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
         return { model, answer, actionReports };
       } catch (error) {
         const normalizedError = error instanceof Error ? error : new Error('Unknown OpenAI error');
@@ -1885,9 +1912,11 @@ ${parsed.answer}`
       const attemptsSummary = modelAttemptErrors
         .map((attempt) => `${attempt.model} [${attempt.status}]: ${attempt.message}`)
         .join(' | ');
+      if (creditReservation) await refundAiCreditReservation(input.userId, creditReservation, requestId);
       throw new Error(`Smart mode failed for all model attempts: ${attemptsSummary}`);
     }
 
+    if (creditReservation) await refundAiCreditReservation(input.userId, creditReservation, requestId);
     throw lastError ?? new Error('OpenAI request failed without details');
   },
 
