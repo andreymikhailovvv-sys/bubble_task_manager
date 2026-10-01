@@ -1,6 +1,7 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { plannerToolsService, type PlannerActionInput, type PlannerSearchInput } from './planner-tools.service.js';
 import { recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
+import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 
 export const MAX_TOOL_ROUNDS = 6;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
@@ -78,19 +79,27 @@ export async function runPlannerToolLoop(options: ToolLoopOptions) {
   throw new Error('Превышен лимит planner tools.');
 }
 
-export async function askAiChatWithPlannerTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string }) {
+export async function askAiChatWithPlannerTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let usedPlannerTools = false;
   let providerCallCount = 0;
+  const dynamicCalls: DynamicResponsesCall[] = [];
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
     const loop = await runPlannerToolLoop({
       initialInput: input.messages,
       request: async (requestInput) => {
         const providerCallIndex = providerCallCount + 1;
-        const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify({ model: input.model, input: requestInput, tools: PLANNER_OPENAI_TOOLS, tool_choice: 'auto', parallel_tool_calls: false }) });
+        const providerPayload = { model: input.model, input: requestInput, tools: PLANNER_OPENAI_TOOLS, tool_choice: 'auto', parallel_tool_calls: false };
+        if (input.dynamicBilling) {
+          const call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat_planner', apiKey: input.apiKey, payload: providerPayload });
+          dynamicCalls.push(call);
+          providerCallCount = providerCallIndex;
+          return call.responseJson as ToolResponse;
+        }
+        const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify(providerPayload) });
         if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
         const payload = await response.json() as ToolResponse;
         providerCallCount = providerCallIndex;
@@ -127,8 +136,11 @@ export async function askAiChatWithPlannerTools(input: { userId: string; model: 
       }
     });
     console.info('[AI tools] completed', { requestId, rounds: loop.rounds, usedPlannerTools, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
-    return { answer: loop.answer, model: input.model, delegatedToPlanner: usedPlannerTools, actionReports, undoOperations };
+    let creditsSpentMilli = 0;
+    for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
+    return { answer: loop.answer, model: input.model, delegatedToPlanner: usedPlannerTools, actionReports, undoOperations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
   } catch (error) {
+    await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     console.info('[AI tools] completed', { requestId, usedPlannerTools, actionCount: actionReports.length, durationMs: Date.now() - startedAt, failed: true });
     throw error;
   }

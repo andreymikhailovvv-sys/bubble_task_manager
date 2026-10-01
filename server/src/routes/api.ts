@@ -25,9 +25,9 @@ const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
 const CREDIT_PACKS = [
-  { key: 'credit_start', name: 'Старт', creditsAmount: 1000, price: 199 },
-  { key: 'credit_pro', name: 'Про', creditsAmount: 5000, price: 690 },
-  { key: 'credit_max', name: 'Макс', creditsAmount: 15000, price: 1490 }
+  { key: 'credit_start', name: 'Старт', creditsAmount: 1800, price: 199 },
+  { key: 'credit_pro', name: 'Про', creditsAmount: 6200, price: 690 },
+  { key: 'credit_max', name: 'Макс', creditsAmount: 14000, price: 1490 }
 ] as const;
 type CreditPackKey = typeof CREDIT_PACKS[number]['key'];
 
