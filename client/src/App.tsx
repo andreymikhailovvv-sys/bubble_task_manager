@@ -2465,6 +2465,19 @@ ${allContext}`,
     void api.markSystemNotificationsRead().catch((error) => console.error('[System notifications] mark read failed', error));
   };
 
+  const refreshSystemNotifications = async () => {
+    try {
+      const result = await api.getSystemNotifications();
+      const newestUnseen = [...result.notifications].reverse().find((notification) => !knownSystemNotificationIdsRef.current.has(notification.id));
+      result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
+      setSystemNotifications(result.notifications);
+      setUnreadSystemNotificationCount(result.unreadCount);
+      if (newestUnseen && newestUnseen.readAt == null) setSystemNotificationToast(newestUnseen);
+    } catch (error) {
+      console.error('[System notifications] refresh failed', error);
+    }
+  };
+
   useEffect(() => {
     if (!isAiChatOpen || activeAiChat?.id !== QUICK_AI_CHAT_ID) return;
     markSystemNotificationsRead();
@@ -2574,7 +2587,7 @@ ${allContext}`,
       const serviceReport = result.delegatedToPlanner && actionReports.length > 0
         ? `\n\nОтчёт сервиса:\n- ${actionReports.join('\n- ')}`
         : '';
-      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString() };
+      const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       if (result.delegatedToPlanner) await load();
@@ -2684,7 +2697,7 @@ ${allContext}`,
         : '';
       setGeneralAiMessages((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}` }
+        { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${serviceReport}`, creditsSpentMilli: result.billing?.creditsSpentMilli }
       ]);
       setLastGeneralAiUndoOperations(result.undoOperations);
       await refreshAiCredits();
@@ -6958,7 +6971,7 @@ ${allContext}`,
                 </div>
                 <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
                 {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div></div></div>)}
+                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div>{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}</div></div>)}
                 {aiChatLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
                 {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
                 </div>
