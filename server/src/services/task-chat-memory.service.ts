@@ -14,6 +14,12 @@ export const TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 = 6;
 export const TASK_CHAT_MEMORY_MAX_OUTPUT_TOKENS = 1_700;
 export const TASK_CHAT_MEMORY_MAX_ESTIMATED_TOKENS = 1_200;
 
+export function resolveTaskChatActiveHistoryLimits(hasAttachments: boolean) {
+  return hasAttachments
+    ? { tokenBudget: TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, maxMessages: TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 }
+    : { tokenBudget: TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, maxMessages: TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES };
+}
+
 export type TaskChatContextMessage = {
   id: string;
   role: 'user' | 'assistant';

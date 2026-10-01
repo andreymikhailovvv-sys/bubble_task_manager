@@ -8,7 +8,7 @@ import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
-import { formatTaskChatMemory, isTaskChatMemoryEnabled, TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
+import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -1555,6 +1555,7 @@ export const aiAssistantService = {
     const memoryPathActive = Boolean(memoryResult && !memoryResult.fallbackToV2History);
     const memoryReady = Boolean(memoryResult?.memory && memoryResult.memoryCaughtUp && !memoryResult.fallbackToV2History);
     const historyForContext = memoryReady ? memoryResult!.recentHistory : history;
+    const activeHistoryLimits = resolveTaskChatActiveHistoryLimits(hasAttachments);
     const contextV2 = useContextV2
       ? buildTaskChatContext({
           task: task.parentTaskId ? { ...task, attachments: [] } : task,
@@ -1562,8 +1563,8 @@ export const aiAssistantService = {
           userTimeZone,
           hasAttachments,
           ...(memoryReady ? {
-            historyTokenBudget: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 : TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET,
-            historyMaxMessages: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 : TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES,
+            historyTokenBudget: activeHistoryLimits.tokenBudget,
+            historyMaxMessages: activeHistoryLimits.maxMessages,
           } : {}),
           ...(memoryPathActive ? { contextVersion: 'v3' as const } : {})
         })
