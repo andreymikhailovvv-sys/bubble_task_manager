@@ -226,6 +226,7 @@ model TaskAiMessage {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   role      AiMessageRole
   content   String
+  creditsSpentMilli Int?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 

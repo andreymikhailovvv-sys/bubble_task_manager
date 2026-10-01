@@ -19,6 +19,7 @@ import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
+import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 
 const MAX_SPHERES = 8;
@@ -366,7 +367,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
 
 function areTaskAiMessagesEqual(a: TaskAiMessage[], b: TaskAiMessage[]) {
   if (a.length !== b.length) return false;
-  return a.every((message, index) => message.role === b[index]?.role && message.content === b[index]?.content);
+  return a.every((message, index) => message.role === b[index]?.role && message.content === b[index]?.content && message.creditsSpentMilli === b[index]?.creditsSpentMilli);
 }
 
 type AiTaskReference = {
@@ -1730,7 +1731,7 @@ export default function App() {
   }, [generalAiMessages, generalAiSearchQuery, isGeneralAiSearchOpen]);
 
   const normalizeTaskAiMessages = (messages: ChatMessage[]): TaskAiMessage[] =>
-    messages.map((message, index) => ({ id: `${index}-${message.role}-${message.content}`, role: message.role, content: message.content }));
+    messages.map((message, index) => ({ id: `${index}-${message.role}-${message.content}`, ...message }));
 
   useEffect(() => {
     if (!focusedTask) {
@@ -2052,7 +2053,7 @@ export default function App() {
       });
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]
       }));
       try {
         await load();
@@ -2408,7 +2409,7 @@ ${allContext}`,
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
       const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true });
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer }]);
+      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]);
       if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (AI_CHAT_MODEL_CREDITS[focusAiModel]) * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
     } catch (error) {
@@ -4390,7 +4391,7 @@ ${allContext}`,
               <div className="relative mt-3 min-h-0 flex-1">
                 <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
                 <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
-                  {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
+                  {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}{message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}</div>)}
                   {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
                 </div>
               </div>
@@ -4417,7 +4418,7 @@ ${allContext}`,
             <div className="relative min-h-0 flex-1">
               <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
               <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>)}
+                {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}{message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}</div>)}
                 {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
               </div>
             </div>
@@ -5892,6 +5893,7 @@ ${allContext}`,
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>
+                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
                 ))}
                 {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
@@ -6653,6 +6655,7 @@ ${allContext}`,
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}</div>
+                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
               ))}
               {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-muted">ИИ думает…</p> : null}

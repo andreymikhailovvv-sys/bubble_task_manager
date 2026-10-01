@@ -166,7 +166,7 @@ export const api = {
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) =>
-    request<{ answer: string; model: string; actionReports?: string[] }>(`/api/tasks/${taskId}/ai-chat`, {
+    request<{ answer: string; model: string; actionReports?: string[]; billing?: { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number } }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
