@@ -2138,27 +2138,21 @@ ${parsed.answer}`
     ];
 
     const requestId = randomUUID();
-    await chargeAiCredits(input.userId, GENERAL_CHAT_MODEL);
-    const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: GENERAL_CHAT_MODEL,
-        input: messages,
-        ...(supportsReasoningEffort(FAST_MODEL) ? { reasoning: { effort: 'low' } } : {})
-      })
-    });
+    const payload = {
+      model: GENERAL_CHAT_MODEL,
+      input: messages,
+      ...(supportsReasoningEffort(GENERAL_CHAT_MODEL) ? { reasoning: { effort: 'low' as const } } : {})
+    };
 
-    if (!openAiResponse.ok) {
-      const errorText = await openAiResponse.text();
-      throw new Error(`OpenAI request failed: ${openAiResponse.status}. ${sanitizeUpstreamErrorText(errorText)}`);
-    }
-
-    const responseJson = await openAiResponse.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
-    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'general_assistant', model: GENERAL_CHAT_MODEL, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
+    return runTextWorkflow({
+      userId: input.userId,
+      actionId: requestId,
+      feature: 'general_assistant',
+      model: GENERAL_CHAT_MODEL,
+      apiKey,
+      payload,
+      legacyCharge: () => chargeAiCredits(input.userId, GENERAL_CHAT_MODEL),
+      complete: async (responseJson) => {
     const rawAnswer = extractOutputText(responseJson);
     if (!rawAnswer) {
       throw new Error('OpenAI returned empty response');
@@ -2499,9 +2493,10 @@ ${parsed.answer}`
       answer,
       model: GENERAL_CHAT_MODEL,
       actionReports,
-      undoOperations,
-      billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(GENERAL_CHAT_MODEL)) }
+      undoOperations
     };
+      }
+    });
   },
 
   undoGeneralAssistantActions: async (input: UndoGeneralAssistantActionsInput) => {
