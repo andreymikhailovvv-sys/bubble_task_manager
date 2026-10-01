@@ -8,7 +8,7 @@ import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
-import { formatTaskChatMemory, isTaskChatMemoryEnabled, TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V2, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
+import { formatTaskChatMemory, isTaskChatMemoryEnabled, TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -1562,8 +1562,8 @@ export const aiAssistantService = {
           userTimeZone,
           hasAttachments,
           ...(memoryReady ? {
-            historyTokenBudget: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 : TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V2,
-            historyMaxMessages: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 : TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES_V2,
+            historyTokenBudget: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 : TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET,
+            historyMaxMessages: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 : TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES,
           } : {}),
           ...(memoryPathActive ? { contextVersion: 'v3' as const } : {})
         })
@@ -1605,6 +1605,12 @@ export const aiAssistantService = {
         memoryCompactionBatches: memoryResult?.memoryCompactionBatches ?? 0,
         memoryCaughtUp: memoryResult?.memoryCaughtUp ?? false,
         fallbackToV2History: memoryResult?.fallbackToV2History ?? false,
+        memoryTriggerTokenBudget: TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET,
+        memoryTriggerMaxMessages: TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES,
+        memoryTargetTokenBudget: TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET,
+        memoryTargetMaxMessages: TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES,
+        unsummarizedMessages: memoryResult?.unsummarizedMessages ?? 0,
+        unsummarizedEstimatedTokens: memoryResult?.unsummarizedEstimatedTokens ?? 0,
         currentRequestAttachmentsCount: input.attachments?.length ?? 0,
         hasAttachmentPayload: hasAttachments
       });
