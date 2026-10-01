@@ -8,6 +8,7 @@ import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
+import { formatTaskChatMemory, isTaskChatMemoryEnabled, TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2, TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES_V2, TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V2, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -50,7 +51,7 @@ type AskTaskAssistantInput = {
   userId: string;
   taskId: string;
   question: string;
-  history: ChatMessage[];
+  history: Array<ChatMessage | TaskChatContextMessage>;
   mode?: 'fast' | 'smart';
   model?: AiChatModel;
   attachments?: ChatAttachment[];
@@ -1356,6 +1357,15 @@ export const aiAssistantService = {
     }));
   },
 
+  listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
+    await prisma.task.findFirstOrThrow({ where: { id: input.taskId, userId: input.userId }, select: { id: true } });
+    return prisma.taskAiMessage.findMany({
+      where: { taskId: input.taskId, userId: input.userId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, role: true, content: true, createdAt: true }
+    });
+  },
+
   appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[] }) => {
     const normalizedMessages = normalizeHistory(input.messages);
     if (normalizedMessages.length === 0) {
@@ -1536,8 +1546,27 @@ export const aiAssistantService = {
     const storedAttachments = task.parentTaskId ? [] : (task.attachments ?? []);
     const attachmentsMessage = buildAttachmentsPromptMessage([...storedAttachments, ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
+    const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
+    const useMemory = useContextV2 && memoryFeatureEnabled && !isSmartPostponeRequest;
+    const contextHistory = input.history.filter((message): message is TaskChatContextMessage => 'id' in message && message.createdAt instanceof Date);
+    const memoryResult = useMemory && contextHistory.length === input.history.length
+      ? await updateTaskChatMemoryIfNeeded({ userId: input.userId, taskId: input.taskId, history: contextHistory })
+      : null;
+    const memoryPathActive = Boolean(memoryResult && !memoryResult.fallbackToV2History);
+    const memoryReady = Boolean(memoryResult?.memory && memoryResult.memoryCaughtUp && !memoryResult.fallbackToV2History);
+    const historyForContext = memoryReady ? memoryResult!.recentHistory : history;
     const contextV2 = useContextV2
-      ? buildTaskChatContext({ task: task.parentTaskId ? { ...task, attachments: [] } : task, history, userTimeZone, hasAttachments })
+      ? buildTaskChatContext({
+          task: task.parentTaskId ? { ...task, attachments: [] } : task,
+          history: historyForContext,
+          userTimeZone,
+          hasAttachments,
+          ...(memoryReady ? {
+            historyTokenBudget: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2 : TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V2,
+            historyMaxMessages: hasAttachments ? TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2 : TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES_V2,
+          } : {}),
+          ...(memoryPathActive ? { contextVersion: 'v3' as const } : {})
+        })
       : null;
     const taskContext = contextV2?.taskContext ?? formatTaskContext(
       task.parentTaskId ? { ...task, attachments: [] } : task,
@@ -1554,6 +1583,7 @@ export const aiAssistantService = {
         ].join('\n')
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
+      ...(memoryReady ? [{ role: 'user' as const, content: formatTaskChatMemory(memoryResult!.memory!.summary) }] : []),
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),
       { role: 'user', content: question }
@@ -1567,6 +1597,14 @@ export const aiAssistantService = {
         userId: input.userId,
         taskId: input.taskId,
         ...contextDiagnostics,
+        memoryPresent: Boolean(memoryResult?.memory),
+        memoryEstimatedTokens: memoryResult?.memory ? Math.ceil(formatTaskChatMemory(memoryResult.memory.summary).length / 3) : 0,
+        memoryRevision: memoryResult?.memory?.revision ?? null,
+        memorySummarizedThroughMessageId: memoryResult?.memory?.summarizedThroughMessageId ?? null,
+        memoryCompactionTriggered: memoryResult?.memoryCompactionTriggered ?? false,
+        memoryCompactionBatches: memoryResult?.memoryCompactionBatches ?? 0,
+        memoryCaughtUp: memoryResult?.memoryCaughtUp ?? false,
+        fallbackToV2History: memoryResult?.fallbackToV2History ?? false,
         currentRequestAttachmentsCount: input.attachments?.length ?? 0,
         hasAttachmentPayload: hasAttachments
       });
