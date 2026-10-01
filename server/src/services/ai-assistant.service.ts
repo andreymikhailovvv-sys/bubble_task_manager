@@ -7,6 +7,7 @@ import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
+import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -1491,7 +1492,8 @@ export const aiAssistantService = {
       }
     });
 
-    const history = normalizeHistory(input.history);
+    const useContextV2 = isTaskChatContextV2Enabled(input.userId);
+    const history = useContextV2 ? input.history : normalizeHistory(input.history);
     const question = input.question.trim();
     if (!question) {
       throw new TypeError('Question is required');
@@ -1528,17 +1530,20 @@ export const aiAssistantService = {
         : [])
     ].join(' ');
 
-    const taskContext = formatTaskContext(
-      task.parentTaskId ? { ...task, attachments: [] } : task,
-      userTimeZone
-    );
     // Files stored on a subtask are user-only reference materials. They are
     // deliberately excluded from the assistant context; the user must attach
     // a file to the chat explicitly when they want the model to process it.
     const storedAttachments = task.parentTaskId ? [] : (task.attachments ?? []);
     const attachmentsMessage = buildAttachmentsPromptMessage([...storedAttachments, ...(input.attachments ?? [])]);
     const hasAttachments = Boolean(attachmentsMessage);
-    const trimmedHistory = trimHistoryForAttachments(history, hasAttachments);
+    const contextV2 = useContextV2
+      ? buildTaskChatContext({ task: task.parentTaskId ? { ...task, attachments: [] } : task, history, userTimeZone, hasAttachments })
+      : null;
+    const taskContext = contextV2?.taskContext ?? formatTaskContext(
+      task.parentTaskId ? { ...task, attachments: [] } : task,
+      userTimeZone
+    );
+    const trimmedHistory = contextV2?.recentHistory ?? trimHistoryForAttachments(history, hasAttachments);
     const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
       { role: 'system', content: systemPrompt },
       {
@@ -1555,6 +1560,17 @@ export const aiAssistantService = {
     ];
 
     const requestId = randomUUID();
+    const contextDiagnostics: TaskChatContextDiagnostics | null = contextV2?.diagnostics ?? null;
+    if (contextDiagnostics) {
+      console.info('[AI task context] prepared', {
+        requestId,
+        userId: input.userId,
+        taskId: input.taskId,
+        ...contextDiagnostics,
+        currentRequestAttachmentsCount: input.attachments?.length ?? 0,
+        hasAttachmentPayload: hasAttachments
+      });
+    }
     const reasoningEffort = resolveReasoningEffort(input.mode);
     const modelCandidates = isSmartPostponeRequest
       ? Array.from(new Set([OTHER_AI_MODEL, ...resolveModelCandidates(input.mode, hasAttachments, input.model)].filter(Boolean)))
@@ -1613,6 +1629,18 @@ export const aiAssistantService = {
           const tokenPayload = await preflight.json() as { input_tokens?: unknown };
           const inputTokens = typeof tokenPayload.input_tokens === 'number' && tokenPayload.input_tokens >= 0 ? Math.floor(tokenPayload.input_tokens) : null;
           if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
+          if (contextDiagnostics) {
+            console.info('[AI task context] preflight', {
+              requestId,
+              userId: input.userId,
+              taskId: input.taskId,
+              model,
+              inputTokens,
+              contextVersion: contextDiagnostics.contextVersion,
+              historyEstimatedTokens: contextDiagnostics.historyEstimatedTokens,
+              taskContextEstimatedTokens: contextDiagnostics.taskContextEstimatedTokens
+            });
+          }
           const minimum = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MIN_OUTPUT_TOKENS });
           const desired = calculateMaximumRequestCreditsMilli({ model, inputTokens, maxOutputTokens: TASK_CHAT_MAX_OUTPUT_TOKENS });
           reservedInputCostMilli = desired.inputCreditsMilli;
