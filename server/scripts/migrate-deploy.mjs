@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const RECOVERABLE_MIGRATIONS = [
   '20260926120000_add_telegram_registration_state',
+  '20260930120000_add_task_ai_message_credits',
   '20260930200000_add_ai_credit_wallet'
 ];
 const serverDirectory = fileURLToPath(new URL('..', import.meta.url));

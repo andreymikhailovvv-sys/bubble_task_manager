@@ -1,2 +1,2 @@
 ALTER TABLE "TaskAiMessage"
-ADD COLUMN "creditsSpentMilli" INTEGER;
+ADD COLUMN IF NOT EXISTS "creditsSpentMilli" INTEGER;
