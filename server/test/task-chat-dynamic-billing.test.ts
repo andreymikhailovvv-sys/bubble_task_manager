@@ -1,12 +1,59 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createTaskChatOpenAiPayload } from '../src/services/ai-assistant.service.js';
+import { aiAssistantService } from '../src/services/ai-assistant.service.js';
 import { isDynamicTaskChatBillingEnabled } from '../src/controllers/ai.controller.js';
+import { prisma } from '../src/db/prisma.js';
 
 test('task chat OpenAI payload удаляет внутренние поля истории для preflight и response', () => {
-  const message = { role: 'user', content: 'Привет', creditsSpentMilli: 593, id: 'message-id', createdAt: 'now', billing: { mode: 'dynamic' } } as any;
-  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message]), { model: 'gpt-6-luna', input: [{ role: 'user', content: 'Привет' }] });
-  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message], 512), { model: 'gpt-6-luna', input: [{ role: 'user', content: 'Привет' }], max_output_tokens: 512 });
+  const message = { role: 'assistant', content: 'Ответ', creditsSpentMilli: 1054, id: 'message-id', createdAt: 'now', billing: { mode: 'dynamic' } } as any;
+  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message]), { model: 'gpt-6-luna', input: [{ role: 'assistant', content: 'Ответ' }] });
+  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message], 512), { model: 'gpt-6-luna', input: [{ role: 'assistant', content: 'Ответ' }], max_output_tokens: 512 });
+});
+
+test('история хранит фактическую dynamic и legacy стоимость только у ответов ИИ', async () => {
+  const originalFindTask = prisma.task.findFirstOrThrow;
+  const originalCreate = prisma.taskAiMessage.create;
+  const originalCreateMany = prisma.taskAiMessage.createMany;
+  const created: Array<Record<string, unknown>> = [];
+  (prisma.task.findFirstOrThrow as any) = async () => ({ id: 'task-1' });
+  (prisma.taskAiMessage.create as any) = async ({ data }: { data: Record<string, unknown> }) => { created.push(data); return data; };
+  (prisma.taskAiMessage.createMany as any) = async ({ data }: { data: Array<Record<string, unknown>> }) => { created.push(...data); return { count: data.length }; };
+  try {
+    await aiAssistantService.appendTaskDialogAssistantMessage({ userId: 'user-1', taskId: 'task-1', content: 'Dynamic', creditsSpentMilli: 1054 });
+    await aiAssistantService.appendTaskDialogAssistantMessage({ userId: 'user-1', taskId: 'task-1', content: 'Legacy', creditsSpentMilli: 5000 });
+    await aiAssistantService.appendTaskDialogMessages({ userId: 'user-1', taskId: 'task-1', messages: [{ role: 'user', content: 'Вопрос' }] });
+    assert.deepEqual(created.map(({ role, creditsSpentMilli }) => ({ role, creditsSpentMilli })), [
+      { role: 'assistant', creditsSpentMilli: 1054 },
+      { role: 'assistant', creditsSpentMilli: 5000 },
+      { role: 'user', creditsSpentMilli: undefined }
+    ]);
+  } finally {
+    (prisma.task.findFirstOrThrow as any) = originalFindTask;
+    (prisma.taskAiMessage.create as any) = originalCreate;
+    (prisma.taskAiMessage.createMany as any) = originalCreateMany;
+  }
+});
+
+test('history API model сохраняет стоимость ответа и не выдумывает её для старых сообщений', async () => {
+  const originalFindTask = prisma.task.findFirstOrThrow;
+  const originalFindMany = prisma.taskAiMessage.findMany;
+  (prisma.task.findFirstOrThrow as any) = async () => ({ id: 'task-1' });
+  (prisma.taskAiMessage.findMany as any) = async () => [
+    { role: 'assistant', content: 'Старый ответ', creditsSpentMilli: null },
+    { role: 'assistant', content: 'Новый ответ', creditsSpentMilli: 593 },
+    { role: 'user', content: 'Вопрос', creditsSpentMilli: null }
+  ];
+  try {
+    assert.deepEqual(await aiAssistantService.listTaskDialog({ userId: 'user-1', taskId: 'task-1' }), [
+      { role: 'assistant', content: 'Старый ответ' },
+      { role: 'assistant', content: 'Новый ответ', creditsSpentMilli: 593 },
+      { role: 'user', content: 'Вопрос' }
+    ]);
+  } finally {
+    (prisma.task.findFirstOrThrow as any) = originalFindTask;
+    (prisma.taskAiMessage.findMany as any) = originalFindMany;
+  }
 });
 
 test('dynamic task chat flag поддерживает default-off и canary allowlist', () => {

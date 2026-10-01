@@ -21,6 +21,7 @@ type ChatRole = 'user' | 'assistant';
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  creditsSpentMilli?: number;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -1339,12 +1340,15 @@ export const aiAssistantService = {
     const messages = await prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId, userId: input.userId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { role: true, content: true }
+      select: { role: true, content: true, creditsSpentMilli: true }
     });
 
     return messages.map((message) => ({
       role: message.role,
-      content: message.content
+      content: message.content,
+      ...(message.role === 'assistant' && message.creditsSpentMilli !== null
+        ? { creditsSpentMilli: message.creditsSpentMilli }
+        : {})
     }));
   },
 
@@ -1369,6 +1373,26 @@ export const aiAssistantService = {
         content: message.content,
         createdAt: new Date(appendStartedAt + index)
       }))
+    });
+  },
+
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number }) => {
+    const content = input.content.trim();
+    if (!content) return;
+
+    await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, userId: input.userId },
+      select: { id: true }
+    });
+
+    await prisma.taskAiMessage.create({
+      data: {
+        taskId: input.taskId,
+        userId: input.userId,
+        role: 'assistant',
+        content,
+        creditsSpentMilli: input.creditsSpentMilli
+      }
     });
   },
 

@@ -6,6 +6,7 @@ import test from 'node:test';
 import { runMigrateDeploy } from '../scripts/migrate-deploy.mjs';
 
 const WALLET_MIGRATION = '20260930200000_add_ai_credit_wallet';
+const TASK_AI_MESSAGE_CREDITS_MIGRATION = '20260930120000_add_task_ai_message_credits';
 
 const outputSink = () => {
   let value = '';
@@ -35,6 +36,36 @@ test('wallet backfill повторяем, сохраняет 36 credits и ис�
   const backfill = (credits: number) => ({ included: 0, bonus: credits * 1000, purchased: 0 });
   assert.deepEqual(backfill(36), { included: 0, bonus: 36_000, purchased: 0 });
   assert.deepEqual(backfill(36), backfill(36));
+});
+
+test('migration стоимости ответа ИИ повторно добавляет nullable column безопасно', async () => {
+  const sql = await readFile(new URL('../prisma/migrations/20260930120000_add_task_ai_message_credits/migration.sql', import.meta.url), 'utf8');
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS "creditsSpentMilli" INTEGER/);
+});
+
+test('P3009 migration стоимости ответа ИИ вызывает rolled-back и ровно один retry', () => {
+  const calls: string[][] = [];
+  const results = [
+    { status: 1, stdout: '', stderr: `P3009 ${TASK_AI_MESSAGE_CREDITS_MIGRATION}` },
+    { status: 0, stdout: 'resolved\n', stderr: '' },
+    { status: 0, stdout: 'applied\n', stderr: '' }
+  ];
+  const stdout = outputSink();
+  const stderr = outputSink();
+  const status = runMigrateDeploy({
+    executePrisma: (args: string[]) => { calls.push(args); return results.shift(); },
+    stdout: stdout.stream,
+    stderr: stderr.stream
+  });
+  assert.equal(status, 0);
+  assert.deepEqual(calls, [
+    ['migrate', 'deploy'],
+    ['migrate', 'resolve', '--rolled-back', TASK_AI_MESSAGE_CREDITS_MIGRATION],
+    ['migrate', 'deploy']
+  ]);
+  assert.match(stderr.read(), new RegExp(`Detected failed known migration: ${TASK_AI_MESSAGE_CREDITS_MIGRATION}`));
+  assert.match(stderr.read(), /Retrying idempotent migration/);
+  assert.match(stdout.read(), /applied/);
 });
 
 test('P3009 известной wallet migration вызывает rolled-back и ровно один retry', () => {

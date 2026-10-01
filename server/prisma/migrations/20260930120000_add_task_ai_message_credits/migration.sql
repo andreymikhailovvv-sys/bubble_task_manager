@@ -1,0 +1,2 @@
+ALTER TABLE "TaskAiMessage"
+ADD COLUMN IF NOT EXISTS "creditsSpentMilli" INTEGER;
