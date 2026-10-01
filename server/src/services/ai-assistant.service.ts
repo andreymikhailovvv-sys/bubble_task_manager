@@ -1406,12 +1406,13 @@ export const aiAssistantService = {
         ...(input.since ? { createdAt: { gte: input.since } } : {})
       },
       orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true }
+      select: { role: true, content: true, creditsSpentMilli: true }
     });
 
     return messages.map((message) => ({
       role: message.role,
-      content: message.content
+      content: message.content,
+      ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));
   },
 
@@ -1428,6 +1429,12 @@ export const aiAssistantService = {
         content: message.content
       }))
     });
+  },
+
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number }) => {
+    const content = input.content.trim();
+    if (!content) return;
+    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
@@ -2492,7 +2499,8 @@ ${parsed.answer}`
       answer,
       model: GENERAL_CHAT_MODEL,
       actionReports,
-      undoOperations
+      undoOperations,
+      billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(GENERAL_CHAT_MODEL)) }
     };
   },
 
@@ -2594,10 +2602,11 @@ ${parsed.answer}`
         ].join(' ')
       });
 
-      await aiAssistantService.appendTaskDialogMessages({
+      await aiAssistantService.appendTaskDialogAssistantMessage({
         userId: input.userId,
         taskId: input.taskId,
-        messages: [{ role: 'assistant', content: result.answer }]
+        content: result.answer,
+        creditsSpentMilli: result.billing.creditsSpentMilli
       });
 
       return {
@@ -2655,7 +2664,7 @@ ${parsed.answer}`
     const finalPlan = normalizedPlan.length > 0 ? normalizedPlan : fallbackPlan;
     const summary = parsed.summary || (finalPlan.length > 0 ? 'Найдено и подготовлено оптимальное перераспределение задач.' : 'Изменения не требуются.');
 
-    return { model: OTHER_AI_MODEL, summary, plan: finalPlan };
+    return { model: OTHER_AI_MODEL, summary, plan: finalPlan, billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(OTHER_AI_MODEL)) } };
   },
 
 
@@ -2670,7 +2679,7 @@ ${parsed.answer}`
       orderBy: { dueDate: 'asc' }
     });
     const overdue = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
-    if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[] };
+    if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[], billing: { mode: 'legacy' as const, creditsSpentMilli: 0 } };
     const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
     const overdueIds = overdue.map((t) => t.id);
     await chargeFixedAiCredits(input.userId, 2);
@@ -2683,7 +2692,7 @@ ${lines}`}] }) });
     const map = new Map(overdue.map((t)=>[t.id,t]));
     const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
     await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.update({ where:{id:u.taskId}, data:{dueDate:u.dueDate} }); }});
-    return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId) };
+    return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId), billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(2) } };
   },
 
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
@@ -2824,7 +2833,9 @@ ${lines}`}] }) });
 
     return {
       model: modelForSubtasks,
-      createdCount: created.length
+      createdCount: created.length,
+      taskTitle: task.title,
+      billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(modelForSubtasks)) }
     };
   },
 
@@ -2927,7 +2938,8 @@ ${lines}`}] }) });
         notifyBeforeMinutes: taskDraft.notifyBeforeMinutes,
         subtasks: taskDraft.subtasks
       },
-      firstAssistantMessage: taskDraft.firstAssistantMessage
+      firstAssistantMessage: taskDraft.firstAssistantMessage,
+      billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(modelForPrompt)) }
     };
   }
 };

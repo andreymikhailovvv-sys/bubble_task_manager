@@ -2,6 +2,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, 
 
 type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
+export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
@@ -165,8 +166,8 @@ export const api = {
 
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
-  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) =>
-    request<{ answer: string; model: string; actionReports?: string[]; billing?: { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number } }>(`/api/tasks/${taskId}/ai-chat`, {
+  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone' }) =>
+    request<{ answer: string; model: string; actionReports?: string[]; billing?: AiBilling }>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
@@ -176,7 +177,7 @@ export const api = {
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   generateTaskSubtasks: (taskId: string, payload?: { note?: string }) =>
-    request<{ createdCount: number; model: string }>(`/api/tasks/${taskId}/ai-subtasks`, {
+    request<{ createdCount: number; model: string; billing?: AiBilling }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST',
       body: JSON.stringify({ ...(payload ?? {}), userTimeZone: resolveUserTimeZone() })
     }),
@@ -199,12 +200,13 @@ export const api = {
         subtasks: Array<{ title: string; description: string; dueDate: string | null }>;
       };
       firstAssistantMessage: string;
+      billing?: AiBilling;
     }>('/api/tasks/ai-generate', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachmentPayload[] }) =>
-    request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }> }>('/api/ai-chat', {
+    request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; billing?: AiBilling }>('/api/ai-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
@@ -219,12 +221,13 @@ export const api = {
         taskId: string;
         previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
       }>;
+      billing?: AiBilling;
     }>('/api/ai-general-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
-  parseRecurrence: (payload: { text: string }) =>
-    request<{ summary: string; schedule: { rrule: string; timezone: string; until: string | null }; model: string; nextDueDate: string | null }>('/api/ai/parse-recurrence', {
+  parseRecurrence: (payload: { text: string; taskId?: string }) =>
+    request<{ summary: string; schedule: { rrule: string; timezone: string; until: string | null }; model: string; nextDueDate: string | null; billing?: AiBilling }>('/api/ai/parse-recurrence', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
@@ -240,14 +243,14 @@ export const api = {
     }),
 
   optimizeTimeline: (payload: { scope: 'day' | 'week' | 'month'; periodStartIso: string; periodEndIso: string; userNote?: string }) =>
-    request<{ model: string; summary: string; plan: Array<{ taskId: string; dueDate: string | null }> }>('/api/timeline/ai-optimize', {
+    request<{ model: string; summary: string; plan: Array<{ taskId: string; dueDate: string | null }>; billing?: AiBilling }>('/api/timeline/ai-optimize', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   applyTimelineOptimization: (payload: { plan: Array<{ taskId: string; dueDate: string | null }> }) =>
     request<{ ok: true }>('/api/timeline/ai-optimize/apply', { method: 'POST', body: JSON.stringify(payload) }),
   postponeOverdueWithAi: () =>
-    request<{ ok: true; model: string; summary: string; updatedTaskIds: string[] }>('/api/timeline/overdue-postpone-ai', { method: 'POST' }),
+    request<{ ok: true; model: string; summary: string; updatedTaskIds: string[]; billing?: AiBilling }>('/api/timeline/overdue-postpone-ai', { method: 'POST' }),
 
   reportClientError: (payload: {
     source: 'error-boundary' | 'window-error' | 'unhandledrejection' | 'timeline-render';

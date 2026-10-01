@@ -3,6 +3,8 @@ import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
 import { prisma } from '../db/prisma.js';
 import { computeNextRecurringDueDate } from '../services/task.service.js';
+import { createAiBillingSystemNotification } from '../services/ai-billing-notification.service.js';
+import { randomUUID } from 'node:crypto';
 
 type ChatAttachment = {
   name: string;
@@ -85,11 +87,9 @@ export const aiController = {
       if (projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы') {
         await aiAssistantService.appendGeneralDialogMessages({
           userId: req.user!.id,
-          messages: [
-            { role: 'user', content: question },
-            { role: 'assistant', content: result.answer }
-          ]
+          messages: [{ role: 'user', content: question }]
         });
+        await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       }
       res.json(result);
     } catch (error) {
@@ -136,11 +136,9 @@ export const aiController = {
 
       await aiAssistantService.appendGeneralDialogMessages({
         userId: req.user!.id,
-        messages: [
-          { role: 'user', content: question.trim() },
-          { role: 'assistant', content: result.answer }
-        ]
+        messages: [{ role: 'user', content: question.trim() }]
       });
+      await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
@@ -154,8 +152,12 @@ export const aiController = {
         return;
       }
       const userTimeZone = await resolveUserTimeZone(req);
+      const taskId = typeof req.body?.taskId === 'string' ? req.body.taskId : null;
+      const task = taskId ? await prisma.task.findFirst({ where: { id: taskId, userId: req.user!.id }, select: { id: true, title: true } }) : null;
+      if (taskId && !task) { res.status(404).json({ error: 'task not found' }); return; }
       const result = await aiAssistantService.parseRecurrence({ userId: req.user!.id, text, userTimeZone });
       const nextDueDate = computeNextRecurringDueDate(result.schedule, new Date());
+      await createAiBillingSystemNotification({ userId: req.user!.id, taskId: task?.id, eventKey: `ai-billing:recurrence:${randomUUID()}`, creditsSpentMilli: result.billing.creditsSpentMilli, content: (credits) => task ? `ИИ сформировал правило повторения для задачи «${task.title}». Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` : `ИИ сформировал правило повторения. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` });
       res.json({ ...result, nextDueDate: nextDueDate?.toISOString() ?? null });
     } catch (error) {
       sendAiError(res, error);
@@ -305,6 +307,7 @@ export const aiController = {
         note: typeof req.body?.note === 'string' ? req.body.note : undefined,
         userTimeZone
       });
+      await createAiBillingSystemNotification({ userId: req.user!.id, taskId: req.params.id, eventKey: `ai-billing:generate-subtasks:${randomUUID()}`, creditsSpentMilli: result.billing.creditsSpentMilli, content: (credits) => `ИИ сформировал ${result.createdCount} подзадач для задачи «${result.taskTitle}». Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` });
       res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
@@ -353,6 +356,7 @@ export const aiController = {
         userNote: typeof req.body?.userNote === 'string' ? req.body.userNote : undefined,
         userTimeZone
       });
+      await createAiBillingSystemNotification({ userId: req.user!.id, eventKey: `ai-billing:optimize-timeline:${randomUUID()}`, creditsSpentMilli: result.billing?.creditsSpentMilli, content: (credits) => result.plan.length > 0 ? `ИИ подготовил оптимизацию расписания. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` : `ИИ проанализировал расписание. Изменения не потребовались. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
@@ -362,6 +366,7 @@ export const aiController = {
     try {
       const userTimeZone = await resolveUserTimeZone(req);
       const result = await aiAssistantService.postponeOverdueWithAi({ userId: req.user!.id, userTimeZone });
+      await createAiBillingSystemNotification({ userId: req.user!.id, eventKey: `ai-billing:overdue-postpone:${randomUUID()}`, creditsSpentMilli: result.billing?.creditsSpentMilli, content: (credits) => result.updatedTaskIds.length > 0 ? `ИИ перенёс просроченные задачи: ${result.updatedTaskIds.length}. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` : `ИИ проанализировал просроченные задачи. Перенос не потребовался. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
@@ -392,6 +397,7 @@ export const aiController = {
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         userTimeZone
       });
+      await createAiBillingSystemNotification({ userId: req.user!.id, eventKey: `ai-billing:generate-task:${randomUUID()}`, creditsSpentMilli: result.billing.creditsSpentMilli, content: (credits) => `Задача «${result.task.title}» сформирована ИИ. Потрачено кредитов: ${credits.replace(/ кредит(?:а|ов)?$/, '')}.` });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
