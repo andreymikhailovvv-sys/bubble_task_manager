@@ -24,16 +24,11 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 
 const MAX_SPHERES = 8;
 
-const AI_CHAT_MODEL_CREDITS: Record<AiChatModel, number> = {
-  'gpt-6-luna': 2,
-  'gpt-5.4-mini': 5,
-  'gpt-6-sol': 8
-};
 
-const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
-  { value: 'gpt-6-luna', label: 'GPT-6 Luna', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-6-luna'] },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-5.4-mini'] },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol', creditsCost: AI_CHAT_MODEL_CREDITS['gpt-6-sol'] }
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
+  { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-6-sol', label: 'GPT-6 Sol' }
 ];
 
 const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
@@ -47,9 +42,9 @@ function AiModelChip({ value, onChange, ariaLabel, className = '' }: { value: Ai
 }
 
 const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; price: string; badge: string; features: string[] }> = [
-  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['2000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений', 'Стоимость: 399 рублей.'] },
-  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['5000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
-  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: ['12000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'Доступ ко всем ИИ-функциям', 'Доступ к самым продвинутым моделям'] }
+  { key: 'start', name: 'Старт', price: '299 ₽/мес', badge: 'Для регулярного старта', features: ['3 000 ИИ-кредитов в месяц', 'Память диалогов: до 100 сообщений'] },
+  { key: 'pro', name: 'Про', price: '599 ₽/мес', badge: 'Оптимальный выбор', features: ['6 000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'ИИ-чекап', 'Оптимизация расписания'] },
+  { key: 'max', name: 'Максимум', price: '1290 ₽/мес', badge: 'Все возможности', features: ['13 000 ИИ-кредитов в месяц', 'Безлимитная память диалогов', 'Доступ ко всем ИИ-функциям', 'Доступ к самым продвинутым моделям'] }
 ];
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
@@ -161,7 +156,6 @@ const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
-const SMART_POSTPONE_CREDITS_COST = 1;
 const QUICK_POSTPONE_OPTIONS = [
   { value: '15m', label: 'На 15 мин' },
   { value: '30m', label: 'На 30 мин' },
@@ -171,7 +165,6 @@ const QUICK_POSTPONE_OPTIONS = [
   { value: 'smart', label: '✦ Ближайшее окно' }
 ] as const;
 type QuickPostponeOption = (typeof QUICK_POSTPONE_OPTIONS)[number]['value'];
-const OVERDUE_AI_POSTPONE_CREDITS_COST = 2;
 const FOCUS_TIMER_OPTIONS = [5, 7, 10, 15, 20, 25, 30, 35, 40] as const;
 const FOCUS_RECOMMENDED_MINUTES = new Set<number>([20, 25, 30]);
 const FOCUS_MIN_TASKS = 1;
@@ -2410,7 +2403,7 @@ ${allContext}`,
     try {
       const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true });
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]);
-      if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (AI_CHAT_MODEL_CREDITS[focusAiModel]) * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
+      if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
@@ -4890,7 +4883,6 @@ ${allContext}`,
                             }}
                           >
                             <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                            {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                           </button>
                         ))}
                       </div>
@@ -5006,7 +4998,7 @@ ${allContext}`,
                             aria-label="Отложить просроченные задачи с помощью ИИ на ближайшее доступное окно"
                           >
                             {timelineOverdueBulkPostponeLoading === 'ai' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} Отложить (ИИ)
-                            <span className="inline-flex items-center gap-1 text-pink-100"><span>{OVERDUE_AI_POSTPONE_CREDITS_COST}</span><Coins size={10} /></span>
+
                           </button>
                         </div>
                         <button className="surface-muted rounded px-2 py-1 text-xs" onClick={() => setIsTimelineOverdueModalOpen(false)}>Свернуть</button>
@@ -5361,7 +5353,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -5412,7 +5403,7 @@ ${allContext}`,
           </section>
           {isUpcomingSubtasksModalOpen ? (
             <div className="modal-backdrop upcoming-subtasks-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
-      
+
         {timelineCreateMenu ? (
           <div
             className="fixed z-[130]"
@@ -5502,7 +5493,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -5748,7 +5738,7 @@ ${allContext}`,
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
         <div className={`fixed inset-0 ${isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
           <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
-    
+
         {timelineCreateMenu ? (
           <div
             className="fixed z-[130]"
@@ -5838,7 +5828,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -5950,7 +5939,7 @@ ${allContext}`,
                 <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={17} /> : <SendHorizontal size={17} />}</button>
               </div></div>
             </aside>
-    
+
         {timelineCreateMenu ? (
           <div
             className="fixed z-[130]"
@@ -6040,7 +6029,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -6467,7 +6455,7 @@ ${allContext}`,
                 }
               }}
             >
-      
+
         {timelineCreateMenu ? (
           <div
             className="fixed z-[130]"
@@ -6557,7 +6545,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -6674,7 +6661,7 @@ ${allContext}`,
 
       {isUpcomingSubtasksModalOpen ? (
         <div className="modal-backdrop upcoming-subtasks-backdrop fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setIsUpcomingSubtasksModalOpen(false)}>
-  
+
         {timelineCreateMenu ? (
           <div
             className="fixed z-[130]"
@@ -6764,7 +6751,6 @@ ${allContext}`,
                       try { await quickPostponeTask(task, option.value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart'); } finally { setTimelinePostponeLoadingTaskId((prev) => (prev === task.id ? null : prev)); }
                     }}>
                       <span className={option.value === 'smart' ? 'text-pink-300' : ''}>{option.label}</span>
-                      {option.value === 'smart' ? <span className="ml-auto inline-flex items-center text-pink-300"><Coins size={12} className="mr-1 text-rose-300" />{SMART_POSTPONE_CREDITS_COST}</span> : null}
                     </button>
                   ))}
                 </div>
@@ -6876,7 +6862,7 @@ ${allContext}`,
           }}
         />
       ) : null}
-    
+
 
       {timelineReschedulePicker ? (
         <DateTimePickerWithApply

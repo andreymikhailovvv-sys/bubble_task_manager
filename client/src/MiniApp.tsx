@@ -138,10 +138,10 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
   };
   return normalized;
 }
-const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string; creditsCost: number }> = [
-  { value: 'gpt-6-luna', label: 'GPT-6 Luna', creditsCost: 2 },
-  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', creditsCost: 5 },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol', creditsCost: 8 }
+const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
+  { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
+  { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-6-sol', label: 'GPT-6 Sol' }
 ];
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
 const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];

@@ -5,6 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
+import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import {
   creditsToMilli,
@@ -281,6 +282,37 @@ async function chargeSingleAiNotificationCredit(userId: string, options?: { skip
   const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod, options), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
   if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, AI_CREDIT_EFFICIENCY_BONUS);
+}
+
+async function runTextWorkflow<T extends object>(input: {
+  userId: string;
+  actionId: string;
+  feature: DynamicTextFeature;
+  model: string;
+  apiKey: string;
+  payload: Record<string, unknown>;
+  legacyCharge?: () => Promise<unknown>;
+  complete: (responseJson: { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown }) => Promise<T> | T;
+}) {
+  if (!isDynamicTextBillingEnabled(input.userId)) {
+    await input.legacyCharge?.();
+    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify(input.payload) });
+    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+    const json = await response.json() as Parameters<typeof input.complete>[0];
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: input.actionId, requestId: input.actionId, providerCallIndex: 1, feature: input.feature, model: input.model, openAiResponseId: typeof json.id === 'string' ? json.id : null, usage: json.usage });
+    const result = await input.complete(json);
+    return { ...result, billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(input.model)) } };
+  }
+  const call = await runDynamicResponsesCall({ userId: input.userId, actionId: input.actionId, providerCallIndex: 1, feature: input.feature, apiKey: input.apiKey, payload: input.payload });
+  try {
+    const result = await input.complete(call.responseJson);
+    const settlement = await settleDynamicResponsesCall(call);
+    if (settlement.chargedMilli > 0) await recordAiEfficiencyBonus(input.userId, settlement.chargedMilli / 1000 * AI_CREDIT_EFFICIENCY_BONUS);
+    return { ...result, billing: { mode: 'dynamic' as const, creditsSpentMilli: settlement.chargedMilli } };
+  } catch (error) {
+    await refundDynamicResponsesCall(call);
+    throw error;
+  }
 }
 
 function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
@@ -980,7 +1012,7 @@ export const aiAssistantService = {
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
     const actionRequestId = randomUUID();
-    return withAiCreditReservation(input.userId, model, async () => {
+    const operation = async () => {
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const history = normalizeGeneralHistory(input.history).slice(-24);
@@ -1005,29 +1037,27 @@ export const aiAssistantService = {
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
-      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId });
+      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) });
     }
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        input: [
-          { role: 'system', content: 'Ты универсальный ИИ-чат внутри Bubble Task Manager. Отвечай на обычные вопросы на русском языке. Ты не загружаешь полный контекст задач для экономии токенов. Если пользователь просит создать, изменить, найти или обсудить задачи, сроки, расписание, календарь, привычки или планирование — не выдумывай данные задач, а коротко скажи, что подключаешь ИИ-планировщик.' },
-          { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
-          ...history,
-          { role: 'user', content: question },
-          ...(attachmentsMessage ? [attachmentsMessage] : [])
-        ]
-      })
-    });
-    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
-    await recordOpenAiUsageShadow({ userId: input.userId, actionId: actionRequestId, requestId: actionRequestId, providerCallIndex: 1, feature: 'ai_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
-    const answer = extractOutputText(responseJson).trim();
-    if (!answer) throw new Error('Empty AI response');
-    return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
-    });
+    const payload = {
+      model,
+      input: [
+        { role: 'system', content: 'Ты универсальный ИИ-чат внутри Bubble Task Manager. Отвечай на обычные вопросы на русском языке. Ты не загружаешь полный контекст задач для экономии токенов. Если пользователь просит создать, изменить, найти или обсудить задачи, сроки, расписание, календарь, привычки или планирование — не выдумывай данные задач, а коротко скажи, что подключаешь ИИ-планировщик.' },
+        { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
+        ...history,
+        { role: 'user', content: question },
+        ...(attachmentsMessage ? [attachmentsMessage] : [])
+      ]
+    };
+    return runTextWorkflow({ userId: input.userId, actionId: actionRequestId, feature: 'ai_chat', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
+      const answer = extractOutputText(responseJson).trim();
+      if (!answer) throw new Error('Empty AI response');
+      return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
+    } });
+    };
+    return plannerToolsEnabled && !isDynamicTextBillingEnabled(input.userId)
+      ? withAiCreditReservation(input.userId, model, operation)
+      : operation();
   },
 
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
@@ -1035,50 +1065,23 @@ export const aiAssistantService = {
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
     const model = OTHER_AI_MODEL || RECURRENCE_MODEL;
     const requestId = randomUUID();
-    return withAiCreditReservation(input.userId, model, async () => {
-    const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
-    const localNowFormatted = new Intl.DateTimeFormat('sv-SE', {
-      timeZone: userTimeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    }).format(now);
-    const response = await openAiFetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        input: [
-          { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
-          { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
-        ]
-      })
-    });
-    if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
-    await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId, providerCallIndex: 1, feature: 'recurrence', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage });
-    const raw = extractOutputText(responseJson);
-    if (!raw) throw new Error('Empty AI response');
-    const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
-    return {
-      summary: parsed.summary ?? 'Повторение настроено.',
-      schedule: {
-        rrule: parsed.schedule?.rrule ?? '',
-        timezone: parsed.schedule?.timezone ?? userTimeZone,
-        until: parsed.schedule?.until ?? null
-      },
-      model
-    };
-    });
+    const localNowFormatted = new Intl.DateTimeFormat('sv-SE', { timeZone: userTimeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+    const payload = { model, input: [
+      { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
+      { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
+    ] };
+    return runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
+      const raw = extractOutputText(responseJson);
+      if (!raw) throw new Error('Empty AI response');
+      const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
+      if (!parsed.schedule?.rrule || typeof parsed.schedule.rrule !== 'string') throw new Error('Invalid recurrence schedule');
+      return { summary: parsed.summary ?? 'Повторение настроено.', schedule: { rrule: parsed.schedule.rrule, timezone: parsed.schedule.timezone ?? userTimeZone, until: parsed.schedule.until ?? null }, model };
+    } });
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
-    await chargeFixedAiCredits(input.userId, 2);
+    if (!isDynamicTextBillingEnabled(input.userId)) await chargeFixedAiCredits(input.userId, 2);
     const userTimeZone = user?.timeZone || MOSCOW_TIMEZONE;
     const now = new Date();
     const localNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
@@ -2565,7 +2568,8 @@ ${parsed.answer}`
         return {
           sent: true as const,
           answer: existingNudge.content,
-          replayed: true as const
+          replayed: true as const,
+          billing: { mode: isDynamicTextBillingEnabled(input.userId) ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli: 0 }
         };
       }
 
@@ -2573,13 +2577,15 @@ ${parsed.answer}`
     }
 
     try {
-      await chargeSingleAiNotificationCredit(input.userId);
+      const dynamicBilling = isDynamicTextBillingEnabled(input.userId);
+      if (!dynamicBilling) await chargeSingleAiNotificationCredit(input.userId);
       const result = await aiAssistantService.askTaskAssistant({
         userId: input.userId,
         taskId: input.taskId,
         history: [],
         mode: 'fast',
-        skipCreditsCharge: true,
+        skipCreditsCharge: !dynamicBilling,
+        billingMode: dynamicBilling ? 'dynamic' : 'legacy',
         question: [
           'Задача только что стала просроченной.',
           'Проанализируй контекст и предложи пользователю максимально конкретный следующий шаг, который можно сделать прямо сейчас.',
@@ -2597,7 +2603,8 @@ ${parsed.answer}`
       return {
         sent: true as const,
         answer: result.answer,
-        model: result.model
+        model: result.model,
+        billing: result.billing
       };
     } catch (error) {
       await prisma.task.updateMany({
