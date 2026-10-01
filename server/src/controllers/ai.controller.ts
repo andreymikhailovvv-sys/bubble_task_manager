@@ -231,17 +231,18 @@ export const aiController = {
       });
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
-      await aiAssistantService.appendTaskDialogMessages({
+      if (normalizedUserMessage) {
+        await aiAssistantService.appendTaskDialogMessages({
+          userId: req.user!.id,
+          taskId: req.params.id,
+          messages: [{ role: 'user', content: normalizedUserMessage }]
+        });
+      }
+      await aiAssistantService.appendTaskDialogAssistantMessage({
         userId: req.user!.id,
         taskId: req.params.id,
-        messages: normalizedUserMessage
-          ? [
-            { role: 'user', content: normalizedUserMessage },
-            { role: 'assistant', content: result.answer }
-          ]
-          : [
-            { role: 'assistant', content: result.answer }
-          ]
+        content: result.answer,
+        creditsSpentMilli: result.billing.creditsSpentMilli
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {

@@ -38,6 +38,7 @@ export type Insight = {
 export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
+  creditsSpentMilli?: number;
 };
 
 export type ChatMode = 'fast' | 'smart';
