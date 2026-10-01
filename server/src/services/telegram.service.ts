@@ -1208,7 +1208,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
-    const history = await aiAssistantService.listTaskDialog({ userId: session.userId, taskId: session.activeTaskId });
+    const history = await aiAssistantService.listTaskDialogForContext({ userId: session.userId, taskId: session.activeTaskId });
     const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { timeZone: true } });
     const userMessage = attachment
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файл: ${attachment.name}`

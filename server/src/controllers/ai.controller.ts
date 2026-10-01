@@ -213,7 +213,7 @@ export const aiController = {
         userMessageLength: typeof userMessage === 'string' ? userMessage.length : 0
       });
 
-      const persistedHistory = await aiAssistantService.listTaskDialog({
+      const persistedHistory = await aiAssistantService.listTaskDialogForContext({
         userId: req.user!.id,
         taskId: req.params.id
       });

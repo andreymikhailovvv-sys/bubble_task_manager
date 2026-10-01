@@ -21,7 +21,7 @@ export type TaskChatContextTask = {
 };
 
 export type TaskChatContextDiagnostics = {
-  contextVersion: 'v2';
+  contextVersion: 'v2' | 'v3';
   historyMessagesAvailable: number;
   historyMessagesUsed: number;
   historyEstimatedTokens: number;
@@ -120,17 +120,20 @@ export function buildTaskChatContext(input: {
   history: ChatMessage[];
   userTimeZone: string;
   hasAttachments: boolean;
+  historyTokenBudget?: number;
+  historyMaxMessages?: number;
+  contextVersion?: 'v2' | 'v3';
 }) {
-  const historyBudget = input.hasAttachments
+  const historyBudget = input.historyTokenBudget ?? (input.hasAttachments
     ? TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V1
-    : TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V1;
-  const historyMaxMessages = input.hasAttachments
+    : TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V1);
+  const historyMaxMessages = input.historyMaxMessages ?? (input.hasAttachments
     ? TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES
-    : TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES;
+    : TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES);
   const selected = selectRecentTaskChatHistory(input.history, { tokenBudget: historyBudget, maxMessages: historyMaxMessages });
   const taskContext = formatCompactTaskContext(input.task, input.userTimeZone);
   const diagnostics: TaskChatContextDiagnostics = {
-    contextVersion: 'v2',
+    contextVersion: input.contextVersion ?? 'v2',
     historyMessagesAvailable: selected.availableMessages,
     historyMessagesUsed: selected.messages.length,
     historyEstimatedTokens: selected.estimatedTokens,
