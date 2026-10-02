@@ -5,6 +5,7 @@ import {
   isTaskChatMemoryEnabled,
   normalizeTaskChatMemory,
   evaluateTaskChatMemoryTrigger,
+  resolveTaskChatActiveHistoryLimits,
   TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2,
   TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2,
   TASK_CHAT_MEMORY_MAX_ESTIMATED_TOKENS,
@@ -88,6 +89,28 @@ test('хвост от 22 до 30 коротких сообщений не зап
     assert.deepEqual(provider.messages.map((message) => message.content), history.map((message) => message.content));
     assert.equal(provider.messages.length, count);
   }
+});
+
+test('между target и trigger обычный provider получает весь хвост', () => {
+  const history = messages(25, 840); // 25 * 280 = 7000 estimated tokens
+  const limits = resolveTaskChatActiveHistoryLimits(false);
+  const provider = selectRecentTaskChatHistory(history, limits);
+
+  assert.equal(evaluateTaskChatMemoryTrigger(history).triggered, false);
+  assert.equal(provider.messages.length, 25);
+  assert.deepEqual(provider.messages.map((message) => message.content), history.map((message) => message.content));
+});
+
+test('attachment ограничивает только provider window, а следующий обычный запрос снова видит полный хвост', () => {
+  const history = messages(25, 840); // 7000 estimated tokens: меньше обычного trigger
+  const attachmentProvider = selectRecentTaskChatHistory(history, resolveTaskChatActiveHistoryLimits(true));
+  const normalProvider = selectRecentTaskChatHistory(history, resolveTaskChatActiveHistoryLimits(false));
+
+  assert.equal(evaluateTaskChatMemoryTrigger(history).triggered, false);
+  assert.equal(attachmentProvider.messages.length, TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES_V2);
+  assert.ok(attachmentProvider.estimatedTokens <= TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V2);
+  assert.equal(normalProvider.messages.length, 25);
+  assert.deepEqual(normalProvider.messages.map((message) => message.content), history.map((message) => message.content));
 });
 
 test('31-е сообщение запускает compaction по messages и target оставляет не больше 20', () => {
