@@ -28,7 +28,7 @@ const task = {
     dueDate: new Date('2026-10-08T10:00:00.000Z'),
     status: 'TODO'
   }],
-  attachments: [{ name: 'contract.pdf', mimeType: 'application/pdf', size: 999_999 }]
+  attachments: [{ id: 'attachment-1', name: 'contract.pdf', mimeType: 'application/pdf', size: 999_999 }]
 };
 
 test('V2 оставляет полный контекст задачи, но сокращает подзадачи и metadata файлов', () => {
@@ -39,6 +39,23 @@ test('V2 оставляет полный контекст задачи, но с�
   assert.match(result.taskContext, /contract\.pdf \(application\/pdf\)/);
   assert.doesNotMatch(result.taskContext, /999999|размер/);
   assert.equal(result.diagnostics.activeSubtasksCount, 1);
+  assert.equal(result.diagnostics.subtasksPreviewed, 1);
+  assert.equal(result.diagnostics.storedAttachmentsPreviewed, 1);
+  assert.equal(result.diagnostics.storedAttachmentContentIncluded, false);
+});
+
+test('preview ограничивает подзадачи и файлы, сохраняя итоговые количества', () => {
+  const many = {
+    ...task,
+    subtasks: Array.from({ length: 14 }, (_, index) => ({ id: `s-${index}`, title: `Подзадача ${index}`, description: 'секрет', dueDate: null, status: 'TODO' })),
+    attachments: Array.from({ length: 12 }, (_, index) => ({ id: `a-${index}`, name: `file-${index}.pdf`, mimeType: 'application/pdf' }))
+  };
+  const result = buildTaskChatContext({ task: many, history: [], userTimeZone: 'UTC', hasAttachments: false });
+  assert.match(result.taskContext, /Активных: 14/);
+  assert.match(result.taskContext, /Ещё 2 подзадач/);
+  assert.doesNotMatch(result.taskContext, /\[s-12\]/);
+  assert.match(result.taskContext, /Всего файлов: 12/);
+  assert.doesNotMatch(result.taskContext, /\[a-10\]/);
 });
 
 test('короткая история сохраняет все 20 сообщений и хронологический порядок', () => {

@@ -4,6 +4,8 @@ export const TASK_CHAT_RECENT_HISTORY_TOKEN_BUDGET_V1 = 12_000;
 export const TASK_CHAT_RECENT_HISTORY_MAX_MESSAGES = 20;
 export const TASK_CHAT_ATTACHMENT_HISTORY_TOKEN_BUDGET_V1 = 4_000;
 export const TASK_CHAT_ATTACHMENT_HISTORY_MAX_MESSAGES = 6;
+export const TASK_CHAT_SUBTASK_PREVIEW_LIMIT = 12;
+export const TASK_CHAT_ATTACHMENT_PREVIEW_LIMIT = 10;
 
 export type TaskChatContextTask = {
   id: string;
@@ -17,7 +19,7 @@ export type TaskChatContextTask = {
   sphere?: { id: string; name: string } | null;
   parentTask?: { sphere?: { id: string; name: string } | null } | null;
   subtasks: Array<{ id: string; title: string; dueDate: Date | null; status: string }>;
-  attachments?: Array<{ name: string; mimeType: string }>;
+  attachments?: Array<{ id: string; name: string; mimeType: string }>;
 };
 
 export type TaskChatContextDiagnostics = {
@@ -28,6 +30,9 @@ export type TaskChatContextDiagnostics = {
   taskContextEstimatedTokens: number;
   activeSubtasksCount: number;
   storedAttachmentsCount: number;
+  subtasksPreviewed: number;
+  storedAttachmentsPreviewed: number;
+  storedAttachmentContentIncluded: false;
   historyBudget: number;
   historyMaxMessages: number;
   historyBudgetExceededBySingleMessage: boolean;
@@ -87,11 +92,13 @@ function formatDueDate(date: Date | null, userTimeZone: string) {
 
 function formatCompactTaskContext(task: TaskChatContextTask, userTimeZone: string): string {
   const sphere = task.sphere?.name ?? task.parentTask?.sphere?.name ?? 'без сектора';
-  const subtasks = task.subtasks.length > 0
-    ? task.subtasks.map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | ${subtask.status} | срок: ${formatDueDate(subtask.dueDate, userTimeZone)}`).join('\n')
+  const subtaskPreview = task.subtasks.slice(0, TASK_CHAT_SUBTASK_PREVIEW_LIMIT);
+  const attachmentPreview = task.attachments?.slice(0, TASK_CHAT_ATTACHMENT_PREVIEW_LIMIT) ?? [];
+  const subtasks = subtaskPreview.length > 0
+    ? subtaskPreview.map((subtask, index) => `${index + 1}. [${subtask.id}] ${subtask.title} | ${subtask.status} | срок: ${formatDueDate(subtask.dueDate, userTimeZone)}`).join('\n')
     : 'Подзадач нет';
-  const attachments = task.attachments?.length
-    ? task.attachments.map((attachment, index) => `${index + 1}. ${attachment.name} (${attachment.mimeType})`).join('\n')
+  const attachments = attachmentPreview.length
+    ? attachmentPreview.map((attachment, index) => `${index + 1}. [${attachment.id}] ${attachment.name} (${attachment.mimeType})`).join('\n')
     : 'Нет прикреплённых файлов';
 
   return [
@@ -104,8 +111,8 @@ function formatCompactTaskContext(task: TaskChatContextTask, userTimeZone: strin
     `Важность: ${task.importance}`,
     `Срочность: ${task.urgency}`,
     `Приоритет: ${task.priorityScore}`,
-    `Подзадачи:\n${subtasks}`,
-    `Прикреплённые файлы:\n${attachments}`
+    `Подзадачи:\nАктивных: ${task.subtasks.length}.\nКраткий список:\n${subtasks}${task.subtasks.length > subtaskPreview.length ? `\nЕщё ${task.subtasks.length - subtaskPreview.length} подзадач доступны через поиск по контексту задачи.` : ''}`,
+    `Файлы задачи:\nВсего файлов: ${task.attachments?.length ?? 0}.\n${attachments}${(task.attachments?.length ?? 0) > attachmentPreview.length ? '\nОстальные доступны через task context lookup.' : ''}`
   ].join('\n');
 }
 
@@ -140,6 +147,9 @@ export function buildTaskChatContext(input: {
     taskContextEstimatedTokens: estimateTaskChatTokens(taskContext),
     activeSubtasksCount: input.task.subtasks.length,
     storedAttachmentsCount: input.task.attachments?.length ?? 0,
+    subtasksPreviewed: Math.min(input.task.subtasks.length, TASK_CHAT_SUBTASK_PREVIEW_LIMIT),
+    storedAttachmentsPreviewed: Math.min(input.task.attachments?.length ?? 0, TASK_CHAT_ATTACHMENT_PREVIEW_LIMIT),
+    storedAttachmentContentIncluded: false,
     historyBudget,
     historyMaxMessages,
     historyBudgetExceededBySingleMessage: selected.historyBudgetExceededBySingleMessage
