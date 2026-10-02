@@ -1,6 +1,7 @@
 import { prisma } from '../db/prisma.js';
 
-export const TASK_CHAT_CONTEXT_TOOL_MAX_ROUNDS = 3;
+export const TASK_CHAT_CONTEXT_MAX_TOOL_CALLS = 3;
+export const TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS = TASK_CHAT_CONTEXT_MAX_TOOL_CALLS + 1;
 export const TASK_CHAT_STORED_FILE_FETCH_LIMIT = 2;
 
 export type TaskContextLookupArguments = {

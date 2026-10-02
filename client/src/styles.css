@@ -6527,3 +6527,26 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
 .tour-click-shield { pointer-events: auto; }
 .tour-card { z-index: 2; background: color-mix(in srgb, var(--panel-bg, #111827) 96%, transparent); border-color: rgba(167,139,250,.7); backdrop-filter: blur(18px); }
 .tour-pointer { z-index: 2; color: #f8fafc; fill: #7c3aed; filter: drop-shadow(0 3px 5px rgba(0,0,0,.5)); pointer-events: none; }
+
+.miniapp-ai-progress {
+  display: flex;
+  min-height: 1.25rem;
+  align-items: baseline;
+  padding-inline: .25rem;
+  color: rgba(165, 243, 252, .82);
+  font-size: .875rem;
+  line-height: 1.25rem;
+  animation: miniapp-ai-progress-pulse 1.8s ease-in-out infinite;
+}
+.miniapp-ai-progress-text { animation: miniapp-ai-progress-fade .2s ease-out both; }
+.miniapp-ai-progress-dots { display: inline-block; width: 1.5em; }
+.miniapp-ai-progress-dots::after { content: ''; animation: miniapp-ai-progress-dots 2.4s steps(1, end) infinite; }
+@keyframes miniapp-ai-progress-pulse { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
+@keyframes miniapp-ai-progress-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes miniapp-ai-progress-dots { 0%, 24% { content: '.'; } 25%, 49% { content: '..'; } 50%, 74% { content: '...'; } 75%, 100% { content: ''; } }
+@media (prefers-reduced-motion: reduce) {
+  .miniapp-ai-progress,
+  .miniapp-ai-progress-text,
+  .miniapp-ai-progress-dots::after { animation: none; transition: none; }
+  .miniapp-ai-progress-dots::after { content: '...'; }
+}

@@ -187,6 +187,11 @@ export const aiController = {
     }
   },
   askTaskAssistant: async (req: Request, res: Response) => {
+    const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
+    const writeStreamEvent = (event: unknown) => {
+      res.write(`${JSON.stringify(event)}\n`);
+      (res as Response & { flush?: () => void }).flush?.();
+    };
     try {
       const { question, userMessage } = req.body as {
         question?: string;
@@ -198,8 +203,17 @@ export const aiController = {
       };
 
       if (!question || typeof question !== 'string') {
-        res.status(400).json({ error: 'question is required' });
+        if (streaming) {
+          res.status(400).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
+          writeStreamEvent({ type: 'error', message: 'question is required' });
+          res.end();
+        } else res.status(400).json({ error: 'question is required' });
         return;
+      }
+
+      if (streaming) {
+        res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
+        res.flushHeaders();
       }
 
       const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
@@ -229,7 +243,8 @@ export const aiController = {
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         userTimeZone,
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
-        skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true
+        skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
+        ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {})
       });
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
@@ -255,7 +270,10 @@ export const aiController = {
         answerLength: result.answer.length
       });
 
-      res.json(result);
+      if (streaming) {
+        writeStreamEvent({ type: 'result', result });
+        res.end();
+      } else res.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown AI error';
       console.error('[AI] /tasks/:id/ai-chat failed', {
@@ -267,7 +285,10 @@ export const aiController = {
         error: message,
         stack: error instanceof Error ? error.stack : null
       });
-      sendAiError(res, error);
+      if (streaming && res.headersSent) {
+        writeStreamEvent({ type: 'error', message });
+        res.end();
+      } else sendAiError(res, error);
     }
   },
   appendTaskAssistantMessages: async (req: Request, res: Response) => {
