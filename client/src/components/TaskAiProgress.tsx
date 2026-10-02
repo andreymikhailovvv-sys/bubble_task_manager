@@ -4,6 +4,7 @@ const TASK_AI_PROGRESS_TEXT: Record<TaskAiProgressStatus, string> = {
   analyzing_request: 'Анализирую запрос',
   using_chat_history: 'Учитываю историю диалога',
   searching_subtasks: 'Ищу нужную подзадачу',
+  analyzing_subtasks: 'Анализирую подзадачи',
   reading_subtask: 'Изучаю детали подзадачи',
   searching_files: 'Ищу нужный файл',
   reading_file: 'Изучаю содержимое файла',

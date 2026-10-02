@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment } from './lib/types';
@@ -19,6 +19,7 @@ import { noteHtmlToPlainText } from './lib/notes';
 import { UpdatesMenu } from './components/UpdatesMenu';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
+import { TaskAiProgress } from './components/TaskAiProgress';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 
@@ -726,6 +727,7 @@ export default function App() {
   const [focusAiDraft, setFocusAiDraft] = useState('');
   const [focusAiMessages, setFocusAiMessages] = useState<TaskAiMessage[]>([]);
   const [focusAiLoading, setFocusAiLoading] = useState(false);
+  const [focusAiProgress, setFocusAiProgress] = useState<TaskAiProgressStatus | null>(null);
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
   const [focusAiModel, setFocusAiModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [focusAiPendingFiles, setFocusAiPendingFiles] = useState<File[]>([]);
@@ -887,6 +889,7 @@ export default function App() {
   const [aiDraft, setAiDraft] = useState('');
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [aiSubtasksLoadingTaskId, setAiSubtasksLoadingTaskId] = useState<string | null>(null);
   const [isAiSubtasksPromptOpen, setIsAiSubtasksPromptOpen] = useState(false);
   const [aiSubtasksPrompt, setAiSubtasksPrompt] = useState('');
@@ -2036,6 +2039,7 @@ export default function App() {
     setAiPendingFiles([]);
     setAiError(null);
     setAiLoadingTaskId(taskId);
+    setAiProgressByTask((current) => ({ ...current, [taskId]: 'analyzing_request' }));
 
     try {
       const result = await askTaskAssistant(taskId, {
@@ -2043,7 +2047,7 @@ export default function App() {
         userMessage: userContent,
         model: options?.modelOverride ?? focusedAiModel,
         attachments: attachmentsPayload
-      });
+      }, (status) => setAiProgressByTask((current) => ({ ...current, [taskId]: status })));
       setAiDialogByTask((prev) => ({
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]
@@ -2066,6 +2070,7 @@ export default function App() {
       }));
     } finally {
       setAiLoadingTaskId(null);
+      setAiProgressByTask((current) => { const next = { ...current }; delete next[taskId]; return next; });
     }
   };
 
@@ -2399,9 +2404,10 @@ ${allContext}`,
     setFocusAiPendingFiles([]);
     setFocusAiError(null);
     setFocusAiLoading(true);
+    setFocusAiProgress('analyzing_request');
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true });
+      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]);
       if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
@@ -2411,6 +2417,7 @@ ${allContext}`,
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message === INSUFFICIENT_AI_CREDITS_MESSAGE ? INSUFFICIENT_AI_CREDITS_MESSAGE : 'Не удалось ответить в режиме концентрации. Попробуйте ещё раз.' }]);
     } finally {
       setFocusAiLoading(false);
+      setFocusAiProgress(null);
     }
   };
 
@@ -3286,8 +3293,8 @@ ${allContext}`,
     event.target.value = '';
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }) => {
-    const result = await api.askTaskAssistant(taskId, payload);
+  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
+    const result = await api.askTaskAssistantStreaming(taskId, payload, { onStatus });
     try {
       const me = await api.getMe();
       setCurrentUser(me.user);
@@ -4398,7 +4405,7 @@ ${allContext}`,
                 <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
                 <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
                   {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[92%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}{message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}</div>)}
-                  {focusAiLoading ? <p className="text-xs text-muted">ИИ думает…</p> : null}
+                  {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
                 </div>
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
@@ -4425,7 +4432,7 @@ ${allContext}`,
               <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
               <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
                 {focusAiMessages.map((message) => <div key={message.id} className={`chat-message max-w-[82%] rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : renderAiMessageContent(message.content)}{message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}</div>)}
-                {focusAiLoading ? <p className="text-sm text-muted">ИИ думает…</p> : null}
+                {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
               </div>
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
@@ -5898,7 +5905,7 @@ ${allContext}`,
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
                 ))}
-                {aiLoadingTaskId === focusedTask.id ? <p className="text-xs text-muted">ИИ думает…</p> : null}
+                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
                 </div>
               </div>
               {aiPendingFiles.length > 0 ? (
@@ -6658,7 +6665,7 @@ ${allContext}`,
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
               ))}
-              {aiLoadingTaskId === focusedTask.id ? <p className="text-sm text-muted">ИИ думает…</p> : null}
+              {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">

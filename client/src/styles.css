@@ -6533,16 +6533,14 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
   min-height: 1.25rem;
   align-items: baseline;
   padding-inline: .25rem;
-  color: rgba(165, 243, 252, .82);
+  color: var(--text-muted);
   font-size: .875rem;
   line-height: 1.25rem;
-  animation: miniapp-ai-progress-pulse 1.8s ease-in-out infinite;
 }
-.miniapp-ai-progress-text { animation: miniapp-ai-progress-fade .2s ease-out both; }
+.miniapp-ai-progress-text { animation: miniapp-ai-progress-shimmer 2.8s ease-in-out infinite; }
 .miniapp-ai-progress-dots { display: inline-block; width: 1.5em; }
 .miniapp-ai-progress-dots::after { content: ''; animation: miniapp-ai-progress-dots 2.4s steps(1, end) infinite; }
-@keyframes miniapp-ai-progress-pulse { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
-@keyframes miniapp-ai-progress-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes miniapp-ai-progress-shimmer { 0%, 100% { opacity: .82; } 50% { opacity: 1; } }
 @keyframes miniapp-ai-progress-dots { 0%, 24% { content: '.'; } 25%, 49% { content: '..'; } 50%, 74% { content: '...'; } 75%, 100% { content: ''; } }
 @media (prefers-reduced-motion: reduce) {
   .miniapp-ai-progress,
