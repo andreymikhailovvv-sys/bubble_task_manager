@@ -4937,7 +4937,7 @@ body[data-theme='dark'] .ai-chat-message-assistant {
 body[data-theme='light'] .ai-chat-message-user {
   border: 1px solid rgba(124, 58, 237, 0.24);
   background: rgba(237, 233, 254, 0.88);
-  color: #4c1d95;
+  color: #1e293b;
 }
 
 body[data-theme='light'] .ai-chat-message-assistant {
@@ -4947,7 +4947,7 @@ body[data-theme='light'] .ai-chat-message-assistant {
 }
 
 body[data-theme='light'] .ai-chat-expanded .ai-chat-message-label-user {
-  color: #7c3aed;
+  color: #64748b;
 }
 
 /* Keep the expanded chat surfaces lightweight; the dedicated backdrop uses
