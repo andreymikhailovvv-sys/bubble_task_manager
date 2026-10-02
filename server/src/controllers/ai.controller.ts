@@ -5,6 +5,7 @@ import { prisma } from '../db/prisma.js';
 import { computeNextRecurringDueDate } from '../services/task.service.js';
 import { createAiBillingSystemNotification } from '../services/ai-billing-notification.service.js';
 import { randomUUID } from 'node:crypto';
+import { logAiTraceSummary } from '../services/ai-trace-summary.service.js';
 
 type ChatAttachment = {
   name: string;
@@ -66,6 +67,7 @@ const resolveUserTimeZone = async (req: Request): Promise<string> => {
 
 export const aiController = {
   askAiChat: async (req: Request, res: Response) => {
+    const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceError: unknown = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     try {
@@ -76,20 +78,29 @@ export const aiController = {
         return;
       }
       if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
-      const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
+      const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content })) : [];
       const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const projectTitle = typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined;
       const chatTitle = typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined;
-      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
-      if (projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы') {
+      const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
+      const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
+      const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      traceResult = result;
+      if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
         await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       }
-      if (streaming) { writeStreamEvent({ type: 'result', result }); res.end(); } else res.json(result);
+      const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
+      if (streaming) { writeStreamEvent({ type: 'result', result: publicResult }); res.end(); } else res.json(publicResult);
     } catch (error) {
+      traceError = error;
       if (streaming) { writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end(); }
       else sendAiError(res, error);
+    } finally {
+      const diagnostics = traceResult?.diagnostics; const workflow = traceResult?.workflowDiagnostics;
+      logAiTraceSummary({ requestId, endpoint: 'ai-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', chatKind: req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'project', projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : null, chatId: typeof req.body?.chatId === 'string' ? req.body.chatId : null, model: traceResult?.model ?? req.body?.model ?? null, contextMode: diagnostics?.context?.contextMode ?? (req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'legacy'), memoryRevision: diagnostics?.context?.memoryRevision ?? null, memoryCompactionTriggered: diagnostics?.context?.memoryCompactionTriggered ?? false, providerCalls: workflow?.providerCalls ?? 0, toolCalls: workflow?.toolCalls ?? 0, toolOperations: workflow?.toolOperations ?? [], inputTokensTotal: workflow?.inputTokensTotal ?? 0, outputTokensTotal: workflow?.outputTokensTotal ?? 0, creditsSpentMilli: traceResult?.billing?.creditsSpentMilli ?? 0, taskDataChanged: traceResult?.taskDataChanged ?? false, durationMs: Date.now() - startedAt, success: !traceError, ...(!traceError ? {} : { errorCode: traceError instanceof Error ? traceError.name : 'UnknownError' }) });
     }
   },
 
@@ -184,6 +195,7 @@ export const aiController = {
     }
   },
   askTaskAssistant: async (req: Request, res: Response) => {
+    const traceStartedAt = Date.now(); const traceRequestId = randomUUID(); let traceTaskResult: any = null; let traceTaskError: unknown = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => {
       res.write(`${JSON.stringify(event)}\n`);
@@ -243,6 +255,7 @@ export const aiController = {
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
         ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {})
       });
+      traceTaskResult = result;
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
       if (normalizedUserMessage) {
@@ -272,6 +285,7 @@ export const aiController = {
         res.end();
       } else res.json(result);
     } catch (error) {
+      traceTaskError = error;
       const message = error instanceof Error ? error.message : 'Unknown AI error';
       console.error('[AI] /tasks/:id/ai-chat failed', {
         userId: req.user?.id,
@@ -286,6 +300,8 @@ export const aiController = {
         writeStreamEvent({ type: 'error', message });
         res.end();
       } else sendAiError(res, error);
+    } finally {
+      logAiTraceSummary({ requestId: traceRequestId, endpoint: 'task-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', taskId: req.params.id, model: traceTaskResult?.model ?? req.body?.model ?? null, contextMode: process.env.TASK_CHAT_MEMORY_ENABLED === 'true' ? 'v3' : 'v2', memoryRevision: traceTaskResult?.diagnostics?.memoryRevision ?? null, memoryCompactionTriggered: traceTaskResult?.diagnostics?.memoryCompactionTriggered ?? false, providerCalls: traceTaskResult?.diagnostics?.providerCalls ?? 0, toolCalls: traceTaskResult?.diagnostics?.toolCalls ?? 0, toolOperations: traceTaskResult?.diagnostics?.toolOperations ?? [], inputTokensTotal: traceTaskResult?.diagnostics?.inputTokensTotal ?? 0, outputTokensTotal: traceTaskResult?.diagnostics?.outputTokensTotal ?? 0, creditsSpentMilli: traceTaskResult?.billing?.creditsSpentMilli ?? 0, durationMs: Date.now() - traceStartedAt, success: !traceTaskError, ...(!traceTaskError ? {} : { errorCode: traceTaskError instanceof Error ? traceTaskError.name : 'UnknownError' }) });
     }
   },
   appendTaskAssistantMessages: async (req: Request, res: Response) => {

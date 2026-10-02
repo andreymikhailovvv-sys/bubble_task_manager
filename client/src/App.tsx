@@ -2591,6 +2591,9 @@ ${allContext}`,
         model: quick ? 'gpt-6-luna' : selectedAiChatModel,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
+        projectId: activeAiChatProject?.id,
+        chatId: quick ? QUICK_AI_CHAT_ID : activeAiChat?.id,
+        clientSurface: 'web',
         attachments
       }, { onStatus: setAiChatProgress });
       const actionReports = result.actionReports ?? [];
@@ -3297,7 +3300,7 @@ ${allContext}`,
   };
 
   const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
-    const result = await api.askTaskAssistantStreaming(taskId, payload, { onStatus });
+    const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus });
     try {
       const me = await api.getMe();
       setCurrentUser(me.user);

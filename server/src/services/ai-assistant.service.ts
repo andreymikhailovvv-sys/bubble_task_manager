@@ -6,6 +6,7 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools } from './ai-chat-tools.service.js';
 import type { AiChatProgressStatus } from './ai-chat-progress.js';
+import { estimateAiChatTokens, formatAiChatMemory, prepareAiChatSmartContext } from './ai-chat-memory.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
@@ -25,6 +26,7 @@ import {
 type ChatRole = 'user' | 'assistant';
 
 export type ChatMessage = {
+  id?: string;
   role: ChatRole;
   content: string;
   creditsSpentMilli?: number;
@@ -113,6 +115,10 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   model?: AiChatModel;
   projectTitle?: string;
   chatTitle?: string;
+  projectId?: string;
+  chatId?: string;
+  clientSurface?: 'web' | 'miniapp';
+  requestId?: string;
   attachments?: ChatAttachment[];
   onProgress?: (status: AiChatProgressStatus) => void;
 };
@@ -345,7 +351,10 @@ function normalizeHistory(history: ChatMessage[]): ChatMessage[] {
 }
 
 function normalizeGeneralHistory(history: ChatMessage[]): ChatMessage[] {
-  return normalizeHistory(history).slice(-12);
+  return history
+    .filter((message) => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+    .map((message) => ({ ...(typeof message.id === 'string' ? { id: message.id } : {}), role: message.role, content: message.content.trim() }))
+    .filter((message) => message.content.length > 0);
 }
 
 function normalizeGeneralPersistedHistory(history: ChatMessage[]): ChatMessage[] {
@@ -1021,11 +1030,33 @@ export const aiAssistantService = {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
-    const actionRequestId = randomUUID();
+    const actionRequestId = input.requestId ?? randomUUID();
     const operation = async () => {
       const now = new Date();
       const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
-      const history = normalizeGeneralHistory(input.history).slice(-24);
+      const normalizedHistory = normalizeGeneralHistory(input.history);
+      const quick = input.chatId === 'quick-ai-requests' || (!input.chatId && input.projectTitle === 'Личный проект' && input.chatTitle === 'Быстрые запросы');
+      let history = normalizedHistory.slice(quick ? -20 : -24);
+      let memoryBlock = '';
+      let context = { contextMode: quick ? 'quick' : 'legacy', memoryRevision: null as number | null, memoryCompactionTriggered: false, memoryCompactionBatches: 0, memoryCaughtUp: true, fallback: false, fallbackReason: null as string | null, unsummarizedMessages: history.length, unsummarizedEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0) };
+      if (!quick && process.env.AI_CHAT_SMART_CONTEXT_ENABLED === 'true') {
+        input.onProgress?.('using_chat_history');
+        if (!input.projectId || !input.chatId) {
+          context = { ...context, fallback: true, fallbackReason: 'missing_project_or_chat_id' };
+        } else if (normalizedHistory.some((message) => !message.id)) {
+          context = { ...context, fallback: true, fallbackReason: 'message_id_missing' };
+        } else {
+          try {
+            const prepared = await prepareAiChatSmartContext({ userId: input.userId, projectId: input.projectId, chatId: input.chatId, history: normalizedHistory as Array<{ id: string; role: 'user' | 'assistant'; content: string }>, requestId: actionRequestId });
+            history = prepared.recentHistory;
+            memoryBlock = prepared.memory ? formatAiChatMemory(prepared.memory.summary) : '';
+            context = { contextMode: 'smart', memoryRevision: prepared.memory?.revision ?? null, memoryCompactionTriggered: prepared.triggered, memoryCompactionBatches: prepared.batches, memoryCaughtUp: prepared.caughtUp, fallback: false, fallbackReason: null, unsummarizedMessages: prepared.unsummarizedMessages, unsummarizedEstimatedTokens: prepared.unsummarizedEstimatedTokens };
+          } catch (error) {
+            context = { ...context, fallback: true, fallbackReason: error instanceof Error ? error.message : 'smart_context_failed', memoryCaughtUp: false };
+            history = normalizedHistory.slice(-24);
+          }
+        }
+      }
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
@@ -1038,15 +1069,19 @@ export const aiAssistantService = {
             'Используй инструменты, только когда пользователь явно ссылается на свои реальные задачи, подзадачи, события, сектора, сроки либо просит изменить их. Не утверждай факты о данных Планировыча, не полученные через инструмент.',
             'search_tasks ищет несколько конкретных объектов по смыслу или названию; list_tasks получает широкий набор по фильтрам и поддерживает пагинацию; get_task читает подробности одного объекта.',
             'Перед изменением существующего объекта сначала найди его. Никогда не придумывай ID. При неоднозначном поиске уточни объект и ничего не меняй.',
+            'Сжатая память содержит контекст предыдущих сообщений этого диалога. Используй её для целей, решений, предпочтений и продолжения разговора. Она не является актуальным источником состояния задач Планировыча. Если ответ зависит от текущих статуса, срока, описания, сектора, наличия или списка задач, используй инструменты.',
             'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. Отвечай на русском языке.'
           ].join(' ')
         },
         { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
+        ...(memoryBlock ? [{ role: 'system' as const, content: memoryBlock }] : []),
         ...history,
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
-      return askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
+      console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
+      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
+      return { ...result, diagnostics: { requestId: actionRequestId, context } };
     };
     return !isDynamicTextBillingEnabled(input.userId)
       ? withAiCreditReservation(input.userId, model, operation)
@@ -1543,7 +1578,7 @@ export const aiAssistantService = {
     const hasAttachments = Boolean(attachmentsMessage);
     const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
     const useMemory = useContextV2 && memoryFeatureEnabled && !isSmartPostponeRequest;
-    const contextHistory = input.history.filter((message): message is TaskChatContextMessage => 'id' in message && message.createdAt instanceof Date);
+    const contextHistory = input.history.filter((message): message is TaskChatContextMessage => 'id' in message && 'createdAt' in message && message.createdAt instanceof Date);
     if (input.history.length > 0) input.onProgress?.('using_chat_history');
     const memoryResult = useMemory && contextHistory.length === input.history.length
       ? await updateTaskChatMemoryIfNeeded({ userId: input.userId, taskId: input.taskId, history: contextHistory })

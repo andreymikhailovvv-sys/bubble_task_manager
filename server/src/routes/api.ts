@@ -850,6 +850,17 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     where: { id: req.user!.id },
     data: { aiChatProjects: projects }
   });
+  const existingPairs = projects.flatMap((project: unknown) => {
+    if (!project || typeof project !== 'object' || typeof (project as { id?: unknown }).id !== 'string' || !Array.isArray((project as { chats?: unknown }).chats)) return [];
+    const projectId = (project as { id: string }).id;
+    return ((project as { chats: unknown[] }).chats).flatMap((chat) => chat && typeof chat === 'object' && typeof (chat as { id?: unknown }).id === 'string' ? [{ projectId, chatId: (chat as { id: string }).id }] : []);
+  });
+  await prisma.aiChatConversationMemory.deleteMany({
+    where: {
+      userId: req.user!.id,
+      ...(existingPairs.length ? { NOT: { OR: existingPairs } } : {})
+    }
+  });
   res.json({ projects });
 }));
 
