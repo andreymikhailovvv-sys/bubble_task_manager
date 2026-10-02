@@ -23,6 +23,7 @@ import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
+import { ExpandedAiChat } from './components/ExpandedAiChat';
 
 const MAX_SPHERES = 8;
 
@@ -912,9 +913,7 @@ export default function App() {
   const [generalAiError, setGeneralAiError] = useState<string | null>(null);
   const [lastGeneralAiUndoOperations, setLastGeneralAiUndoOperations] = useState<GeneralAiUndoOperation[]>([]);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
-  const [aiChatDraft, setAiChatDraft] = useState('');
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
-  const [isAiFileDragActive, setIsAiFileDragActive] = useState(false);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
@@ -972,8 +971,6 @@ export default function App() {
   const expandedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
-  const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
-  const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const quickAiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineCurrentDayRef = useRef<HTMLDivElement | null>(null);
@@ -2129,11 +2126,6 @@ export default function App() {
     setAiChatPendingFiles((previous) => [...previous, ...normalized].slice(0, MAX_AI_ATTACHMENTS));
   };
 
-  const handleAiChatFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    addAiChatFiles(Array.from(event.target.files ?? []));
-    event.target.value = '';
-  };
-
   const uploadFocusedTaskFiles = async (files: File[]) => {
     if (!focusedTask || files.length === 0) return;
     const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
@@ -2551,10 +2543,6 @@ ${allContext}`,
     return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading]);
 
-  useEffect(() => {
-    aiChatDialogContainerRef.current?.scrollTo({ top: aiChatDialogContainerRef.current.scrollHeight, behavior: 'smooth' });
-  }, [activeAiChat?.messages.length, aiChatLoading, isAiChatOpen]);
-
   const updateActiveAiChatMessages = (updater: (messages: AiChatMessage[]) => AiChatMessage[]) => {
     setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
       ...project,
@@ -2562,8 +2550,8 @@ ${allContext}`,
     }));
   };
 
-  const sendAiChatQuestion = async (quick = false) => {
-    const question = (quick ? quickAiChatDraft : aiChatDraft).trim();
+  const sendAiChatQuestion = async (quick = false, expandedDraft = '') => {
+    const question = (quick ? quickAiChatDraft : expandedDraft).trim();
     if ((!question && (quick || aiChatPendingFiles.length === 0)) || aiChatLoading) return;
     const fileNames = quick ? [] : aiChatPendingFiles.map((file) => file.name);
     const userContent = fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question;
@@ -2574,7 +2562,6 @@ ${allContext}`,
       setQuickAiChatDraft('');
     } else {
       updateActiveAiChatMessages((messages) => [...messages, userMessage]);
-      setAiChatDraft('');
       setAiChatPendingFiles([]);
     }
     setAiChatLoading(true);
@@ -6966,33 +6953,31 @@ ${allContext}`,
       ) : null}
 
       {isAiChatOpen ? (
-        <div className="modal-backdrop fixed inset-0 z-[140] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiChatOpen(false)}>
-          <div data-tour="ai-full-chat" className="ai-chat-expanded focus-mode-shell grid h-[min(820px,calc(100vh-32px))] w-full max-w-6xl grid-cols-[280px_minmax(0,1fr)] overflow-hidden rounded-3xl border" onClick={(e) => e.stopPropagation()}>
-            <aside className="focus-side-panel flex min-h-0 flex-col gap-3 border-r p-4">
-              <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Проекты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-violet-100" onClick={openAiChatProjectDialog}><Plus size={14} /></button></div>
-              <div className="space-y-2 overflow-y-auto pr-1">{aiChatProjects.map((project) => <div key={project.id} onContextMenu={(event) => openAiChatItemContextMenu(event, 'project', project.id)} className={`group/project flex w-full items-center gap-2 rounded-2xl border px-2.5 py-2 text-left text-sm shadow-sm transition hover:bg-violet-500/10 ${project.id === activeAiChatProject?.id ? 'border-white/50 text-white' : 'surface-muted text-primary hover:shadow-lg'}`} style={project.id === activeAiChatProject?.id ? { background: `linear-gradient(135deg, ${project.color}, #7c3aed)` } : undefined}><button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-base">{project.icon}</span><span className="min-w-0 flex-1 truncate font-semibold">{project.title}</span></button><button className="rounded-full p-1 opacity-60 transition hover:bg-rose-500/15 hover:text-rose-300 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={aiChatProjects.length <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatProject(project.id); }} title="Удалить проект"><Trash2 size={13} /></button></div>)}</div>
-              <div className="mt-2 flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Чаты</p><button className="surface-muted rounded-full p-1.5 transition hover:bg-cyan-100" onClick={createAiChatThread}><Plus size={14} /></button></div>
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{activeAiChatProject?.chats.map((chat) => <div key={chat.id} onContextMenu={(event) => { if (chat.id !== QUICK_AI_CHAT_ID) openAiChatItemContextMenu(event, 'chat', chat.id); }} className={`group/chat flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm shadow-sm transition hover:bg-cyan-500/10 ${chat.id === activeAiChat?.id ? 'border-cyan-300 bg-cyan-500/20 text-primary' : 'surface-muted text-muted hover:text-primary'}`}><button className="min-w-0 flex-1 text-left" onClick={() => setActiveAiChatId(chat.id)}><span className="block truncate font-medium">{chat.title}</span><span className="block truncate text-[11px] text-subtle">{chat.id === QUICK_AI_CHAT_ID ? 'Чат по умолчанию' : `${chat.messages.length} сообщ.`}</span></button><button className="rounded-full p-1 opacity-50 transition hover:bg-rose-500/15 hover:text-rose-400 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} onClick={(e) => { e.stopPropagation(); deleteAiChatThread(chat.id); }} title="Удалить чат"><Trash2 size={13} /></button></div>)}</div>
-            </aside>
-            <section className="flex min-h-0 flex-col p-5">
-              <div className="mb-1 flex items-start justify-between gap-3"><div><div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700"><Sparkles size={14} /> Чат с ИИ</div><h2 className="mt-2 text-2xl font-bold text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2><p className="text-sm text-muted">{activeAiChat?.id === QUICK_AI_CHAT_ID ? 'Развернутая версия быстрых запросов к ИИ. Этот чат открыт по умолчанию и не редактируется.' : 'ИИ может отвечать на вопросы и при необходимости работать с вашими задачами и расписанием.'}</p></div><button className="rounded-full p-2 text-muted transition hover:-translate-y-0.5 hover:bg-white/60" onClick={() => setIsAiChatOpen(false)}><X size={18} /></button></div>
-              <div className="ai-chat-thread-wrap relative min-h-0 flex-1" onDragOver={(event) => { event.preventDefault(); setIsAiFileDragActive(true); }} onDragLeave={(event) => { if (event.currentTarget === event.target) setIsAiFileDragActive(false); }} onDrop={(event) => { event.preventDefault(); setIsAiFileDragActive(false); addAiChatFiles(Array.from(event.dataTransfer.files)); }}>
-                {isAiFileDragActive ? <div className="absolute inset-0 z-30 flex items-center justify-center rounded-3xl border-2 border-dashed border-violet-400 bg-violet-500/15 text-sm font-semibold text-violet-700 backdrop-blur-sm">Перетащите файл, чтобы прикрепить его</div> : null}
-                <div className="ai-chat-model-cap absolute left-1/2 top-px z-10 w-40 -translate-x-1/2">
-                  <CustomSelect value={selectedAiChatModel} options={AI_CHAT_MODEL_SELECT_OPTIONS} onChange={(value) => setSelectedAiChatModel(value as AiChatModel)} className="w-full" buttonClassName="ai-chat-model-cap-button rounded-b-xl rounded-t-none border px-3 py-1.5 text-xs font-semibold text-primary hover:brightness-105" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel="Выбрать модель чата" />
-                </div>
-                <div ref={aiChatDialogContainerRef} className="chat-thread h-full min-h-0 space-y-4 overflow-y-auto rounded-3xl p-4">
-                {(activeAiChat?.messages ?? []).length === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-                {(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[78%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[78%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 transition hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div>{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}</div></div>)}
-                {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
-                {aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}
-                </div>
-              </div>
-              {aiChatPendingFiles.length ? <div className="mt-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={file.name} type="button" onClick={() => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name))} className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700">📎 {file.name} ×</button>)}</div> : null}
-              <div className="ai-chat-composer mt-4 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 transition focus:ring-0" value={aiChatDraft} onChange={(e) => setAiChatDraft(e.target.value)} onKeyDown={(e) => { if (shouldSendAiMessageOnEnter(e)) { e.preventDefault(); void sendAiChatQuestion(false); } }} placeholder="Напишите сообщение…" /><input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition hover:brightness-110" title="Прикрепить файл" onClick={() => aiChatFileInputRef.current?.click()}><Paperclip size={17} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm transition hover:bg-violet-500 active:scale-95 disabled:opacity-50" title="Отправить" disabled={aiChatLoading || (!aiChatDraft.trim() && aiChatPendingFiles.length === 0)} onClick={() => void sendAiChatQuestion(false)}><SendHorizontal size={18} /></button></div>
-            </section>
-          </div>
-        </div>
+        <ExpandedAiChat
+          projects={aiChatProjects}
+          activeProject={activeAiChatProject}
+          activeChat={activeAiChat}
+          quickChatId={QUICK_AI_CHAT_ID}
+          model={selectedAiChatModel}
+          modelOptions={AI_CHAT_MODEL_SELECT_OPTIONS}
+          pendingFiles={aiChatPendingFiles}
+          loading={aiChatLoading}
+          messageCount={activeAiChat?.messages.length ?? 0}
+          onClose={() => setIsAiChatOpen(false)}
+          onCreateProject={openAiChatProjectDialog}
+          onCreateChat={createAiChatThread}
+          onSelectProject={(project) => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}
+          onSelectChat={setActiveAiChatId}
+          onDeleteProject={deleteAiChatProject}
+          onDeleteChat={deleteAiChatThread}
+          onContextMenu={openAiChatItemContextMenu}
+          onModelChange={setSelectedAiChatModel}
+          onAddFiles={addAiChatFiles}
+          onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
+          onSend={(draft) => void sendAiChatQuestion(false, draft)}
+          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[86%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : renderAiMessageContent(item.message.content)}</div>{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}</div></div>)}
+          status={<>{aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
+        />
       ) : null}
 
       {aiChatContextMenu ? (
