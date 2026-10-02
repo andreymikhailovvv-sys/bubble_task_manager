@@ -25,6 +25,12 @@ test('provider payload excludes internal metadata and preserves tool token input
   assert.deepEqual(clean, { model: 'gpt-5-nano', input: [{ role: 'user', content: 'hi' }], tools: [{ type: 'function' }], tool_choice: 'auto', parallel_tool_calls: false });
 });
 
+test('provider payload preserves max_tool_calls for Responses API', () => {
+  const clean = createCleanOpenAiResponsesPayload({ model: 'gpt-6-luna', input: [], tools: [{ type: 'web_search' }], max_tool_calls: 1, privateField: true });
+  assert.equal(clean.max_tool_calls, 1);
+  assert.equal('privateField' in clean, false);
+});
+
 test('every dynamic text workflow has explicit output bounds', () => {
   for (const [feature, limits] of Object.entries(DYNAMIC_TEXT_OUTPUT_LIMITS)) {
     assert.ok(limits.min > 0, feature);

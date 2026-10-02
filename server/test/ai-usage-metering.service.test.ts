@@ -6,6 +6,12 @@ import {
   normalizeOpenAiUsage,
   recordOpenAiUsageShadow
 } from '../src/services/ai-usage-metering.service.js';
+import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../src/config/openai-pricing.js';
+import { providerNanoUsdToMilliCredits } from '../src/services/ai-usage-metering.service.js';
+
+test('web search fixed price is exactly 16667 millicredits', () => {
+  assert.equal(providerNanoUsdToMilliCredits(OPENAI_WEB_SEARCH_COST_NANO_USD), 16667);
+});
 
 test('maximum reservation использует дорогую cache-write ставку и output budget', () => {
   const result = calculateMaximumRequestCreditsMilli({ model: 'gpt-6-luna', inputTokens: 1_000, maxOutputTokens: 1_000 });

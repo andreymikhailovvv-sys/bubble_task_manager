@@ -1,4 +1,6 @@
-export const OPENAI_PRICING_VERSION = 'openai-standard-2026-09-30';
+// Token prices plus hosted web_search at $10 / 1,000 calls, verified 2026-10-02.
+export const OPENAI_PRICING_VERSION = 'openai-standard-and-web-search-2026-10-02';
+export const OPENAI_WEB_SEARCH_COST_NANO_USD = 10_000_000n;
 
 export type OpenAiTokenRates = {
   inputNanoUsdPerMillion: bigint;
