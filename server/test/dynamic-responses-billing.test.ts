@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createCleanOpenAiResponsesPayload, DYNAMIC_TEXT_OUTPUT_LIMITS, isDynamicTextBillingEnabled } from '../src/services/dynamic-responses-billing.service.js';
+import { createCleanOpenAiResponsesPayload, DYNAMIC_TEXT_OUTPUT_LIMITS, getOpenAiPreflightErrorDiagnostics, isDynamicTextBillingEnabled } from '../src/services/dynamic-responses-billing.service.js';
 
 test('dynamic text flag supports global rollout and a user allowlist', () => {
   const enabled = process.env.AI_DYNAMIC_TEXT_BILLING_ENABLED;
@@ -30,4 +30,15 @@ test('every dynamic text workflow has explicit output bounds', () => {
     assert.ok(limits.min > 0, feature);
     assert.ok(limits.max >= limits.min, feature);
   }
+});
+
+test('preflight error diagnostics пропускает только безопасные поля', () => {
+  const diagnostics = getOpenAiPreflightErrorDiagnostics({ error: { type: 'invalid_request_error', code: 'bad_input', param: 'input[2].id', message: 'private user text' }, payload: 'secret' });
+  assert.deepEqual(diagnostics, {
+    providerErrorType: 'invalid_request_error',
+    providerErrorCode: 'bad_input',
+    providerErrorParam: 'input[2].id'
+  });
+  assert.equal(JSON.stringify(diagnostics).includes('private user text'), false);
+  assert.equal(JSON.stringify(diagnostics).includes('secret'), false);
 });

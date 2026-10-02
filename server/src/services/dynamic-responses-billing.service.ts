@@ -26,6 +26,17 @@ export function createCleanOpenAiResponsesPayload(payload: Record<string, unknow
   return Object.fromEntries(PROVIDER_KEYS.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]]));
 }
 
+export function getOpenAiPreflightErrorDiagnostics(body: unknown) {
+  const root = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
+  const error = typeof root.error === 'object' && root.error !== null ? root.error as Record<string, unknown> : {};
+  const safeString = (value: unknown) => typeof value === 'string' ? value : null;
+  return {
+    providerErrorType: safeString(error.type),
+    providerErrorCode: safeString(error.code),
+    providerErrorParam: safeString(error.param)
+  };
+}
+
 export type DynamicResponsesCall = {
   responseJson: { id?: unknown; usage?: OpenAiUsage; [key: string]: unknown };
   reservation: AiCreditReservation;
@@ -46,7 +57,13 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
     throw error;
   }
   if (!preflight.ok) {
-    console.error('[AI dynamic billing] input token preflight failed', { actionId: input.actionId, requestId: tokenRequestId, feature: input.feature, model, status: preflight.status });
+    let errorBody: unknown = null;
+    try {
+      errorBody = await preflight.json();
+    } catch {
+      // An invalid provider response body must not hide the original HTTP failure.
+    }
+    console.error('[AI dynamic billing] input token preflight failed', { actionId: input.actionId, requestId: tokenRequestId, feature: input.feature, model, status: preflight.status, ...getOpenAiPreflightErrorDiagnostics(errorBody) });
     throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
   }
   const tokenJson = await preflight.json() as { input_tokens?: unknown };
