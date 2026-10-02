@@ -4664,6 +4664,8 @@ body[data-theme='light'] .miniapp-shell .miniapp-postpone-button {
   .notes-editor-panel,
   .modal-backdrop,
   .modal-backdrop > *,
+  .ai-chat-expanded-backdrop,
+  .ai-chat-expanded-backdrop > .ai-chat-expanded,
   .miniapp-window-opening .miniapp-ai-dialog,
   .miniapp-window-opening .miniapp-habit-recurrence-panel,
   .miniapp-window-opening .miniapp-ai-chat-thread {
@@ -4933,8 +4935,8 @@ body[data-theme='dark'] .ai-chat-message-assistant {
 }
 
 body[data-theme='light'] .ai-chat-message-user {
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  background: #ede9fe;
+  border: 1px solid rgba(124, 58, 237, 0.24);
+  background: rgba(237, 233, 254, 0.88);
   color: #4c1d95;
 }
 
@@ -4944,8 +4946,12 @@ body[data-theme='light'] .ai-chat-message-assistant {
   color: #1e293b;
 }
 
-/* Keep the expanded chat itself opaque and lightweight while the standard
-   modal backdrop provides visual separation from the page behind it. */
+body[data-theme='light'] .ai-chat-expanded .ai-chat-message-label-user {
+  color: #7c3aed;
+}
+
+/* Keep the expanded chat surfaces lightweight; the dedicated backdrop uses
+   only a very small blur to preserve depth without a large repaint cost. */
 .ai-chat-expanded {
   --ai-composer-height: 76px;
   display: grid;
@@ -4970,7 +4976,25 @@ body[data-theme='dark'] .ai-chat-expanded {
 }
 
 .ai-chat-expanded-backdrop {
-  background: rgba(2, 6, 23, 0.72);
+  background: rgba(2, 6, 23, 0.64);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: ai-chat-backdrop-in 180ms ease-out both;
+}
+
+.ai-chat-expanded-backdrop > .ai-chat-expanded {
+  transform-origin: center;
+  animation: ai-chat-dialog-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ai-chat-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ai-chat-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .ai-chat-expanded-sidebar {
@@ -4995,6 +5019,27 @@ body[data-theme='dark'] .ai-chat-expanded {
   pointer-events: none;
   opacity: 0;
   transform: translateX(-16px);
+}
+
+.ai-chat-expanded-sidebar .ai-chat-sidebar-project,
+.ai-chat-expanded-sidebar .ai-chat-sidebar-thread {
+  border-color: color-mix(in srgb, var(--panel-border) 72%, transparent);
+  box-shadow: none;
+}
+
+body[data-theme='dark'] .ai-chat-expanded-sidebar .ai-chat-sidebar-project,
+body[data-theme='dark'] .ai-chat-expanded-sidebar .ai-chat-sidebar-thread {
+  border-color: rgba(100, 116, 139, 0.42);
+  background: rgba(30, 41, 59, 0.72);
+}
+
+body[data-theme='dark'] .ai-chat-expanded-sidebar .ai-chat-sidebar-project[style] {
+  border-color: rgba(167, 139, 250, 0.5);
+}
+
+body[data-theme='dark'] .ai-chat-expanded-sidebar .ai-chat-sidebar-thread.border-cyan-300 {
+  border-color: rgba(34, 211, 238, 0.62);
+  background: rgba(8, 145, 178, 0.22);
 }
 
 .ai-chat-expanded-main {
