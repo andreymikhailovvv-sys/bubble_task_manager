@@ -1902,6 +1902,9 @@ export default function MiniApp() {
         model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-6-luna' : selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
+        projectId: activeAiChatProject?.id,
+        chatId: activeAiChat?.id,
+        clientSurface: 'miniapp',
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress });
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli };
@@ -2199,6 +2202,7 @@ export default function MiniApp() {
         userMessage,
         mode: selectedAiChatModel === 'gpt-6-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
+        clientSurface: 'miniapp',
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })) });
       setAiDialogByTask((prev) => ({

@@ -96,6 +96,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   
   let providerCallCount = 0;
+  let inputTokensTotal = 0; let outputTokensTotal = 0; const toolOperations: string[] = [];
   const dynamicCalls: DynamicResponsesCall[] = [];
   input.onProgress?.('analyzing_request');
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
@@ -112,17 +113,22 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           dynamicCalls.push(call);
           providerCallCount = providerCallIndex;
           const response = call.responseJson as ToolResponse;
+          inputTokensTotal += typeof response.usage?.input_tokens === 'number' ? response.usage.input_tokens : 0;
+          outputTokensTotal += typeof response.usage?.output_tokens === 'number' ? response.usage.output_tokens : 0;
           console.info('[AI chat round] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, hadToolCall: response.output?.some((item) => item.type === 'function_call') ?? false, toolOperation: response.output?.find((item) => item.type === 'function_call')?.name ?? null, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, actualCreditsMilli: call.actualCreditsMilli, isForcedFinalRound });
           return response;
         }
         const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify(providerPayload) });
         if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
         const payload = await response.json() as ToolResponse;
+        inputTokensTotal += typeof payload.usage?.input_tokens === 'number' ? payload.usage.input_tokens : 0;
+        outputTokensTotal += typeof payload.usage?.output_tokens === 'number' ? payload.usage.output_tokens : 0;
         providerCallCount = providerCallIndex;
         await recordOpenAiUsageShadow({ userId: input.userId, actionId: requestId, requestId: `${requestId}:ai-chat:${providerCallIndex}`, providerCallIndex, feature: 'ai_chat', model: input.model, openAiResponseId: typeof payload.id === 'string' ? payload.id : null, usage: payload.usage });
         return payload;
       },
       executeTool: async (name, value, round) => {
+        toolOperations.push(name);
         
         const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes' } as const)[name as 'search_tasks'];
         if (progress) input.onProgress?.(progress);
@@ -163,7 +169,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     console.info('[AI tools] completed', { requestId, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
     let creditsSpentMilli = 0;
     for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     console.info('[AI tools] completed', { requestId, actionCount: actionReports.length, durationMs: Date.now() - startedAt, failed: true });

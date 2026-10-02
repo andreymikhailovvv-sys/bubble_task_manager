@@ -116,10 +116,29 @@ model User {
   habitCompletions HabitCompletion[]
   consents     UserConsent[]
   aiUsageEvents AiUsageEvent[]
+  aiChatConversationMemories AiChatConversationMemory[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+model AiChatConversationMemory {
+  id                         String   @id @default(cuid())
+  userId                     String
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId                  String
+  chatId                     String
+  summary                    Json
+  summarizedThroughMessageId String?
+  revision                   Int      @default(0)
+  formatVersion              Int      @default(1)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@unique([userId, projectId, chatId])
+  @@index([userId])
+  @@index([userId, updatedAt])
 }
 
 model AiUsageEvent {
