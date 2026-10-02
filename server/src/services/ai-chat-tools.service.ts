@@ -5,6 +5,7 @@ import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicRespo
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
 import { providerNanoUsdToMilliCredits } from './ai-usage-metering.service.js';
 import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservation } from './ai-credit-wallet.service.js';
+import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-responses-stream.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -110,12 +111,26 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let webSearchAvailable = Boolean(input.dynamicBilling);
   let webSearchUsed = false;
   let webSearchCalls = 0;
+  let webSearchProgressObserved = false;
+  let lastProgress: import('./ai-chat-progress.js').AiChatProgressStatus | null = null;
+  const emitProgress = (status: import('./ai-chat-progress.js').AiChatProgressStatus) => {
+    if (lastProgress === status) return;
+    lastProgress = status;
+    input.onProgress?.(status);
+  };
+  const observeProviderEvent = (event: { type?: unknown }) => {
+    const progress = getWebSearchProgressStatus(event.type);
+    if (progress) {
+      webSearchProgressObserved = true;
+      emitProgress(progress);
+    }
+  };
   const webSources: WebSource[] = []; const webCitations: WebCitation[] = []; const sourceByUrl = new Map<string, number>();
   if (webSearchAvailable) {
     try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI); }
     catch (error) { if (error instanceof Error && error.message === 'Недостаточно AI кредитов') webSearchAvailable = false; else throw error; }
   }
-  input.onProgress?.('analyzing_request');
+  emitProgress('analyzing_request');
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
     const loop = await runAiChatToolLoop({
@@ -123,17 +138,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       request: async (requestInput) => {
         const providerCallIndex = providerCallCount + 1;
         const isForcedFinalRound = providerCallIndex === MAX_PROVIDER_CALLS;
-        if (isForcedFinalRound) input.onProgress?.('forming_answer');
+        if (isForcedFinalRound) emitProgress('forming_answer');
         const includeWebSearch = !isForcedFinalRound && webSearchAvailable && !webSearchUsed;
         const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL] : AI_CHAT_OPENAI_TOOLS;
         const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: 'auto', parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1 } : {}) }) };
         if (input.dynamicBilling) {
           let call: DynamicResponsesCall;
-          try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload }); }
+          try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload, stream: true, onProviderEvent: observeProviderEvent }); }
           catch (error) {
             if (includeWebSearch && !webSearchUsed && webReservation && error instanceof Error && error.message === 'Недостаточно AI кредитов') {
               await refundAiCreditReservation(webReservation); webReservation = null; webSearchAvailable = false;
-              call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: { ...providerPayload, tools: AI_CHAT_OPENAI_TOOLS, max_tool_calls: undefined } });
+              call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: { ...providerPayload, tools: AI_CHAT_OPENAI_TOOLS, max_tool_calls: undefined }, stream: true, onProviderEvent: observeProviderEvent });
             } else throw error;
           }
           dynamicCalls.push(call);
@@ -157,9 +172,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           console.info('[AI chat round] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, hadToolCall: response.output?.some((item) => item.type === 'function_call') ?? false, toolOperation: response.output?.find((item) => item.type === 'function_call')?.name ?? null, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, actualCreditsMilli: call.actualCreditsMilli, isForcedFinalRound });
           return response;
         }
-        const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify(providerPayload) });
+        const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify({ ...providerPayload, stream: true }) });
         if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-        const payload = await response.json() as ToolResponse;
+        const payload = await readOpenAiResponsesStream(response.body, observeProviderEvent) as ToolResponse;
         inputTokensTotal += typeof payload.usage?.input_tokens === 'number' ? payload.usage.input_tokens : 0;
         outputTokensTotal += typeof payload.usage?.output_tokens === 'number' ? payload.usage.output_tokens : 0;
         providerCallCount = providerCallIndex;
@@ -170,7 +185,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         toolOperations.push(name);
         
         const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes' } as const)[name as 'search_tasks'];
-        if (progress) input.onProgress?.(progress);
+        if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
         if (name === 'search_tasks') {
@@ -182,7 +197,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'list_tasks') {
           const result = await plannerToolsService.list(input.userId, value as PlannerListInput);
           result.items.forEach((item: { id: string }) => resolvedItemIds.add(item.id));
-          input.onProgress?.('analyzing_retrieved_context');
+          emitProgress('analyzing_retrieved_context');
           return result;
         }
         if (name === 'get_task') {
@@ -190,7 +205,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           if (typeof id !== 'string') return { ok: false, code: 'INVALID_ID', message: 'id обязателен.' };
           const item = await plannerToolsService.getItem(input.userId, id);
           if (!item) return { ok: false, code: 'ITEM_NOT_FOUND', message: 'Объект не найден.' };
-          resolvedItemIds.add(item.id); input.onProgress?.('analyzing_retrieved_context'); return { ok: true, item };
+          resolvedItemIds.add(item.id); emitProgress('analyzing_retrieved_context'); return { ok: true, item };
         }
         if (name === 'list_sectors') {
           const spheres = await plannerToolsService.listSpheres(input.userId); spheres.forEach((sphere: { id: string }) => resolvedSphereIds.add(sphere.id)); return spheres;
@@ -204,12 +219,12 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент задач.' };
       }
     });
-    input.onProgress?.('forming_answer');
+    emitProgress('forming_answer');
     console.info('[AI tools] completed', { requestId, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
     let creditsSpentMilli = 0;
     for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
     if (webReservation) { if (webSearchUsed) creditsSpentMilli += webReservation.totalMilli; else { await refundAiCreditReservation(webReservation); webReservation = null; } }
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCalls, webSearchCreditsMilli: webSearchUsed ? WEB_SEARCH_CALL_CREDITS_MILLI : 0, webSourceCount: webSources.length } };
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCalls, webSearchCreditsMilli: webSearchUsed ? WEB_SEARCH_CALL_CREDITS_MILLI : 0, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);

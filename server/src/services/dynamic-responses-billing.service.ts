@@ -1,6 +1,7 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
+import { readOpenAiResponsesStream } from './openai-responses-stream.service.js';
 
 export type DynamicTextFeature = 'ai_chat' | 'ai_chat_planner' | 'general_assistant' | 'recurrence' | 'generate_subtasks' | 'generate_task' | 'optimize_timeline' | 'overdue_postpone';
 
@@ -45,7 +46,7 @@ export type DynamicResponsesCall = {
   webSearchCreditsMilli: number;
 };
 
-export async function runDynamicResponsesCall(input: { userId: string; actionId: string; providerCallIndex: number; feature: DynamicTextFeature; apiKey: string; payload: Record<string, unknown> }): Promise<DynamicResponsesCall> {
+export async function runDynamicResponsesCall(input: { userId: string; actionId: string; providerCallIndex: number; feature: DynamicTextFeature; apiKey: string; payload: Record<string, unknown>; stream?: boolean; onProviderEvent?: (event: { type?: unknown }) => void }): Promise<DynamicResponsesCall> {
   const limits = DYNAMIC_TEXT_OUTPUT_LIMITS[input.feature];
   const cleanPayload = createCleanOpenAiResponsesPayload(input.payload);
   const model = String(cleanPayload.model ?? '');
@@ -80,9 +81,11 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
   const maxOutputTokens = Math.max(limits.min, Math.min(limits.max, affordable));
   try {
     const requestId = `${input.actionId}:response:${input.providerCallIndex}`;
-    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify({ ...cleanPayload, max_output_tokens: maxOutputTokens }) });
+    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify({ ...cleanPayload, max_output_tokens: maxOutputTokens, ...(input.stream ? { stream: true } : {}) }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-    const responseJson = await response.json() as DynamicResponsesCall['responseJson'];
+    const responseJson = (input.stream
+      ? await readOpenAiResponsesStream(response.body, input.onProviderEvent)
+      : await response.json()) as DynamicResponsesCall['responseJson'];
     const output = Array.isArray(responseJson.output) ? responseJson.output as Array<Record<string, unknown>> : [];
     const webSearchCalls = input.feature === 'ai_chat' ? output.filter((item) => item.type === 'web_search_call' && (item.action as Record<string, unknown> | undefined)?.type === 'search').length : 0;
     const { OPENAI_WEB_SEARCH_COST_NANO_USD } = await import('../config/openai-pricing.js');

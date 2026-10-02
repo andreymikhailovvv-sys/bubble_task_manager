@@ -5,6 +5,7 @@ const PROGRESS_TEXT: Record<AiChatProgressStatus | TaskAiProgressStatus, string>
   searching_tasks: 'Ищу задачи', listing_tasks: 'Собираю список задач', reading_task: 'Изучаю задачу', checking_sectors: 'Проверяю сектора',
   searching_subtasks: 'Ищу нужную подзадачу', analyzing_subtasks: 'Анализирую подзадачи', reading_subtask: 'Изучаю детали подзадачи',
   searching_files: 'Ищу нужный файл', reading_file: 'Изучаю содержимое файла', reading_attachment: 'Изучаю вложение',
+  searching_web: 'Ищу в интернете', analyzing_web_results: 'Изучаю найденные источники',
   analyzing_retrieved_context: 'Анализирую найденные данные', forming_answer: 'Формирую ответ', applying_changes: 'Вношу изменения'
 };
 export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiProgressStatus }) {

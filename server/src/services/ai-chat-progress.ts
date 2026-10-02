@@ -8,4 +8,6 @@ export type AiChatProgressStatus =
   | 'analyzing_retrieved_context'
   | 'applying_changes'
   | 'reading_attachment'
+  | 'searching_web'
+  | 'analyzing_web_results'
   | 'forming_answer';
