@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
-import { askAiChatWithPlannerTools } from './ai-chat-planner.service.js';
+import { askAiChatWithTools } from './ai-chat-tools.service.js';
+import type { AiChatProgressStatus } from './ai-chat-progress.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
@@ -108,8 +109,13 @@ type AskGeneralAssistantInput = {
   userTimeZone?: string;
 };
 type AiChatModel = 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol';
-type AskAiChatInput = AskGeneralAssistantInput & { model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachment[] };
-const TASK_INTENT_PATTERN = /(задач|подзадач|дедлайн|срок|расписан|планиров|заплан|перенес|созда(й|ть).*дел|созда(й|ть).*зада|отметь|выполнен|закрой|сектор|привычк|таймлайн|календар)/i;
+type AskAiChatInput = AskGeneralAssistantInput & {
+  model?: AiChatModel;
+  projectTitle?: string;
+  chatTitle?: string;
+  attachments?: ChatAttachment[];
+  onProgress?: (status: AiChatProgressStatus) => void;
+};
 type GeneralAssistantUndoOperation = {
   taskId: string;
   previous: {
@@ -1012,39 +1018,27 @@ export const aiAssistantService = {
   async askAiChat(input: AskAiChatInput) {
     const question = input.question.trim();
     if (!question) throw new TypeError('Question is required');
-    const plannerToolsEnabled = process.env.AI_CHAT_PLANNER_TOOLS_ENABLED?.trim().toLowerCase() === 'true';
-    if (!plannerToolsEnabled && TASK_INTENT_PATTERN.test(question)) {
-      const delegated = await this.askGeneralAssistant({
-        userId: input.userId,
-        question: `[Запрос перенаправлен из "Чата с ИИ". Ответ верни как обычный ответ пользователю в этом чате.] ${question}`,
-        history: input.history,
-        userTimeZone: input.userTimeZone
-      });
-      return { ...delegated, delegatedToPlanner: true };
-    }
-
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
     const actionRequestId = randomUUID();
     const operation = async () => {
-    const now = new Date();
-    const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
-    const history = normalizeGeneralHistory(input.history).slice(-24);
-    const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-    if (plannerToolsEnabled) {
+      const now = new Date();
+      const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
+      const history = normalizeGeneralHistory(input.history).slice(-24);
+      if (history.length) input.onProgress?.('using_chat_history');
+      const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+      if (attachmentsMessage) input.onProgress?.('reading_attachment');
       const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
         {
           role: 'system',
           content: [
-            'Ты универсальный AI-чат Планировыча. Отвечай на русском языке.',
-            'Ты видишь историю текущего разговора, но не знаешь реальные задачи пользователя заранее.',
-            'Если пользователь спрашивает о своих задачах, сроках, расписании, секторах, событиях или просит изменить их, используй planner tools.',
-            'Для ссылок «это», «её», «первую», «ту презентацию» используй весь диалог и формируй 1–4 отличительные поисковые фразы и до 10 смысловых keywords.',
-            'Включай тему, объект, проект, человека, мероприятие и сектор. Не используй бесполезные теги вроде «задача», «сделать», «это», «она», «дело».',
-            'Никогда не придумывай ID. Перед изменением существующего объекта сначала найди его tool-ом.',
-            'Если search вернул ambiguous=true и несколько правдоподобных объектов, не изменяй ничего: выполни максимум один более точный search или задай короткий уточняющий вопрос.',
-            'Если обычный вопрос не связан с данными Планировыча, не вызывай planner tools.'
+            'Ты единый универсальный ИИ Планировыча. Ты умеешь вести обычный разговор и работать с реальными задачами пользователя; отдельного ИИ-планировщика не существует.',
+            'Если ответ можно дать без доступа к пользовательским данным, отвечай сразу и не вызывай инструменты. Слова «задача», «дедлайн», «план», «проект» или «расписание» сами по себе не требуют инструмента.',
+            'Используй инструменты, только когда пользователь явно ссылается на свои реальные задачи, подзадачи, события, сектора, сроки либо просит изменить их. Не утверждай факты о данных Планировыча, не полученные через инструмент.',
+            'search_tasks ищет несколько конкретных объектов по смыслу или названию; list_tasks получает широкий набор по фильтрам и поддерживает пагинацию; get_task читает подробности одного объекта.',
+            'Перед изменением существующего объекта сначала найди его. Никогда не придумывай ID. При неоднозначном поиске уточни объект и ничего не меняй.',
+            'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. Отвечай на русском языке.'
           ].join(' ')
         },
         { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
@@ -1052,25 +1046,9 @@ export const aiAssistantService = {
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
-      return askAiChatWithPlannerTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) });
-    }
-    const payload = {
-      model,
-      input: [
-        { role: 'system', content: 'Ты универсальный ИИ-чат внутри Bubble Task Manager. Отвечай на обычные вопросы на русском языке. Ты не загружаешь полный контекст задач для экономии токенов. Если пользователь просит создать, изменить, найти или обсудить задачи, сроки, расписание, календарь, привычки или планирование — не выдумывай данные задач, а коротко скажи, что подключаешь ИИ-планировщик.' },
-        { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
-        ...history,
-        { role: 'user', content: question },
-        ...(attachmentsMessage ? [attachmentsMessage] : [])
-      ]
+      return askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
     };
-    return runTextWorkflow({ userId: input.userId, actionId: actionRequestId, feature: 'ai_chat', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
-      const answer = extractOutputText(responseJson).trim();
-      if (!answer) throw new Error('Empty AI response');
-      return { answer, model, actionReports: [], undoOperations: [], delegatedToPlanner: false };
-    } });
-    };
-    return plannerToolsEnabled && !isDynamicTextBillingEnabled(input.userId)
+    return !isDynamicTextBillingEnabled(input.userId)
       ? withAiCreditReservation(input.userId, model, operation)
       : operation();
   },

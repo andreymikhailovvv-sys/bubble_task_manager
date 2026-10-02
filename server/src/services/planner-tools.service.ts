@@ -17,6 +17,11 @@ export type PlannerSearchInput = {
   dueTo: string | null;
   limit: number;
 };
+export type PlannerListInput = Pick<PlannerSearchInput, 'itemType' | 'statusScope' | 'dueFrom' | 'dueTo'> & {
+  sphereId: string | null;
+  offset: number;
+  limit: number;
+};
 export type PlannerCandidate = {
   id: string;
   title: string;
@@ -150,6 +155,25 @@ export function createPlannerToolsService(db: any = prisma) {
     where: { id, userId },
     select: { id: true, title: true, description: true, status: true, dueDate: true, taskType: true, parentTaskId: true, importance: true, urgency: true, notifyBeforeMinutes: true, location: true, sphere: { select: { id: true, name: true } }, parentTask: { select: { id: true, title: true, sphere: { select: { id: true, name: true } } } }, subtasks: { select: { id: true, title: true, description: true, status: true, dueDate: true }, orderBy: { createdAt: 'asc' } } }
   });
+  const list = async (userId: string, input: PlannerListInput) => {
+    const dueFrom = input.dueFrom && validIsoDate(input.dueFrom) ? new Date(input.dueFrom) : undefined;
+    const dueTo = input.dueTo && validIsoDate(input.dueTo) ? new Date(input.dueTo) : undefined;
+    const offset = Math.max(0, Math.round(input.offset || 0));
+    const limit = Math.max(1, Math.min(100, Math.round(input.limit || 50)));
+    const where = {
+      userId,
+      ...(input.itemType === 'task' ? { parentTaskId: null } : input.itemType === 'subtask' ? { parentTaskId: { not: null } } : {}),
+      ...(input.statusScope === 'active' ? { status: { not: 'DONE' } } : input.statusScope === 'completed' ? { status: 'DONE' } : {}),
+      ...(dueFrom || dueTo ? { dueDate: { ...(dueFrom ? { gte: dueFrom } : {}), ...(dueTo ? { lte: dueTo } : {}) } } : {}),
+      ...(input.sphereId ? { OR: [{ sphereId: input.sphereId }, { parentTask: { sphereId: input.sphereId } }] } : {})
+    };
+    const [total, items] = await db.$transaction([
+      db.task.count({ where }),
+      db.task.findMany({ where, skip: offset, take: limit, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }], select: { id: true, title: true, description: true, status: true, dueDate: true, importance: true, urgency: true, taskType: true, parentTaskId: true, sphere: { select: { id: true, name: true } }, parentTask: { select: { id: true, title: true, sphere: { select: { id: true, name: true } } } } } })
+    ]);
+    const compactItems = items.map((item: any) => ({ id: item.id, kind: item.parentTaskId ? 'subtask' : 'task', title: item.title, status: item.status, dueDate: item.dueDate?.toISOString() ?? null, importance: item.importance, urgency: item.urgency, taskType: item.taskType, sphere: item.sphere ?? item.parentTask?.sphere ?? null, parentTask: item.parentTask ? { id: item.parentTask.id, title: item.parentTask.title } : null, descriptionPreview: (item.description ?? '').slice(0, 400) }));
+    return { ok: true as const, total, offset, count: compactItems.length, hasMore: offset + compactItems.length < total, nextOffset: offset + compactItems.length < total ? offset + compactItems.length : null, items: compactItems };
+  };
   const listSpheres = async (userId: string) => db.sphere.findMany({ where: { userId }, select: { id: true, name: true }, orderBy: { createdAt: 'asc' } });
 
   const action = async (userId: string, value: PlannerActionInput, resolvedItemIds: Set<string>, resolvedSphereIds: Set<string>, userTimeZone: string) => {
@@ -189,7 +213,7 @@ export function createPlannerToolsService(db: any = prisma) {
     const labels: Record<string, string> = { rename: `Переименован объект «${item.title}».`, set_description: `Обновлено описание «${item.title}».`, reschedule: `Перенесён объект «${item.title}» на ${new Date(value.dueDate!).toLocaleString('ru-RU', { timeZone: userTimeZone })}.`, clear_due_date: `Срок объекта «${item.title}» очищен.`, complete: `Объект «${item.title}» отмечен выполненным.`, reopen: `Объект «${item.title}» снова открыт.`, delete: `Удалён объект «${item.title}».`, set_priority: `Обновлён приоритет «${item.title}».`, set_notification: `Обновлено уведомление «${item.title}».`, change_sphere: `Изменён сектор «${item.title}».` };
     return { ok: true, operation: value.operation, itemId: item.id, report: labels[value.operation], ...(undoOperation ? { undoOperation } : {}) };
   };
-  return { search, getItem, listSpheres, action };
+  return { search, list, getItem, listSpheres, action };
 }
 
 export const plannerToolsService = createPlannerToolsService();

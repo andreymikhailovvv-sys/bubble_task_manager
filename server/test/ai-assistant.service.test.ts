@@ -57,10 +57,9 @@ test('general assistant использует общий dynamic text workflow в
   assert.doesNotMatch(method, /billing:\s*\{\s*mode:\s*'legacy'/);
 });
 
-test('делегированный task intent и planner tools сохраняют свои billing paths', async () => {
+test('общий AI chat всегда использует единый tool workflow и выбранную модель', async () => {
   const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
   const method = source.slice(source.indexOf('async askAiChat('), source.indexOf('async parseRecurrence('));
-
-  assert.match(method, /!plannerToolsEnabled && TASK_INTENT_PATTERN\.test\(question\)[\s\S]*this\.askGeneralAssistant\(/);
-  assert.match(method, /askAiChatWithPlannerTools\([\s\S]*dynamicBilling: isDynamicTextBillingEnabled\(input\.userId\)/);
+  assert.doesNotMatch(method, /TASK_INTENT_PATTERN|plannerToolsEnabled|askGeneralAssistant/);
+  assert.match(method, /askAiChatWithTools\([\s\S]*model[\s\S]*dynamicBilling: isDynamicTextBillingEnabled\(input\.userId\)/);
 });
