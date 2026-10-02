@@ -53,8 +53,8 @@ const EFFICIENCY_DAY_BUCKET_PENALTY = 1;
 const EFFICIENCY_NIGHT_BUCKET_PENALTY = 0.5;
 const EFFICIENCY_BUCKET_KEYS = EFFICIENCY_BUCKET_ORDER;
 const EFFICIENCY_BONUSES = {
-  doneTask: 5,
-  doneSubtask: 2,
+  doneTask: 4,
+  doneSubtask: 1.5,
   doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,

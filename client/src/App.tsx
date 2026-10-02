@@ -173,17 +173,16 @@ const FOCUS_MIN_TASKS = 1;
 const FOCUS_MAX_TASKS = 5;
 type FocusBonusType = 'ai' | 'subtask' | 'task' | 'time';
 type FocusBonusEvent = { id: string; type: FocusBonusType; delta: number; totalDelta: number; message: string; atMs: number };
-const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2, ai: 1.5 } as const;
+const FOCUS_BONUS_MULTIPLIERS = { task: 2, subtask: 2 } as const;
 const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
 const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
-  doneTask: 5,
-  doneSubtask: 2,
+  doneTask: 4,
+  doneSubtask: 1.5,
   doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,
-  createdTask: 1,
-  aiCreditSpent: 0.1
+  createdTask: 1
 } as const;
 const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
 
@@ -2411,7 +2410,6 @@ ${allContext}`,
     try {
       const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]);
-      if (isFocusBonusEligible(currentTask.id)) pushFocusBonusMessage('ai', EFFICIENCY_BONUSES.aiCreditSpent * (FOCUS_BONUS_MULTIPLIERS.ai - 1));
       await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';

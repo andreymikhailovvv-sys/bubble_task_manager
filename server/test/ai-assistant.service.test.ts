@@ -98,3 +98,36 @@ test('controller сохраняет context diagnostics до ранней оши
   assert.match(method, /onDiagnosticsPrepared: \(diagnostics\) => \{ traceDiagnostics = diagnostics; \}/);
   assert.match(method, /traceResult\?\.diagnostics \?\? traceDiagnostics/);
 });
+
+test('billing не начисляет AI-рейтинг в зависимости от потраченных кредитов', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(source, /AI_CREDIT_EFFICIENCY_BONUS/);
+  assert.doesNotMatch(source, /recordAiEfficiencyBonus\([^\n]*creditsSpent/);
+  assert.doesNotMatch(source, /recordAiEfficiencyBonus\([^\n]*chargedMilli/);
+  assert.doesNotMatch(source, /recordAiEfficiencyBonus\([^\n]*reservation\.cost/);
+});
+
+test('ровно четыре продуктовых AI workflow явно начисляют фиксированные 0.3 после успеха', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const awards = [...source.matchAll(/grantAiProductActionRating\(input\.userId, '([^']+)'\)/g)].map((match) => match[1]);
+
+  assert.match(source, /const AI_PRODUCT_ACTION_RATING_BONUS = 0\.3/);
+  assert.deepEqual(awards.sort(), ['generate_subtasks', 'generate_task', 'optimize_timeline', 'parse_recurrence']);
+
+  const subtasks = source.slice(source.indexOf('generateSubtasks: async'), source.indexOf('generateTaskFromPrompt: async'));
+  assert.ok(subtasks.indexOf('await prisma.$transaction') < subtasks.indexOf("grantAiProductActionRating(input.userId, 'generate_subtasks')"));
+
+  const timeline = source.slice(source.indexOf('optimizeTimelineSchedule: async'), source.indexOf('postponeOverdueWithAi: async'));
+  assert.ok(timeline.indexOf('parseTimelineOptimizationPlan') < timeline.indexOf("grantAiProductActionRating(input.userId, 'optimize_timeline')"));
+  assert.doesNotMatch(source.slice(source.indexOf('applyTimelineOptimization: async'), source.indexOf('generateSubtasks: async')), /grantAiProductActionRating/);
+});
+
+test('AI-чаты и их task actions не начисляют рейтинг', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const generalChat = source.slice(source.indexOf('async askAiChat('), source.indexOf('async parseRecurrence('));
+  const taskChat = source.slice(source.indexOf('async askTaskAssistant('), source.indexOf('generateOverdueTaskNudge:'));
+
+  assert.doesNotMatch(generalChat, /grantAiProductActionRating|recordAiEfficiencyBonus/);
+  assert.doesNotMatch(taskChat, /grantAiProductActionRating|recordAiEfficiencyBonus/);
+});

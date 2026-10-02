@@ -204,10 +204,11 @@ const resolveModelCredits = (model: string): number => {
   return 1;
 };
 
-const AI_CREDIT_EFFICIENCY_BONUS = 0.1;
+const AI_PRODUCT_ACTION_RATING_BONUS = 0.3;
+type AiProductAction = 'optimize_timeline' | 'generate_task' | 'generate_subtasks' | 'parse_recurrence';
 
-const aiCreditEfficiencyData = (cost: number, period: string, currentPeriod: string | undefined, options?: { skipEfficiencyBonus?: boolean }) => (
-  options?.skipEfficiencyBonus || cost <= 0
+const aiCreditEfficiencyData = (cost: number, period: string, currentPeriod: string | undefined) => (
+  cost <= 0
     ? {}
     : {
       aiEfficiencyCreditsSpent: currentPeriod === period ? { increment: cost } : cost,
@@ -260,23 +261,31 @@ async function recordAiEfficiencyBonus(userId: string, delta: number) {
   });
 }
 
+async function grantAiProductActionRating(userId: string, action: AiProductAction) {
+  await recordAiEfficiencyBonus(userId, AI_PRODUCT_ACTION_RATING_BONUS);
+  console.info('[Efficiency] AI action rating awarded', {
+    userId,
+    action,
+    delta: AI_PRODUCT_ACTION_RATING_BONUS
+  });
+}
+
 async function clampUserEfficiencyScore(userId: string, score: number) {
   if (score <= 100) return;
   await prisma.user.update({ where: { id: userId }, data: { efficiencyScore: 100 } });
 }
 
-type AiCreditReservation = WalletReservation & { cost: number; skipEfficiencyBonus: boolean };
+type AiCreditReservation = WalletReservation & { cost: number };
 
-async function chargeAiCredits(userId: string, model: string, options?: { skipEfficiencyBonus?: boolean; deferEfficiencyBonus?: boolean }): Promise<AiCreditReservation> {
+async function chargeAiCredits(userId: string, model: string, options?: { deferCommit?: boolean }): Promise<AiCreditReservation> {
   const cost = resolveModelCredits(model);
   const walletReservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost));
-  const reservation = { ...walletReservation, cost, skipEfficiencyBonus: Boolean(options?.skipEfficiencyBonus) };
-  if (!options?.deferEfficiencyBonus) await commitAiCreditReservation(userId, reservation);
+  const reservation = { ...walletReservation, cost };
+  if (!options?.deferCommit) await commitAiCreditReservation(userId, reservation);
   return reservation;
 }
 
 async function commitAiCreditReservation(userId: string, reservation: AiCreditReservation) {
-  if (reservation.skipEfficiencyBonus) return;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
   const updated = await prisma.user.update({
@@ -285,7 +294,6 @@ async function commitAiCreditReservation(userId: string, reservation: AiCreditRe
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
-  await recordAiEfficiencyBonus(userId, reservation.cost * AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 async function refundAiCreditReservation(userId: string, reservation: AiCreditReservation, requestId?: string) {
@@ -293,8 +301,8 @@ async function refundAiCreditReservation(userId: string, reservation: AiCreditRe
   console.info('[AI] AI credits refunded', { requestId, userId, credits: reservation.cost });
 }
 
-async function withAiCreditReservation<T>(userId: string, model: string, operation: () => Promise<T>, options?: { skipEfficiencyBonus?: boolean; requestId?: string }): Promise<T> {
-  const reservation = await chargeAiCredits(userId, model, { skipEfficiencyBonus: options?.skipEfficiencyBonus, deferEfficiencyBonus: true });
+async function withAiCreditReservation<T>(userId: string, model: string, operation: () => Promise<T>, options?: { requestId?: string }): Promise<T> {
+  const reservation = await chargeAiCredits(userId, model, { deferCommit: true });
   try {
     const result = await operation();
     await commitAiCreditReservation(userId, reservation);
@@ -305,22 +313,20 @@ async function withAiCreditReservation<T>(userId: string, model: string, operati
   }
 }
 
-async function chargeFixedAiCredits(userId: string, cost: number, options?: { skipEfficiencyBonus?: boolean }) {
+async function chargeFixedAiCredits(userId: string, cost: number) {
   const period = currentAiCreditsPeriod();
   await reserveAiCreditsMilli(userId, creditsToMilli(cost));
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
-  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod, options), select: { efficiencyScore: true } });
+  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
-  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, cost * AI_CREDIT_EFFICIENCY_BONUS);
 }
 
-async function chargeSingleAiNotificationCredit(userId: string, options?: { skipEfficiencyBonus?: boolean }) {
+async function chargeSingleAiNotificationCredit(userId: string) {
   const period = currentAiCreditsPeriod();
   await reserveAiCreditsMilli(userId, creditsToMilli(1));
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
-  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod, options), select: { efficiencyScore: true } });
+  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
-  if (!options?.skipEfficiencyBonus) await recordAiEfficiencyBonus(userId, AI_CREDIT_EFFICIENCY_BONUS);
 }
 
 async function runTextWorkflow<T extends object>(input: {
@@ -346,7 +352,6 @@ async function runTextWorkflow<T extends object>(input: {
   try {
     const result = await input.complete(call.responseJson);
     const settlement = await settleDynamicResponsesCall(call);
-    if (settlement.chargedMilli > 0) await recordAiEfficiencyBonus(input.userId, settlement.chargedMilli / 1000 * AI_CREDIT_EFFICIENCY_BONUS);
     return { ...result, billing: { mode: 'dynamic' as const, creditsSpentMilli: settlement.chargedMilli } };
   } catch (error) {
     await refundDynamicResponsesCall(call);
@@ -1118,13 +1123,15 @@ export const aiAssistantService = {
       { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
       { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
     ] };
-    return runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
+    const result = await runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
       const raw = extractOutputText(responseJson);
       if (!raw) throw new Error('Empty AI response');
       const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
       if (!parsed.schedule?.rrule || typeof parsed.schedule.rrule !== 'string') throw new Error('Invalid recurrence schedule');
       return { summary: parsed.summary ?? 'Повторение настроено.', schedule: { rrule: parsed.schedule.rrule, timezone: parsed.schedule.timezone ?? userTimeZone, until: parsed.schedule.until ?? null }, model };
     } });
+    await grantAiProductActionRating(input.userId, 'parse_recurrence');
+    return result;
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
@@ -1689,10 +1696,7 @@ export const aiAssistantService = {
     const dynamicBilling = input.billingMode === 'dynamic';
     const creditReservation = input.skipCreditsCharge || dynamicBilling
       ? null
-      : await chargeAiCredits(input.userId, modelCandidates[0], {
-        skipEfficiencyBonus: input.skipEfficiencyBonus,
-        deferEfficiencyBonus: true
-      });
+      : await chargeAiCredits(input.userId, modelCandidates[0], { deferCommit: true });
 
     let providerCallIndex = 0;
     for (const model of modelCandidates) {
@@ -2044,13 +2048,6 @@ ${parsed.answer}`
           for (const call of dynamicCalls) {
             const settlement = await settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
             creditsSpentMilli += settlement.chargedMilli;
-          }
-          if (!input.skipEfficiencyBonus) {
-            try {
-              await recordAiEfficiencyBonus(input.userId, creditsSpentMilli / 1000 * AI_CREDIT_EFFICIENCY_BONUS);
-            } catch (error) {
-              console.error('[AI dynamic billing] efficiency bonus failed', { requestId, userId: input.userId, error: error instanceof Error ? error.message : 'Unknown error' });
-            }
           }
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
@@ -2725,6 +2722,7 @@ ${parsed.answer}`
     const finalPlan = normalizedPlan.length > 0 ? normalizedPlan : fallbackPlan;
     const summary = parsed.summary || (finalPlan.length > 0 ? 'Найдено и подготовлено оптимальное перераспределение задач.' : 'Изменения не требуются.');
 
+    await grantAiProductActionRating(input.userId, 'optimize_timeline');
     return { model: OTHER_AI_MODEL, summary, plan: finalPlan, billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(resolveModelCredits(OTHER_AI_MODEL)) } };
   },
 
@@ -2892,6 +2890,8 @@ ${lines}`}] }) });
       }))
     );
 
+    await grantAiProductActionRating(input.userId, 'generate_subtasks');
+
     return {
       model: modelForSubtasks,
       createdCount: created.length,
@@ -2986,6 +2986,8 @@ ${lines}`}] }) });
     const suggestedSphereId = input.autoAssignSphere
       ? userSpheres.find((sphere) => sphere.name.trim().toLowerCase() === (taskDraft.selectedSphereName ?? '').trim().toLowerCase())?.id ?? null
       : null;
+
+    await grantAiProductActionRating(input.userId, 'generate_task');
 
     return {
       model: modelForPrompt,
