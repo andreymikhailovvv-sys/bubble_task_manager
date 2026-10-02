@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { aiAssistantService } from '../services/ai-assistant.service.js';
+import { aiAssistantService, type AiChatContextDiagnostics } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
 import { prisma } from '../db/prisma.js';
 import { computeNextRecurringDueDate } from '../services/task.service.js';
@@ -67,7 +67,7 @@ const resolveUserTimeZone = async (req: Request): Promise<string> => {
 
 export const aiController = {
   askAiChat: async (req: Request, res: Response) => {
-    const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceError: unknown = null;
+    const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceDiagnostics: { context: AiChatContextDiagnostics } | null = null; let traceError: unknown = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     try {
@@ -86,7 +86,7 @@ export const aiController = {
       const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
       const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
-      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -99,7 +99,7 @@ export const aiController = {
       if (streaming) { writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end(); }
       else sendAiError(res, error);
     } finally {
-      const diagnostics = traceResult?.diagnostics; const workflow = traceResult?.workflowDiagnostics;
+      const diagnostics = traceResult?.diagnostics ?? traceDiagnostics; const workflow = traceResult?.workflowDiagnostics;
       logAiTraceSummary({ requestId, endpoint: 'ai-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', chatKind: req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'project', projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : null, chatId: typeof req.body?.chatId === 'string' ? req.body.chatId : null, model: traceResult?.model ?? req.body?.model ?? null, contextMode: diagnostics?.context?.contextMode ?? (req.body?.chatId === 'quick-ai-requests' ? 'quick' : 'legacy'), memoryRevision: diagnostics?.context?.memoryRevision ?? null, memoryCompactionTriggered: diagnostics?.context?.memoryCompactionTriggered ?? false, providerCalls: workflow?.providerCalls ?? 0, toolCalls: workflow?.toolCalls ?? 0, toolOperations: workflow?.toolOperations ?? [], inputTokensTotal: workflow?.inputTokensTotal ?? 0, outputTokensTotal: workflow?.outputTokensTotal ?? 0, creditsSpentMilli: traceResult?.billing?.creditsSpentMilli ?? 0, taskDataChanged: traceResult?.taskDataChanged ?? false, durationMs: Date.now() - startedAt, success: !traceError, ...(!traceError ? {} : { errorCode: traceError instanceof Error ? traceError.name : 'UnknownError' }) });
     }
   },

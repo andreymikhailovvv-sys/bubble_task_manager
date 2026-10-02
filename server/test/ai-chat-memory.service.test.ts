@@ -32,5 +32,5 @@ test('project chat не дублирует current question, quick chat не в�
   assert.match(method, /chatId === 'quick-ai-requests'/);
   assert.match(method, /history = normalizedHistory\.slice\(quick \? -20 : -24\)/);
   assert.equal((method.match(/\{ role: 'user', content: question \}/g) ?? []).length, 1);
-  assert.match(method, /\.\.\.history,[\s\S]*\{ role: 'user', content: question \}/);
+  assert.match(method, /\.\.\.providerHistory,[\s\S]*\{ role: 'user', content: question \}/);
 });

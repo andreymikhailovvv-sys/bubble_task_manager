@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   MAX_ASSISTANT_ACTIONS,
-  parseGeneralAssistantPayload
+  parseGeneralAssistantPayload,
+  toOpenAiGeneralHistory
 } from '../src/services/ai-assistant.service.js';
 
 const makeCreateSubtaskActions = (count: number) => Array.from({ length: count }, (_, index) => ({
@@ -62,4 +63,38 @@ test('общий AI chat всегда использует единый tool wor
   const method = source.slice(source.indexOf('async askAiChat('), source.indexOf('async parseRecurrence('));
   assert.doesNotMatch(method, /TASK_INTENT_PATTERN|plannerToolsEnabled|askGeneralAssistant/);
   assert.match(method, /askAiChatWithTools\([\s\S]*model[\s\S]*dynamicBilling: isDynamicTextBillingEnabled\(input\.userId\)/);
+});
+
+test('provider history не содержит внутренних id сообщений', () => {
+  const history = toOpenAiGeneralHistory([
+    { id: 'm1', role: 'user', content: 'Первый вопрос' },
+    { id: 'm2', role: 'assistant', content: 'Первый ответ' }
+  ]);
+
+  assert.deepEqual(history, [
+    { role: 'user', content: 'Первый вопрос' },
+    { role: 'assistant', content: 'Первый ответ' }
+  ]);
+  assert.equal(JSON.stringify(history).includes('m1'), false);
+  assert.equal(JSON.stringify(history).includes('m2'), false);
+});
+
+test('general AI очищает history только после подготовки smart context для всех режимов', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const method = source.slice(source.indexOf('async askAiChat('), source.indexOf('async parseRecurrence('));
+  const prepareIndex = method.indexOf('prepareAiChatSmartContext');
+  const sanitizeIndex = method.indexOf('toOpenAiGeneralHistory(history)');
+
+  assert.ok(prepareIndex >= 0 && sanitizeIndex > prepareIndex, 'memory должна получить history с id до sanitization');
+  assert.match(method, /history = normalizedHistory\.slice\(quick \? -20 : -24\)/);
+  assert.match(method, /const providerHistory = toOpenAiGeneralHistory\(history\)/);
+  assert.match(method, /\.\.\.providerHistory,[\s\S]*\{ role: 'user', content: question \}/);
+  assert.doesNotMatch(method, /\.\.\.history,[\s\S]*\{ role: 'user', content: question \}/);
+});
+
+test('controller сохраняет context diagnostics до ранней ошибки provider', async () => {
+  const source = await readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8');
+  const method = source.slice(source.indexOf('askAiChat: async'), source.indexOf('getGeneralAssistantHistory:'));
+  assert.match(method, /onDiagnosticsPrepared: \(diagnostics\) => \{ traceDiagnostics = diagnostics; \}/);
+  assert.match(method, /traceResult\?\.diagnostics \?\? traceDiagnostics/);
 });

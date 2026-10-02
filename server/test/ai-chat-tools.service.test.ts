@@ -11,7 +11,9 @@ test('tool loop выполняет search, action один раз и возвр�
   const calls: string[] = []; const requestInputs: unknown[][] = [];
   const result = await runAiChatToolLoop({ initialInput: [{ role: 'user', content: 'Перенеси её' }], request: async (input) => { requestInputs.push([...input]); return responses.shift()!; }, executeTool: async (name) => { calls.push(name); return { ok: true }; } });
   assert.equal(result.answer, 'Перенёс презентацию на пятницу.'); assert.deepEqual(calls, ['search_planner_items', 'planner_action']);
-  assert.ok(JSON.stringify(requestInputs[1]).includes('reason-1'), 'reasoning item должен переноситься между rounds');
+  assert.deepEqual(requestInputs[1][1], { type: 'reasoning', id: 'reason-1' }, 'provider item должен переноситься без sanitization');
+  assert.deepEqual(requestInputs[1][2], { type: 'function_call', call_id: 'call-1', name: 'search_planner_items', arguments: '{}' });
+  assert.deepEqual(requestInputs[1][3], { type: 'function_call_output', call_id: 'call-1', output: '{"ok":true}' });
 });
 
 test('обычный вопрос завершается без tools', async () => {

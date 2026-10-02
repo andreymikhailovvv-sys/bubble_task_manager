@@ -35,6 +35,17 @@ type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
   content: string;
 };
+export type AiChatContextDiagnostics = {
+  contextMode: 'quick' | 'legacy' | 'smart';
+  memoryRevision: number | null;
+  memoryCompactionTriggered: boolean;
+  memoryCompactionBatches: number;
+  memoryCaughtUp: boolean;
+  fallback: boolean;
+  fallbackReason: string | null;
+  unsummarizedMessages: number;
+  unsummarizedEstimatedTokens: number;
+};
 type OpenAiUserAttachmentMessage = {
   role: 'user';
   content: Array<
@@ -121,6 +132,7 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   requestId?: string;
   attachments?: ChatAttachment[];
   onProgress?: (status: AiChatProgressStatus) => void;
+  onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
 };
 type GeneralAssistantUndoOperation = {
   taskId: string;
@@ -355,6 +367,11 @@ function normalizeGeneralHistory(history: ChatMessage[]): ChatMessage[] {
     .filter((message) => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
     .map((message) => ({ ...(typeof message.id === 'string' ? { id: message.id } : {}), role: message.role, content: message.content.trim() }))
     .filter((message) => message.content.length > 0);
+}
+
+/** Removes internal conversation metadata only at the provider boundary. */
+export function toOpenAiGeneralHistory(history: ChatMessage[]): OpenAiTextMessage[] {
+  return history.map((message) => ({ role: message.role, content: message.content }));
 }
 
 function normalizeGeneralPersistedHistory(history: ChatMessage[]): ChatMessage[] {
@@ -1038,7 +1055,7 @@ export const aiAssistantService = {
       const quick = input.chatId === 'quick-ai-requests' || (!input.chatId && input.projectTitle === 'Личный проект' && input.chatTitle === 'Быстрые запросы');
       let history = normalizedHistory.slice(quick ? -20 : -24);
       let memoryBlock = '';
-      let context = { contextMode: quick ? 'quick' : 'legacy', memoryRevision: null as number | null, memoryCompactionTriggered: false, memoryCompactionBatches: 0, memoryCaughtUp: true, fallback: false, fallbackReason: null as string | null, unsummarizedMessages: history.length, unsummarizedEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0) };
+      let context: AiChatContextDiagnostics = { contextMode: quick ? 'quick' : 'legacy', memoryRevision: null, memoryCompactionTriggered: false, memoryCompactionBatches: 0, memoryCaughtUp: true, fallback: false, fallbackReason: null, unsummarizedMessages: history.length, unsummarizedEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0) };
       if (!quick && process.env.AI_CHAT_SMART_CONTEXT_ENABLED === 'true') {
         input.onProgress?.('using_chat_history');
         if (!input.projectId || !input.chatId) {
@@ -1060,6 +1077,7 @@ export const aiAssistantService = {
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
+      const providerHistory = toOpenAiGeneralHistory(history);
       const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
         {
           role: 'system',
@@ -1075,11 +1093,12 @@ export const aiAssistantService = {
         },
         { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
         ...(memoryBlock ? [{ role: 'system' as const, content: memoryBlock }] : []),
-        ...history,
+        ...providerHistory,
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
+      input.onDiagnosticsPrepared?.({ context });
       const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
       return { ...result, diagnostics: { requestId: actionRequestId, context } };
     };
