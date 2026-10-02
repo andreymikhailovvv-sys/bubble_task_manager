@@ -110,7 +110,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let webReservation: AiCreditReservation | null = null;
   let webSearchAvailable = Boolean(input.dynamicBilling);
   let webSearchUsed = false;
-  let webSearchCalls = 0;
+  let webSearchCallsActual = 0;
+  let webSearchSearchItemsRaw = 0;
+  let webSearchDuplicateItems = 0;
+  let providerWebSearchCostMilli = 0;
   let webSearchProgressObserved = false;
   let lastProgress: import('./ai-chat-progress.js').AiChatProgressStatus | null = null;
   const emitProgress = (status: import('./ai-chat-progress.js').AiChatProgressStatus) => {
@@ -156,8 +159,15 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           const response = call.responseJson as ToolResponse;
           inputTokensTotal += typeof response.usage?.input_tokens === 'number' ? response.usage.input_tokens : 0;
           outputTokensTotal += typeof response.usage?.output_tokens === 'number' ? response.usage.output_tokens : 0;
-          if (call.webSearchCalls > 0 && !webSearchUsed) {
-            webSearchUsed = true; webSearchCalls = Math.min(MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, call.webSearchCalls); toolOperations.push('web_search');
+          webSearchCallsActual += call.webSearchCallsActual;
+          webSearchSearchItemsRaw += call.webSearchSearchItemsRaw;
+          webSearchDuplicateItems += call.webSearchDuplicateItems;
+          providerWebSearchCostMilli += call.webSearchCreditsMilliProvider;
+          if (call.webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST) {
+            console.error('[AI web search] hard limit violation', { requestId, model: input.model, providerCallIndex, responseId: typeof response.id === 'string' ? response.id : null, configuredMaxToolCalls: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, searchActionsRaw: call.webSearchSearchItemsRaw, uniqueSearchCalls: call.webSearchCallsActual - call.webSearchCallsWithoutId, searchCallsWithoutId: call.webSearchCallsWithoutId, duplicateSearchItems: call.webSearchDuplicateItems, actionTypes: call.webSearchActionTypes });
+          }
+          if (call.webSearchCallsActual > 0 && !webSearchUsed) {
+            webSearchUsed = true; toolOperations.push('web_search');
             for (const item of response.output ?? []) for (const part of Array.isArray(item.content) ? item.content : []) {
               if (!part || typeof part !== 'object') continue;
               for (const annotation of Array.isArray((part as { annotations?: unknown }).annotations) ? (part as { annotations: Array<Record<string, unknown>> }).annotations : []) {
@@ -167,7 +177,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
                 if (typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
               }
             }
-            console.info('[AI web search] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, sourceCount: webSources.length, fixedCreditsMilli: WEB_SEARCH_CALL_CREDITS_MILLI });
+            console.info('[AI web search] completed', { requestId, model: input.model, providerCallIndex, sourceCount: webSources.length, searchActionsRaw: call.webSearchSearchItemsRaw, uniqueSearchCalls: call.webSearchCallsActual - call.webSearchCallsWithoutId, searchCallsWithoutId: call.webSearchCallsWithoutId, duplicateSearchItems: call.webSearchDuplicateItems, billedSearchCalls: 1, fixedCreditsMilliBilled: WEB_SEARCH_CALL_CREDITS_MILLI, providerWebSearchCreditsMilli: call.webSearchCreditsMilliProvider });
           }
           console.info('[AI chat round] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, hadToolCall: response.output?.some((item) => item.type === 'function_call') ?? false, toolOperation: response.output?.find((item) => item.type === 'function_call')?.name ?? null, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, actualCreditsMilli: call.actualCreditsMilli, isForcedFinalRound });
           return response;
@@ -224,7 +234,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     let creditsSpentMilli = 0;
     for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
     if (webReservation) { if (webSearchUsed) creditsSpentMilli += webReservation.totalMilli; else { await refundAiCreditReservation(webReservation); webReservation = null; } }
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCalls, webSearchCreditsMilli: webSearchUsed ? WEB_SEARCH_CALL_CREDITS_MILLI : 0, webSourceCount: webSources.length } };
+    const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
+    const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
