@@ -66,36 +66,33 @@ const resolveUserTimeZone = async (req: Request): Promise<string> => {
 
 export const aiController = {
   askAiChat: async (req: Request, res: Response) => {
+    const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
+    const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     try {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
-      if (!question.trim()) { res.status(400).json({ error: 'question is required' }); return; }
+      if (!question.trim()) {
+        if (streaming) { res.status(400).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); writeStreamEvent({ type: 'error', message: 'question is required' }); res.end(); }
+        else res.status(400).json({ error: 'question is required' });
+        return;
+      }
+      if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').slice(-24) : [];
       const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const projectTitle = typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined;
       const chatTitle = typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined;
-      const result = await aiAssistantService.askAiChat({
-        userId: req.user!.id,
-        question,
-        history,
-        model: requestedModel,
-        userTimeZone,
-        projectTitle,
-        chatTitle,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : []
-      });
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       if (projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы') {
-        await aiAssistantService.appendGeneralDialogMessages({
-          userId: req.user!.id,
-          messages: [{ role: 'user', content: question }]
-        });
+        await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
         await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       }
-      res.json(result);
+      if (streaming) { writeStreamEvent({ type: 'result', result }); res.end(); } else res.json(result);
     } catch (error) {
-      sendAiError(res, error);
+      if (streaming) { writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end(); }
+      else sendAiError(res, error);
     }
   },
+
   getGeneralAssistantHistory: async (req: Request, res: Response) => {
     try {
       const todayUtc = new Date();

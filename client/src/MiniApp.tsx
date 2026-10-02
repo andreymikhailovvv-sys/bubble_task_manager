@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser, type TaskAiProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -11,6 +11,7 @@ import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
 import { TaskAiProgress } from './components/TaskAiProgress';
+import { AiProgress } from './components/AiProgress';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -679,6 +680,7 @@ export default function MiniApp() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
   const [aiChatError, setAiChatError] = useState<string | null>(null);
   const [aiChatProjectDraft, setAiChatProjectDraft] = useState<MiniAiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
@@ -1893,18 +1895,19 @@ export default function MiniApp() {
     setAiChatLoading(true);
     setAiChatError(null);
     try {
-      const result = await api.askAiChat({
+      setAiChatProgress('analyzing_request');
+      const result = await api.askAiChatStreaming({
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
         model: activeAiChat?.id === QUICK_AI_CHAT_ID ? 'gpt-6-luna' : selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         attachments: attachmentsPayload
-      });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${result.delegatedToPlanner ? '🧭 ИИ-планировщик\n' : ''}${normalizeMiniAiMessageContent(result.answer)}`, creditsSpentMilli: result.billing?.creditsSpentMilli };
+      }, { onStatus: setAiChatProgress });
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
-      if (result.delegatedToPlanner) await loadData();
+      if (result.taskDataChanged) await loadData();
     } catch (e) {
       setAiChatError(e instanceof Error ? e.message : 'Не удалось получить ответ ИИ');
     } finally {
@@ -3299,7 +3302,7 @@ export default function MiniApp() {
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
               ))}
-              {aiChatLoading ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+              {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
               {aiChatError ? <p className="text-sm text-rose-300">{aiChatError}</p> : null}
               <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>

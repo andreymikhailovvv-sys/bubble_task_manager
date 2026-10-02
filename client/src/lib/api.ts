@@ -3,6 +3,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, 
 type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
+export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'forming_answer';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes';
 export type TaskAssistantResult = { answer: string; model: string; actionReports?: string[]; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
@@ -108,6 +109,18 @@ async function askTaskAssistantStreaming(taskId: string, payload: { question: st
     if (!response.ok && error instanceof SyntaxError) throw new Error(`HTTP ${response.status}`);
     throw error;
   }
+}
+
+export type AiChatResult = { answer: string; model: string; taskDataChanged: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; billing?: AiBilling };
+export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
+  const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
+  const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
+  while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value, { stream: !done }); const lines = buffer.split('\n'); buffer = lines.pop() ?? ''; lines.forEach(consume); if (done) break; }
+  consume(buffer); if (!result) throw new Error('Сервер не вернул результат чата ИИ'); return result;
+}
+async function askAiChatStreaming(payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachmentPayload[] }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
+  const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
+  if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
 }
 
 export type CurrentUser = {
@@ -247,10 +260,11 @@ export const api = {
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   askAiChat: (payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; attachments?: ChatAttachmentPayload[] }) =>
-    request<{ answer: string; model: string; delegatedToPlanner: boolean; actionReports?: string[]; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; billing?: AiBilling }>('/api/ai-chat', {
+    request<AiChatResult>('/api/ai-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
+  askAiChatStreaming,
   getGeneralAssistantHistory: () =>
     request<{ messages: ChatMessage[] }>(`/api/ai-general-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askGeneralAssistant: (payload: { question: string }) =>
