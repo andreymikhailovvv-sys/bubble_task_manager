@@ -27,6 +27,57 @@ export function createCleanOpenAiResponsesPayload(payload: Record<string, unknow
   return Object.fromEntries(PROVIDER_KEYS.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]]));
 }
 
+export function createOpenAiResponsesRequestPayload(cleanPayload: Record<string, unknown>, maxOutputTokens: number, stream = false) {
+  return { ...cleanPayload, max_output_tokens: maxOutputTokens, ...(stream ? { stream: true } : {}) };
+}
+
+export type WebSearchCallAnalysis = {
+  rawWebSearchItems: number;
+  searchActionsRaw: number;
+  uniqueSearchCalls: number;
+  searchCallsWithoutId: number;
+  duplicateSearchItems: number;
+  openPageActions: number;
+  findInPageActions: number;
+  actionTypes: string[];
+};
+
+export function analyzeWebSearchCalls(responseJson: unknown): WebSearchCallAnalysis {
+  const root = typeof responseJson === 'object' && responseJson !== null ? responseJson as Record<string, unknown> : {};
+  const output = Array.isArray(root.output) ? root.output : [];
+  const providerIds = new Set<string>();
+  const actionTypes = new Set<string>();
+  let rawWebSearchItems = 0;
+  let searchActionsRaw = 0;
+  let searchCallsWithoutId = 0;
+  let duplicateSearchItems = 0;
+  let openPageActions = 0;
+  let findInPageActions = 0;
+
+  for (const value of output) {
+    if (typeof value !== 'object' || value === null) continue;
+    const item = value as Record<string, unknown>;
+    if (item.type !== 'web_search_call') continue;
+    rawWebSearchItems += 1;
+    const action = typeof item.action === 'object' && item.action !== null ? item.action as Record<string, unknown> : {};
+    const actionType = typeof action.type === 'string' ? action.type : 'unknown';
+    actionTypes.add(actionType);
+    if (actionType === 'open_page') openPageActions += 1;
+    if (actionType === 'find_in_page') findInPageActions += 1;
+    if (actionType !== 'search') continue;
+    searchActionsRaw += 1;
+    if (typeof item.id !== 'string' || !item.id) {
+      searchCallsWithoutId += 1;
+    } else if (providerIds.has(item.id)) {
+      duplicateSearchItems += 1;
+    } else {
+      providerIds.add(item.id);
+    }
+  }
+
+  return { rawWebSearchItems, searchActionsRaw, uniqueSearchCalls: providerIds.size, searchCallsWithoutId, duplicateSearchItems, openPageActions, findInPageActions, actionTypes: [...actionTypes] };
+}
+
 export function getOpenAiPreflightErrorDiagnostics(body: unknown) {
   const root = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
   const error = typeof root.error === 'object' && root.error !== null ? root.error as Record<string, unknown> : {};
@@ -42,7 +93,15 @@ export type DynamicResponsesCall = {
   responseJson: { id?: unknown; usage?: OpenAiUsage; [key: string]: unknown };
   reservation: AiCreditReservation;
   actualCreditsMilli: number;
+  webSearchCallsActual: number;
+  webSearchSearchItemsRaw: number;
+  webSearchDuplicateItems: number;
+  webSearchCallsWithoutId: number;
+  webSearchActionTypes: string[];
+  webSearchCreditsMilliProvider: number;
+  /** Backwards-compatible alias for webSearchCallsActual. */
   webSearchCalls: number;
+  /** Backwards-compatible alias for webSearchCreditsMilliProvider. */
   webSearchCreditsMilli: number;
 };
 
@@ -81,19 +140,21 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
   const maxOutputTokens = Math.max(limits.min, Math.min(limits.max, affordable));
   try {
     const requestId = `${input.actionId}:response:${input.providerCallIndex}`;
-    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify({ ...cleanPayload, max_output_tokens: maxOutputTokens, ...(input.stream ? { stream: true } : {}) }) });
+    const responsePayload = createOpenAiResponsesRequestPayload(cleanPayload, maxOutputTokens, input.stream);
+    const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify(responsePayload) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const responseJson = (input.stream
       ? await readOpenAiResponsesStream(response.body, input.onProviderEvent)
       : await response.json()) as DynamicResponsesCall['responseJson'];
-    const output = Array.isArray(responseJson.output) ? responseJson.output as Array<Record<string, unknown>> : [];
-    const webSearchCalls = input.feature === 'ai_chat' ? output.filter((item) => item.type === 'web_search_call' && (item.action as Record<string, unknown> | undefined)?.type === 'search').length : 0;
+    const webSearchAnalysis = input.feature === 'ai_chat' ? analyzeWebSearchCalls(responseJson) : analyzeWebSearchCalls({});
+    const webSearchCallsActual = webSearchAnalysis.uniqueSearchCalls + webSearchAnalysis.searchCallsWithoutId;
     const { OPENAI_WEB_SEARCH_COST_NANO_USD } = await import('../config/openai-pricing.js');
-    const extraProviderCostNanoUsd = BigInt(webSearchCalls) * OPENAI_WEB_SEARCH_COST_NANO_USD;
+    const extraProviderCostNanoUsd = BigInt(webSearchCallsActual) * OPENAI_WEB_SEARCH_COST_NANO_USD;
     await recordOpenAiUsageShadow({ userId: input.userId, actionId: input.actionId, requestId, providerCallIndex: input.providerCallIndex, feature: input.feature, model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: 'DYNAMIC', extraProviderCostNanoUsd });
     const actualCreditsMilli = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
     if (actualCreditsMilli === null) throw new Error(`Unknown OpenAI pricing for model "${model}"`);
-    return { responseJson, reservation, actualCreditsMilli, webSearchCalls, webSearchCreditsMilli: Number((extraProviderCostNanoUsd + 599n) / 600n) };
+    const webSearchCreditsMilliProvider = Number((extraProviderCostNanoUsd + 599n) / 600n);
+    return { responseJson, reservation, actualCreditsMilli, webSearchCallsActual, webSearchSearchItemsRaw: webSearchAnalysis.searchActionsRaw, webSearchDuplicateItems: webSearchAnalysis.duplicateSearchItems, webSearchCallsWithoutId: webSearchAnalysis.searchCallsWithoutId, webSearchActionTypes: webSearchAnalysis.actionTypes, webSearchCreditsMilliProvider, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliProvider };
   } catch (error) {
     await refundAiCreditReservation(reservation);
     throw error;
