@@ -5,10 +5,14 @@ import { aiAssistantService } from '../src/services/ai-assistant.service.js';
 import { isDynamicTaskChatBillingEnabled } from '../src/controllers/ai.controller.js';
 import { prisma } from '../src/db/prisma.js';
 
-test('task chat OpenAI payload удаляет внутренние поля истории для preflight и response', () => {
+test('task chat OpenAI payload включает одинаковый retrieval protocol для preflight и response', () => {
   const message = { role: 'assistant', content: 'Ответ', creditsSpentMilli: 1054, id: 'message-id', createdAt: 'now', billing: { mode: 'dynamic' } } as any;
-  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message]), { model: 'gpt-6-luna', input: [{ role: 'assistant', content: 'Ответ' }] });
-  assert.deepEqual(createTaskChatOpenAiPayload('gpt-6-luna', [message], 512), { model: 'gpt-6-luna', input: [{ role: 'assistant', content: 'Ответ' }], max_output_tokens: 512 });
+  const payload = createTaskChatOpenAiPayload('gpt-6-luna', [message]);
+  assert.deepEqual(payload.input, [{ role: 'assistant', content: 'Ответ' }]);
+  assert.equal(payload.tool_choice, 'auto');
+  assert.equal(payload.parallel_tool_calls, false);
+  assert.equal(payload.tools[0].name, 'task_context_lookup');
+  assert.equal(createTaskChatOpenAiPayload('gpt-6-luna', [message], 512).max_output_tokens, 512);
 });
 
 test('история хранит фактическую dynamic и legacy стоимость только у ответов ИИ', async () => {
