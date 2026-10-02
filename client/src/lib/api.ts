@@ -3,6 +3,9 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, 
 type ApiError = Error & { status?: number };
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
+export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes';
+export type TaskAssistantResult = { answer: string; model: string; actionReports?: string[]; billing?: AiBilling };
+type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
@@ -68,6 +71,43 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   return response.json();
+}
+
+export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: TaskAiProgressStatus) => void): Promise<TaskAssistantResult> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: TaskAssistantResult | null = null;
+  const consumeLine = (line: string) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line) as TaskAiStreamEvent;
+    if (event.type === 'status') onStatus?.(event.status);
+    else if (event.type === 'result') result = event.result;
+    else if (event.type === 'error') throw new Error(event.message);
+  };
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) consumeLine(line);
+    if (done) break;
+  }
+  consumeLine(buffer);
+  if (!result) throw new Error('Сервер не вернул результат чата ИИ');
+  return result;
+}
+
+async function askTaskAssistantStreaming(taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone' }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
+  const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
+  if (response.status === 401) unauthorizedHandler?.();
+  if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
+  try {
+    return await readTaskAssistantNdjson(response.body, options?.onStatus);
+  } catch (error) {
+    if (!response.ok && error instanceof SyntaxError) throw new Error(`HTTP ${response.status}`);
+    throw error;
+  }
 }
 
 export type CurrentUser = {
@@ -167,10 +207,11 @@ export const api = {
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone' }) =>
-    request<{ answer: string; model: string; actionReports?: string[]; billing?: AiBilling }>(`/api/tasks/${taskId}/ai-chat`, {
+    request<TaskAssistantResult>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
+  askTaskAssistantStreaming,
   appendTaskAssistantMessages: (taskId: string, payload: { messages: ChatMessage[] }) =>
     request<{ ok: true }>(`/api/tasks/${taskId}/ai-chat/messages`, {
       method: 'POST',

@@ -9,7 +9,8 @@ import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResp
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
-import { executeTaskContextLookup, TASK_CHAT_CONTEXT_TOOL_MAX_ROUNDS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
+import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
+import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -43,7 +44,8 @@ type OpenAiFunctionCall = { type: 'function_call'; call_id: string; name: string
 type OpenAiFunctionCallOutput = { type: 'function_call_output'; call_id: string; output: string };
 type TaskChatProviderInput = OpenAiTextMessage | OpenAiUserAttachmentMessage | OpenAiFunctionCall | OpenAiFunctionCallOutput;
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string }) {
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean }) {
+  const allowTools = options?.allowTools !== false;
   return {
     model,
     input: messages.map((message) => {
@@ -51,9 +53,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       if (message.type === 'function_call') return { type: message.type, call_id: message.call_id, name: message.name, arguments: message.arguments };
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
-    tools: [TASK_CONTEXT_LOOKUP_TOOL],
-    tool_choice: 'auto',
-    parallel_tool_calls: false,
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -71,6 +71,7 @@ type AskTaskAssistantInput = {
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
   billingMode?: 'legacy' | 'dynamic';
+  onProgress?: (status: TaskAiProgressStatus) => void;
 };
 
 export const TASK_CHAT_MAX_OUTPUT_TOKENS = 4096;
@@ -1461,6 +1462,7 @@ export const aiAssistantService = {
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
+    input.onProgress?.('analyzing_request');
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       throw new Error('OPENAI_API_KEY is not configured');
@@ -1563,6 +1565,7 @@ export const aiAssistantService = {
     const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
     const useMemory = useContextV2 && memoryFeatureEnabled && !isSmartPostponeRequest;
     const contextHistory = input.history.filter((message): message is TaskChatContextMessage => 'id' in message && message.createdAt instanceof Date);
+    if (input.history.length > 0) input.onProgress?.('using_chat_history');
     const memoryResult = useMemory && contextHistory.length === input.history.length
       ? await updateTaskChatMemoryIfNeeded({ userId: input.userId, taskId: input.taskId, history: contextHistory })
       : null;
@@ -1667,11 +1670,17 @@ export const aiAssistantService = {
         const fetchedAttachmentIds = new Set<string>();
         const loadedSubtaskIds = new Set<string>();
         let rawAnswer = '';
-        for (let toolRound = 0; toolRound < TASK_CHAT_CONTEXT_TOOL_MAX_ROUNDS; toolRound += 1) {
+        let toolCallsExecuted = 0;
+        for (let modelProviderCallIndex = 0; modelProviderCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS && providerCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS; modelProviderCallIndex += 1) {
           providerCallIndex += 1;
+          const isForcedFinalRound = toolCallsExecuted >= TASK_CHAT_CONTEXT_MAX_TOOL_CALLS;
+          if (isForcedFinalRound) {
+            input.onProgress?.('forming_answer');
+            providerInput.push({ role: 'system', content: 'Лимит получения дополнительных данных исчерпан. Сформируй лучший возможный финальный ответ на основе уже полученного контекста. Не запрашивай дополнительные tools.' });
+          }
           const startedAt = Date.now();
           const reasoning = supportsReasoningEffort(model) ? reasoningEffort : undefined;
-          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning });
+          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound });
           let maxOutputTokens: number | undefined;
           let dynamicReservation: WalletReservation | null = null;
           if (dynamicBilling && !input.skipCreditsCharge) {
@@ -1690,7 +1699,7 @@ export const aiAssistantService = {
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
-          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning });
+          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
             method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(payload)
@@ -1711,29 +1720,46 @@ export const aiAssistantService = {
           }
           const output = Array.isArray(responseJson.output) ? responseJson.output : [];
           const toolCalls = output.filter((item): item is OpenAiFunctionCall => Boolean(item && typeof item === 'object' && (item as { type?: unknown }).type === 'function_call' && typeof (item as { call_id?: unknown }).call_id === 'string'));
+          const usage = responseJson.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+          const roundCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
           if (toolCalls.length === 0) {
             rawAnswer = extractOutputText(responseJson);
             if (!rawAnswer) throw new Error(`OpenAI returned empty response for model "${model}"`);
+            console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: false, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
             break;
           }
-          if (toolRound === TASK_CHAT_CONTEXT_TOOL_MAX_ROUNDS - 1) throw new Error('TASK_CHAT_CONTEXT_TOOL_ROUND_LIMIT');
+          if (isForcedFinalRound) throw new Error('TASK_CHAT_CONTEXT_FORCED_FINAL_TOOL_CALL');
           for (const call of toolCalls.slice(0, 1)) {
             providerInput.push(call);
             let args: TaskContextLookupArguments;
-            try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch { providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) }); continue; }
+            try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
+              console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
+              continue;
+            }
             if (args.operation === 'get_attachment' && args.attachmentId && fetchedAttachmentIds.has(args.attachmentId)) {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, alreadyLoaded: true }) });
+              console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: true, resultCount: null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: null });
+              console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
               continue;
             }
             if (args.operation === 'get_attachment' && fetchedAttachmentIds.size >= TASK_CHAT_STORED_FILE_FETCH_LIMIT) {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'FILE_FETCH_LIMIT' }) });
+              console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: false, resultCount: null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: null });
+              console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
               continue;
             }
             if (args.operation === 'get_subtask' && args.subtaskId && loadedSubtaskIds.has(args.subtaskId)) {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, alreadyLoaded: true }) });
+              console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: true, resultCount: null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: null });
+              console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
               continue;
             }
+            if (args.operation === 'search_subtasks') input.onProgress?.('searching_subtasks');
+            else if (args.operation === 'get_subtask') input.onProgress?.('reading_subtask');
+            else input.onProgress?.('searching_files');
             const lookup = await executeTaskContextLookup({ userId: input.userId, taskId: input.taskId, isSubtaskChat: Boolean(task.parentTaskId), args });
+            toolCallsExecuted += 1;
             providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(lookup.result) });
             if (args.operation === 'get_subtask' && args.subtaskId && (lookup.result as { ok?: boolean }).ok) loadedSubtaskIds.add(args.subtaskId);
             if (lookup.attachment && args.attachmentId) {
@@ -1741,9 +1767,14 @@ export const aiAssistantService = {
               const fileMessage = buildAttachmentsPromptMessage([lookup.attachment]);
               if (fileMessage) providerInput.push(fileMessage);
             }
+            if (args.operation === 'get_attachment' && lookup.attachment) input.onProgress?.('reading_file');
+            else input.onProgress?.('analyzing_retrieved_context');
+            const lookupResult = lookup.result as { ok?: boolean; totalMatches?: number; results?: unknown[]; total?: number; attachments?: unknown[]; attachment?: { size?: number } };
+            console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: lookupResult.ok === true, resultCount: Array.isArray(lookupResult.results) ? lookupResult.results.length : Array.isArray(lookupResult.attachments) ? lookupResult.attachments.length : null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: lookup.attachment?.size ?? null });
+            console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
           }
         }
-        if (!rawAnswer) throw new Error('TASK_CHAT_CONTEXT_TOOL_ROUND_LIMIT');
+        if (!rawAnswer) throw new Error('TASK_CHAT_CONTEXT_PROVIDER_CALL_LIMIT');
         if (input.mode === 'smart' && model !== FULL_MODEL) {
           console.warn('[AI] Smart mode fallback model used', {
             requestId,
@@ -1803,6 +1834,7 @@ export const aiAssistantService = {
         });
         const actionReports: string[] = [];
         let appliedActionsCount = 0;
+        if (parsed.actions.length > 0) input.onProgress?.('applying_changes');
         for (const action of parsed.actions) {
           console.info('[AI] Applying task action', {
             requestId,

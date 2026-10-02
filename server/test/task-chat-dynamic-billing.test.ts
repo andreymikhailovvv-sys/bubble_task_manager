@@ -13,6 +13,9 @@ test('task chat OpenAI payload включает одинаковый retrieval p
   assert.equal(payload.parallel_tool_calls, false);
   assert.equal(payload.tools[0].name, 'task_context_lookup');
   assert.equal(createTaskChatOpenAiPayload('gpt-6-luna', [message], 512).max_output_tokens, 512);
+  const finalPayload = createTaskChatOpenAiPayload('gpt-6-luna', [message], 512, { allowTools: false });
+  assert.equal(finalPayload.tool_choice, 'none');
+  assert.equal('tools' in finalPayload, false);
 });
 
 test('история хранит фактическую dynamic и legacy стоимость только у ответов ИИ', async () => {

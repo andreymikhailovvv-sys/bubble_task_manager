@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser, type TaskAiProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -10,6 +10,7 @@ import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
+import { TaskAiProgress } from './components/TaskAiProgress';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -667,6 +668,7 @@ export default function MiniApp() {
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
+  const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [aiCredits, setAiCredits] = useState(100);
@@ -2168,6 +2170,7 @@ export default function MiniApp() {
     const question = aiDraft.trim();
     if (!question && aiPendingFiles.length === 0) return;
     setAiLoadingTaskId(openedTask.id);
+    setAiProgressByTask((current) => ({ ...current, [openedTask.id]: 'analyzing_request' }));
     setError(null);
     const fileNames = aiPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
@@ -2176,6 +2179,7 @@ export default function MiniApp() {
     } catch {
       setError('Не удалось прочитать приложенные файлы');
       setAiLoadingTaskId(null);
+      setAiProgressByTask((current) => { const next = { ...current }; delete next[openedTask.id]; return next; });
       return;
     }
     const baseDialog = aiDialogByTask[openedTask.id] ?? [];
@@ -2187,13 +2191,13 @@ export default function MiniApp() {
     setAiDraft('');
     setAiPendingFiles([]);
     try {
-      const result = await api.askTaskAssistant(openedTask.id, {
+      const result = await api.askTaskAssistantStreaming(openedTask.id, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage,
         mode: selectedAiChatModel === 'gpt-6-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
         attachments: attachmentsPayload
-      });
+      }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })) });
       setAiDialogByTask((prev) => ({
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: normalizeMiniAiMessageContent(result.answer), creditsSpentMilli: result.billing?.creditsSpentMilli }]
@@ -2209,6 +2213,7 @@ export default function MiniApp() {
       }
     } finally {
       setAiLoadingTaskId(null);
+      setAiProgressByTask((current) => { const next = { ...current }; delete next[openedTask.id]; return next; });
     }
   };
 
@@ -2242,7 +2247,7 @@ export default function MiniApp() {
     };
     scrollToBottom(fullscreenAiDialogContainerRef.current);
     taskAiChatScrollTopRef.current = fullscreenAiDialogContainerRef.current?.scrollTop ?? 0;
-  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId]);
+  }, [isAiDialogOpen, openedTaskId, openedTaskAiDialog.length, aiLoadingTaskId, openedTaskId ? aiProgressByTask[openedTaskId] : undefined]);
 
   useEffect(() => {
     if (!isAiDialogOpen) return;
@@ -3184,7 +3189,7 @@ export default function MiniApp() {
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
                 ))}
-                {aiLoadingTaskId === openedTask.id ? <p className="text-sm text-cyan-200">ИИ думает…</p> : null}
+                {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
             </div>
