@@ -21,7 +21,7 @@ export const isDynamicTextBillingEnabled = (userId: string) => {
   return allowlist.length === 0 || allowlist.includes(userId);
 };
 
-const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'reasoning', 'text', 'temperature', 'top_p'] as const;
+const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls', 'reasoning', 'text', 'temperature', 'top_p'] as const;
 export function createCleanOpenAiResponsesPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(PROVIDER_KEYS.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]]));
 }
@@ -41,6 +41,8 @@ export type DynamicResponsesCall = {
   responseJson: { id?: unknown; usage?: OpenAiUsage; [key: string]: unknown };
   reservation: AiCreditReservation;
   actualCreditsMilli: number;
+  webSearchCalls: number;
+  webSearchCreditsMilli: number;
 };
 
 export async function runDynamicResponsesCall(input: { userId: string; actionId: string; providerCallIndex: number; feature: DynamicTextFeature; apiKey: string; payload: Record<string, unknown> }): Promise<DynamicResponsesCall> {
@@ -51,7 +53,8 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` };
   let preflight;
   try {
-    preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': tokenRequestId }, body: JSON.stringify(cleanPayload) });
+    const { max_tool_calls: _maxToolCalls, ...preflightPayload } = cleanPayload;
+    preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': tokenRequestId }, body: JSON.stringify(preflightPayload) });
   } catch (error) {
     console.error('[AI dynamic billing] input token preflight failed', { actionId: input.actionId, requestId: tokenRequestId, feature: input.feature, model, status: 'network' });
     throw error;
@@ -80,10 +83,14 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify({ ...cleanPayload, max_output_tokens: maxOutputTokens }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const responseJson = await response.json() as DynamicResponsesCall['responseJson'];
-    await recordOpenAiUsageShadow({ userId: input.userId, actionId: input.actionId, requestId, providerCallIndex: input.providerCallIndex, feature: input.feature, model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: 'DYNAMIC' });
+    const output = Array.isArray(responseJson.output) ? responseJson.output as Array<Record<string, unknown>> : [];
+    const webSearchCalls = input.feature === 'ai_chat' ? output.filter((item) => item.type === 'web_search_call' && (item.action as Record<string, unknown> | undefined)?.type === 'search').length : 0;
+    const { OPENAI_WEB_SEARCH_COST_NANO_USD } = await import('../config/openai-pricing.js');
+    const extraProviderCostNanoUsd = BigInt(webSearchCalls) * OPENAI_WEB_SEARCH_COST_NANO_USD;
+    await recordOpenAiUsageShadow({ userId: input.userId, actionId: input.actionId, requestId, providerCallIndex: input.providerCallIndex, feature: input.feature, model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: 'DYNAMIC', extraProviderCostNanoUsd });
     const actualCreditsMilli = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
     if (actualCreditsMilli === null) throw new Error(`Unknown OpenAI pricing for model "${model}"`);
-    return { responseJson, reservation, actualCreditsMilli };
+    return { responseJson, reservation, actualCreditsMilli, webSearchCalls, webSearchCreditsMilli: Number((extraProviderCostNanoUsd + 599n) / 600n) };
   } catch (error) {
     await refundAiCreditReservation(reservation);
     throw error;

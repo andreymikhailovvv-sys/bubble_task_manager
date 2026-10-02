@@ -12,6 +12,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurat
 import { formatCreditsSpent } from './lib/credits';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
+import { WebCitations } from './components/WebCitations';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -119,7 +120,8 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           id: message.id ?? crypto.randomUUID(),
           role: message.role,
           content: message.content,
-          ...(message.creditsSpentMilli === undefined ? {} : { creditsSpentMilli: message.creditsSpentMilli })
+          ...(message.creditsSpentMilli === undefined ? {} : { creditsSpentMilli: message.creditsSpentMilli }),
+          ...(message.webSearchUsed ? { webSearchUsed: true, webSources: message.webSources, webCitations: message.webCitations } : {})
         }))
     }))
   }));
@@ -1907,7 +1909,7 @@ export default function MiniApp() {
         clientSurface: 'miniapp',
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli };
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData();
@@ -3303,6 +3305,7 @@ export default function MiniApp() {
                 <div key={message.id} className={`miniapp-ai-chat-message miniapp-ai-chat-message-general max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : renderMiniAiMessageContent(message.content)}</div>
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
               ))}

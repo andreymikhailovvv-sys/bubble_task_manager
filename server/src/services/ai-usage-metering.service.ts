@@ -2,7 +2,8 @@ import { prisma } from '../db/prisma.js';
 import { OPENAI_PRICING_VERSION, resolveOpenAiTokenRates } from '../config/openai-pricing.js';
 
 const TOKENS_PER_MILLION = 1_000_000n;
-const NANO_USD_PER_MILLICREDIT = 600n;
+export const NANO_USD_PER_MILLICREDIT = 600n;
+export const providerNanoUsdToMilliCredits = (cost: bigint) => Number((cost + NANO_USD_PER_MILLICREDIT - 1n) / NANO_USD_PER_MILLICREDIT);
 
 export type OpenAiUsage = {
   input_tokens?: unknown;
@@ -39,6 +40,7 @@ export type RecordOpenAiUsageInput = {
   openAiResponseId?: string | null;
   usage?: OpenAiUsage | null;
   billingMode?: 'SHADOW' | 'DYNAMIC';
+  extraProviderCostNanoUsd?: bigint;
 };
 
 type UsageEventRepository = {
@@ -128,6 +130,8 @@ export async function recordOpenAiUsageShadow(
 
   try {
     const metering = calculateOpenAiUsageCost(input.model, input.usage);
+    const providerCostNanoUsd = metering.providerCostNanoUsd === null ? null : metering.providerCostNanoUsd + (input.extraProviderCostNanoUsd ?? 0n);
+    const estimatedCreditsMilli = providerCostNanoUsd === null ? null : providerNanoUsdToMilliCredits(providerCostNanoUsd);
     if (metering.providerCostNanoUsd === null) {
       console.warn('[AI shadow usage] unknown model pricing', {
         requestId: input.requestId,
@@ -161,8 +165,8 @@ export async function recordOpenAiUsageShadow(
         outputTokens: metering.outputTokens,
         reasoningTokens: metering.reasoningTokens,
         totalTokens: metering.totalTokens,
-        providerCostNanoUsd: metering.providerCostNanoUsd,
-        estimatedCreditsMilli: metering.estimatedCreditsMilli,
+        providerCostNanoUsd,
+        estimatedCreditsMilli,
         billingMode: input.billingMode ?? 'SHADOW',
         pricingVersion: OPENAI_PRICING_VERSION
       }
@@ -183,10 +187,10 @@ export async function recordOpenAiUsageShadow(
       outputTokens: metering.outputTokens,
       reasoningTokens: metering.reasoningTokens,
       totalTokens: metering.totalTokens,
-      providerCostNanoUsd: metering.providerCostNanoUsd?.toString() ?? null,
-      providerCostUsd: metering.providerCostNanoUsd === null ? null : formatNanoUsd(metering.providerCostNanoUsd),
-      estimatedCreditsMilli: metering.estimatedCreditsMilli,
-      estimatedCredits: metering.estimatedCreditsMilli === null ? null : metering.estimatedCreditsMilli / 1000,
+      providerCostNanoUsd: providerCostNanoUsd?.toString() ?? null,
+      providerCostUsd: providerCostNanoUsd === null ? null : formatNanoUsd(providerCostNanoUsd),
+      estimatedCreditsMilli,
+      estimatedCredits: estimatedCreditsMilli === null ? null : estimatedCreditsMilli / 1000,
       pricingVersion: OPENAI_PRICING_VERSION
     });
   } catch (error) {

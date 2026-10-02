@@ -1125,6 +1125,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       if ((result.actionReports ?? []).length > 0) {
         lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
       }
+      if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
 
       await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
       await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
@@ -1172,6 +1173,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     if ((result.actionReports ?? []).length > 0) {
       lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
     }
+    if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
 
     await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
     return;

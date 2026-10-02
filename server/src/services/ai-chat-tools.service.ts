@@ -2,9 +2,15 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { plannerToolsService, type PlannerActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
+import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
+import { providerNanoUsdToMilliCredits } from './ai-usage-metering.service.js';
+import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservation } from './ai-credit-wallet.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
+export const MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST = 1;
+export const WEB_SEARCH_CALL_CREDITS_MILLI = providerNanoUsdToMilliCredits(OPENAI_WEB_SEARCH_COST_NANO_USD);
+export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size: 'low' } as const;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
 
 export const AI_CHAT_OPENAI_TOOLS = [
@@ -46,6 +52,8 @@ export const AI_CHAT_OPENAI_TOOLS = [
 
 type OpenAiOutputItem = Record<string, unknown>;
 type ToolResponse = { id?: unknown; usage?: OpenAiUsage; output?: OpenAiOutputItem[]; output_text?: string };
+export type WebSource = { title: string; url: string };
+export type WebCitation = { startIndex: number; endIndex: number; sourceIndex: number };
 type ToolLoopOptions = {
   initialInput: unknown[];
   request: (input: unknown[]) => Promise<ToolResponse>;
@@ -98,6 +106,15 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let providerCallCount = 0;
   let inputTokensTotal = 0; let outputTokensTotal = 0; const toolOperations: string[] = [];
   const dynamicCalls: DynamicResponsesCall[] = [];
+  let webReservation: AiCreditReservation | null = null;
+  let webSearchAvailable = Boolean(input.dynamicBilling);
+  let webSearchUsed = false;
+  let webSearchCalls = 0;
+  const webSources: WebSource[] = []; const webCitations: WebCitation[] = []; const sourceByUrl = new Map<string, number>();
+  if (webSearchAvailable) {
+    try { webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI); }
+    catch (error) { if (error instanceof Error && error.message === 'Недостаточно AI кредитов') webSearchAvailable = false; else throw error; }
+  }
   input.onProgress?.('analyzing_request');
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
@@ -107,14 +124,36 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const providerCallIndex = providerCallCount + 1;
         const isForcedFinalRound = providerCallIndex === MAX_PROVIDER_CALLS;
         if (isForcedFinalRound) input.onProgress?.('forming_answer');
-        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools: AI_CHAT_OPENAI_TOOLS, tool_choice: 'auto', parallel_tool_calls: false }) };
+        const includeWebSearch = !isForcedFinalRound && webSearchAvailable && !webSearchUsed;
+        const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL] : AI_CHAT_OPENAI_TOOLS;
+        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: 'auto', parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1 } : {}) }) };
         if (input.dynamicBilling) {
-          const call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload });
+          let call: DynamicResponsesCall;
+          try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload }); }
+          catch (error) {
+            if (includeWebSearch && !webSearchUsed && webReservation && error instanceof Error && error.message === 'Недостаточно AI кредитов') {
+              await refundAiCreditReservation(webReservation); webReservation = null; webSearchAvailable = false;
+              call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: { ...providerPayload, tools: AI_CHAT_OPENAI_TOOLS, max_tool_calls: undefined } });
+            } else throw error;
+          }
           dynamicCalls.push(call);
           providerCallCount = providerCallIndex;
           const response = call.responseJson as ToolResponse;
           inputTokensTotal += typeof response.usage?.input_tokens === 'number' ? response.usage.input_tokens : 0;
           outputTokensTotal += typeof response.usage?.output_tokens === 'number' ? response.usage.output_tokens : 0;
+          if (call.webSearchCalls > 0 && !webSearchUsed) {
+            webSearchUsed = true; webSearchCalls = Math.min(MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, call.webSearchCalls); toolOperations.push('web_search');
+            for (const item of response.output ?? []) for (const part of Array.isArray(item.content) ? item.content : []) {
+              if (!part || typeof part !== 'object') continue;
+              for (const annotation of Array.isArray((part as { annotations?: unknown }).annotations) ? (part as { annotations: Array<Record<string, unknown>> }).annotations : []) {
+                if (annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
+                let sourceIndex = sourceByUrl.get(annotation.url);
+                if (sourceIndex === undefined) { sourceIndex = webSources.length; sourceByUrl.set(annotation.url, sourceIndex); webSources.push({ url: annotation.url, title: typeof annotation.title === 'string' && annotation.title.trim() ? annotation.title.trim() : annotation.url }); }
+                if (typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
+              }
+            }
+            console.info('[AI web search] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, sourceCount: webSources.length, fixedCreditsMilli: WEB_SEARCH_CALL_CREDITS_MILLI });
+          }
           console.info('[AI chat round] completed', { requestId, userId: input.userId, model: input.model, providerCallIndex, hadToolCall: response.output?.some((item) => item.type === 'function_call') ?? false, toolOperation: response.output?.find((item) => item.type === 'function_call')?.name ?? null, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens, actualCreditsMilli: call.actualCreditsMilli, isForcedFinalRound });
           return response;
         }
@@ -169,9 +208,11 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     console.info('[AI tools] completed', { requestId, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
     let creditsSpentMilli = 0;
     for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal } };
+    if (webReservation) { if (webSearchUsed) creditsSpentMilli += webReservation.totalMilli; else { await refundAiCreditReservation(webReservation); webReservation = null; } }
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCalls, webSearchCreditsMilli: webSearchUsed ? WEB_SEARCH_CALL_CREDITS_MILLI : 0, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
+    if (webReservation) await refundAiCreditReservation(webReservation);
     console.info('[AI tools] completed', { requestId, actionCount: actionReports.length, durationMs: Date.now() - startedAt, failed: true });
     throw error;
   }
