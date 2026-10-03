@@ -822,6 +822,54 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
   res.json({ user: toAuthUser(user) });
 });
 
+apiRouter.post('/auth/telegram-web-register', async (req, res) => {
+  const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
+  const login = sanitizeLogin(String(req.body?.login ?? ''));
+  const password = String(req.body?.password ?? '');
+  const name = String(req.body?.name ?? '').trim();
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken || !initDataRaw) {
+    res.status(400).json({ error: 'Откройте форму регистрации кнопкой в Telegram-боте' });
+    return;
+  }
+
+  let telegramChatId: string;
+  try {
+    telegramChatId = String(validateTelegramWebAppInitData(initDataRaw, botToken).id);
+  } catch (error) {
+    console.warn(`[TelegramWebRegister] invalid init data: ${error instanceof Error ? error.message : 'unknown error'}`);
+    res.status(401).json({ error: 'Сессия Telegram устарела. Откройте форму заново' });
+    return;
+  }
+
+  let user;
+  try {
+    validatePersonalDataConsent(req.body?.consentAccepted);
+    user = await accountRegistrationService.register({
+      login,
+      password,
+      name,
+      personalDataConsent: { version: PERSONAL_DATA_CONSENT_VERSION, ipAddress: req.ip }
+    });
+  } catch (error) {
+    if (!(error instanceof AccountRegistrationError)) throw error;
+    const response = error.code === 'INVALID_LOGIN'
+      ? { status: 400, message: 'Логин должен содержать минимум 3 символа' }
+      : error.code === 'INVALID_PASSWORD'
+        ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
+        : error.code === 'CONSENT_REQUIRED'
+          ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
+          : { status: 409, message: 'Логин уже занят' };
+    res.status(response.status).json({ error: response.message });
+    return;
+  }
+
+  await telegramService.completeWebLogin(telegramChatId, user, true);
+  setAuthCookies(res, user);
+  console.info(`[TelegramWebRegister] success chatId=${telegramChatId} userId=${user.id}`);
+  res.json({ user: toAuthUser(user) });
+});
+
 apiRouter.get('/spheres', requireAuth, sphereController.list);
 apiRouter.post('/spheres', requireAuth, sphereController.create);
 apiRouter.patch('/spheres/:id', requireAuth, sphereController.update);

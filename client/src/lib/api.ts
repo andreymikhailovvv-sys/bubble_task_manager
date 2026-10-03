@@ -183,6 +183,8 @@ export const api = {
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
   loginTelegramWeb: (payload: { initData: string; login: string; password: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-web-login', { method: 'POST', body: JSON.stringify(payload) }),
+  registerTelegramWeb: (payload: { initData: string; login: string; password: string; name: string; consentAccepted: boolean }) =>
+    request<{ user: CurrentUser }>('/api/auth/telegram-web-register', { method: 'POST', body: JSON.stringify(payload) }),
   logMiniAppClientEvent: (payload: { event: string; data?: Record<string, unknown> }) =>
     request<{ ok: true }>('/api/miniapp/client-log', { method: 'POST', body: JSON.stringify(payload) }),
   loginWithGoogle: () => {
