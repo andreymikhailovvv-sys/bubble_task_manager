@@ -147,6 +147,7 @@ export type CurrentUser = {
   efficiencyFocusScore?: number;
   efficiencyLastActivityAt?: string | Date | null;
   completedLessonIds?: string[];
+  hasPassword?: boolean;
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
 export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
@@ -176,6 +177,8 @@ export const api = {
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  updateProfile: (payload: { name: string; email: string; currentPassword?: string; newPassword?: string }) =>
+    request<{ user: CurrentUser }>('/api/user/profile', { method: 'PATCH', body: JSON.stringify(payload) }),
   loginTelegramMiniApp: (payload: { initData: string }) =>
     request<{ user: CurrentUser }>('/api/auth/telegram-miniapp', { method: 'POST', body: JSON.stringify(payload) }),
   logMiniAppClientEvent: (payload: { event: string; data?: Record<string, unknown> }) =>
