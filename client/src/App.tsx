@@ -3344,6 +3344,16 @@ ${allContext}`,
 
   if (!currentUser) return null;
 
+  const hasAccount = Boolean(
+    currentUser.username?.trim()
+    || currentUser.email?.trim()
+    || currentUser.googleSub?.trim()
+  );
+  const accountDisplayName = currentUser.name?.trim()
+    || currentUser.username?.trim()
+    || currentUser.email?.trim()
+    || 'Пользователь';
+
   const formatTaskDueDate = (value?: string | null) => {
     if (!value) return 'Без дедлайна';
     const date = new Date(value);
@@ -3999,12 +4009,6 @@ ${allContext}`,
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
         </h1>
-        <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
-        {currentUser.username ? (
-          <div className="rounded bg-emerald-700/80 px-2 py-1 text-xs">Аккаунт: {currentUser.username}</div>
-        ) : (
-          <div className="surface-muted rounded px-2 py-1 text-xs">Гостевой режим</div>
-        )}
         <button
           type="button"
           data-tour="feature-telegram-button"
@@ -4018,22 +4022,33 @@ ${allContext}`,
 
         <input className="surface-input light-search-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
-        <button className="rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setAuthModalMode('login')}>Войти</button>
-        <button className="rounded bg-indigo-700 px-3 py-2 text-sm light-secondary-action" onClick={() => setAuthModalMode('register')}>Регистрация</button>
-        <button
-          className="surface-muted rounded px-3 py-2 text-sm"
-          onClick={async () => {
-            try {
-              await api.logout();
-            } finally {
-              const me = await api.getMe();
-              setCurrentUser(me.user);
-              setAuthError(null);
-            }
-          }}
-        >
-          Выйти
-        </button>
+        <div className="auth-actions" aria-label="Управление аккаунтом">
+          {hasAccount ? (
+            <>
+              <div className="auth-user-pill" title={accountDisplayName}>{accountDisplayName}</div>
+              <button
+                type="button"
+                className="auth-logout-button"
+                onClick={async () => {
+                  try {
+                    await api.logout();
+                  } finally {
+                    const me = await api.getMe();
+                    setCurrentUser(me.user);
+                    setAuthError(null);
+                  }
+                }}
+              >
+                Выйти
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="auth-login-button" onClick={() => setAuthModalMode('login')}>Войти</button>
+              <button type="button" className="auth-register-button" onClick={() => setAuthModalMode('register')}>Регистрация</button>
+            </>
+          )}
+        </div>
       </header>
 
       {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
