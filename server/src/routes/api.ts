@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
@@ -89,6 +90,7 @@ const toAuthUser = (user: {
   efficiencyFocusScore?: number;
   efficiencyLastActivityAt?: Date | string | null;
   completedLessonIds?: string[];
+  passwordHash?: string | null;
 }) => {
   const aiCreditsMilli = (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
     + (user.aiBonusCreditsMilli ?? 0)
@@ -116,7 +118,8 @@ const toAuthUser = (user: {
   efficiencyAiScore: Math.max(0, user.efficiencyAiScore ?? 0),
   efficiencyFocusScore: Math.max(0, user.efficiencyFocusScore ?? 0),
   efficiencyLastActivityAt: user.efficiencyLastActivityAt ?? null,
-  completedLessonIds: user.completedLessonIds ?? []
+  completedLessonIds: user.completedLessonIds ?? [],
+  hasPassword: Boolean(user.passwordHash)
   });
 };
 
@@ -460,6 +463,55 @@ apiRouter.get('/credit-packs', async (_req, res) => {
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
+});
+
+apiRouter.patch('/user/profile', requireAuth, async (req, res) => {
+  const name = String(req.body?.name ?? '').trim();
+  const emailRaw = String(req.body?.email ?? '').trim().toLowerCase();
+  const currentPassword = String(req.body?.currentPassword ?? '');
+  const newPassword = String(req.body?.newPassword ?? '');
+
+  if (name.length > 100) {
+    res.status(400).json({ error: 'Имя должно содержать не более 100 символов' });
+    return;
+  }
+  if (emailRaw.length > 254 || (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw))) {
+    res.status(400).json({ error: 'Укажите корректную почту' });
+    return;
+  }
+  if (newPassword && newPassword.length < 6) {
+    res.status(400).json({ error: 'Новый пароль должен содержать минимум 6 символов' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user || !(user.username || user.email || user.googleSub)) {
+    res.status(403).json({ error: 'Настройки профиля доступны только для аккаунта' });
+    return;
+  }
+  if (newPassword && user.passwordHash && !authService.verifyPassword(currentPassword, user.passwordHash)) {
+    res.status(400).json({ error: 'Текущий пароль указан неверно' });
+    return;
+  }
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        name: name || null,
+        email: emailRaw || null,
+        ...(newPassword ? { passwordHash: authService.hashPassword(newPassword) } : {})
+      }
+    });
+    setAuthCookies(res, updatedUser);
+    res.json({ user: toAuthUser(updatedUser) });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'Эта почта уже используется' });
+      return;
+    }
+    throw error;
+  }
 });
 
 apiRouter.delete('/user/account', requireAuth, async (req, res) => {

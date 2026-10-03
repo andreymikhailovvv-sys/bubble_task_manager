@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -958,6 +958,14 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(() => (
     new URLSearchParams(window.location.search).get('auth') === 'login' ? 'login' : null
   ));
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
+  const [profileNewPassword, setProfileNewPassword] = useState('');
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const focusedTaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const focusedSubtaskTitleInputRef = useRef<HTMLInputElement | null>(null);
   const focusedAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
@@ -3334,6 +3342,44 @@ ${allContext}`,
     }
   };
 
+  const openProfileModal = () => {
+    setProfileName(currentUser?.name?.trim() ?? '');
+    setProfileEmail(currentUser?.email?.trim() ?? '');
+    setProfileCurrentPassword('');
+    setProfileNewPassword('');
+    setProfileError(null);
+    setProfileSaved(false);
+    setIsProfileModalOpen(true);
+  };
+
+  const closeProfileModal = () => {
+    if (profileSaving) return;
+    setIsProfileModalOpen(false);
+    setProfileError(null);
+  };
+
+  const submitProfile = async () => {
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
+    try {
+      const result = await api.updateProfile({
+        name: profileName,
+        email: profileEmail,
+        currentPassword: profileCurrentPassword || undefined,
+        newPassword: profileNewPassword || undefined
+      });
+      setCurrentUser(result.user);
+      setProfileCurrentPassword('');
+      setProfileNewPassword('');
+      setProfileSaved(true);
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Не удалось сохранить изменения');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <main className="app-shell flex h-screen items-center justify-center p-4" data-theme={themeMode}>
@@ -3343,6 +3389,16 @@ ${allContext}`,
   }
 
   if (!currentUser) return null;
+
+  const hasAccount = Boolean(
+    currentUser.username?.trim()
+    || currentUser.email?.trim()
+    || currentUser.googleSub?.trim()
+  );
+  const accountDisplayName = currentUser.name?.trim()
+    || currentUser.username?.trim()
+    || currentUser.email?.trim()
+    || 'Пользователь';
 
   const formatTaskDueDate = (value?: string | null) => {
     if (!value) return 'Без дедлайна';
@@ -3999,12 +4055,6 @@ ${allContext}`,
           <img src="/icon.png" alt="" className="h-7 w-7 rounded-md" />
           <span>Планировыч AI</span>
         </h1>
-        <div className="mr-1 text-xs text-muted">{currentUser.name ?? currentUser.username ?? currentUser.email ?? 'Локальный пользователь'}</div>
-        {currentUser.username ? (
-          <div className="rounded bg-emerald-700/80 px-2 py-1 text-xs">Аккаунт: {currentUser.username}</div>
-        ) : (
-          <div className="surface-muted rounded px-2 py-1 text-xs">Гостевой режим</div>
-        )}
         <button
           type="button"
           data-tour="feature-telegram-button"
@@ -4018,22 +4068,36 @@ ${allContext}`,
 
         <input className="surface-input light-search-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
-        <button className="rounded bg-cyan-700 px-3 py-2 text-sm light-primary-action" onClick={() => setAuthModalMode('login')}>Войти</button>
-        <button className="rounded bg-indigo-700 px-3 py-2 text-sm light-secondary-action" onClick={() => setAuthModalMode('register')}>Регистрация</button>
-        <button
-          className="surface-muted rounded px-3 py-2 text-sm"
-          onClick={async () => {
-            try {
-              await api.logout();
-            } finally {
-              const me = await api.getMe();
-              setCurrentUser(me.user);
-              setAuthError(null);
-            }
-          }}
-        >
-          Выйти
-        </button>
+        <div className="auth-actions" aria-label="Управление аккаунтом">
+          {hasAccount ? (
+            <>
+              <button type="button" className="auth-user-pill" title={`${accountDisplayName} — изменить профиль`} onClick={openProfileModal}>
+                <UserRound size={16} aria-hidden="true" />
+                <span>{accountDisplayName}</span>
+              </button>
+              <button
+                type="button"
+                className="auth-logout-button"
+                onClick={async () => {
+                  try {
+                    await api.logout();
+                  } finally {
+                    const me = await api.getMe();
+                    setCurrentUser(me.user);
+                    setAuthError(null);
+                  }
+                }}
+              >
+                Выйти
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="auth-login-button" onClick={() => setAuthModalMode('login')}>Войти</button>
+              <button type="button" className="auth-register-button" onClick={() => setAuthModalMode('register')}>Регистрация</button>
+            </>
+          )}
+        </div>
       </header>
 
       {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
@@ -4615,6 +4679,42 @@ ${allContext}`,
               <a className="public-secondary-link text-xs" href="/legal/offer">Публичная оферта</a>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {isProfileModalOpen && hasAccount ? (
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfileModal(); }}>
+          <section className="profile-modal surface-popover w-full max-w-md rounded-2xl border p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 id="profile-modal-title" className="text-lg font-semibold text-primary">Настройки профиля</h2>
+                <p className="mt-1 text-xs text-muted">Измените имя, почту или пароль аккаунта.</p>
+              </div>
+              <button type="button" className="profile-modal-close" onClick={closeProfileModal} aria-label="Закрыть настройки профиля"><X size={17} /></button>
+            </div>
+            <div className="space-y-3">
+              <label className="profile-field-label">Имя
+                <input className="profile-field" value={profileName} maxLength={100} autoComplete="name" onChange={(event) => setProfileName(event.target.value)} />
+              </label>
+              <label className="profile-field-label">Почта
+                <input className="profile-field" value={profileEmail} maxLength={254} type="email" autoComplete="email" placeholder="name@example.com" onChange={(event) => setProfileEmail(event.target.value)} />
+              </label>
+              {currentUser.hasPassword ? (
+                <label className="profile-field-label">Текущий пароль
+                  <input className="profile-field" value={profileCurrentPassword} type="password" autoComplete="current-password" onChange={(event) => setProfileCurrentPassword(event.target.value)} />
+                </label>
+              ) : null}
+              <label className="profile-field-label">Новый пароль
+                <input className="profile-field" value={profileNewPassword} minLength={6} type="password" autoComplete="new-password" placeholder="Не менее 6 символов" onChange={(event) => setProfileNewPassword(event.target.value)} />
+              </label>
+              {profileError ? <p className="text-xs text-rose-400" role="alert">{profileError}</p> : null}
+              {profileSaved ? <p className="text-xs text-emerald-400" role="status">Изменения сохранены</p> : null}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="profile-cancel-button" onClick={closeProfileModal} disabled={profileSaving}>Отмена</button>
+              <button type="button" className="profile-save-button" onClick={() => void submitProfile()} disabled={profileSaving}>{profileSaving ? 'Сохраняем…' : 'Сохранить'}</button>
+            </div>
+          </section>
         </div>
       ) : null}
 
