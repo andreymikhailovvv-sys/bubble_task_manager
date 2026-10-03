@@ -36,6 +36,12 @@ type TelegramWindow = Window & {
   };
 };
 
+export type MiniAppRuntime = 'telegram' | 'web';
+
+type MiniAppProps = {
+  runtime?: MiniAppRuntime;
+};
+
 const extractInitDataFromUrl = () => {
   const fromSearch = new URLSearchParams(window.location.search).get('tgWebAppData');
   if (fromSearch?.trim()) return fromSearch.trim();
@@ -579,7 +585,10 @@ function compareByDueDate(a: Task, b: Task) {
   return a.title.localeCompare(b.title, 'ru-RU');
 }
 
-export default function MiniApp() {
+export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
+  const isTelegramRuntime = runtime === 'telegram';
+  const isWebRuntime = runtime === 'web';
+  const clientSurface = isTelegramRuntime ? 'miniapp' : 'web';
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -677,6 +686,14 @@ export default function MiniApp() {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [aiCredits, setAiCredits] = useState(100);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const [authLogin, setAuthLogin] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authConsentAccepted, setAuthConsentAccepted] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
   const [aiChatDraft, setAiChatDraft] = useState('');
@@ -720,22 +737,34 @@ export default function MiniApp() {
   }, []);
 
   const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
-    if (options.showInitialLoader ?? false) setLoading(true);
+    if (options.showInitialLoader ?? false) {
+      setLoading(true);
+      // Never render data that belongs to the session used before an account switch.
+      setSpheres([]);
+      setTasks([]);
+      setHabits([]);
+      setAiDialogByTask({});
+      aiChatProjectsSyncReadyRef.current = false;
+      if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+    }
     setError(null);
     try {
-      const tgWindow = window as TelegramWindow;
-      const initData = tgWindow.Telegram?.WebApp?.initData?.trim() || extractInitDataFromUrl();
-
-      if (initData) {
+      let user: CurrentUser;
+      if (isTelegramRuntime) {
+        const tgWindow = window as TelegramWindow;
+        const initData = tgWindow.Telegram?.WebApp?.initData?.trim() || extractInitDataFromUrl();
+        if (!initData) {
+          throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
+        }
         console.info(`[MiniApp] Используем Telegram initData (length=${initData.length})`);
-        const { user } = await api.loginTelegramMiniApp({ initData });
-        setAiCredits(user.aiCredits ?? 100);
-        setCurrentUser(user);
+        ({ user } = await api.loginTelegramMiniApp({ initData }));
         tgWindow.Telegram?.WebApp?.ready?.();
         tgWindow.Telegram?.WebApp?.expand?.();
       } else {
-        throw new Error('Telegram initData не найден. Откройте мини-приложение из Telegram бота.');
+        ({ user } = await api.getMe());
       }
+      setAiCredits(user.aiCredits ?? 100);
+      setCurrentUser(user);
 
       const [sphereList, taskList, habitList, quickHistory, syncedProjects] = await Promise.all([
         api.getSpheres(),
@@ -748,25 +777,100 @@ export default function MiniApp() {
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
         .map((message) => attachChatMessageId(message, crypto.randomUUID()))
         .slice(-20);
-      setAiChatProjects((prev) => normalizeMiniAiChatProjects(syncedProjects.projects?.length ? syncedProjects.projects : prev).map((project, projectIndex) => projectIndex === 0 ? {
+      const nextAiChatProjects = normalizeMiniAiChatProjects(syncedProjects.projects).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
         chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
-      } : project));
+      } : project);
+      setAiChatProjects(nextAiChatProjects);
+      setActiveAiChatProjectId(nextAiChatProjects[0]?.id ?? '');
+      setActiveAiChatId(QUICK_AI_CHAT_ID);
       aiChatProjectsSyncReadyRef.current = true;
       setSpheres(sphereList);
       setTasks(taskList);
       setHabits(habitList);
       console.info(`[MiniApp] Данные загружены: sectors=${sphereList.length}, tasks=${taskList.length}, habits=${habitList.length}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить мини-приложение');
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить данные');
     } finally {
       setLoading(false);
     }
   };
 
+  const hasAccount = Boolean(
+    currentUser?.hasPassword
+    || currentUser?.username?.trim()
+    || currentUser?.email?.trim()
+    || currentUser?.googleSub
+  );
+  const accountDisplayName = currentUser?.name?.trim()
+    || currentUser?.username?.trim()
+    || currentUser?.email?.trim()
+    || 'Пользователь';
+
+  const openAuthModal = (mode: 'login' | 'register') => {
+    setAuthModalMode(mode);
+    setAuthError(null);
+    setAuthPassword('');
+    setAuthConsentAccepted(false);
+    setIsSettingsOpen(false);
+  };
+
+  const closeAuthModal = () => {
+    if (authSubmitting) return;
+    setAuthModalMode(null);
+    setAuthError(null);
+    setAuthPassword('');
+    setAuthConsentAccepted(false);
+  };
+
+  const submitAuth = async () => {
+    if (!isWebRuntime || !authModalMode || authSubmitting) return;
+    if (!authLogin.trim() || !authPassword) {
+      setAuthError('Введите логин и пароль.');
+      return;
+    }
+    if (authModalMode === 'register' && !authConsentAccepted) {
+      setAuthError('Необходимо согласиться на обработку персональных данных.');
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthError(null);
+    try {
+      const result = authModalMode === 'login'
+        ? await api.login({ login: authLogin.trim(), password: authPassword })
+        : await api.register({ login: authLogin.trim(), password: authPassword, name: authName.trim(), consentAccepted: authConsentAccepted });
+      setCurrentUser(result.user);
+      setAuthModalMode(null);
+      setAuthPassword('');
+      setAuthConsentAccepted(false);
+      await loadData({ showInitialLoader: true });
+    } catch (authFailure) {
+      setAuthError(authFailure instanceof Error ? authFailure.message : 'Не удалось выполнить авторизацию.');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const logout = async () => {
+    if (!isWebRuntime || logoutSubmitting) return;
+    setLogoutSubmitting(true);
+    setError(null);
+    try {
+      await api.logout();
+      const { user } = await api.getMe();
+      setCurrentUser(user);
+      setIsSettingsOpen(false);
+      await loadData({ showInitialLoader: true });
+    } catch (logoutFailure) {
+      setError(logoutFailure instanceof Error ? logoutFailure.message : 'Не удалось выйти из аккаунта');
+    } finally {
+      setLogoutSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     void loadData({ showInitialLoader: true });
-  }, []);
+  }, [runtime]);
 
   useEffect(() => {
     document.body.dataset.theme = miniThemeMode;
@@ -784,9 +888,9 @@ export default function MiniApp() {
     const prevBodyWebkitOverflowScrolling = document.body.style.getPropertyValue('-webkit-overflow-scrolling');
     const prevRootOverflow = document.documentElement.style.overflow;
 
-    document.body.style.overflow = 'auto';
+    document.body.style.overflow = 'hidden';
     document.body.style.setProperty('-webkit-overflow-scrolling', 'touch');
-    document.documentElement.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'hidden';
 
     return () => {
       document.body.style.overflow = prevBodyOverflow;
@@ -1907,7 +2011,7 @@ export default function MiniApp() {
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         projectId: activeAiChatProject?.id,
         chatId: activeAiChat?.id,
-        clientSurface: 'miniapp',
+        clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress });
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations };
@@ -2205,7 +2309,7 @@ export default function MiniApp() {
         userMessage,
         mode: selectedAiChatModel === 'gpt-6-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
-        clientSurface: 'miniapp',
+        clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })) });
       setAiDialogByTask((prev) => ({
@@ -2291,7 +2395,7 @@ export default function MiniApp() {
   }, [displayMode, timelineToday.currentTimeTop, timelineToday.isTodayVisible]);
 
   if (loading) {
-    return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем мини-приложение…</main>;
+    return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
   }
 
   return (
@@ -2305,7 +2409,7 @@ export default function MiniApp() {
         else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
         lastMainScrollTopRef.current = nextTop;
       }}
-      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
+      className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
@@ -2361,7 +2465,7 @@ export default function MiniApp() {
                 </div>
               ) : null}
               {isSettingsOpen ? (
-                <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
+                <div className="miniapp-settings-popover absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="font-medium text-slate-100">Настройки</span>
                     <button type="button" onClick={() => setIsSettingsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-800" aria-label="Закрыть настройки">
@@ -2389,6 +2493,24 @@ export default function MiniApp() {
                       </button>
                     </div>
                   </div>
+                  {isWebRuntime ? (
+                    <div className="mt-3 border-t border-slate-700 pt-3">
+                      <p className="mb-2 text-xs font-semibold text-slate-200">Аккаунт</p>
+                      {hasAccount ? (
+                        <div className="space-y-2">
+                          <p className="truncate text-xs text-slate-300" title={accountDisplayName}>{accountDisplayName}</p>
+                          <button type="button" onClick={() => void logout()} disabled={logoutSubmitting} className="w-full rounded-md border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60">
+                            {logoutSubmitting ? 'Выходим…' : 'Выйти'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button type="button" onClick={() => openAuthModal('login')} className="rounded-md border border-sky-400/60 bg-sky-500/15 px-2 py-2 text-xs font-semibold text-sky-200">Войти</button>
+                          <button type="button" onClick={() => openAuthModal('register')} className="rounded-md border border-violet-400/60 bg-violet-500/15 px-2 py-2 text-xs font-semibold text-violet-200">Регистрация</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -3090,7 +3212,7 @@ export default function MiniApp() {
         isOpen={isCalendarExportOpen}
         onClose={() => { setIsCalendarExportOpen(false); setCalendarExportTaskId(null); }}
         onSaveBeforeExport={() => saveTask(calendarExportTask.id)}
-        openExternalUrl={(url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); }}
+        openExternalUrl={(url) => { const webApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); }}
         timeZone={currentUser?.timeZone?.trim() || 'Europe/Moscow'}
         googleUrlMode="mobile-web"
         timelineTasks={timelinePickerTasks}
@@ -3951,6 +4073,48 @@ export default function MiniApp() {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {isWebRuntime && authModalMode ? (
+        <div className="miniapp-auth-backdrop fixed inset-0 z-[300] flex items-end justify-center bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={closeAuthModal}>
+          <section className="miniapp-auth-sheet miniapp-scrollless w-full max-w-md overflow-y-auto rounded-t-3xl border border-slate-600 bg-slate-900 p-5 text-slate-100 shadow-2xl sm:rounded-3xl" role="dialog" aria-modal="true" aria-labelledby="miniapp-auth-title" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="miniapp-auth-title" className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
+              <button type="button" onClick={closeAuthModal} disabled={authSubmitting} className="rounded-full p-2 text-slate-300 hover:bg-slate-800" aria-label="Закрыть"><X size={18} /></button>
+            </div>
+            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitAuth(); }}>
+              <label className="block space-y-1 text-xs text-slate-300">
+                <span>Логин</span>
+                <input autoFocus autoComplete="username" required value={authLogin} onChange={(event) => setAuthLogin(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
+              </label>
+              {authModalMode === 'register' ? (
+                <label className="block space-y-1 text-xs text-slate-300">
+                  <span>Имя</span>
+                  <input autoComplete="name" value={authName} onChange={(event) => setAuthName(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-violet-400" />
+                </label>
+              ) : null}
+              <label className="block space-y-1 text-xs text-slate-300">
+                <span>Пароль</span>
+                <input type="password" autoComplete={authModalMode === 'login' ? 'current-password' : 'new-password'} required value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} className="w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400" />
+              </label>
+              {authModalMode === 'register' ? (
+                <label className="flex items-start gap-2 rounded-xl border border-slate-700 bg-slate-800/70 p-3 text-xs leading-5 text-slate-300">
+                  <input type="checkbox" required checked={authConsentAccepted} onChange={(event) => setAuthConsentAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-violet-500" />
+                  <span>Я согласен на обработку персональных данных. <a href="/legal/consent" target="_blank" rel="noreferrer" className="text-sky-300 underline">Прочитать согласие</a></span>
+                </label>
+              ) : null}
+              {authError ? <p className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200">{authError}</p> : null}
+              <button type="submit" disabled={authSubmitting} className="w-full rounded-xl bg-gradient-to-r from-sky-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60">
+                {authSubmitting ? 'Подождите…' : authModalMode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+              </button>
+              {authModalMode === 'register' ? (
+                <p className="text-center text-[11px] leading-4 text-slate-400">
+                  Регистрируясь, вы принимаете <a href="/legal/terms" target="_blank" rel="noreferrer" className="underline">пользовательское соглашение</a> и <a href="/legal/privacy" target="_blank" rel="noreferrer" className="underline">политику конфиденциальности</a>.
+                </p>
+              ) : null}
+            </form>
+          </section>
         </div>
       ) : null}
     </main>

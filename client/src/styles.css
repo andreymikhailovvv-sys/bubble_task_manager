@@ -2,6 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+.miniapp-web-runtime {
+  height: 100dvh;
+  min-height: 100dvh;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  overscroll-behavior-y: contain;
+}
+
+.miniapp-web-runtime .miniapp-auth-backdrop {
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+.miniapp-web-runtime .miniapp-auth-sheet {
+  max-height: min(92dvh, 46rem);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.miniapp-web-runtime .miniapp-create-task-sticky-action {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
 body[data-theme='dark'] {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   color: var(--text-primary);

@@ -75,11 +75,21 @@ const isPublicRoute = window.location.pathname === '/about'
   || window.location.pathname === '/legal/terms'
   || window.location.pathname === '/legal/consent'
   || window.location.pathname === '/legal/offer';
+// Choose the workspace once at startup so resizing does not unmount it and lose state.
+const isCompactWorkspaceViewport = window.matchMedia('(max-width: 1024px)').matches;
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppErrorBoundary>
-      {isAdminRoute ? <AdminPage /> : isMiniAppRoute ? <MiniApp /> : isPublicRoute ? <PublicPages /> : <App />}
+      {isAdminRoute
+        ? <AdminPage />
+        : isMiniAppRoute
+          ? <MiniApp runtime="telegram" />
+          : isPublicRoute
+            ? <PublicPages />
+            : isCompactWorkspaceViewport
+              ? <MiniApp runtime="web" />
+              : <App />}
       {!isMiniAppRoute && !isAdminRoute ? <CookieBanner /> : null}
     </AppErrorBoundary>
   </React.StrictMode>
