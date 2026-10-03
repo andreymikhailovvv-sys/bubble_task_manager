@@ -900,6 +900,29 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, []);
 
   useEffect(() => {
+    if (!isEfficiencyDetailsOpen && !isSettingsOpen) return;
+
+    const closePopoversOnOutsidePress = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest('[data-miniapp-popover="efficiency"]')) setIsEfficiencyDetailsOpen(false);
+      if (!target.closest('[data-miniapp-popover="settings"]')) setIsSettingsOpen(false);
+    };
+    const closePopoversOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setIsEfficiencyDetailsOpen(false);
+      setIsSettingsOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closePopoversOnOutsidePress, true);
+    document.addEventListener('keydown', closePopoversOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closePopoversOnOutsidePress, true);
+      document.removeEventListener('keydown', closePopoversOnEscape);
+    };
+  }, [isEfficiencyDetailsOpen, isSettingsOpen]);
+
+  useEffect(() => {
     if (displayMode !== 'timeline') return;
     const intervalId = window.setInterval(() => {
       setTimelineNow(new Date());
@@ -2402,12 +2425,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     <main
       ref={mainScrollRef}
       onScroll={(event) => {
+        setIsEfficiencyDetailsOpen(false);
+        setIsSettingsOpen(false);
         const nextTop = event.currentTarget.scrollTop;
         const prevTop = lastMainScrollTopRef.current;
         if (nextTop <= 8) setIsHeaderVisible(true);
         else if (nextTop > prevTop + 6) setIsHeaderVisible(false);
         else if (nextTop < prevTop - 6) setIsHeaderVisible(true);
         lastMainScrollTopRef.current = nextTop;
+      }}
+      onTouchMove={() => {
+        setIsEfficiencyDetailsOpen(false);
+        setIsSettingsOpen(false);
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
@@ -2431,6 +2460,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <button
                 type="button"
                 onClick={() => setIsEfficiencyDetailsOpen((open) => !open)}
+                data-miniapp-popover="efficiency"
                 className="miniapp-efficiency-button inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors"
                 aria-label={`Рейтинг эффективности: ${formattedEfficiencyScore} из 100`}
                 aria-expanded={isEfficiencyDetailsOpen}
@@ -2444,6 +2474,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen((prev) => !prev)}
+                data-miniapp-popover="settings"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 transition-colors hover:bg-amber-500/10"
                 aria-label="Открыть настройки"
                 title="Настройки"
@@ -2451,7 +2482,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Settings size={16} className="text-amber-400" />
               </button>
               {isEfficiencyDetailsOpen ? (
-                <div className="miniapp-efficiency-popover absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border p-4 text-xs shadow-2xl backdrop-blur">
+                <div data-miniapp-popover="efficiency" className="miniapp-efficiency-popover absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border p-4 text-xs shadow-2xl backdrop-blur">
                   <div className="text-center">
                     <div className="miniapp-efficiency-score tabular-nums">{formattedEfficiencyScore}/100</div>
                     <p className="mt-1 text-sm font-semibold">{efficiencyGradeMessage}</p>
@@ -2465,7 +2496,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
               {isSettingsOpen ? (
-                <div className="miniapp-settings-popover absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
+                <div data-miniapp-popover="settings" className="miniapp-settings-popover absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <span className="font-medium text-slate-100">Настройки</span>
                     <button type="button" onClick={() => setIsSettingsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-800" aria-label="Закрыть настройки">
@@ -2580,8 +2611,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </section>
 
           <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="flex items-center gap-3">
-              <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
+            <div className="miniapp-list-toolbar flex items-center gap-3">
+              <div className="display-mode-toggle-group inline-flex min-w-0 flex-1 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
                 <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="true">
                   <List size={16} className="text-violet-300" aria-hidden="true" />
                   <span>Список</span>
@@ -2595,7 +2626,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
                 disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
                 title="Перенести просроченные задачи на сегодня на это же время"
                 aria-label="Перенести просроченные задачи на сегодня на это же время"
               >
@@ -2712,9 +2743,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </div>
         ) : (
 
-          <section className="-mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
-            <div className="flex items-center justify-between gap-3">
-              <div className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
+          <section className="miniapp-timeline-section -mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
+            <div className="miniapp-timeline-toolbar flex items-center justify-between gap-3">
+              <div className="display-mode-toggle-group inline-flex min-w-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
                 <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="false">
                   <List size={16} className="text-violet-300" aria-hidden="true" />
                   <span>Список</span>
@@ -2730,7 +2761,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 ))}
               </div>
             </div>
-            <div className="mb-3 mt-3 flex items-center justify-between gap-2">
+            <div className="miniapp-timeline-period-toolbar mb-3 mt-3 flex items-center justify-between gap-2">
               <div className="miniapp-timeline-date-nav">
                 <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
                 <div className="miniapp-timeline-date-current" aria-live="polite">
@@ -2746,7 +2777,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 type="button"
                 onClick={() => void postponeAllOverdueToToday()}
                 disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
+                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
                 title="Перенести просроченные задачи на сегодня на это же время"
                 aria-label="Перенести просроченные задачи на сегодня на это же время"
               >
