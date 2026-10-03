@@ -4590,12 +4590,94 @@ body[data-theme='light'] .focused-task-ai-panel {
 }
 
 .miniapp-postpone-button {
+  max-width: 100%;
   border: 1px solid rgba(56, 189, 248, 0.72);
   border-radius: 9999px;
   color: #7dd3fc;
   background: rgba(14, 165, 233, 0.08);
   box-shadow: 0 3px 10px rgba(2, 132, 199, 0.08);
   transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.miniapp-list-toolbar .display-mode-toggle-button,
+.miniapp-timeline-toolbar .display-mode-toggle-button {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.miniapp-timeline-section {
+  width: calc(100% + 2rem);
+  max-width: calc(100% + 2rem);
+  min-width: 0;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+.miniapp-timeline-toolbar,
+.miniapp-timeline-period-toolbar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.miniapp-timeline-toolbar > *,
+.miniapp-timeline-period-toolbar > * {
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .miniapp-timeline-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .miniapp-timeline-toolbar .display-mode-toggle-group,
+  .miniapp-timeline-view-switch {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .miniapp-timeline-toolbar .display-mode-toggle-group {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .miniapp-timeline-toolbar .display-mode-toggle-button,
+  .miniapp-timeline-view-switch button {
+    width: 100%;
+    padding-inline: 0.45rem;
+  }
+
+  .miniapp-timeline-date-nav {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .miniapp-timeline-section {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .miniapp-list-toolbar,
+  .miniapp-timeline-period-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .miniapp-list-toolbar .miniapp-postpone-button,
+  .miniapp-timeline-period-toolbar .miniapp-postpone-button {
+    width: 100%;
+  }
+
+  .miniapp-list-toolbar .display-mode-toggle-group {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .miniapp-list-filter-button {
