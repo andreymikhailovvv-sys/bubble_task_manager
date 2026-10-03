@@ -464,12 +464,12 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
       <button
         key={key}
         type="button"
-        className="inline-flex items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
+        className="inline-flex w-fit max-w-48 items-center gap-1 rounded-full bg-cyan-600/90 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-cyan-500"
         onClick={() => openTask(reference.taskId, matchedTask)}
         title={`Открыть задачу: ${buttonLabel}`}
       >
         <ArrowUpRight size={12} />
-        <span className="max-w-40 truncate">{buttonLabel}</span>
+        <span className="min-w-0 truncate">{buttonLabel}</span>
       </button>
     );
   };
