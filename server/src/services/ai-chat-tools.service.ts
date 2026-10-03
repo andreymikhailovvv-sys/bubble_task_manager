@@ -1,5 +1,5 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
-import { plannerToolsService, type PlannerActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
+import { plannerToolsService, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -10,6 +10,7 @@ import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
 export const MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST = 1;
+export const MAX_BATCH_TASK_ACTIONS = 100;
 export const WEB_SEARCH_CALL_CREDITS_MILLI = providerNanoUsdToMilliCredits(OPENAI_WEB_SEARCH_COST_NANO_USD);
 export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size: 'low' } as const;
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
@@ -27,7 +28,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'list_tasks', strict: true,
-    description: 'Получить широкий список реальных задач по фильтрам (например, все задачи за день или неделю). Используй search_tasks вместо этого инструмента для поиска нескольких конкретных задач по смыслу или названию.',
+    description: 'Получить полный/широкий список реальных задач по структурным фильтрам. Обязательно используй для запросов «все задачи», «все просроченные», «задачи сектора X», «задачи за день/неделю». Используй search_tasks только для поиска нескольких конкретных объектов по названию или смыслу. Если hasMore=true и пользователь просил все объекты, продолжи пагинацию.',
     parameters: { type: 'object', additionalProperties: false, required: ['itemType', 'statusScope', 'dueFrom', 'dueTo', 'sphereId', 'offset', 'limit'], properties: {
       itemType: { type: 'string', enum: ['any', 'task', 'subtask'] }, statusScope: { type: 'string', enum: ['active', 'completed', 'all'] },
       dueFrom: nullable('string'), dueTo: nullable('string'), sphereId: nullable('string'), offset: { type: 'number', minimum: 0 }, limit: { type: 'number', minimum: 1, maximum: 100 }
@@ -42,11 +43,20 @@ export const AI_CHAT_OPENAI_TOOLS = [
     parameters: { type: 'object', additionalProperties: false, required: [], properties: {} }
   },
   {
-    type: 'function', name: 'task_action', strict: true, description: 'Выполнить одну строго проверяемую операцию над задачами.',
+    type: 'function', name: 'task_action', strict: true, description: 'Выполнить одну строго проверяемую операцию над одной задачей. Не используй последовательно для массового запроса, если доступен task_actions.',
     parameters: { type: 'object', additionalProperties: false, required: ['operation', 'itemId', 'parentTaskId', 'title', 'description', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes', 'sphereId', 'location'], properties: {
       operation: { type: 'string', enum: ['create_task', 'create_event', 'create_subtask', 'rename', 'set_description', 'reschedule', 'clear_due_date', 'complete', 'reopen', 'delete', 'set_priority', 'set_notification', 'change_sphere'] },
       itemId: nullable('string'), parentTaskId: nullable('string'), title: nullable('string'), description: nullable('string'), dueDate: nullable('string'),
       importance: nullable('number'), urgency: nullable('number'), notifyBeforeMinutes: nullable('number'), sphereId: nullable('string'), location: nullable('string')
+    } }
+  },
+  {
+    type: 'function', name: 'task_actions', strict: true,
+    description: 'Выполнить несколько проверяемых изменений над ранее найденными существующими задачами за один вызов. Используй для массовых запросов: «все», «каждый», «остальные», «весь список» и при любом изменении нескольких объектов. Не используй для создания и удаления.',
+    parameters: { type: 'object', additionalProperties: false, required: ['actions'], properties: {
+      actions: { type: 'array', minItems: 1, maxItems: MAX_BATCH_TASK_ACTIONS, items: { type: 'object', additionalProperties: false, required: ['operation', 'itemId', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes', 'sphereId'], properties: {
+        operation: { type: 'string', enum: PLANNER_BATCH_OPERATIONS }, itemId: { type: 'string' }, dueDate: nullable('string'), importance: nullable('number'), urgency: nullable('number'), notifyBeforeMinutes: nullable('number'), sphereId: nullable('string')
+      } } }
     } }
   }
 ] as const;
@@ -69,6 +79,46 @@ const outputText = (response: ToolResponse) => {
   }
   return '';
 };
+
+type BatchFailure = { index: number; itemId: string; operation: string; code: string; message: string };
+export async function executePlannerBatchActions(options: {
+  value: unknown;
+  execute: (action: PlannerActionInput) => Promise<any>;
+  onSuccess?: (result: any) => void;
+}) {
+  const actions = (options.value as Partial<PlannerBatchActionInput> | null)?.actions;
+  if (!Array.isArray(actions)) return { ok: false as const, code: 'INVALID_ARGUMENTS', message: 'actions должен быть массивом.' };
+  if (actions.length === 0) return { ok: false as const, code: 'INVALID_ARGUMENTS', message: 'Пакет должен содержать хотя бы одно действие.' };
+  if (actions.length > MAX_BATCH_TASK_ACTIONS) return { ok: false as const, code: 'BATCH_TOO_LARGE', message: 'За один пакет можно выполнить максимум 100 действий.' };
+  const failures: BatchFailure[] = [];
+  let successCount = 0;
+  const seen = new Set<string>();
+  for (let index = 0; index < actions.length; index += 1) {
+    const action = actions[index] as PlannerBatchActionInput['actions'][number];
+    const operation = typeof action?.operation === 'string' ? action.operation : '';
+    const itemId = typeof action?.itemId === 'string' ? action.itemId : '';
+    if (!PLANNER_BATCH_OPERATIONS.includes(operation as never)) {
+      failures.push({ index, itemId, operation, code: 'INVALID_BATCH_OPERATION', message: 'Операция недоступна для пакетного изменения.' });
+      continue;
+    }
+    const key = JSON.stringify([operation, itemId, action.dueDate, action.importance, action.urgency, action.notifyBeforeMinutes, action.sphereId]);
+    if (seen.has(key)) {
+      failures.push({ index, itemId, operation, code: 'DUPLICATE_ACTION', message: 'Идентичное действие уже присутствует в пакете.' });
+      continue;
+    }
+    seen.add(key);
+    const plannerAction: PlannerActionInput = { operation: action.operation, itemId, parentTaskId: null, title: null, description: null, dueDate: action.dueDate, importance: action.importance, urgency: action.urgency, notifyBeforeMinutes: action.notifyBeforeMinutes, sphereId: action.sphereId, location: null };
+    try {
+      const result = await options.execute(plannerAction);
+      if (result?.ok) { successCount += 1; options.onSuccess?.(result); }
+      else failures.push({ index, itemId, operation, code: typeof result?.code === 'string' ? result.code : 'ACTION_FAILED', message: typeof result?.message === 'string' ? result.message : 'Не удалось выполнить действие.' });
+    } catch (error) {
+      failures.push({ index, itemId, operation, code: 'ACTION_FAILED', message: error instanceof Error ? error.message : 'Не удалось выполнить действие.' });
+    }
+  }
+  const failureCount = failures.length;
+  return { ok: failureCount === 0, requestedCount: actions.length, successCount, failureCount, partial: successCount > 0 && failureCount > 0, failures };
+}
 
 export async function runAiChatToolLoop(options: ToolLoopOptions) {
   const input = [...options.initialInput];
@@ -103,6 +153,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
+  let batchToolCalls = 0; let batchActionsRequested = 0; let batchActionsSucceeded = 0; let batchActionsFailed = 0;
   
   let providerCallCount = 0;
   let inputTokensTotal = 0; let outputTokensTotal = 0; const toolOperations: string[] = [];
@@ -194,7 +245,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       executeTool: async (name, value, round) => {
         toolOperations.push(name);
         
-        const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes' } as const)[name as 'search_tasks'];
+        const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes', task_actions: 'applying_changes' } as const)[name as 'search_tasks'];
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
@@ -207,6 +258,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'list_tasks') {
           const result = await plannerToolsService.list(input.userId, value as PlannerListInput);
           result.items.forEach((item: { id: string }) => resolvedItemIds.add(item.id));
+          const listInput = value as PlannerListInput;
+          console.info('[AI tools] list complete', { requestId, itemType: listInput.itemType, statusScope: listInput.statusScope, dueFromUsed: Boolean(listInput.dueFrom), dueToUsed: Boolean(listInput.dueTo), sphereFilterUsed: Boolean(listInput.sphereId), offset: result.offset, limit: listInput.limit, total: result.total, count: result.count, hasMore: result.hasMore, nextOffset: result.nextOffset });
           emitProgress('analyzing_retrieved_context');
           return result;
         }
@@ -226,6 +279,20 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           console.info('[AI tools] action', { requestId, operation: (value as PlannerActionInput).operation, itemId: (value as PlannerActionInput).itemId, ok: result.ok });
           return result;
         }
+        if (name === 'task_actions') {
+          batchToolCalls += 1;
+          const result = await executePlannerBatchActions({ value,
+            execute: (action) => plannerToolsService.action(input.userId, action, resolvedItemIds, resolvedSphereIds, input.userTimeZone),
+            onSuccess: (success) => { actionReports.push(success.report); if (success.undoOperation) undoOperations.push(success.undoOperation); }
+          });
+          if (typeof result.requestedCount === 'number' && typeof result.successCount === 'number' && typeof result.failureCount === 'number') {
+            batchActionsRequested += result.requestedCount; batchActionsSucceeded += result.successCount; batchActionsFailed += result.failureCount;
+            const operationCounts: Record<string, number> = {};
+            for (const action of (value as PlannerBatchActionInput).actions) operationCounts[action.operation] = (operationCounts[action.operation] ?? 0) + 1;
+            console.info('[AI tools] batch action completed', { requestId, requestedCount: result.requestedCount, successCount: result.successCount, failureCount: result.failureCount, operationCounts });
+          }
+          return result;
+        }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент задач.' };
       }
     });
@@ -236,7 +303,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     if (webReservation) { if (webSearchUsed) creditsSpentMilli += webReservation.totalMilli; else { await refundAiCreditReservation(webReservation); webReservation = null; } }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);

@@ -47,6 +47,19 @@ export type PlannerActionInput = {
   sphereId: string | null;
   location: string | null;
 };
+export const PLANNER_BATCH_OPERATIONS = ['reschedule', 'clear_due_date', 'complete', 'reopen', 'set_priority', 'set_notification', 'change_sphere'] as const;
+export type PlannerBatchOperation = typeof PLANNER_BATCH_OPERATIONS[number];
+export type PlannerBatchActionInput = {
+  actions: Array<{
+    operation: PlannerBatchOperation;
+    itemId: string;
+    dueDate: string | null;
+    importance: number | null;
+    urgency: number | null;
+    notifyBeforeMinutes: number | null;
+    sphereId: string | null;
+  }>;
+};
 export type PlannerUndoOperation = { taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } };
 
 export const normalizePlannerSearchText = (value: string) => value
