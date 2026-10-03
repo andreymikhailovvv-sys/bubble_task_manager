@@ -19,6 +19,7 @@ const MINI_APP_URL = process.env.TELEGRAM_MINI_APP_URL?.trim()
   || process.env.MINI_APP_URL?.trim()
   || process.env.APP_BASE_URL?.trim()
   || (APP_URL ? `${APP_URL.replace(/\/$/, '')}/miniapp` : '/miniapp');
+const TELEGRAM_AUTH_URL = APP_URL.startsWith('https://') ? `${APP_URL.replace(/\/$/, '')}/telegram-auth` : '';
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const MOSCOW_TIMEZONE = 'Europe/Moscow';
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -1058,8 +1059,12 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       '👋 <b>Bubble Task Manager Bot</b>\n\nВойдите в существующий аккаунт или создайте новый.',
       {
         inline_keyboard: [[
-          { text: '🔐 Войти', callback_data: 'auth_login' },
-          { text: '✨ Создать аккаунт', callback_data: 'auth_register' }
+          TELEGRAM_AUTH_URL
+            ? { text: '🔐 Войти', web_app: { url: TELEGRAM_AUTH_URL } }
+            : { text: '🔐 Войти', callback_data: 'auth_login' },
+          TELEGRAM_AUTH_URL
+            ? { text: '✨ Создать аккаунт', web_app: { url: `${TELEGRAM_AUTH_URL}?mode=register` } }
+            : { text: '✨ Создать аккаунт', callback_data: 'auth_register' }
         ]]
       }
     );
@@ -1697,6 +1702,25 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
 export const telegramService = {
   isEnabled,
   createTelegramLinkToken,
+  async completeWebLogin(chatId: string, user: { id: string; name: string | null; username: string | null }, isNewAccount = false) {
+    await prisma.$transaction(async (tx) => {
+      await tx.user.updateMany({ where: { telegramChatId: chatId, id: { not: user.id } }, data: { telegramChatId: null, telegramLinkedAt: null } });
+      await tx.user.update({ where: { id: user.id }, data: { telegramChatId: chatId, telegramLinkedAt: new Date() } });
+      await tx.telegramSession.upsert({
+        where: { chatId },
+        update: { userId: user.id, mode: 'IDLE', activeTaskId: null, registrationLogin: null, registrationPasswordHash: null },
+        create: { chatId, userId: user.id, mode: 'IDLE' }
+      });
+    });
+    listTaskIdsByChatId.delete(chatId);
+    pendingAiAttachmentByChatId.delete(chatId);
+    quickAiHistoryByChatId.delete(chatId);
+    await sendMessage(
+      chatId,
+      `✅ <b>${isNewAccount ? 'Аккаунт создан.' : 'Аккаунт подключён.'}</b>\nДобро пожаловать, ${escapeHtml(user.name ?? user.username ?? '')}! Теперь логин и пароль не нужно отправлять сообщением.`,
+      keyboardReplyMain
+    );
+  },
   isWebhookAuthorized(headers: Record<string, unknown>) {
     if (!WEBHOOK_SECRET) return true;
     const header = String(headers['x-telegram-bot-api-secret-token'] ?? '');

@@ -7017,3 +7017,36 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
   .miniapp-ai-progress-dots::after { animation: none; transition: none; }
   .miniapp-ai-progress-dots::after { content: '...'; }
 }
+.telegram-auth-page {
+  position: relative;
+  isolation: isolate;
+  background: radial-gradient(circle at 15% 15%, #172554 0, transparent 38%), linear-gradient(145deg, #020617 0%, #0f172a 52%, #111827 100%);
+}
+
+.telegram-auth-card {
+  z-index: 1;
+  background: linear-gradient(145deg, rgba(30, 41, 59, .92), rgba(15, 23, 42, .9));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .06);
+  backdrop-filter: blur(24px);
+}
+
+.telegram-auth-logo,
+.telegram-auth-submit {
+  background: linear-gradient(135deg, #0284c7, #7c3aed);
+}
+
+.telegram-auth-input {
+  border-color: rgba(148, 163, 184, .25);
+  background: rgba(2, 6, 23, .48);
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.telegram-auth-input:focus-within {
+  border-color: rgba(56, 189, 248, .75);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, .12);
+}
+
+.telegram-auth-submit:hover { filter: brightness(1.08); }
+.telegram-auth-orb { position: fixed; z-index: -1; border-radius: 9999px; filter: blur(70px); opacity: .28; }
+.telegram-auth-orb-one { width: 16rem; height: 16rem; top: -5rem; right: -5rem; background: #0ea5e9; }
+.telegram-auth-orb-two { width: 18rem; height: 18rem; bottom: -7rem; left: -7rem; background: #7c3aed; }

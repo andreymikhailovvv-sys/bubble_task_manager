@@ -20,6 +20,7 @@ import { calendarExportController } from '../controllers/calendar-export.control
 import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistrationService, normalizeAccountLogin, validatePersonalDataConsent } from '../services/account-registration.service.js';
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
+import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 
 export const apiRouter = Router();
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
@@ -251,59 +252,7 @@ const validateTelegramMiniAppInitData = (initDataRaw: string) => {
     throw new Error('TELEGRAM_BOT_TOKEN is required for mini app auth');
   }
 
-  const parsed = new URLSearchParams(initDataRaw);
-  const hash = parsed.get('hash');
-  if (!hash) {
-    throw new Error('Missing hash in init data');
-  }
-
-  const pairs: string[] = [];
-  parsed.forEach((value, key) => {
-    if (key === 'hash') return;
-    pairs.push(`${key}=${value}`);
-  });
-  pairs.sort();
-  const dataCheckString = pairs.join('\n');
-
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-  const expectedHash = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-  if (expectedHash.length !== hash.length) {
-    throw new Error('Invalid init data signature length');
-  }
-  const isValid = crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(hash));
-  if (!isValid) {
-    throw new Error('Invalid init data signature');
-  }
-
-  const authDateRaw = parsed.get('auth_date');
-  const authDate = authDateRaw ? Number(authDateRaw) : Number.NaN;
-  if (!Number.isFinite(authDate)) {
-    throw new Error('Invalid auth_date in init data');
-  }
-
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const maxAgeSeconds = 24 * 60 * 60;
-  if (nowSeconds - authDate > maxAgeSeconds) {
-    throw new Error('Init data is too old');
-  }
-
-  const userRaw = parsed.get('user');
-  if (!userRaw) {
-    throw new Error('Missing user in init data');
-  }
-
-  let user: { id: number; username?: string; first_name?: string; last_name?: string };
-  try {
-    user = JSON.parse(userRaw) as { id: number; username?: string; first_name?: string; last_name?: string };
-  } catch {
-    throw new Error('Invalid user payload in init data');
-  }
-
-  if (!user?.id) {
-    throw new Error('Missing telegram user id in init data');
-  }
-
-  return user;
+  return validateTelegramWebAppInitData(initDataRaw, botToken);
 };
 
 const ensureDeviceUser = async (req: any, res: any) => {
@@ -834,6 +783,90 @@ apiRouter.post('/auth/telegram-miniapp', async (req, res) => {
 
   setAuthCookies(res, user);
   console.info(`[MiniApp] auth success userId=${user.id} telegramChatId=${telegramUserId}`);
+  res.json({ user: toAuthUser(user) });
+});
+
+apiRouter.post('/auth/telegram-web-login', async (req, res) => {
+  const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
+  const login = sanitizeLogin(String(req.body?.login ?? ''));
+  const password = String(req.body?.password ?? '');
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken || !initDataRaw) {
+    res.status(400).json({ error: 'Откройте форму входа кнопкой в Telegram-боте' });
+    return;
+  }
+  if (!login || !password) {
+    res.status(400).json({ error: 'Укажите логин и пароль' });
+    return;
+  }
+
+  let telegramChatId: string;
+  try {
+    telegramChatId = String(validateTelegramWebAppInitData(initDataRaw, botToken).id);
+  } catch (error) {
+    console.warn(`[TelegramWebLogin] invalid init data: ${error instanceof Error ? error.message : 'unknown error'}`);
+    res.status(401).json({ error: 'Сессия Telegram устарела. Откройте форму заново' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { username: login } });
+  if (!user?.passwordHash || !authService.verifyPassword(password, user.passwordHash)) {
+    console.warn(`[TelegramWebLogin] invalid credentials chatId=${telegramChatId} login=${login}`);
+    res.status(401).json({ error: 'Неверный логин или пароль' });
+    return;
+  }
+
+  await telegramService.completeWebLogin(telegramChatId, user);
+  setAuthCookies(res, user);
+  console.info(`[TelegramWebLogin] success chatId=${telegramChatId} userId=${user.id}`);
+  res.json({ user: toAuthUser(user) });
+});
+
+apiRouter.post('/auth/telegram-web-register', async (req, res) => {
+  const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
+  const login = sanitizeLogin(String(req.body?.login ?? ''));
+  const password = String(req.body?.password ?? '');
+  const name = String(req.body?.name ?? '').trim();
+  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!botToken || !initDataRaw) {
+    res.status(400).json({ error: 'Откройте форму регистрации кнопкой в Telegram-боте' });
+    return;
+  }
+
+  let telegramChatId: string;
+  try {
+    telegramChatId = String(validateTelegramWebAppInitData(initDataRaw, botToken).id);
+  } catch (error) {
+    console.warn(`[TelegramWebRegister] invalid init data: ${error instanceof Error ? error.message : 'unknown error'}`);
+    res.status(401).json({ error: 'Сессия Telegram устарела. Откройте форму заново' });
+    return;
+  }
+
+  let user;
+  try {
+    validatePersonalDataConsent(req.body?.consentAccepted);
+    user = await accountRegistrationService.register({
+      login,
+      password,
+      name,
+      personalDataConsent: { version: PERSONAL_DATA_CONSENT_VERSION, ipAddress: req.ip }
+    });
+  } catch (error) {
+    if (!(error instanceof AccountRegistrationError)) throw error;
+    const response = error.code === 'INVALID_LOGIN'
+      ? { status: 400, message: 'Логин должен содержать минимум 3 символа' }
+      : error.code === 'INVALID_PASSWORD'
+        ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
+        : error.code === 'CONSENT_REQUIRED'
+          ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
+          : { status: 409, message: 'Логин уже занят' };
+    res.status(response.status).json({ error: response.message });
+    return;
+  }
+
+  await telegramService.completeWebLogin(telegramChatId, user, true);
+  setAuthCookies(res, user);
+  console.info(`[TelegramWebRegister] success chatId=${telegramChatId} userId=${user.id}`);
   res.json({ user: toAuthUser(user) });
 });
 
