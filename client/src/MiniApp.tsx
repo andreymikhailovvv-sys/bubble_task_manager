@@ -13,6 +13,7 @@ import { formatCreditsSpent } from './lib/credits';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
 import { WebCitations } from './components/WebCitations';
+import { attachChatMessageId } from './lib/chatMessages';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -745,7 +746,7 @@ export default function MiniApp() {
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-        .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }))
+        .map((message) => attachChatMessageId(message, crypto.randomUUID()))
         .slice(-20);
       setAiChatProjects((prev) => normalizeMiniAiChatProjects(syncedProjects.projects?.length ? syncedProjects.projects : prev).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
