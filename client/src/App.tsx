@@ -5848,8 +5848,8 @@ ${allContext}`,
       /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
-        <div className={`fixed inset-0 ${isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
-          <div className="flex w-full max-w-[1380px] items-stretch justify-center gap-3">
+        <div className={`focused-task-modal-backdrop fixed inset-0 ${isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
+          <div className="focused-task-modal-layout flex w-full max-w-[1380px] items-stretch justify-center gap-3">
 
         {timelineCreateMenu ? (
           <div
@@ -5948,7 +5948,7 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside data-tour="ai-task-help" className="ai-chat-lightweight app-side-panel focused-task-ai-panel relative order-2 hidden h-[min(90vh,800px)] min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+        <aside data-tour="ai-task-help" className="ai-chat-lightweight app-side-panel focused-task-ai-panel focused-task-modal-panel-height relative order-2 hidden min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
               <div className="absolute right-4 top-4 z-20 flex items-center gap-1.5">
                 <button
                   className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
@@ -6149,7 +6149,7 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside className="focused-task-editor-shell focus-mode-shell order-1 relative h-[min(90vh,800px)] min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
+        <aside className="focused-task-editor-shell focus-mode-shell focused-task-modal-panel-height order-1 relative min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
             <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-24 top-3 z-20 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
             <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-14 top-3 z-20" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
             <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
