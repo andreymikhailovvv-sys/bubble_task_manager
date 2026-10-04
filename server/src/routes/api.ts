@@ -21,19 +21,14 @@ import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistr
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
+import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
+import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
 
 export const apiRouter = Router();
+apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
-const CREDIT_PACKS = [
-  { key: 'credit_start', name: 'Старт', creditsAmount: 1800, price: 199 },
-  { key: 'credit_pro', name: 'Про', creditsAmount: 6200, price: 690 },
-  { key: 'credit_max', name: 'Макс', creditsAmount: 14000, price: 1490 }
-] as const;
-type CreditPackKey = typeof CREDIT_PACKS[number]['key'];
-
-
 const sanitizeLogin = normalizeAccountLogin;
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -397,16 +392,7 @@ apiRouter.get('/subscription-links', async (_req, res) => {
 });
 
 apiRouter.get('/credit-packs', async (_req, res) => {
-  const storedPacks = await prisma.creditPack.findMany({
-    where: { key: { in: CREDIT_PACKS.map((pack) => pack.key) } },
-    select: { key: true, paymentUrl: true, isActive: true }
-  });
-  res.json({
-    packs: CREDIT_PACKS.map((pack) => {
-      const stored = storedPacks.find((candidate) => candidate.key === pack.key);
-      return { ...pack, paymentUrl: stored?.paymentUrl ?? '', isActive: stored?.isActive ?? true };
-    })
-  });
+  res.json(await creditPacksResponse());
 });
 
 apiRouter.post('/auth/logout', (_req, res) => {
@@ -550,7 +536,7 @@ apiRouter.post('/admin/credit-packs', async (req, res) => {
 
   await Promise.all(CREDIT_PACKS.map((pack) => prisma.creditPack.upsert({
     where: { key: pack.key },
-    create: { ...pack, paymentUrl: links[pack.key] },
+    create: { key: pack.key, name: pack.name, creditsAmount: pack.creditsAmount, price: pack.price, paymentUrl: links[pack.key] },
     update: { name: pack.name, creditsAmount: pack.creditsAmount, price: pack.price, paymentUrl: links[pack.key] }
   })));
 
