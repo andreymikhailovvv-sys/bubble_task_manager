@@ -2251,14 +2251,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
-  const downloadSubtaskAttachment = (attachment: TaskAttachment) => {
-    if (!openedSubtask) return;
-    const link = document.createElement('a');
-    link.href = api.getTaskAttachmentDownloadUrl(openedSubtask.id, attachment.id);
-    link.download = attachment.name;
-    link.click();
-  };
-
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
@@ -3306,7 +3298,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </button>
               {openedSubtask ? <button type="button" className="miniapp-focus-icon-button" disabled={isUploadingSubtaskAttachment} onClick={() => subtaskAttachmentInputRef.current?.click()} title="Добавить вложение" aria-label="Добавить вложение к подзадаче"><Paperclip size={15} /></button> : null}
               {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
-              {subtaskAttachments.map((attachment) => <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] cursor-pointer items-center gap-1 rounded-xl border px-2 py-1 text-[11px]" role="button" tabIndex={0} title={`${attachment.name} • скачать`} onClick={() => downloadSubtaskAttachment(attachment)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') downloadSubtaskAttachment(attachment); }}><span className="inline-flex min-w-0 items-center gap-1"><Paperclip size={11} /><span className="truncate">{attachment.name}</span></span><button type="button" aria-label={`Удалить ${attachment.name}`} onClick={(event) => { event.stopPropagation(); void removeSubtaskAttachment(attachment.id); }}><X size={11} /></button></div>)}
+              {subtaskAttachments.map((attachment) => (
+                <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
+                  <a
+                    className="inline-flex min-w-0 items-center gap-1"
+                    href={api.getTaskAttachmentDownloadUrl(openedSubtask!.id, attachment.id)}
+                    download={attachment.name}
+                    title={`${attachment.name} • скачать`}
+                    aria-label={`Скачать ${attachment.name}`}
+                  >
+                    <Paperclip size={11} className="shrink-0" />
+                    <span className="truncate">{attachment.name}</span>
+                  </a>
+                  <button type="button" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeSubtaskAttachment(attachment.id)}>
+                    <X size={11} />
+                  </button>
+                </div>
+              ))}
             </div>
             {isSubtaskNotesEditorOpen ? <NotesEditor miniAppSheet value={openedSubtaskDraft.description} onChange={(description) => changeSubtaskDraft({ description })} onClose={() => setIsSubtaskNotesEditorOpen(false)} /> : null}
             {isCreatingNewSubtask && openedTask ? (
