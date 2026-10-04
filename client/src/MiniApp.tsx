@@ -590,6 +590,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const isTelegramRuntime = runtime === 'telegram';
   const isWebRuntime = runtime === 'web';
   const clientSurface = isTelegramRuntime ? 'miniapp' : 'web';
+  const [webVisualViewport, setWebVisualViewport] = useState(() => ({
+    top: window.visualViewport?.offsetTop ?? 0,
+    height: window.visualViewport?.height ?? window.innerHeight
+  }));
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -868,6 +872,35 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setLogoutSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!isWebRuntime) return;
+
+    const updateVisualViewport = () => {
+      const viewport = window.visualViewport;
+      const nextViewport = {
+        top: Math.max(0, viewport?.offsetTop ?? 0),
+        height: Math.max(1, viewport?.height ?? window.innerHeight)
+      };
+      setWebVisualViewport((current) => (
+        Math.abs(current.top - nextViewport.top) < 0.5
+        && Math.abs(current.height - nextViewport.height) < 0.5
+          ? current
+          : nextViewport
+      ));
+    };
+
+    updateVisualViewport();
+    window.addEventListener('resize', updateVisualViewport);
+    window.visualViewport?.addEventListener('resize', updateVisualViewport);
+    window.visualViewport?.addEventListener('scroll', updateVisualViewport);
+
+    return () => {
+      window.removeEventListener('resize', updateVisualViewport);
+      window.visualViewport?.removeEventListener('resize', updateVisualViewport);
+      window.visualViewport?.removeEventListener('scroll', updateVisualViewport);
+    };
+  }, [isWebRuntime]);
 
   useEffect(() => {
     void loadData({ showInitialLoader: true });
@@ -2986,9 +3019,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       </div>
 
       {openedTask && openedTaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-[90] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}>
+        <div
+          className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} fixed inset-0 z-[90] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
+          style={isWebRuntime ? { top: webVisualViewport.top, bottom: 'auto', height: webVisualViewport.height } : undefined}
+        >
           <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
-            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+            <div className="miniapp-focus-task-scroll-layout flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
                 <div className="flex items-center gap-2">

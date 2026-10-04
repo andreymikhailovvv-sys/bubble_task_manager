@@ -4203,6 +4203,32 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   width: min(450px, 32vw);
 }
 
+.focused-task-modal-panel-height {
+  height: min(90vh, 800px);
+  height: min(90dvh, 800px);
+}
+
+@media (max-width: 1023px) {
+  .focused-task-modal-backdrop {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .focused-task-modal-layout {
+    min-height: 0;
+  }
+
+  .focused-task-modal-panel-height {
+    height: calc(100vh - 1rem);
+    height: calc(100dvh - max(0.5rem, env(safe-area-inset-top)) - max(0.5rem, env(safe-area-inset-bottom)));
+    max-height: 800px;
+  }
+}
+
 .focused-task-title-input::placeholder {
   color: rgba(100, 116, 139, 0.58);
 }
@@ -5748,6 +5774,28 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   background: #fff;
   color: #0f172a;
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.3);
+}
+
+@media (max-width: 639px) {
+  .miniapp-web-task-backdrop {
+    align-items: flex-start;
+    box-sizing: border-box;
+    padding-top: max(0.5rem, env(safe-area-inset-top));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .miniapp-web-task-backdrop .miniapp-focus-task-panel {
+    height: 100%;
+    max-height: 100%;
+    border-radius: 2rem;
+  }
+
+  .miniapp-web-task-backdrop .miniapp-focus-task-scroll-layout {
+    height: 100%;
+    max-height: none;
+  }
 }
 
 .miniapp-light .miniapp-focus-panel {
