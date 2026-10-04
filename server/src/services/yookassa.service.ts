@@ -12,11 +12,34 @@ export type YooKassaPayment = {
 };
 
 export class YooKassaError extends Error {
-  constructor(message: string, public readonly httpStatus?: number, public readonly providerCode?: string) {
+  public readonly httpStatus?: number;
+  public readonly providerCode?: string;
+  public readonly providerErrorId?: string;
+  public readonly providerDescription?: string;
+  public readonly providerParameter?: string;
+
+  constructor(message: string, diagnostics: {
+    httpStatus?: number;
+    providerCode?: string;
+    providerErrorId?: string;
+    providerDescription?: string;
+    providerParameter?: string;
+  } = {}) {
     super(message);
     this.name = 'YooKassaError';
+    this.httpStatus = diagnostics.httpStatus;
+    this.providerCode = diagnostics.providerCode;
+    this.providerErrorId = diagnostics.providerErrorId;
+    this.providerDescription = diagnostics.providerDescription;
+    this.providerParameter = diagnostics.providerParameter;
   }
 }
+
+const sanitizedProviderString = (value: unknown, maxLength: number) => {
+  if (typeof value !== 'string') return undefined;
+  const sanitized = value.trim().slice(0, maxLength);
+  return sanitized || undefined;
+};
 
 export const isYooKassaConfigured = () => Boolean(process.env.YOOKASSA_SHOP_ID?.trim() && process.env.YOOKASSA_SECRET_KEY?.trim());
 
@@ -38,12 +61,18 @@ async function providerRequest(path: string, init: RequestInit): Promise<YooKass
       headers: { Authorization: authorization, 'Content-Type': 'application/json', ...init.headers }
     });
     if (!response.ok) {
-      let code: string | undefined;
+      let diagnostics: ConstructorParameters<typeof YooKassaError>[1] = { httpStatus: response.status };
       try {
-        const error = await response.json() as { code?: unknown; type?: unknown };
-        code = typeof error.code === 'string' ? error.code : typeof error.type === 'string' ? error.type : undefined;
+        const error = await response.json() as { type?: unknown; id?: unknown; code?: unknown; description?: unknown; parameter?: unknown };
+        diagnostics = {
+          httpStatus: response.status,
+          providerCode: sanitizedProviderString(error.code, 200),
+          providerErrorId: sanitizedProviderString(error.id, 200),
+          providerDescription: sanitizedProviderString(error.description, 500),
+          providerParameter: sanitizedProviderString(error.parameter, 200)
+        };
       } catch { /* Provider body is deliberately not retained. */ }
-      throw new YooKassaError('YooKassa request failed', response.status, code);
+      throw new YooKassaError('YooKassa request failed', diagnostics);
     }
     return await response.json() as YooKassaPayment;
   } catch (error) {

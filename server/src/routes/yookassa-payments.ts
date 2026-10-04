@@ -62,7 +62,14 @@ yookassaPaymentsRouter.post('/credit-packs/:packKey', requireAuth, async (req, r
     return void res.json({ purchaseId: purchase.id, status: purchase.status, confirmationUrl: purchase.confirmationUrl });
   } catch (error) {
     await prisma.creditPurchase.update({ where: { id: purchase.id }, data: { status: 'create_failed' } });
-    console.error('[Payments] YooKassa create failed', { purchaseId: purchase.id, httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined, providerCode: error instanceof YooKassaError ? error.providerCode : undefined });
+    console.error('[Payments] YooKassa create failed', {
+      purchaseId: purchase.id,
+      httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
+      providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
+      providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
+      providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
+      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+    });
     return void res.status(502).json({ error: 'Не удалось создать платёж. Попробуйте ещё раз.' });
   }
 });
@@ -78,7 +85,14 @@ yookassaPaymentsRouter.post('/webhook', async (req, res) => {
     console.info('[Payments] YooKassa webhook', { event, providerPaymentId, purchaseId: result.purchase?.id });
     return void res.json({ ok: true });
   } catch (error) {
-    console.error('[Payments] YooKassa webhook verification failed', { providerPaymentId, httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined, providerCode: error instanceof YooKassaError ? error.providerCode : undefined });
+    console.error('[Payments] YooKassa webhook verification failed', {
+      providerPaymentId,
+      httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
+      providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
+      providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
+      providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
+      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+    });
     return void res.status(502).json({ error: 'Временная ошибка обработки платежа.' });
   }
 });
@@ -93,7 +107,14 @@ yookassaPaymentsRouter.get('/purchases/:purchaseId', requireAuth, async (req, re
         const verified = await yookassaService.getPayment(purchase.yookassaPaymentId);
         purchase = (await reconcileCreditPurchaseFromYooKassa(verified, purchase.id)).purchase ?? purchase;
       } catch (error) {
-        console.warn('[Payments] YooKassa status reconciliation failed', { purchaseId: purchase.id, httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined });
+        console.warn('[Payments] YooKassa status reconciliation failed', {
+          purchaseId: purchase.id,
+          httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
+          providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
+          providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
+          providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
+          providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+        });
       }
     } else purchase = await prisma.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } });
   }
