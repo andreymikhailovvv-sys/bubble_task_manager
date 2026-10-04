@@ -23,6 +23,7 @@ import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
+import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { WebCitations } from './components/WebCitations';
 
@@ -746,6 +747,8 @@ export default function App() {
   const [focusDistractionTaskId, setFocusDistractionTaskId] = useState<string | null>(null);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+  const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const creditPurchase = useCreditPurchase({ surface: 'web', openConfirmation: (url) => window.location.assign(url), onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); } });
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramLinkUrl, setTelegramLinkUrl] = useState<string | null>(null);
@@ -1008,10 +1011,20 @@ export default function App() {
 
   useEffect(() => {
     api.getCreditPacks()
-      .then((response) => setCreditPacks(response.packs))
+      .then((response) => { setCreditPacks(response.packs); setCreditPurchaseAvailable(response.purchaseAvailable); })
       .catch(() => {
         // Не блокируем приложение, если пакеты временно недоступны.
       });
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const purchaseId = params.get('payment') === 'return' ? params.get('purchaseId') : null;
+    if (!purchaseId) return;
+    creditPurchase.setPendingPurchaseId(purchaseId);
+    void creditPurchase.check(purchaseId).catch((error) => creditPurchase.setMessage(error instanceof Error ? error.message : 'Не удалось проверить платёж'));
+    params.delete('payment'); params.delete('purchaseId');
+    window.history.replaceState({}, '', `${window.location.pathname}${params.size ? `?${params.toString()}` : ''}${window.location.hash}`);
   }, []);
 
   useEffect(() => {
@@ -4607,18 +4620,23 @@ ${allContext}`,
               <p className="mt-1 text-sm text-muted">Разовая покупка кредитов без изменения текущей подписки.</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
                 {creditPacks.filter((pack) => pack.isActive).map((pack) => {
-                  const link = pack.paymentUrl.trim();
+                  const isCreating = creditPurchase.creatingPackKey === pack.key;
                   return (
                     <article key={pack.key} className="subscription-plan-card flex flex-col rounded-2xl border p-3 shadow-xl">
                       <div className="text-xl font-bold text-fuchsia-300">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div>
                       <div className="mt-1 text-base font-semibold text-secondary">{pack.price.toLocaleString('ru-RU')} ₽</div>
-                      <a href={link || undefined} target={link ? '_blank' : undefined} rel={link ? 'noreferrer' : undefined} aria-disabled={!link} onClick={(event) => { if (!link) event.preventDefault(); }} className={`mt-2 rounded-xl px-4 py-2 text-center text-sm font-semibold shadow-lg transition ${link ? 'bg-gradient-to-r from-cyan-600 to-fuchsia-600 text-white hover:-translate-y-0.5' : 'cursor-not-allowed bg-slate-500/40 text-slate-300'}`}>
-                        {link ? 'Купить' : 'Скоро'}
-                      </a>
+                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="mt-2 rounded-xl bg-gradient-to-r from-cyan-600 to-fuchsia-600 px-4 py-2 text-center text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50">
+                        {isCreating ? 'Создаём платёж…' : creditPurchaseAvailable ? 'Купить' : 'Оплата недоступна'}
+                      </button>
                     </article>
                   );
                 })}
               </div>
+              {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+              </div> : null}
+              {creditPurchase.message ? <div className="mt-3 rounded-xl border border-cyan-400/30 bg-cyan-950/30 p-3 text-sm text-secondary" role="status">{creditPurchase.message}{creditPurchase.message.includes('войдите') ? <button type="button" className="ml-2 underline" onClick={() => setAuthModalMode('login')}>Войти</button> : null}</div> : null}
             </section>
             <p className="px-4 pb-4 text-center text-xs leading-5 text-muted sm:px-5 sm:pb-4">
               Приобретая платные функции Сервиса, вы принимаете условия{' '}
