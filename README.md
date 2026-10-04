@@ -172,6 +172,15 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 ```
 5. В боте отправьте `/start`, затем нажмите «Войти» или «Создать аккаунт»: бот откроет соответствующую защищённую Web App-форму. Для формирования её URL задайте публичный HTTPS-адрес в `APP_URL` (или `PUBLIC_APP_URL`).
 
+## Подключение оплаты AI-кредитов через ЮKassa
+
+1. Добавьте в production окружение `YOOKASSA_SHOP_ID` и `YOOKASSA_SECRET_KEY`, затем выполните redeploy/restart. Секретный ключ является только серверным и не должен публиковаться.
+2. В кабинете ЮKassa откройте **Интеграция → HTTP-уведомления**.
+3. Укажите URL `https://planirovych.ru/api/payments/yookassa/webhook`.
+4. Включите события `payment.succeeded` и `payment.canceled`.
+
+Если магазин требует передачу объекта чека, параметры receipt и НДС необходимо отдельно согласовать с бухгалтерией и настроить до включения production-платежей: эта интеграция намеренно не угадывает `vat_code` или систему налогообложения.
+
 ### Relay webhook нового бота через Render
 
 Отдельный endpoint `POST /api/telegram-relay` пересылает update в основной сервис и не вызывает обработчики Telegram-бота. По умолчанию endpoint выключен и отвечает `404`. Для Render задайте `TELEGRAM_RELAY_ENABLED=true`, HTTPS-адрес `TELEGRAM_RELAY_TARGET_URL` и `TELEGRAM_RELAY_SOURCE_SECRET`; при необходимости проверки на целевом webhook также задайте `TELEGRAM_RELAY_TARGET_SECRET`, совпадающий с `TELEGRAM_WEBHOOK_SECRET` на Timeweb. Webhook нового бота регистрируется вручную с `secret_token`, равным `TELEGRAM_RELAY_SOURCE_SECRET`.

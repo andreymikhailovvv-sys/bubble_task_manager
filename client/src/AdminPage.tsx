@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { api, type CreditPackLinks, type SubscriptionLinks } from './lib/api';
+import { api, type SubscriptionLinks } from './lib/api';
 
 type AdminUser = {
   id: string;
@@ -21,18 +21,15 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState(false);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [subscriptionLinksSaving, setSubscriptionLinksSaving] = useState(false);
-  const [creditPackLinks, setCreditPackLinks] = useState<CreditPackLinks>({ credit_start: '', credit_pro: '', credit_max: '' });
-  const [creditPackLinksSaving, setCreditPackLinksSaving] = useState(false);
 
   async function loadUsers(event?: FormEvent) {
     event?.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const [response, linksResponse, creditPacksResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks(), api.getCreditPacks()]);
+      const [response, linksResponse] = await Promise.all([api.adminGetUsers({ password }), api.getSubscriptionLinks()]);
       setUsers(response.users);
       setSubscriptionLinks(linksResponse.links);
-      setCreditPackLinks(Object.fromEntries(creditPacksResponse.packs.map((pack) => [pack.key, pack.paymentUrl])) as CreditPackLinks);
       if (response.users.length > 0 && !selectedUserId) {
         setSelectedUserId(response.users[0].id);
       }
@@ -82,20 +79,6 @@ export default function AdminPage() {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить ссылки подписок');
     } finally {
       setSubscriptionLinksSaving(false);
-    }
-  }
-
-  async function saveCreditPackLinks(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setCreditPackLinksSaving(true);
-    try {
-      const result = await api.adminSaveCreditPackLinks({ password, links: creditPackLinks });
-      setCreditPackLinks(result.links);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить ссылки покупки кредитов');
-    } finally {
-      setCreditPackLinksSaving(false);
     }
   }
 
@@ -156,24 +139,6 @@ export default function AdminPage() {
             className="mt-4 rounded-md bg-fuchsia-600 px-4 py-2 text-sm font-medium text-white hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {subscriptionLinksSaving ? 'Сохранение...' : 'Сохранить ссылки'}
-          </button>
-        </form>
-
-        <form onSubmit={saveCreditPackLinks} className="rounded-xl border border-cyan-400/25 bg-gradient-to-br from-slate-900/90 to-cyan-950/30 p-4 shadow-xl">
-          <div className="mb-3">
-            <h2 className="text-lg font-semibold text-cyan-100">Ссылки покупки AI-кредитов</h2>
-            <p className="text-xs text-slate-400">Настройте отдельную ссылку оплаты для каждого разового пакета.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {([['credit_start', 'Старт'], ['credit_pro', 'Про'], ['credit_max', 'Макс']] as const).map(([key, label]) => (
-              <label key={key} className="text-sm text-slate-200">
-                {label}
-                <input type="url" placeholder="https://..." value={creditPackLinks[key]} onChange={(event) => setCreditPackLinks((prev) => ({ ...prev, [key]: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-sm outline-none ring-cyan-400 focus:ring-2" />
-              </label>
-            ))}
-          </div>
-          <button type="submit" disabled={creditPackLinksSaving} className="mt-4 rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60">
-            {creditPackLinksSaving ? 'Сохранение...' : 'Сохранить ссылки кредитов'}
           </button>
         </form>
 

@@ -194,5 +194,17 @@ export async function grantBonusCreditsMilliInTransaction(userId: string, amount
   return updateWallet(tx, userId, next, wallet.aiCreditsPeriod);
 }
 
+export async function grantPurchasedCreditsMilliInTransaction(userId: string, amountMilli: number, tx: WalletTransaction) {
+  if (!Number.isSafeInteger(amountMilli) || amountMilli <= 0) throw new TypeError('amountMilli must be a positive safe integer');
+  const row = await selectWalletForUpdate(tx, userId);
+  if (!row) throw new Error('User not found');
+  const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+  return updateWallet(tx, userId, {
+    aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli,
+    aiBonusCreditsMilli: wallet.aiBonusCreditsMilli,
+    aiPurchasedCreditsMilli: wallet.aiPurchasedCreditsMilli + amountMilli
+  }, wallet.aiCreditsPeriod);
+}
+
 export const grantBonusCreditsMilli = (userId: string, amountMilli: number, db: WalletDatabase = prisma) => grantCreditsMilli(userId, amountMilli, 'bonus', db);
 export const grantPurchasedCreditsMilli = (userId: string, amountMilli: number, db: WalletDatabase = prisma) => grantCreditsMilli(userId, amountMilli, 'purchased', db);
