@@ -1,6 +1,6 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment, WebCitation, WebSource } from './types';
 
-type ApiError = Error & { status?: number };
+export type ApiError = Error & { status?: number; code?: string };
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer';
@@ -38,10 +38,12 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}`;
+    let errorCode: string | undefined;
     try {
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const payload = await response.json() as { error?: unknown; message?: unknown };
+        const payload = await response.json() as { error?: unknown; message?: unknown; code?: unknown };
+        if (typeof payload.code === 'string') errorCode = payload.code;
         const candidate = typeof payload.error === 'string'
           ? payload.error
           : typeof payload.message === 'string'
@@ -65,6 +67,7 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
     const error = new Error(errorMessage) as ApiError;
     error.status = response.status;
+    error.code = errorCode;
     if (response.status === 401) {
       unauthorizedHandler?.();
     }
@@ -151,8 +154,9 @@ export type CurrentUser = {
 };
 export type SubscriptionLinks = { start: string; pro: string; max: string };
 export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
-export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; paymentUrl: string; isActive: boolean };
+export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; isActive: boolean };
 export type CreditPackLinks = Record<CreditPackKey, string>;
+export type CreditPurchase = { id: string; creditPackKey: CreditPackKey; creditsAmount: number; price: number; status: string; credited: boolean };
 
 type AdminUser = {
   id: string;
@@ -328,7 +332,10 @@ export const api = {
       body: JSON.stringify(payload)
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
-  getCreditPacks: () => request<{ packs: CreditPack[] }>('/api/credit-packs'),
+  getCreditPacks: () => request<{ packs: CreditPack[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean }>('/api/credit-packs'),
+  createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp' }) =>
+    request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface }) }),
+  getCreditPurchaseStatus: (purchaseId: string) => request<{ purchase: CreditPurchase }>(`/api/payments/yookassa/purchases/${encodeURIComponent(purchaseId)}`),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {
       method: 'POST',

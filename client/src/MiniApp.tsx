@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -14,6 +14,7 @@ import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
 import { WebCitations } from './components/WebCitations';
 import { attachChatMessageId } from './lib/chatMessages';
+import { useCreditPurchase } from './lib/useCreditPurchase';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -691,6 +692,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [aiCredits, setAiCredits] = useState(100);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [isCreditPurchaseOpen, setIsCreditPurchaseOpen] = useState(false);
+  const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+  const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
+  const creditPurchase = useCreditPurchase({
+    surface: 'miniapp',
+    openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
+    onSucceeded: async () => { const { user } = await api.getMe(); setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }
+  });
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -2461,6 +2470,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     main.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
   }, [displayMode, timelineToday.currentTimeTop, timelineToday.isTodayVisible]);
 
+  useEffect(() => {
+    void api.getCreditPacks().then((result) => { setCreditPacks(result.packs); setCreditPurchaseAvailable(result.purchaseAvailable); }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const checkPending = () => { if (document.visibilityState === 'visible' && creditPurchase.pendingPurchaseId) void creditPurchase.check(creditPurchase.pendingPurchaseId).catch(() => undefined); };
+    window.addEventListener('focus', checkPending);
+    document.addEventListener('visibilitychange', checkPending);
+    return () => { window.removeEventListener('focus', checkPending); document.removeEventListener('visibilitychange', checkPending); };
+  }, [creditPurchase.check, creditPurchase.pendingPurchaseId]);
+
   if (loading) {
     return <main className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 text-sm ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}>Загружаем Планировыч…</main>;
   }
@@ -2497,10 +2517,19 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             />
             </div>
             <div className="relative inline-flex shrink-0 items-center gap-1">
-              <div className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Доступные ИИ-кредиты" aria-label={`ИИ-кредиты: ${aiCredits}`}>
+              <button type="button" onClick={() => setIsCreditPurchaseOpen((open) => !open)} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Купить AI-кредиты" aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
                 <span>{aiCredits}</span>
-              </div>
+              </button>
+              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
+                <div className="flex items-center justify-between"><h2 className="font-semibold">AI-кредиты</h2><button type="button" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button></div>
+                <p className="mt-1 text-xs text-slate-400">Текущий баланс: {aiCredits}</p>
+                <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="flex items-center justify-between gap-2 rounded-xl border border-slate-700 p-2">
+                  <span className="text-xs font-medium">{pack.creditsAmount.toLocaleString('ru-RU')} — {pack.price.toLocaleString('ru-RU')} ₽</span>
+                  <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
+                </div>)}</div>
+                {creditPurchase.message ? <p className="mt-3 text-xs text-cyan-300" role="status">{creditPurchase.message}</p> : null}
+              </div> : null}
               <button
                 type="button"
                 onClick={() => setIsEfficiencyDetailsOpen((open) => !open)}
