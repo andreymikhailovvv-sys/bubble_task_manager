@@ -333,8 +333,8 @@ export const api = {
     }),
   getSubscriptionLinks: () => request<{ links: SubscriptionLinks }>('/api/subscription-links'),
   getCreditPacks: () => request<{ packs: CreditPack[]; paymentProvider: 'yookassa' | null; purchaseAvailable: boolean }>('/api/credit-packs'),
-  createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp' }) =>
-    request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface }) }),
+  createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
+    request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface, ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) }) }),
   getCreditPurchaseStatus: (purchaseId: string) => request<{ purchase: CreditPurchase }>(`/api/payments/yookassa/purchases/${encodeURIComponent(purchaseId)}`),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {

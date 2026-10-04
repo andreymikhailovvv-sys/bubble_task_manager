@@ -7,8 +7,11 @@ export function useCreditPurchase(options: { surface: 'web' | 'miniapp'; onSucce
   const [creatingPackKey, setCreatingPackKey] = useState<CreditPackKey | null>(null);
   const [pendingPurchaseId, setPendingPurchaseId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [receiptEmail, setReceiptEmail] = useState('');
+  const [isReceiptEmailRequired, setIsReceiptEmailRequired] = useState(false);
   const pollingStartedAt = useRef(0);
   const creatingRef = useRef(false);
+  const purchaseAttemptRef = useRef<{ packKey: CreditPackKey; clientRequestId: string } | null>(null);
 
   const applyStatus = useCallback(async (purchase: CreditPurchase) => {
     if (purchase.status === 'succeeded' && purchase.credited) {
@@ -39,14 +42,14 @@ export function useCreditPurchase(options: { surface: 'web' | 'miniapp'; onSucce
     return () => window.clearInterval(timer);
   }, [check, pendingPurchaseId]);
 
-  const start = useCallback(async (packKey: CreditPackKey) => {
+  const createAttempt = useCallback(async (attempt: { packKey: CreditPackKey; clientRequestId: string }, email?: string) => {
     if (creatingRef.current) return;
     creatingRef.current = true;
-    setCreatingPackKey(packKey);
+    setCreatingPackKey(attempt.packKey);
     setMessage(null);
-    const clientRequestId = crypto.randomUUID();
     try {
-      const result = await api.createCreditPurchase({ packKey, clientRequestId, clientSurface: optionsRef.current.surface });
+      const result = await api.createCreditPurchase({ ...attempt, clientSurface: optionsRef.current.surface, ...(email ? { receiptEmail: email } : {}) });
+      setIsReceiptEmailRequired(false);
       setPendingPurchaseId(result.purchaseId);
       pollingStartedAt.current = Date.now();
       if (result.status === 'succeeded') await check(result.purchaseId);
@@ -54,9 +57,24 @@ export function useCreditPurchase(options: { surface: 'web' | 'miniapp'; onSucce
       else setMessage('Платёж создан, но ссылка оплаты пока недоступна.');
     } catch (error) {
       const apiError = error as ApiError;
-      setMessage(apiError.code === 'PAYMENT_ACCOUNT_REQUIRED' ? 'Для покупки кредитов войдите или зарегистрируйтесь.' : apiError.message);
+      if (apiError.code === 'RECEIPT_EMAIL_REQUIRED' || apiError.code === 'INVALID_RECEIPT_EMAIL') {
+        setIsReceiptEmailRequired(true);
+        setMessage('Укажите email для получения чека.');
+      } else setMessage(apiError.code === 'PAYMENT_ACCOUNT_REQUIRED' ? 'Для покупки кредитов войдите или зарегистрируйтесь.' : apiError.message);
     } finally { creatingRef.current = false; setCreatingPackKey(null); }
   }, [check]);
 
-  return { creatingPackKey, pendingPurchaseId, message, setMessage, start, check, setPendingPurchaseId };
+  const start = useCallback(async (packKey: CreditPackKey) => {
+    const attempt = { packKey, clientRequestId: crypto.randomUUID() };
+    purchaseAttemptRef.current = attempt;
+    setIsReceiptEmailRequired(false);
+    await createAttempt(attempt);
+  }, [createAttempt]);
+
+  const retryWithReceiptEmail = useCallback(async () => {
+    if (!purchaseAttemptRef.current) return;
+    await createAttempt(purchaseAttemptRef.current, receiptEmail.trim());
+  }, [createAttempt, receiptEmail]);
+
+  return { creatingPackKey, pendingPurchaseId, message, setMessage, start, check, setPendingPurchaseId, receiptEmail, setReceiptEmail, isReceiptEmailRequired, retryWithReceiptEmail };
 }

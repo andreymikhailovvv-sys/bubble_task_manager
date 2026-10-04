@@ -1,5 +1,6 @@
 const YOOKASSA_API_BASE = 'https://api.yookassa.ru/v3';
 const REQUEST_TIMEOUT_MS = 15_000;
+const RECEIPT_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type YooKassaPayment = {
   id: string;
@@ -40,6 +41,15 @@ const sanitizedProviderString = (value: unknown, maxLength: number) => {
   const sanitized = value.trim().slice(0, maxLength);
   return sanitized || undefined;
 };
+
+export const normalizeReceiptEmail = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 && normalized.length <= 254 && RECEIPT_EMAIL_PATTERN.test(normalized) ? normalized : null;
+};
+
+export const resolveReceiptEmail = (user: { email?: string | null; username?: string | null }, receiptEmail: unknown) =>
+  normalizeReceiptEmail(user.email) ?? normalizeReceiptEmail(user.username) ?? normalizeReceiptEmail(receiptEmail);
 
 export const isYooKassaConfigured = () => Boolean(process.env.YOOKASSA_SHOP_ID?.trim() && process.env.YOOKASSA_SECRET_KEY?.trim());
 
@@ -93,16 +103,29 @@ export const parseProviderAmountKopecks = (value: string | undefined): number | 
 };
 
 export const yookassaService = {
-  createPayment(input: { amountKopecks: number; returnUrl: string; description: string; purchaseId: string; creditPackKey: string; idempotenceKey: string }) {
+  createPayment(input: { amountKopecks: number; returnUrl: string; description: string; receiptDescription: string; customerEmail: string; purchaseId: string; creditPackKey: string; idempotenceKey: string }) {
+    const amount = { value: formatKopecks(input.amountKopecks), currency: 'RUB' };
     return providerRequest('/payments', {
       method: 'POST',
       headers: { 'Idempotence-Key': input.idempotenceKey },
       body: JSON.stringify({
-        amount: { value: formatKopecks(input.amountKopecks), currency: 'RUB' },
+        amount,
         capture: true,
         confirmation: { type: 'redirect', return_url: input.returnUrl },
         description: input.description,
-        metadata: { purchase_id: input.purchaseId, credit_pack_key: input.creditPackKey }
+        metadata: { purchase_id: input.purchaseId, credit_pack_key: input.creditPackKey },
+        receipt: {
+          customer: { email: input.customerEmail },
+          items: [{
+            description: input.receiptDescription,
+            quantity: '1.000',
+            amount,
+            vat_code: 1,
+            payment_mode: 'full_payment',
+            payment_subject: 'service'
+          }],
+          internet: true
+        }
       })
     });
   },

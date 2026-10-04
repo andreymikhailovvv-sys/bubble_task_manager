@@ -2528,6 +2528,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <span className="text-xs font-medium">{pack.creditsAmount.toLocaleString('ru-RU')} — {pack.price.toLocaleString('ru-RU')} ₽</span>
                   <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
                 </div>)}</div>
+                {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                  <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs" />
+                  <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+                </div> : null}
                 {creditPurchase.message ? <p className="mt-3 text-xs text-cyan-300" role="status">{creditPurchase.message}</p> : null}
               </div> : null}
               <button

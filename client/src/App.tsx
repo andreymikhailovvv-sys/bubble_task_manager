@@ -4632,6 +4632,10 @@ ${allContext}`,
                   );
                 })}
               </div>
+              {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="form-field min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm" />
+                <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+              </div> : null}
               {creditPurchase.message ? <div className="mt-3 rounded-xl border border-cyan-400/30 bg-cyan-950/30 p-3 text-sm text-secondary" role="status">{creditPurchase.message}{creditPurchase.message.includes('войдите') ? <button type="button" className="ml-2 underline" onClick={() => setAuthModalMode('login')}>Войти</button> : null}</div> : null}
             </section>
             <p className="px-4 pb-4 text-center text-xs leading-5 text-muted sm:px-5 sm:pb-4">

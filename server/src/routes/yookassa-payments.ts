@@ -5,7 +5,7 @@ import { CREDIT_PACKS, getCreditPackByKey } from '../config/credit-packs.js';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { reconcileCreditPurchaseFromYooKassa } from '../services/credit-purchase.service.js';
-import { isYooKassaConfigured, YooKassaError, yookassaService } from '../services/yookassa.service.js';
+import { isYooKassaConfigured, resolveReceiptEmail, YooKassaError, yookassaService } from '../services/yookassa.service.js';
 
 export const yookassaPaymentsRouter = Router();
 const CLIENT_REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -38,6 +38,8 @@ yookassaPaymentsRouter.post('/credit-packs/:packKey', requireAuth, async (req, r
   const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, username: true, email: true, googleSub: true, telegramChatId: true } });
   if (!user) return void res.status(401).json({ error: 'Unauthorized' });
   if (!user.username && !user.email && !user.googleSub && !user.telegramChatId) return void res.status(403).json({ code: 'PAYMENT_ACCOUNT_REQUIRED', error: 'Для покупки кредитов войдите или зарегистрируйтесь.' });
+  const customerEmail = resolveReceiptEmail(user, req.body?.receiptEmail);
+  if (!customerEmail) return void res.status(400).json({ code: 'RECEIPT_EMAIL_REQUIRED', error: 'Укажите email для получения чека.' });
   const active = await prisma.creditPack.findUnique({ where: { key: pack.key }, select: { isActive: true } });
   if (active?.isActive === false) return void res.status(409).json({ error: 'Этот пакет временно недоступен.' });
 
@@ -55,7 +57,16 @@ yookassaPaymentsRouter.post('/credit-packs/:packKey', requireAuth, async (req, r
 
   try {
     const returnUrl = `${publicOrigin(req)}/?payment=return&purchaseId=${encodeURIComponent(purchase.id)}`;
-    const providerPayment = await yookassaService.createPayment({ amountKopecks: purchase.amountKopecks, returnUrl, description: `Планировыч: ${purchase.creditsAmount} AI-кредитов`, purchaseId: purchase.id, creditPackKey: purchase.creditPackKey, idempotenceKey: purchase.idempotenceKey });
+    const providerPayment = await yookassaService.createPayment({
+      amountKopecks: purchase.amountKopecks,
+      returnUrl,
+      description: `Планировыч: ${purchase.creditsAmount} AI-кредитов`,
+      receiptDescription: `AI-кредиты Планировыч — ${purchase.creditsAmount} кредитов`,
+      customerEmail,
+      purchaseId: purchase.id,
+      creditPackKey: purchase.creditPackKey,
+      idempotenceKey: purchase.idempotenceKey
+    });
     purchase = await prisma.creditPurchase.update({ where: { id: purchase.id }, data: { yookassaPaymentId: providerPayment.id, providerStatus: providerPayment.status, providerCheckedAt: new Date(), confirmationUrl: providerPayment.confirmation?.confirmation_url ?? null, status: providerPayment.status === 'canceled' ? 'canceled' : 'pending' } });
     if (providerPayment.status === 'succeeded' && providerPayment.paid === true) purchase = (await reconcileCreditPurchaseFromYooKassa(providerPayment, purchase.id)).purchase ?? purchase;
     console.info('[Payments] YooKassa payment created', { purchaseId: purchase.id, userId: purchase.userId, packKey: purchase.creditPackKey, providerPaymentId: providerPayment.id, amountKopecks: purchase.amountKopecks, status: purchase.status });
