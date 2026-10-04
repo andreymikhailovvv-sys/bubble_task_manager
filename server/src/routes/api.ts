@@ -888,6 +888,8 @@ apiRouter.post('/habits/:id/uncomplete', requireAuth, asyncHandler(habitControll
 apiRouter.delete('/habits/:id', requireAuth, asyncHandler(habitController.remove));
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
 apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
+apiRouter.post('/tasks/:id/attachments/:attachmentId/download-link', requireAuth, taskAttachmentController.createDownloadLink);
+apiRouter.get('/task-attachments/download', taskAttachmentController.downloadWithToken);
 apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.create);
 apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));

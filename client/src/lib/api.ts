@@ -219,6 +219,8 @@ export const api = {
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
   getTaskAttachments: (taskId: string) => request<TaskAttachment[]>(`/api/tasks/${taskId}/attachments`),
   getTaskAttachmentDownloadUrl: (taskId: string, attachmentId: string) => `/api/tasks/${taskId}/attachments/${attachmentId}/download`,
+  createTaskAttachmentDownloadLink: (taskId: string, attachmentId: string) =>
+    request<{ url: string; fileName: string }>(`/api/tasks/${taskId}/attachments/${attachmentId}/download-link`, { method: 'POST' }),
   createTaskAttachment: (taskId: string, payload: ChatAttachmentPayload) =>
     request<TaskAttachment>(`/api/tasks/${taskId}/attachments`, { method: 'POST', body: JSON.stringify(payload) }),
   deleteTaskAttachment: (taskId: string, attachmentId: string) =>

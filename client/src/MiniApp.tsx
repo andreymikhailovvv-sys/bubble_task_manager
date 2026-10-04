@@ -28,6 +28,7 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   openLink?: (url: string) => void;
+  downloadFile?: (params: { url: string; file_name: string }, callback?: (accepted: boolean) => void) => void;
 };
 
 type TelegramWindow = Window & {
@@ -2251,6 +2252,24 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
+  const downloadSubtaskAttachment = async (attachment: TaskAttachment) => {
+    if (!openedSubtask) return;
+    try {
+      const download = await api.createTaskAttachmentDownloadLink(openedSubtask.id, attachment.id);
+      const webApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined;
+      if (webApp?.downloadFile) {
+        webApp.downloadFile({ url: download.url, file_name: download.fileName });
+      } else if (webApp?.openLink) {
+        webApp.openLink(download.url);
+      } else {
+        window.open(download.url, '_blank', 'noopener,noreferrer');
+      }
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось скачать файл');
+    }
+  };
+
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
@@ -3300,16 +3319,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
               {subtaskAttachments.map((attachment) => (
                 <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
-                  <a
+                  <button
+                    type="button"
                     className="inline-flex min-w-0 items-center gap-1"
-                    href={api.getTaskAttachmentDownloadUrl(openedSubtask!.id, attachment.id)}
-                    download={attachment.name}
                     title={`${attachment.name} • скачать`}
                     aria-label={`Скачать ${attachment.name}`}
+                    onClick={() => void downloadSubtaskAttachment(attachment)}
                   >
                     <Paperclip size={11} className="shrink-0" />
                     <span className="truncate">{attachment.name}</span>
-                  </a>
+                  </button>
                   <button type="button" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeSubtaskAttachment(attachment.id)}>
                     <X size={11} />
                   </button>
