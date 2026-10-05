@@ -131,3 +131,23 @@ test('AI-чаты и их task actions не начисляют рейтинг', 
   assert.doesNotMatch(generalChat, /grantAiProductActionRating|recordAiEfficiencyBonus/);
   assert.doesNotMatch(taskChat, /grantAiProductActionRating|recordAiEfficiencyBonus/);
 });
+
+
+test('AI-подзадачи в совместной задаче наследуют collaborationId родителя', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const taskChat = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('generateOverdueTaskNudge:'));
+  const generateSubtasks = source.slice(source.indexOf('generateSubtasks: async'));
+
+  assert.match(taskChat, /create_subtask[\s\S]*prisma\.task\.create\([\s\S]*collaborationId:\s*task\.collaborationId/);
+  assert.match(generateSubtasks, /generatedSubtasks\.map[\s\S]*prisma\.task\.create\([\s\S]*collaborationId:\s*task\.collaborationId/);
+});
+
+test('backfill migration восстанавливает collaborationId у существующих подзадач', async () => {
+  const migration = await readFile(new URL('../prisma/migrations/20261005221500_backfill_collaborative_subtasks/migration.sql', import.meta.url), 'utf8');
+
+  assert.match(migration, /UPDATE "Task" AS child/);
+  assert.match(migration, /SET "collaborationId" = parent\."collaborationId"/);
+  assert.match(migration, /child\."parentTaskId" = parent\."id"/);
+  assert.match(migration, /child\."collaborationId" IS NULL/);
+  assert.match(migration, /parent\."collaborationId" IS NOT NULL/);
+});
