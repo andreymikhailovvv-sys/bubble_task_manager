@@ -7098,3 +7098,47 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
 .telegram-auth-orb { position: fixed; z-index: -1; border-radius: 9999px; filter: blur(70px); opacity: .28; }
 .telegram-auth-orb-one { width: 16rem; height: 16rem; top: -5rem; right: -5rem; background: #0ea5e9; }
 .telegram-auth-orb-two { width: 18rem; height: 18rem; bottom: -7rem; left: -7rem; background: #7c3aed; }
+.collapsible-user-message-content {
+  overflow: hidden;
+  max-height: 8.5rem;
+}
+
+.collapsible-user-message.is-collapsible:not(.is-expanded) .collapsible-user-message-content {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 68%, transparent 100%);
+}
+
+.collapsible-user-message.is-expanded .collapsible-user-message-content {
+  max-height: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.collapsible-user-message-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  opacity: 0.82;
+  cursor: pointer;
+}
+
+.collapsible-user-message-toggle:hover {
+  opacity: 1;
+}
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message .collapsible-user-message-toggle,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message .collapsible-user-message-toggle:hover,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message .collapsible-user-message-toggle,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message .collapsible-user-message-toggle:hover {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
