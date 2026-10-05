@@ -7132,3 +7132,13 @@ body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede
 .collapsible-user-message-toggle:hover {
   opacity: 1;
 }
+
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message .collapsible-user-message-toggle,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message .collapsible-user-message-toggle:hover,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message .collapsible-user-message-toggle,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message .collapsible-user-message-toggle:hover {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
