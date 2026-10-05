@@ -6060,6 +6060,34 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   color: inherit;
 }
 
+.miniapp-collaboration-badge {
+  max-width: 9rem;
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  border-radius: 9999px;
+  padding: 0.25rem 0.65rem;
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.98), rgba(254, 249, 195, 0.94));
+  color: #a16207;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.12);
+}
+
+.miniapp-collaboration-author {
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.18);
+}
+
+.miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored {
+  border-color: color-mix(in srgb, var(--message-author-color) 72%, white) !important;
+  background: var(--message-author-color) !important;
+  color: #fff !important;
+}
+
 .miniapp-light .miniapp-focus-subtask-row,
 .miniapp-light .miniapp-focus-attachment-pill {
   border-color: rgba(226, 232, 240, 0.95);

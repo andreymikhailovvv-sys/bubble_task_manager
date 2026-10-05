@@ -130,6 +130,8 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           id: message.id ?? crypto.randomUUID(),
           role: message.role,
           content: message.content,
+          ...(message.authorName ? { authorName: message.authorName } : {}),
+          ...(message.authorColor ? { authorColor: message.authorColor } : {}),
           ...(message.creditsSpentMilli === undefined ? {} : { creditsSpentMilli: message.creditsSpentMilli }),
           ...(message.webSearchUsed ? { webSearchUsed: true, webSources: message.webSources, webCitations: message.webCitations } : {})
         }))
@@ -626,6 +628,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isOpenedTaskSubtaskFilterOpen, setIsOpenedTaskSubtaskFilterOpen] = useState(false);
   const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
+  const [isCollaborationSettingsOpen, setIsCollaborationSettingsOpen] = useState(false);
+  const [collaborationAction, setCollaborationAction] = useState<{ task: Task; action: 'complete' | 'delete' } | null>(null);
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
   const [calendarExportTaskId, setCalendarExportTaskId] = useState<string | null>(null);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
@@ -1443,6 +1447,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setOpenedSubtaskId(null);
     setNewSubtaskDraft(null);
     setIsTaskSettingsOpen(false);
+    setIsCollaborationSettingsOpen(false);
     setIsCalendarExportOpen(false);
     setCalendarExportTaskId(null);
     setIsTaskNotesEditorOpen(false);
@@ -1501,12 +1506,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     closeMiniWindowWithMotion(editor, editor === 'task' ? closeTaskModal : () => setOpenedSubtaskId(null));
   };
 
-  const completeTask = async (taskId: string) => {
+  const completeTask = async (taskId: string, scope?: 'me' | 'all') => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (task?.isCollaborative && task.collaborationOwner && !scope) {
+      setCollaborationAction({ task, action: 'complete' });
+      return;
+    }
     setCompletingId(taskId);
     setError(null);
     try {
       const completed = tasks.find((item) => item.id === taskId);
-      const updatedTask = await api.updateTask(taskId, { status: 'DONE' });
+      const updatedTask = await api.updateTask(taskId, { status: 'DONE', collaborationScope: scope ?? 'me' });
       setTasks((current) => current.map((item) => item.id === taskId ? updatedTask : item));
 
       if (!completed?.parentTaskId && openedTaskId === taskId) {
@@ -1534,11 +1544,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   };
 
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = async (taskId: string, scope?: 'me' | 'all') => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (task?.isCollaborative && task.collaborationOwner && !scope) {
+      setCollaborationAction({ task, action: 'delete' });
+      return;
+    }
     setDeletingId(taskId);
     setError(null);
     try {
-      await api.deleteTask(taskId);
+      await api.deleteTask(taskId, scope ?? 'me');
       if (openedTaskId === taskId) {
         closeTaskModal();
       }
@@ -3078,7 +3093,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
             <div className="miniapp-focus-task-scroll-layout flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{openedTask.taskType === 'EVENT' ? 'Редактирование события' : 'Фокус задачи'}</p>
+                  {openedTask.isCollaborative ? <button type="button" className="miniapp-collaboration-badge truncate" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}
+                </div>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => openCalendarExport(openedTask.id)} className="miniapp-focus-icon-button" title="Добавить в календарь" aria-label="Добавить задачу в календарь">
                     <CalendarPlus size={16} />
@@ -3321,10 +3339,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="space-y-2">
                     {openedTaskSubtasks.map((subtask) => {
                       return (
-                        <article key={subtask.id} className={`miniapp-focus-subtask-row rounded-xl px-3 py-2 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
-                          <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full items-center gap-2 text-left">
+                        <article key={subtask.id} className={`miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
+                          <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left">
                             <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                             <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
+                            {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                             {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                           </button>
                         </article>
@@ -3335,6 +3354,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {isCollaborationSettingsOpen && openedTask?.isCollaborative ? (
+        <div className="miniapp-slide-backdrop fixed inset-0 z-[160] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setIsCollaborationSettingsOpen(false)}>
+          <section className="miniapp-slide-panel miniapp-focus-panel w-full rounded-t-[2rem] border p-5 shadow-2xl sm:max-w-md sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-500">Совместная задача</p><h2 className="mt-1 text-xl font-bold">Настройки участников</h2></div><button type="button" className="miniapp-focus-icon-button" onClick={() => setIsCollaborationSettingsOpen(false)} aria-label="Закрыть настройки совместной задачи"><X size={16} /></button></div>
+            <p className="mt-4 text-sm text-slate-400">Ваш цвет в совместной задаче</p>
+            <div className="mt-3 flex flex-wrap gap-3">{['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#22c55e', '#eab308'].map((color) => <button key={color} type="button" className={`h-10 w-10 rounded-full border-4 transition ${openedTask.collaborationColor === color ? 'border-white ring-2 ring-amber-400' : 'border-white/70'}`} style={{ backgroundColor: color }} onClick={async () => { await api.updateTaskCollaboration(openedTask.id, color); await loadData(); }} aria-label={`Выбрать цвет ${color}`} />)}</div>
+            {openedTask.collaborationOwner ? <div className="mt-6 border-t border-amber-300/30 pt-5"><p className="text-sm font-semibold">Вы создатель задачи</p><p className="mt-1 text-xs leading-relaxed text-slate-400">После выключения у каждого участника останется отдельная копия задачи. Дальнейшие изменения больше не будут общими.</p><button type="button" className="miniapp-focus-danger-button mt-4 w-full" onClick={async () => { await api.disableTaskCollaboration(openedTask.id); setIsCollaborationSettingsOpen(false); await loadData(); }}>Выключить совместный режим</button></div> : null}
+          </section>
+        </div>
+      ) : null}
+      {collaborationAction ? (
+        <div className="miniapp-slide-backdrop fixed inset-0 z-[170] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setCollaborationAction(null)}>
+          <section className="miniapp-slide-panel miniapp-focus-panel w-full rounded-t-[2rem] border p-5 shadow-2xl sm:max-w-md sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-500">Совместная задача</p>
+            <h2 className="mt-1 text-xl font-bold">{collaborationAction.action === 'delete' ? 'Как удалить задачу?' : 'Как выполнить задачу?'}</h2>
+            <p className="mt-2 text-sm text-slate-400">Вы создатель: действие можно применить только к себе или ко всем участникам.</p>
+            <div className="mt-5 grid gap-2"><button type="button" className="miniapp-focus-primary-button" onClick={() => { const { task, action } = collaborationAction; setCollaborationAction(null); void (action === 'complete' ? completeTask(task.id, 'me') : deleteTask(task.id, 'me')); }}>{collaborationAction.action === 'delete' ? 'Удалить только у меня' : 'Выполнить только у меня'}</button><button type="button" className={collaborationAction.action === 'delete' ? 'miniapp-focus-danger-button' : 'miniapp-focus-success-button'} onClick={() => { const { task, action } = collaborationAction; setCollaborationAction(null); void (action === 'complete' ? completeTask(task.id, 'all') : deleteTask(task.id, 'all')); }}>{collaborationAction.action === 'delete' ? 'Удалить у всех' : 'Выполнить у всех'}</button><button type="button" className="px-4 py-2 text-sm text-slate-400" onClick={() => setCollaborationAction(null)}>Отмена</button></div>
+          </section>
         </div>
       ) : null}
       {calendarExportTask ? <CalendarExportDialog
@@ -3461,8 +3500,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
-                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
-                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor, color: '#fff' } as CSSProperties) : undefined}>
+                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
