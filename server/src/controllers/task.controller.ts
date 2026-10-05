@@ -22,7 +22,7 @@ export const taskController = {
     res.json(item);
   },
   remove: async (req: Request, res: Response) => {
-    await taskService.remove(req.params.id, req.user!.id);
+    await taskService.remove(req.params.id, req.user!.id, req.query.scope === 'all' ? 'all' : 'me');
     res.json({ ok: true });
   },
   createShareLink: async (req: Request, res: Response) => {
@@ -33,5 +33,11 @@ export const taskController = {
   },
   acceptShare: async (req: Request, res: Response) => {
     res.json(await taskService.acceptShare(req.params.token, req.user!.id, typeof req.body.sphereId === 'string' ? req.body.sphereId : null));
+  },
+  updateCollaboration: async (req: Request, res: Response) => {
+    res.json(await taskService.updateCollaboration(req.params.id, req.user!.id, String(req.body.color ?? '')));
+  },
+  disableCollaboration: async (req: Request, res: Response) => {
+    res.json(await taskService.disableCollaboration(req.params.id, req.user!.id));
   }
 };

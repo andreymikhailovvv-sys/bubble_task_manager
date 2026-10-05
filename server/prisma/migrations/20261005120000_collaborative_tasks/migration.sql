@@ -14,6 +14,9 @@ CREATE TABLE "CollaborativeTaskMember" (
   "collaborationId" TEXT NOT NULL,
   "userId" TEXT NOT NULL,
   "sphereId" TEXT,
+  "color" TEXT NOT NULL DEFAULT '#8b5cf6',
+  "statusOverride" "TaskStatus",
+  "isHidden" BOOLEAN NOT NULL DEFAULT false,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "CollaborativeTaskMember_pkey" PRIMARY KEY ("id")
 );

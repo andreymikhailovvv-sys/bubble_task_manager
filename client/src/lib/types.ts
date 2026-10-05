@@ -30,6 +30,9 @@ export type Task = {
   updatedAt?: string;
   creatorName?: string;
   isCollaborative?: boolean;
+  creatorColor?: string;
+  collaborationColor?: string;
+  collaborationOwner?: boolean;
 };
 
 export type Insight = {
@@ -45,6 +48,7 @@ export type ChatMessage = {
   webSources?: WebSource[];
   webCitations?: WebCitation[];
   authorName?: string;
+  authorColor?: string;
 };
 
 export type WebSource = { title: string; url: string };

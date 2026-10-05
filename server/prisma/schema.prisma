@@ -260,6 +260,9 @@ model CollaborativeTaskMember {
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sphereId        String?
+  color           String   @default("#8b5cf6")
+  statusOverride  TaskStatus?
+  isHidden        Boolean  @default(false)
   createdAt       DateTime @default(now())
 
   @@unique([collaborationId, userId])
