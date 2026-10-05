@@ -28,6 +28,8 @@ export type Task = {
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
   createdAt?: string;
   updatedAt?: string;
+  creatorName?: string;
+  isCollaborative?: boolean;
 };
 
 export type Insight = {
@@ -42,6 +44,7 @@ export type ChatMessage = {
   webSearchUsed?: boolean;
   webSources?: WebSource[];
   webCitations?: WebCitation[];
+  authorName?: string;
 };
 
 export type WebSource = { title: string; url: string };

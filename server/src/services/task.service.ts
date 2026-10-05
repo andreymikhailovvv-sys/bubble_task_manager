@@ -1,4 +1,5 @@
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
+import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 
 interface TaskInput {
@@ -139,7 +140,19 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
 };
 
 export const taskService = {
-  list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+  list: async (userId: string) => {
+    const items = await prisma.task.findMany({
+      where: { OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { where: { userId }, select: { sphereId: true } } } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    return items.map(({ user, collaboration, ...task }) => ({
+      ...task,
+      sphereId: !task.parentTaskId && collaboration ? (collaboration.members[0]?.sphereId ?? null) : task.sphereId,
+      creatorName: user.name || user.username || user.email || 'Участник',
+      isCollaborative: Boolean(task.collaborationId)
+    }));
+  },
   create: async (userId: string, input: CreateTaskInput) => {
     const isEvent = input.taskType === 'EVENT';
     const isSubtask = Boolean(input.parentTaskId);
@@ -154,6 +167,11 @@ export const taskService = {
         ? computeNextRecurringDueDate(recurrenceSchedule, new Date())
         : null;
 
+    const parent = input.parentTaskId ? await prisma.task.findFirst({
+      where: { id: input.parentTaskId, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      select: { collaborationId: true }
+    }) : null;
+    if (input.parentTaskId && !parent) throw new Error('Parent task not found');
     const created = await prisma.task.create({
       data: {
         title: input.title,
@@ -176,6 +194,8 @@ export const taskService = {
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
         aiNotificationsEnabled: isEvent ? false : (input.aiNotificationsEnabled ?? true)
+        ,
+        collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -183,7 +203,7 @@ export const taskService = {
   },
   update: async (id: string, userId: string, input: TaskInput) => {
     const currentTask = await prisma.task.findFirstOrThrow({
-      where: { id, userId }
+      where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }
     });
     const patch: Prisma.TaskUpdateInput = {};
 
@@ -196,7 +216,7 @@ export const taskService = {
     if (input.location !== undefined) {
       patch.location = input.location;
     }
-    if (input.sphereId !== undefined) {
+    if (input.sphereId !== undefined && (!currentTask.collaborationId || currentTask.parentTaskId)) {
       patch.sphere = input.sphereId ? { connect: { id: input.sphereId } } : { disconnect: true };
     }
     if (input.status !== undefined) {
@@ -271,6 +291,12 @@ export const taskService = {
     }
 
     return prisma.$transaction(async (tx) => {
+      if (input.sphereId !== undefined && currentTask.collaborationId && !currentTask.parentTaskId) {
+        await tx.collaborativeTaskMember.update({
+          where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } },
+          data: { sphereId: input.sphereId }
+        });
+      }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
       let finalTask = updatedTask;
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
@@ -287,7 +313,7 @@ export const taskService = {
         }
       } else if (input.status === 'DONE' && !currentTask.parentTaskId) {
         await tx.task.updateMany({
-          where: { parentTaskId: id, userId, status: { not: 'DONE' } },
+          where: { parentTaskId: id, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
         });
       }
@@ -296,11 +322,35 @@ export const taskService = {
     });
   },
   remove: async (id: string, userId: string) => {
-    const existing = await prisma.task.findFirst({ where: { id, userId }, select: { id: true, parentTaskId: true, status: true, dueDate: true } });
-    const deleted = await prisma.task.deleteMany({ where: { id, userId } });
-    if (deleted.count === 0) {
+    const existing = await prisma.task.findFirst({ where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }, select: { id: true, parentTaskId: true, status: true, dueDate: true } });
+    if (!existing) {
       throw new Error('Task not found');
     }
+    await prisma.task.delete({ where: { id } });
     console.info('[Task] remove', { userId, taskId: id, parentTaskId: existing?.parentTaskId ?? null, status: existing?.status ?? null, dueDate: existing?.dueDate?.toISOString() ?? null });
+  },
+  createShareLink: async (id: string, userId: string) => {
+    const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] } });
+    let collaboration = task.collaborationId ? await prisma.collaborativeTask.findUniqueOrThrow({ where: { id: task.collaborationId } }) : null;
+    if (!collaboration) {
+      collaboration = await prisma.$transaction(async (tx) => {
+        const created = await tx.collaborativeTask.create({ data: { token: crypto.randomBytes(24).toString('base64url'), rootTaskId: task.id } });
+        await tx.task.updateMany({ where: { OR: [{ id: task.id }, { parentTaskId: task.id }] }, data: { collaborationId: created.id } });
+        await tx.collaborativeTaskMember.create({ data: { collaborationId: created.id, userId, sphereId: task.sphereId } });
+        return created;
+      });
+    }
+    return { token: collaboration.token };
+  },
+  sharePreview: async (token: string) => {
+    const collaboration = await prisma.collaborativeTask.findUniqueOrThrow({ where: { token }, include: { tasks: { where: { parentTaskId: null }, include: { user: { select: { name: true, username: true } }, _count: { select: { subtasks: true } } } } } });
+    const task = collaboration.tasks[0];
+    return { title: task.title, description: task.description, subtaskCount: task._count.subtasks, ownerName: task.user.name || task.user.username || 'Пользователь' };
+  },
+  acceptShare: async (token: string, userId: string, sphereId: string | null) => {
+    const collaboration = await prisma.collaborativeTask.findUniqueOrThrow({ where: { token }, include: { tasks: { where: { parentTaskId: null }, select: { id: true } } } });
+    if (sphereId) await prisma.sphere.findFirstOrThrow({ where: { id: sphereId, userId } });
+    await prisma.collaborativeTaskMember.upsert({ where: { collaborationId_userId: { collaborationId: collaboration.id, userId } }, create: { collaborationId: collaboration.id, userId, sphereId }, update: { sphereId } });
+    return { taskId: collaboration.tasks[0].id };
   }
 };

@@ -118,6 +118,7 @@ model User {
   aiUsageEvents AiUsageEvent[]
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
+  collaborativeTaskMembers CollaborativeTaskMember[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -230,6 +231,8 @@ model Task {
   attachments         TaskAttachment[]
   aiMessages          TaskAiMessage[]
   aiConversationMemory TaskAiConversationMemory?
+  collaborationId     String?
+  collaboration       CollaborativeTask? @relation(fields: [collaborationId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -237,6 +240,30 @@ model Task {
   @@index([sphereId])
   @@index([parentTaskId])
   @@index([status])
+  @@index([collaborationId])
+}
+
+model CollaborativeTask {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  rootTaskId String  @unique
+  tasks     Task[]
+  members   CollaborativeTaskMember[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CollaborativeTaskMember {
+  id              String   @id @default(cuid())
+  collaborationId String
+  collaboration   CollaborativeTask @relation(fields: [collaborationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sphereId        String?
+  createdAt       DateTime @default(now())
+
+  @@unique([collaborationId, userId])
+  @@index([userId])
 }
 
 model TaskAiMessage {
