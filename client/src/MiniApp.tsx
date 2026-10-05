@@ -15,6 +15,7 @@ import { AiProgress } from './components/AiProgress';
 import { WebCitations } from './components/WebCitations';
 import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
+import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -3462,7 +3463,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : renderMiniAiMessageContent(message.content)}</div>
+                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
                 ))}
@@ -3572,7 +3573,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`miniapp-ai-chat-message miniapp-ai-chat-message-general max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user ml-auto rounded-br-lg' : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : renderMiniAiMessageContent(message.content)}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
