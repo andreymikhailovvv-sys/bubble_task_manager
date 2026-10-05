@@ -357,6 +357,21 @@ export const habitService = {
     return serializeHabit(habit);
   },
 
+  finish: async (id: string, userId: string) => {
+    const finishedAt = new Date();
+    const result = await prisma.habit.updateMany({
+      where: { id, userId, isArchived: false },
+      data: {
+        isArchived: true,
+        finishedAt,
+        reminderSnoozedUntil: null,
+        lastReminderNotifiedKey: null
+      }
+    });
+    if (result.count === 0) throw new Error('Habit not found');
+    return { ok: true as const, finishedAt: finishedAt.toISOString() };
+  },
+
   remove: async (id: string, userId: string) => {
     const deleted = await prisma.habit.deleteMany({ where: { id, userId } });
     if (deleted.count === 0) throw new Error('Habit not found');

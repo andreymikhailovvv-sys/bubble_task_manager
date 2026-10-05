@@ -639,6 +639,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [habitDraft, setHabitDraft] = useState<HabitDraft>(() => createEmptyHabitDraft());
   const [savingHabit, setSavingHabit] = useState(false);
+  const [finishingHabitId, setFinishingHabitId] = useState<string | null>(null);
   const [deletingHabitId, setDeletingHabitId] = useState<string | null>(null);
   const [completedHabitPulseId, setCompletedHabitPulseId] = useState<string | null>(null);
   const [completingHabitIds, setCompletingHabitIds] = useState<string[]>([]);
@@ -1805,6 +1806,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setError(e instanceof Error ? e.message : 'Не удалось удалить привычку');
     } finally {
       setDeletingHabitId(null);
+    }
+  };
+
+  const finishHabit = async (habitId: string) => {
+    const confirmed = window.confirm('Завершить привычку? Она исчезнет из активных привычек, но вся статистика выполнения сохранится.');
+    if (!confirmed) return;
+
+    setFinishingHabitId(habitId);
+    setError(null);
+    try {
+      await api.finishHabit(habitId);
+      setHabits((currentHabits) => currentHabits.filter((habit) => habit.id !== habitId));
+      closeHabitModal();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось завершить привычку');
+    } finally {
+      setFinishingHabitId(null);
     }
   };
 
@@ -3974,6 +3992,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {savingHabit ? 'Сохраняем…' : editingHabitId ? 'Сохранить привычку' : 'Создать привычку'}
                 </button>
               </div>
+              {editingHabitId ? (
+                <button
+                  type="button"
+                  onClick={() => void finishHabit(editingHabitId)}
+                  disabled={finishingHabitId === editingHabitId}
+                  className="inline-flex w-full items-center justify-center rounded-xl border border-amber-500/70 px-3 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-60"
+                >
+                  {finishingHabitId === editingHabitId ? 'Завершаем…' : 'Завершить'}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

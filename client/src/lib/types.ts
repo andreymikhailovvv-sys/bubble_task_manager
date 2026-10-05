@@ -97,6 +97,7 @@ export type Habit = {
   completedTotal?: number;
   durationRemaining?: number | null;
   isArchived?: boolean;
+  finishedAt?: string | null;
   stats: HabitStat[];
   createdAt?: string;
   updatedAt?: string;
