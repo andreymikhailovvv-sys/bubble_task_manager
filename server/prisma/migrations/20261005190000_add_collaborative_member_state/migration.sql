@@ -1,0 +1,4 @@
+ALTER TABLE "CollaborativeTaskMember"
+  ADD COLUMN IF NOT EXISTS "color" TEXT NOT NULL DEFAULT '#8b5cf6',
+  ADD COLUMN IF NOT EXISTS "statusOverride" "TaskStatus",
+  ADD COLUMN IF NOT EXISTS "isHidden" BOOLEAN NOT NULL DEFAULT false;
