@@ -24,5 +24,14 @@ export const taskController = {
   remove: async (req: Request, res: Response) => {
     await taskService.remove(req.params.id, req.user!.id);
     res.json({ ok: true });
+  },
+  createShareLink: async (req: Request, res: Response) => {
+    res.json(await taskService.createShareLink(req.params.id, req.user!.id));
+  },
+  sharePreview: async (req: Request, res: Response) => {
+    res.json(await taskService.sharePreview(req.params.token));
+  },
+  acceptShare: async (req: Request, res: Response) => {
+    res.json(await taskService.acceptShare(req.params.token, req.user!.id, typeof req.body.sphereId === 'string' ? req.body.sphereId : null));
   }
 };

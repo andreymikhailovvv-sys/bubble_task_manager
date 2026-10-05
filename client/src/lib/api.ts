@@ -206,6 +206,9 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   updateTask: (id: string, payload: Partial<Task>) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string) => request<{ ok: true }>(`/api/tasks/${id}`, { method: 'DELETE' }),
+  createTaskShare: (id: string) => request<{ token: string }>(`/api/tasks/${id}/share`, { method: 'POST' }),
+  getTaskShare: (token: string) => request<{ title: string; description?: string | null; subtaskCount: number; ownerName: string }>(`/api/task-shares/${token}`),
+  acceptTaskShare: (token: string, sphereId: string | null) => request<{ taskId: string }>(`/api/task-shares/${token}/accept`, { method: 'POST', body: JSON.stringify({ sphereId }) }),
   createTaskCalendarIcsLink: (id: string, payload: { startAt: string; durationMinutes: 30 | 60 | 90 | 120; reminderMinutes: 10 | 30 | 60 | null }) =>
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
