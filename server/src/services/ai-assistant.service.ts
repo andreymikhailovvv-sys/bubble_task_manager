@@ -1412,8 +1412,8 @@ export const aiAssistantService = {
     return messages.map((message) => ({
       role: message.role,
       content: message.content,
-      ...(message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
-      ...(dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
+      ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
+      ...(message.role === 'user' && dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
         : {})

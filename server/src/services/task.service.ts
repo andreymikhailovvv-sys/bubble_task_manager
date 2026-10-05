@@ -144,7 +144,7 @@ export const taskService = {
   list: async (userId: string) => {
     const items = await prisma.task.findMany({
       where: { OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
-      include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { select: { userId: true, sphereId: true, color: true, statusOverride: true, isHidden: true } } } } },
+      include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { include: { user: { select: { name: true, username: true, email: true } } } } } } },
       orderBy: { createdAt: 'desc' }
     });
     return items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden).map(({ user, collaboration, ...task }) => {
@@ -158,6 +158,12 @@ export const taskService = {
       creatorColor: creatorMembership?.color ?? '#8b5cf6',
       collaborationColor: ownMembership?.color ?? '#8b5cf6',
       collaborationOwner: Boolean(collaboration && task.userId === userId && !task.parentTaskId),
+      collaborationMembers: collaboration && !task.parentTaskId ? collaboration.members.filter((member) => !member.isHidden).map((member) => ({
+        userId: member.userId,
+        name: member.user.name || member.user.username || member.user.email || 'Участник',
+        color: member.color,
+        isOwner: member.userId === task.userId
+      })) : undefined,
       isCollaborative: Boolean(task.collaborationId)
     });
     });
@@ -383,6 +389,17 @@ export const taskService = {
     const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, collaboration: { members: { some: { userId } } } }, select: { collaborationId: true } });
     await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId } }, data: { color } });
     return { color };
+  },
+  removeCollaborator: async (id: string, ownerId: string, memberUserId: string) => {
+    const task = await prisma.task.findFirstOrThrow({
+      where: { id, userId: ownerId, parentTaskId: null, collaborationId: { not: null } },
+      select: { collaborationId: true }
+    });
+    if (memberUserId === ownerId) throw new TypeError('Task owner cannot be removed');
+    await prisma.collaborativeTaskMember.delete({
+      where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId: memberUserId } }
+    });
+    return { ok: true as const };
   },
   disableCollaboration: async (id: string, userId: string) => {
     const root = await prisma.task.findFirstOrThrow({ where: { id, userId, parentTaskId: null, collaborationId: { not: null } }, include: { subtasks: true, collaboration: { include: { members: true } } } });

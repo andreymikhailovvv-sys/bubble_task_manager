@@ -33,6 +33,14 @@ export type Task = {
   creatorColor?: string;
   collaborationColor?: string;
   collaborationOwner?: boolean;
+  collaborationMembers?: CollaborationMember[];
+};
+
+export type CollaborationMember = {
+  userId: string;
+  name: string;
+  color: string;
+  isOwner: boolean;
 };
 
 export type Insight = {

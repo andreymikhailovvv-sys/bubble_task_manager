@@ -210,6 +210,7 @@ export const api = {
   getTaskShare: (token: string) => request<{ title: string; description?: string | null; subtaskCount: number; ownerName: string }>(`/api/task-shares/${token}`),
   acceptTaskShare: (token: string, sphereId: string | null) => request<{ taskId: string }>(`/api/task-shares/${token}/accept`, { method: 'POST', body: JSON.stringify({ sphereId }) }),
   updateTaskCollaboration: (id: string, color: string) => request<{ color: string }>(`/api/tasks/${id}/collaboration`, { method: 'PATCH', body: JSON.stringify({ color }) }),
+  removeTaskCollaborator: (id: string, userId: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration/members/${userId}`, { method: 'DELETE' }),
   disableTaskCollaboration: (id: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration`, { method: 'DELETE' }),
   createTaskCalendarIcsLink: (id: string, payload: { startAt: string; durationMinutes: 30 | 60 | 90 | 120; reminderMinutes: 10 | 30 | 60 | null }) =>
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),

@@ -37,6 +37,9 @@ export const taskController = {
   updateCollaboration: async (req: Request, res: Response) => {
     res.json(await taskService.updateCollaboration(req.params.id, req.user!.id, String(req.body.color ?? '')));
   },
+  removeCollaborator: async (req: Request, res: Response) => {
+    res.json(await taskService.removeCollaborator(req.params.id, req.user!.id, req.params.userId));
+  },
   disableCollaboration: async (req: Request, res: Response) => {
     res.json(await taskService.disableCollaboration(req.params.id, req.user!.id));
   }
