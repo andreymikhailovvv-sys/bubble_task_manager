@@ -866,6 +866,7 @@ apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.post('/tasks/:id/share', requireAuth, asyncHandler(taskController.createShareLink));
 apiRouter.patch('/tasks/:id/collaboration', requireAuth, asyncHandler(taskController.updateCollaboration));
+apiRouter.delete('/tasks/:id/collaboration/members/:userId', requireAuth, asyncHandler(taskController.removeCollaborator));
 apiRouter.delete('/tasks/:id/collaboration', requireAuth, asyncHandler(taskController.disableCollaboration));
 apiRouter.get('/task-shares/:token', requireAuth, asyncHandler(taskController.sharePreview));
 apiRouter.post('/task-shares/:token/accept', requireAuth, asyncHandler(taskController.acceptShare));
