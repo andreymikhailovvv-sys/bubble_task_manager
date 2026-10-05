@@ -17,6 +17,9 @@ export const habitController = {
   uncomplete: async (req: Request, res: Response) => {
     res.json(await habitService.uncomplete(req.params.id, req.user!.id, req.body));
   },
+  finish: async (req: Request, res: Response) => {
+    res.json(await habitService.finish(req.params.id, req.user!.id));
+  },
   remove: async (req: Request, res: Response) => {
     await habitService.remove(req.params.id, req.user!.id);
     res.json({ ok: true });

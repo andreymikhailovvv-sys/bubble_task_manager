@@ -344,6 +344,7 @@ model Habit {
   isAutoCompleted Boolean            @default(false)
   autoCompletedAt DateTime?
   isArchived     Boolean             @default(false)
+  finishedAt     DateTime?
   completions    HabitCompletion[]
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt

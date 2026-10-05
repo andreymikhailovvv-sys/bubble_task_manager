@@ -871,6 +871,7 @@ apiRouter.post('/habits', requireAuth, asyncHandler(habitController.create));
 apiRouter.patch('/habits/:id', requireAuth, asyncHandler(habitController.update));
 apiRouter.post('/habits/:id/complete', requireAuth, asyncHandler(habitController.complete));
 apiRouter.post('/habits/:id/uncomplete', requireAuth, asyncHandler(habitController.uncomplete));
+apiRouter.post('/habits/:id/finish', requireAuth, asyncHandler(habitController.finish));
 apiRouter.delete('/habits/:id', requireAuth, asyncHandler(habitController.remove));
 apiRouter.get('/tasks/:id/attachments', requireAuth, taskAttachmentController.list);
 apiRouter.get('/tasks/:id/attachments/:attachmentId/download', requireAuth, taskAttachmentController.download);
