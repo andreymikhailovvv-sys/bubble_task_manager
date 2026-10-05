@@ -879,6 +879,10 @@ export default function App() {
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
   const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
   const [isFocusedCalendarExportOpen, setIsFocusedCalendarExportOpen] = useState(false);
+  const [taskShareDialog, setTaskShareDialog] = useState<{ mode: 'create'; url?: string; loading?: boolean; error?: string } | { mode: 'accept'; token: string; preview?: { title: string; description?: string | null; subtaskCount: number; ownerName: string }; sphereId: string | null; loading?: boolean; error?: string } | null>(null);
+  const [isCollaborationSettingsOpen, setIsCollaborationSettingsOpen] = useState(false);
+  const [collaborationAction, setCollaborationAction] = useState<{ task: Task; action: 'complete' | 'delete' } | null>(null);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
   const [isFocusedTitleSingleLine, setIsFocusedTitleSingleLine] = useState(true);
@@ -1239,6 +1243,13 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     void load();
+  }, [currentUser?.id]);
+  useEffect(() => {
+    if (!currentUser) return;
+    const token = new URLSearchParams(window.location.search).get('joinTask');
+    if (!token) return;
+    setTaskShareDialog({ mode: 'accept', token, sphereId: null, loading: true });
+    void api.getTaskShare(token).then((preview) => setTaskShareDialog({ mode: 'accept', token, preview, sphereId: null })).catch((error) => setTaskShareDialog({ mode: 'accept', token, sphereId: null, error: error instanceof Error ? error.message : 'Ссылка недействительна' }));
   }, [currentUser?.id]);
   useEffect(() => {
     if (!currentUser) {
@@ -3130,11 +3141,15 @@ ${allContext}`,
     setPoppingTaskId((prev) => (prev === taskId ? null : prev));
   };
 
-  const completeTask = async (task: Task) => {
+  const completeTask = async (task: Task, scope?: 'me' | 'all') => {
+    if (task.isCollaborative && task.collaborationOwner && !scope) {
+      setCollaborationAction({ task, action: 'complete' });
+      return;
+    }
     markTaskAsClosing(task.id);
     setPoppingTaskId(task.id);
     await new Promise((resolve) => setTimeout(resolve, 680));
-    await api.updateTask(task.id, { status: 'DONE' });
+    await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
     void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
     if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
     unmarkTaskAsClosing(task.id);
@@ -5849,7 +5864,12 @@ ${allContext}`,
           } : undefined}
           onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
           onDelete={editorState.task?.id ? async () => {
-            await api.deleteTask(editorState.task!.id);
+            if (editorState.task!.isCollaborative && editorState.task!.collaborationOwner) {
+              setCollaborationAction({ task: editorState.task!, action: 'delete' });
+              setEditorState(null);
+              return;
+            }
+            await api.deleteTask(editorState.task!.id, 'me');
             setEditorState(null);
             await load();
           } : undefined}
@@ -6010,8 +6030,9 @@ ${allContext}`,
                   <div
                     key={message.id}
                     className={`chat-message max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
+                    style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
@@ -6169,7 +6190,8 @@ ${allContext}`,
         ) : null}
 
         <aside className="focused-task-editor-shell focus-mode-shell focused-task-modal-panel-height order-1 relative min-h-0 w-full max-w-3xl overflow-hidden rounded-[2.3rem] border p-5">
-            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-24 top-3 z-20 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-36 top-3 z-20 lg:hidden" onClick={() => void closeFocusedTask()} aria-label="Закрыть окно"><X size={16} /></button>
+            <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-24 top-3 z-20" onClick={async () => { setTaskShareDialog({ mode: 'create', loading: true }); try { const { token } = await api.createTaskShare(focusedTask.id); setTaskShareDialog({ mode: 'create', url: `${window.location.origin}${window.location.pathname}?joinTask=${encodeURIComponent(token)}` }); await load(); } catch (error) { setTaskShareDialog({ mode: 'create', error: error instanceof Error ? error.message : 'Не удалось создать ссылку' }); } }} aria-label="Поделиться задачей" title="Поделиться задачей"><SendHorizontal size={16} /></button>
             <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-14 top-3 z-20" onClick={() => setIsFocusedCalendarExportOpen(true)} aria-label="Добавить задачу в календарь" title="Добавить в календарь"><CalendarPlus size={16} /></button>
             <button type="button" className="focused-task-icon-button focused-task-calendar-like-button absolute right-5 top-3 z-20" onClick={() => setIsFocusedSettingsOpen((prev) => !prev)} aria-label="Открыть настройки задачи" title="Настройки задачи"><Settings size={16} /></button>
             <div className="flex h-full min-h-0 flex-col">
@@ -6179,7 +6201,7 @@ ${allContext}`,
                     isFocusedTitleSingleLine ? 'focused-task-single-line-title' : ''
                   }`}
                 >
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>
+                  <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{focusedTask.isCollaborative ? <button type="button" className="rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
                   <div className="mt-4 flex items-start gap-3">
                     <div className="relative min-w-0 flex-1">
                       <textarea
@@ -6213,7 +6235,7 @@ ${allContext}`,
                       />
                     </div>
                     <div className="ml-auto flex shrink-0 items-center gap-2">
-                      <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { await api.deleteTask(focusedTask.id); setFocusedTaskId(null); await load(); }}>Удалить</button>
+                      <button className="danger-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={async () => { if (focusedTask.isCollaborative && focusedTask.collaborationOwner) { setCollaborationAction({ task: focusedTask, action: 'delete' }); return; } await api.deleteTask(focusedTask.id, 'me'); setFocusedTaskId(null); await load(); }}>Удалить</button>
                       <button className="success-button rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => completeTask(focusedTask)}>Выполнить</button>
                     </div>
                   </div>
@@ -6558,6 +6580,7 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
+                      {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
@@ -6770,8 +6793,9 @@ ${allContext}`,
                 <div
                   key={`expanded-${message.id}`}
                   className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
+                  style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
@@ -7050,6 +7074,49 @@ ${allContext}`,
           ✦
         </button>
       </div>
+
+      {isCollaborationSettingsOpen && focusedTask?.isCollaborative ? (
+        <div className="modal-backdrop fixed inset-0 z-[175] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsCollaborationSettingsOpen(false)}>
+          <section className="dialog-surface w-full max-w-md rounded-[2rem] border p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-500">Совместная задача</p><h2 className="mt-1 text-2xl font-bold text-primary">Настройки участников</h2></div><button className="focused-task-icon-button rounded-full p-2" onClick={() => setIsCollaborationSettingsOpen(false)}><X size={17} /></button></div>
+            <p className="mt-5 text-sm text-muted">Выберите свой цвет. Им будут отмечены созданные вами подзадачи и сообщения в чате с ИИ.</p>
+            <div className="mt-4 flex flex-wrap gap-3">{['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#22c55e', '#eab308'].map((color) => <button key={color} type="button" className={`h-10 w-10 rounded-full border-4 transition hover:scale-110 ${focusedTask.collaborationColor === color ? 'border-white ring-2 ring-amber-400' : 'border-white/70'}`} style={{ backgroundColor: color }} onClick={async () => { await api.updateTaskCollaboration(focusedTask.id, color); await load(); }} aria-label={`Выбрать цвет ${color}`} />)}</div>
+            {focusedTask.collaborationOwner ? <div className="mt-6 border-t border-amber-200 pt-5"><p className="text-sm font-semibold text-primary">Вы создатель задачи</p><p className="mt-1 text-xs leading-relaxed text-muted">После выключения у каждого участника останется отдельная копия задачи. Дальнейшие изменения больше не будут общими.</p><button className="danger-button mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold" onClick={async () => { await api.disableTaskCollaboration(focusedTask.id); setIsCollaborationSettingsOpen(false); await load(); }}>Выключить совместный режим</button></div> : null}
+          </section>
+        </div>
+      ) : null}
+
+      {collaborationAction ? (
+        <div className="modal-backdrop fixed inset-0 z-[176] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setCollaborationAction(null)}>
+          <section className="dialog-surface w-full max-w-md rounded-[2rem] border p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-500">Совместная задача</p><h2 className="mt-2 text-2xl font-bold text-primary">{collaborationAction.action === 'delete' ? 'Удалить задачу?' : 'Выполнить задачу?'}</h2><p className="mt-3 text-sm leading-relaxed text-muted">Выберите, применить действие только для вашего списка или сразу для всех участников.</p>
+            <div className="mt-6 grid gap-2"><button className="secondary-button rounded-xl px-4 py-3 text-sm font-semibold" onClick={async () => { const { task, action } = collaborationAction; setCollaborationAction(null); if (action === 'complete') await completeTask(task, 'me'); else { await api.deleteTask(task.id, 'me'); setFocusedTaskId(null); await load(); } }}>{collaborationAction.action === 'delete' ? 'Удалить только у меня' : 'Выполнить только у меня'}</button><button className={collaborationAction.action === 'delete' ? 'danger-button rounded-xl px-4 py-3 text-sm font-semibold' : 'success-button rounded-xl px-4 py-3 text-sm font-semibold'} onClick={async () => { const { task, action } = collaborationAction; setCollaborationAction(null); if (action === 'complete') await completeTask(task, 'all'); else { await api.deleteTask(task.id, 'all'); setFocusedTaskId(null); await load(); } }}>{collaborationAction.action === 'delete' ? 'Удалить у всех' : 'Выполнить у всех'}</button><button className="mt-1 px-4 py-2 text-sm text-muted" onClick={() => setCollaborationAction(null)}>Отмена</button></div>
+          </section>
+        </div>
+      ) : null}
+
+      {taskShareDialog ? (
+        <div className="modal-backdrop fixed inset-0 z-[170] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setTaskShareDialog(null)}>
+          <section className="dialog-surface w-full max-w-lg rounded-[2rem] border p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-fuchsia-500">Совместная задача</p><h2 className="mt-1 text-2xl font-bold text-primary">{taskShareDialog.mode === 'create' ? 'Пригласите участника' : 'Добавить совместную задачу?'}</h2></div>
+              <button className="focused-task-icon-button rounded-full p-2" onClick={() => setTaskShareDialog(null)} aria-label="Закрыть"><X size={17} /></button>
+            </div>
+            {taskShareDialog.loading ? <div className="mt-6 flex items-center gap-3 text-sm text-muted"><Loader2 className="animate-spin text-violet-500" size={20} /> Загружаем…</div> : null}
+            {taskShareDialog.error ? <p className="mt-5 rounded-2xl bg-rose-50 p-3 text-sm text-rose-600">{taskShareDialog.error}</p> : null}
+            {taskShareDialog.mode === 'create' && taskShareDialog.url ? <>
+              <p className="mt-5 text-sm leading-relaxed text-muted">Отправьте ссылку другому зарегистрированному пользователю. Вы оба сможете менять задачу, подзадачи и общаться с ИИ.</p>
+              <div className="surface-input mt-4 flex items-center gap-2 rounded-2xl border p-2"><input readOnly value={taskShareDialog.url} className="min-w-0 flex-1 bg-transparent px-2 text-sm text-primary outline-none" /><button className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition ${shareLinkCopied ? 'bg-emerald-500' : 'bg-violet-600 hover:bg-violet-500'}`} onClick={async () => { await navigator.clipboard.writeText(taskShareDialog.url!); setShareLinkCopied(true); window.setTimeout(() => setShareLinkCopied(false), 2000); }}>{shareLinkCopied ? <><Check size={15} />Скопировано✅</> : <><Copy size={15} />Копировать</>}</button></div>
+            </> : null}
+            {taskShareDialog.mode === 'accept' && taskShareDialog.preview ? <>
+              <div className="mt-5 rounded-3xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 p-5"><p className="text-xs font-semibold text-violet-500">Автор: {taskShareDialog.preview.ownerName}</p><h3 className="mt-2 text-xl font-bold text-primary">{taskShareDialog.preview.title}</h3><p className="mt-2 line-clamp-3 text-sm text-muted">{taskShareDialog.preview.description || 'Без описания'}</p><span className="mt-3 inline-flex rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-violet-600">Подзадач: {taskShareDialog.preview.subtaskCount}</span></div>
+              <label className="mt-5 block text-sm font-semibold text-primary">В какой сектор добавить?</label>
+              <select className="form-field mt-2 w-full rounded-2xl border px-3 py-3 text-sm" value={taskShareDialog.sphereId ?? ''} onChange={(event) => setTaskShareDialog((state) => state?.mode === 'accept' ? { ...state, sphereId: event.target.value || null } : state)}><option value="">Без сектора</option>{spheres.map((sphere) => <option key={sphere.id} value={sphere.id}>{sphere.name}</option>)}</select>
+              <div className="mt-6 flex justify-end gap-2"><button className="secondary-button rounded-xl px-4 py-2 text-sm font-semibold" onClick={() => { history.replaceState({}, '', window.location.pathname); setTaskShareDialog(null); }}>Нет</button><button className="primary-button rounded-xl px-5 py-2 text-sm font-semibold" onClick={async () => { const state = taskShareDialog; if (state.mode !== 'accept') return; setTaskShareDialog({ ...state, loading: true }); try { const result = await api.acceptTaskShare(state.token, state.sphereId); history.replaceState({}, '', window.location.pathname); await load(); setFocusedTaskId(result.taskId); setTaskShareDialog(null); } catch (error) { setTaskShareDialog({ ...state, error: error instanceof Error ? error.message : 'Не удалось добавить задачу' }); } }}>Да, добавить</button></div>
+            </> : null}
+          </section>
+        </div>
+      ) : null}
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>

@@ -1,4 +1,5 @@
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
+import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
 
 interface TaskInput {
@@ -19,6 +20,7 @@ interface TaskInput {
   aiNotificationsEnabled?: boolean;
   taskType?: 'TASK' | 'EVENT';
   location?: string | null;
+  collaborationScope?: 'me' | 'all';
 }
 
 const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined): PrismaTypes.InputJsonValue | PrismaTypes.NullableJsonNullValueInput | undefined => {
@@ -139,7 +141,27 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
 };
 
 export const taskService = {
-  list: (userId: string) => prisma.task.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+  list: async (userId: string) => {
+    const items = await prisma.task.findMany({
+      where: { OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { select: { userId: true, sphereId: true, color: true, statusOverride: true, isHidden: true } } } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    return items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden).map(({ user, collaboration, ...task }) => {
+      const ownMembership = collaboration?.members.find((member) => member.userId === userId);
+      const creatorMembership = collaboration?.members.find((member) => member.userId === task.userId);
+      return ({
+      ...task,
+      sphereId: !task.parentTaskId && collaboration ? (ownMembership?.sphereId ?? null) : task.sphereId,
+      status: !task.parentTaskId && ownMembership?.statusOverride ? ownMembership.statusOverride : task.status,
+      creatorName: user.name || user.username || user.email || 'Участник',
+      creatorColor: creatorMembership?.color ?? '#8b5cf6',
+      collaborationColor: ownMembership?.color ?? '#8b5cf6',
+      collaborationOwner: Boolean(collaboration && task.userId === userId && !task.parentTaskId),
+      isCollaborative: Boolean(task.collaborationId)
+    });
+    });
+  },
   create: async (userId: string, input: CreateTaskInput) => {
     const isEvent = input.taskType === 'EVENT';
     const isSubtask = Boolean(input.parentTaskId);
@@ -154,6 +176,11 @@ export const taskService = {
         ? computeNextRecurringDueDate(recurrenceSchedule, new Date())
         : null;
 
+    const parent = input.parentTaskId ? await prisma.task.findFirst({
+      where: { id: input.parentTaskId, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      select: { collaborationId: true }
+    }) : null;
+    if (input.parentTaskId && !parent) throw new Error('Parent task not found');
     const created = await prisma.task.create({
       data: {
         title: input.title,
@@ -176,6 +203,8 @@ export const taskService = {
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
         aiNotificationsEnabled: isEvent ? false : (input.aiNotificationsEnabled ?? true)
+        ,
+        collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
@@ -183,9 +212,17 @@ export const taskService = {
   },
   update: async (id: string, userId: string, input: TaskInput) => {
     const currentTask = await prisma.task.findFirstOrThrow({
-      where: { id, userId }
+      where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }
     });
+    if (currentTask.collaborationId && input.collaborationScope === 'all' && currentTask.userId !== userId) throw new Error('Only collaboration owner can update everyone');
     const patch: Prisma.TaskUpdateInput = {};
+    if (currentTask.collaborationId && !currentTask.parentTaskId && input.status !== undefined && input.collaborationScope !== 'all') {
+      await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } }, data: { statusOverride: input.status } });
+      input = { ...input, status: undefined };
+    }
+    if (currentTask.collaborationId && !currentTask.parentTaskId && input.status !== undefined && input.collaborationScope === 'all') {
+      await prisma.collaborativeTaskMember.updateMany({ where: { collaborationId: currentTask.collaborationId }, data: { statusOverride: input.status } });
+    }
 
     if (input.title !== undefined) {
       patch.title = input.title;
@@ -196,7 +233,7 @@ export const taskService = {
     if (input.location !== undefined) {
       patch.location = input.location;
     }
-    if (input.sphereId !== undefined) {
+    if (input.sphereId !== undefined && (!currentTask.collaborationId || currentTask.parentTaskId)) {
       patch.sphere = input.sphereId ? { connect: { id: input.sphereId } } : { disconnect: true };
     }
     if (input.status !== undefined) {
@@ -271,6 +308,12 @@ export const taskService = {
     }
 
     return prisma.$transaction(async (tx) => {
+      if (input.sphereId !== undefined && currentTask.collaborationId && !currentTask.parentTaskId) {
+        await tx.collaborativeTaskMember.update({
+          where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } },
+          data: { sphereId: input.sphereId }
+        });
+      }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
       let finalTask = updatedTask;
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
@@ -287,7 +330,7 @@ export const taskService = {
         }
       } else if (input.status === 'DONE' && !currentTask.parentTaskId) {
         await tx.task.updateMany({
-          where: { parentTaskId: id, userId, status: { not: 'DONE' } },
+          where: { parentTaskId: id, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
         });
       }
@@ -295,12 +338,64 @@ export const taskService = {
       return finalTask;
     });
   },
-  remove: async (id: string, userId: string) => {
-    const existing = await prisma.task.findFirst({ where: { id, userId }, select: { id: true, parentTaskId: true, status: true, dueDate: true } });
-    const deleted = await prisma.task.deleteMany({ where: { id, userId } });
-    if (deleted.count === 0) {
+  remove: async (id: string, userId: string, scope: 'me' | 'all' = 'me') => {
+    const existing = await prisma.task.findFirst({ where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }, select: { id: true, userId: true, parentTaskId: true, status: true, dueDate: true } });
+    if (!existing) {
       throw new Error('Task not found');
     }
+    if (scope === 'all' && existing.userId !== userId) throw new Error('Only collaboration owner can delete for everyone');
+    const taskWithCollaboration = await prisma.task.findUnique({ where: { id }, select: { collaborationId: true, parentTaskId: true } });
+    if (taskWithCollaboration?.collaborationId && !taskWithCollaboration.parentTaskId && scope !== 'all') {
+      await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: taskWithCollaboration.collaborationId, userId } }, data: { isHidden: true } });
+    } else {
+      await prisma.task.delete({ where: { id } });
+    }
     console.info('[Task] remove', { userId, taskId: id, parentTaskId: existing?.parentTaskId ?? null, status: existing?.status ?? null, dueDate: existing?.dueDate?.toISOString() ?? null });
+  },
+  createShareLink: async (id: string, userId: string) => {
+    const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] } });
+    let collaboration = task.collaborationId ? await prisma.collaborativeTask.findUniqueOrThrow({ where: { id: task.collaborationId } }) : null;
+    if (!collaboration) {
+      collaboration = await prisma.$transaction(async (tx) => {
+        const created = await tx.collaborativeTask.create({ data: { token: crypto.randomBytes(24).toString('base64url'), rootTaskId: task.id } });
+        await tx.task.updateMany({ where: { OR: [{ id: task.id }, { parentTaskId: task.id }] }, data: { collaborationId: created.id } });
+        await tx.collaborativeTaskMember.create({ data: { collaborationId: created.id, userId, sphereId: task.sphereId } });
+        return created;
+      });
+    }
+    return { token: collaboration.token };
+  },
+  sharePreview: async (token: string) => {
+    const collaboration = await prisma.collaborativeTask.findUniqueOrThrow({ where: { token }, include: { tasks: { where: { parentTaskId: null }, include: { user: { select: { name: true, username: true } }, _count: { select: { subtasks: true } } } } } });
+    const task = collaboration.tasks[0];
+    return { title: task.title, description: task.description, subtaskCount: task._count.subtasks, ownerName: task.user.name || task.user.username || 'Пользователь' };
+  },
+  acceptShare: async (token: string, userId: string, sphereId: string | null) => {
+    const collaboration = await prisma.collaborativeTask.findUniqueOrThrow({ where: { token }, include: { tasks: { where: { parentTaskId: null }, select: { id: true } } } });
+    if (sphereId) await prisma.sphere.findFirstOrThrow({ where: { id: sphereId, userId } });
+    const colors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#22c55e', '#eab308'];
+    const memberCount = await prisma.collaborativeTaskMember.count({ where: { collaborationId: collaboration.id } });
+    await prisma.collaborativeTaskMember.upsert({ where: { collaborationId_userId: { collaborationId: collaboration.id, userId } }, create: { collaborationId: collaboration.id, userId, sphereId, color: colors[memberCount % colors.length] }, update: { sphereId, isHidden: false } });
+    return { taskId: collaboration.tasks[0].id };
+  },
+  updateCollaboration: async (id: string, userId: string, color: string) => {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) throw new TypeError('Invalid color');
+    const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, collaboration: { members: { some: { userId } } } }, select: { collaborationId: true } });
+    await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId } }, data: { color } });
+    return { color };
+  },
+  disableCollaboration: async (id: string, userId: string) => {
+    const root = await prisma.task.findFirstOrThrow({ where: { id, userId, parentTaskId: null, collaborationId: { not: null } }, include: { subtasks: true, collaboration: { include: { members: true } } } });
+    await prisma.$transaction(async (tx) => {
+      const ownerMembership = root.collaboration!.members.find((item) => item.userId === userId);
+      if (ownerMembership?.statusOverride) await tx.task.update({ where: { id: root.id }, data: { status: ownerMembership.statusOverride } });
+      for (const member of root.collaboration!.members.filter((item) => item.userId !== userId && !item.isHidden)) {
+        const clone = await tx.task.create({ data: { title: root.title, description: root.description, userId: member.userId, sphereId: member.sphereId, taskType: root.taskType, location: root.location, importance: root.importance, urgency: root.urgency, priorityScore: root.priorityScore, status: member.statusOverride ?? root.status, dueDate: root.dueDate, notifyBeforeMinutes: root.notifyBeforeMinutes, isRecurring: root.isRecurring, recurrenceText: root.recurrenceText, recurrenceJson: root.recurrenceJson ?? Prisma.JsonNull, recurrenceSummary: root.recurrenceSummary, recurrenceUntil: root.recurrenceUntil, aiNotificationsEnabled: root.aiNotificationsEnabled } });
+        if (root.subtasks.length) await tx.task.createMany({ data: root.subtasks.map((subtask) => ({ title: subtask.title, description: subtask.description, userId: member.userId, parentTaskId: clone.id, importance: subtask.importance, urgency: subtask.urgency, priorityScore: subtask.priorityScore, status: subtask.status, dueDate: subtask.dueDate, notifyBeforeMinutes: subtask.notifyBeforeMinutes })) });
+      }
+      await tx.task.updateMany({ where: { collaborationId: root.collaborationId }, data: { collaborationId: null } });
+      await tx.collaborativeTask.delete({ where: { id: root.collaborationId! } });
+    });
+    return { ok: true };
   }
 };

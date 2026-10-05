@@ -1398,20 +1398,22 @@ export const aiAssistantService = {
   },
 
   listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {
-    await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, userId: input.userId },
-      select: { id: true }
+    const dialogTask = await prisma.task.findFirstOrThrow({
+      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      select: { id: true, collaboration: { select: { members: { select: { userId: true, color: true } } } } }
     });
 
     const messages = await prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId, userId: input.userId },
+      where: { taskId: input.taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { role: true, content: true, creditsSpentMilli: true }
+      select: { role: true, content: true, creditsSpentMilli: true, userId: true, user: { select: { name: true, username: true } } }
     });
 
     return messages.map((message) => ({
       role: message.role,
       content: message.content,
+      ...(message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
+      ...(dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
         : {})
@@ -1419,9 +1421,9 @@ export const aiAssistantService = {
   },
 
   listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
-    await prisma.task.findFirstOrThrow({ where: { id: input.taskId, userId: input.userId }, select: { id: true } });
+    await prisma.task.findFirstOrThrow({ where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] }, select: { id: true } });
     return prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId, userId: input.userId },
+      where: { taskId: input.taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, role: true, content: true, createdAt: true }
     });
@@ -1434,7 +1436,7 @@ export const aiAssistantService = {
     }
 
     await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, userId: input.userId },
+      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
       select: { id: true }
     });
 
@@ -1456,7 +1458,7 @@ export const aiAssistantService = {
     if (!content) return;
 
     await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, userId: input.userId },
+      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
       select: { id: true }
     });
 
@@ -1517,7 +1519,7 @@ export const aiAssistantService = {
     }
 
     const task = await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, userId: input.userId },
+      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
       include: {
         sphere: {
           select: {
@@ -2783,7 +2785,7 @@ ${lines}`}] }) });
     }
 
     const task = await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, userId: input.userId },
+      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
       include: {
         subtasks: {
           select: {

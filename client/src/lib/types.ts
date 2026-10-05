@@ -28,6 +28,11 @@ export type Task = {
   status?: 'TODO' | 'IN_PROGRESS' | 'DONE';
   createdAt?: string;
   updatedAt?: string;
+  creatorName?: string;
+  isCollaborative?: boolean;
+  creatorColor?: string;
+  collaborationColor?: string;
+  collaborationOwner?: boolean;
 };
 
 export type Insight = {
@@ -42,6 +47,8 @@ export type ChatMessage = {
   webSearchUsed?: boolean;
   webSources?: WebSource[];
   webCitations?: WebCitation[];
+  authorName?: string;
+  authorColor?: string;
 };
 
 export type WebSource = { title: string; url: string };
