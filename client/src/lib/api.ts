@@ -255,6 +255,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
+  sendTaskParticipantMessage: (taskId: string, payload: { recipientUserId: string; content: string }) =>
+    request<ChatMessage>(`/api/tasks/${taskId}/participant-messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   generateTaskSubtasks: (taskId: string, payload?: { note?: string }) =>
     request<{ createdCount: number; model: string; billing?: AiBilling }>(`/api/tasks/${taskId}/ai-subtasks`, {
       method: 'POST',
