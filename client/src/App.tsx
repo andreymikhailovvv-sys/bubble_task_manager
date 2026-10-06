@@ -3281,9 +3281,16 @@ ${allContext}`,
       const response = await api.getTaskComments(subtask.id);
       setSubtaskComments(response.comments);
       await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
-      setTasks((current) => current.map((task) => task.id === subtask.id
-        ? { ...task, commentCount: response.comments.length, unreadCommentCount: 0 }
-        : task));
+      const clearedUnread = subtask.unreadCommentCount ?? 0;
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) {
+          return { ...task, commentCount: response.comments.length, unreadCommentCount: 0 };
+        }
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId && clearedUnread > 0) {
+          return { ...task, unreadCommentCount: Math.max(0, (task.unreadCommentCount ?? 0) - clearedUnread) };
+        }
+        return task;
+      }));
     } catch (error) {
       setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
     } finally {
@@ -3303,9 +3310,15 @@ ${allContext}`,
         parentCommentId: subtaskCommentReplyTo?.id ?? null
       });
       setSubtaskComments((current) => [...current, created]);
-      setTasks((current) => current.map((task) => task.id === panel.task.id
-        ? { ...task, commentCount: (task.commentCount ?? 0) + 1 }
-        : task));
+      setTasks((current) => current.map((task) => {
+        if (task.id === panel.task.id) {
+          return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        }
+        if (panel.task.parentTaskId && task.id === panel.task.parentTaskId) {
+          return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        }
+        return task;
+      }));
       setSubtaskCommentDraft('');
       setSubtaskCommentReplyTo(null);
     } catch (error) {
@@ -3313,6 +3326,26 @@ ${allContext}`,
     } finally {
       setSubtaskCommentSending(false);
     }
+  };
+
+  const renderWorkspaceCommentIndicator = (task: Task, compact = false) => {
+    const total = task.commentCount ?? 0;
+    if (total <= 0) return null;
+    const unread = task.unreadCommentCount ?? 0;
+    return (
+      <span
+        className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-violet-300/50 bg-violet-500/10 text-violet-600 ${compact ? 'h-5 w-5' : 'h-6 w-6'}`}
+        title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${total}`}
+        aria-label={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${total}`}
+      >
+        <MessageCircle size={compact ? 11 : 13} />
+        {unread > 0 ? (
+          <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        ) : null}
+      </span>
+    );
   };
 
   const renderSubtaskCommentButton = (subtask: Task) => {
@@ -3776,6 +3809,7 @@ ${allContext}`,
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
           {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
+          {!isEventChip ? renderWorkspaceCommentIndicator(task, true) : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
@@ -5045,6 +5079,7 @@ ${allContext}`,
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
+                      {renderWorkspaceCommentIndicator(task)}
                       {rankingMode === 'coefficient' ? (
                         <span
                           className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"

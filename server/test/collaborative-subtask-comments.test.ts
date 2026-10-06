@@ -61,6 +61,44 @@ test('список задач содержит персональные счет
   assert.match(source, /comment\.createdAt > lastReadAt/);
 });
 
+test('основная задача агрегирует счетчики комментариев своих подзадач', async () => {
+  const source = await readFile(new URL('../src/services/task.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /const rootCommentStats = new Map/);
+  assert.match(source, /rootCommentStats\.get\(item\.parentTaskId\)/);
+  assert.match(source, /current\.total \+= stats\.total/);
+  assert.match(source, /current\.unread \+= stats\.unread/);
+  assert.match(source, /rootCommentStats\.get\(task\.id\)/);
+});
+
+test('индикаторы комментариев отображаются на бабле, в списке и таймлайне', async () => {
+  const appSource = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const bubbleSource = await readFile(new URL('../../client/src/components/BubbleField.tsx', import.meta.url), 'utf8');
+
+  assert.match(bubbleSource, /commentBadgeX = bubble\.radius \* 0\.78/);
+  assert.match(bubbleSource, /commentBadgeY = bubble\.radius \* 0\.78/);
+  assert.match(bubbleSource, /<MessageCircle size=\{12\} color="#ffffff" \/>/);
+  assert.match(bubbleSource, /unreadCommentCount > 0/);
+
+  const listIndex = appSource.indexOf('className="flex shrink-0 items-center gap-1.5"');
+  const listSlice = appSource.slice(listIndex, listIndex + 1800);
+  assert.ok(listIndex >= 0);
+  assert.ok(listSlice.indexOf('renderWorkspaceCommentIndicator(task)') < listSlice.indexOf("rankingMode === 'coefficient'"));
+
+  const timelineIndex = appSource.indexOf('const renderTimelineTaskChip');
+  const timelineSlice = appSource.slice(timelineIndex, timelineIndex + 9500);
+  assert.ok(timelineIndex >= 0);
+  assert.match(timelineSlice, /renderWorkspaceCommentIndicator\(task, true\)/);
+  assert.match(timelineSlice, /const isSubtaskChip = options\?\.isSubtask/);
+});
+
+test('локальное чтение и отправка комментария синхронизируют индикатор основной задачи', async () => {
+  const source = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  assert.match(source, /task\.id === subtask\.parentTaskId && clearedUnread > 0/);
+  assert.match(source, /Math\.max\(0, \(task\.unreadCommentCount \?\? 0\) - clearedUnread\)/);
+  assert.match(source, /task\.id === panel\.task\.parentTaskId/);
+  assert.match(source, /commentCount: \(task\.commentCount \?\? 0\) \+ 1/);
+});
+
 test('web UI показывает контекстное меню, ответы и корректный порядок правых элементов', async () => {
   const source = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
   assert.match(source, /onContextMenu=\{\(event\) => handleSubtaskCommentContextMenu/);

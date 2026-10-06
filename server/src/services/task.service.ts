@@ -175,10 +175,23 @@ export const taskService = {
       }
     }
 
+    const rootCommentStats = new Map<string, { total: number; unread: number }>();
+    for (const item of visibleItems) {
+      if (!item.parentTaskId) continue;
+      const stats = commentStats.get(item.id);
+      if (!stats || (stats.total === 0 && stats.unread === 0)) continue;
+      const current = rootCommentStats.get(item.parentTaskId) ?? { total: 0, unread: 0 };
+      current.total += stats.total;
+      current.unread += stats.unread;
+      rootCommentStats.set(item.parentTaskId, current);
+    }
+
     return visibleItems.map(({ user, collaboration, ...task }) => {
       const ownMembership = collaboration?.members.find((member) => member.userId === userId);
       const creatorMembership = collaboration?.members.find((member) => member.userId === task.userId);
-      const taskCommentStats = commentStats.get(task.id) ?? { total: 0, unread: 0 };
+      const taskCommentStats = task.parentTaskId
+        ? (commentStats.get(task.id) ?? { total: 0, unread: 0 })
+        : (rootCommentStats.get(task.id) ?? { total: 0, unread: 0 });
       return ({
       ...task,
       commentCount: taskCommentStats.total,

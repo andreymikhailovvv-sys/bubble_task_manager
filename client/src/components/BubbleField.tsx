@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, Plus, Repeat, Sparkles } from 'lucide-react';
+import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
@@ -589,8 +589,13 @@ export function BubbleField({
     const subtaskProgress = bubbleSubtasks.length > 0 ? doneSubtasksCount / bubbleSubtasks.length : 0;
     const progressCircumference = 2 * Math.PI * (bubble.radius + 6);
     const hasAiMessage = hasAiNotification?.(bubble.task.id) ?? false;
+    const commentCount = bubble.task.commentCount ?? 0;
+    const unreadCommentCount = bubble.task.unreadCommentCount ?? 0;
+    const hasComments = commentCount > 0;
     const aiBadgeX = -bubble.radius * 0.78;
     const aiBadgeY = -bubble.radius * 0.78;
+    const commentBadgeX = bubble.radius * 0.78;
+    const commentBadgeY = bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
     const displayPoint = mapToOval(bubble.x, bubble.y);
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
@@ -697,6 +702,31 @@ export function BubbleField({
                 <Sparkles size={12} color="#ffffff" />
               </div>
             </foreignObject>
+          </motion.g>
+        ) : null}
+
+        {hasComments ? (
+          <motion.g
+            animate={unreadCommentCount > 0 ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+            transition={unreadCommentCount > 0 ? { duration: 1.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.15 }}
+            pointerEvents="none"
+          >
+            <circle cx={commentBadgeX} cy={commentBadgeY} r={11} fill="#2563eb" />
+            <foreignObject x={commentBadgeX - 6} y={commentBadgeY - 6} width={12} height={12}>
+              <div className="flex h-full w-full items-center justify-center">
+                <MessageCircle size={12} color="#ffffff" />
+              </div>
+            </foreignObject>
+            {unreadCommentCount > 0 ? (
+              <>
+                <circle cx={commentBadgeX + 8} cy={commentBadgeY - 8} r={7} fill="#7c3aed" />
+                <foreignObject x={commentBadgeX + 2} y={commentBadgeY - 14} width={12} height={12}>
+                  <div className="flex h-full w-full items-center justify-center text-[7px] font-bold leading-none text-white">
+                    {unreadCommentCount > 9 ? '9+' : unreadCommentCount}
+                  </div>
+                </foreignObject>
+              </>
+            ) : null}
           </motion.g>
         ) : null}
 
