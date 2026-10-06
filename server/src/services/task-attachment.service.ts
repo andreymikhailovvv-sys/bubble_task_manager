@@ -23,11 +23,22 @@ const isSupportedByExtension = (fileName: string) => /\.(pdf|docx|xlsx?|png|jpe?
 
 const sanitizeName = (name: string) => name.trim().slice(0, 180);
 
+const ensureTaskAccess = (taskId: string, userId: string) => prisma.task.findFirstOrThrow({
+  where: {
+    id: taskId,
+    OR: [
+      { userId },
+      { collaboration: { members: { some: { userId, isHidden: false } } } }
+    ]
+  },
+  select: { id: true }
+});
+
 export const taskAttachmentService = {
   list: async (taskId: string, userId: string) => {
-    await prisma.task.findFirstOrThrow({ where: { id: taskId, userId } });
+    await ensureTaskAccess(taskId, userId);
     return prisma.taskAttachment.findMany({
-      where: { taskId, userId },
+      where: { taskId },
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -62,7 +73,7 @@ export const taskAttachmentService = {
       throw new TypeError('Пустое содержимое файла');
     }
 
-    await prisma.task.findFirstOrThrow({ where: { id: taskId, userId } });
+    await ensureTaskAccess(taskId, userId);
 
     return prisma.taskAttachment.create({
       data: {
@@ -85,14 +96,16 @@ export const taskAttachmentService = {
     });
   },
   remove: async (taskId: string, attachmentId: string, userId: string) => {
-    const deleted = await prisma.taskAttachment.deleteMany({ where: { id: attachmentId, taskId, userId } });
+    await ensureTaskAccess(taskId, userId);
+    const deleted = await prisma.taskAttachment.deleteMany({ where: { id: attachmentId, taskId } });
     if (deleted.count === 0) {
       throw new Error('Файл не найден');
     }
   },
   getContent: async (taskId: string, attachmentId: string, userId: string) => {
+    await ensureTaskAccess(taskId, userId);
     const attachment = await prisma.taskAttachment.findFirst({
-      where: { id: attachmentId, taskId, userId },
+      where: { id: attachmentId, taskId },
       select: {
         name: true,
         mimeType: true,
@@ -105,8 +118,9 @@ export const taskAttachmentService = {
     return attachment;
   },
   listForAi: async (taskId: string, userId: string) => {
+    await ensureTaskAccess(taskId, userId);
     return prisma.taskAttachment.findMany({
-      where: { taskId, userId },
+      where: { taskId },
       orderBy: { createdAt: 'asc' },
       select: {
         name: true,
