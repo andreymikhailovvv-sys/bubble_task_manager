@@ -3351,6 +3351,55 @@ ${allContext}`,
     }
   };
 
+  const renderTaskAiRecipientPicker = (task: Task) => {
+    if (!task.isCollaborative || !task.collaborationMembers?.length) return null;
+    const selectedUserId = aiRecipientByTaskId[task.id] ?? 'ai';
+    const selectedMember = task.collaborationMembers.find((member) => member.userId === selectedUserId);
+    return (
+      <div className="relative mb-1 flex justify-end">
+        <button
+          type="button"
+          className="secondary-button inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold"
+          onClick={() => setIsAiRecipientMenuOpen((open) => !open)}
+          aria-haspopup="menu"
+          aria-expanded={isAiRecipientMenuOpen}
+        >
+          <span className="text-muted">Получатель:</span>
+          <span>{selectedMember?.name ?? 'ИИ'}</span>
+          <ChevronDown size={12} />
+        </button>
+        {isAiRecipientMenuOpen ? (
+          <div className="surface-popover absolute bottom-full right-0 z-30 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl" role="menu">
+            <button
+              type="button"
+              className={`block w-full rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === 'ai' ? 'bg-violet-500/20 text-violet-200' : 'text-primary hover:bg-slate-700/30'}`}
+              onClick={() => {
+                setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: 'ai' }));
+                setIsAiRecipientMenuOpen(false);
+              }}
+            >
+              ИИ
+            </button>
+            {task.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
+              <button
+                key={member.userId}
+                type="button"
+                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === member.userId ? 'bg-violet-500/20 text-violet-200' : 'text-primary hover:bg-slate-700/30'}`}
+                onClick={() => {
+                  setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: member.userId }));
+                  setIsAiRecipientMenuOpen(false);
+                }}
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: member.color }} />
+                <span className="truncate">{member.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderWorkspaceCommentIndicator = (task: Task, compact = false) => {
     const total = task.commentCount ?? 0;
     if (total <= 0) return null;
@@ -6306,7 +6355,7 @@ ${allContext}`,
                     className={`chat-message max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                     style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
                   >
-                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
@@ -6332,6 +6381,7 @@ ${allContext}`,
                 </div>
               ) : null}
               {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
+              {renderTaskAiRecipientPicker(focusedTask)}
               <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -6358,7 +6408,8 @@ ${allContext}`,
                   className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 transition hover:bg-slate-300"
                   type="button"
                   onClick={() => focusedAiFileInputRef.current?.click()}
-                  title="Прикрепить файл"
+                  disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'}
+                  title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
                 >
                   <Paperclip size={16} />
                 </button>
@@ -7096,7 +7147,7 @@ ${allContext}`,
                   className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
                   style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
                 >
-                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
+                  <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
@@ -7104,10 +7155,11 @@ ${allContext}`,
               {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
+            {renderTaskAiRecipientPicker(focusedTask)}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
-              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" type="button" title="Прикрепить файл" onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
+              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-40" type="button" title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
             {aiError ? <p className="mt-2 text-xs text-rose-300">{aiError}</p> : null}
