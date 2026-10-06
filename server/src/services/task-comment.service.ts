@@ -174,13 +174,19 @@ export const taskCommentService = {
     };
   },
 
-  markRead: async (taskId: string, userId: string) => {
+  markRead: async (taskId: string, userId: string, rawLastCommentId?: unknown) => {
     await getAccessibleCollaborativeSubtask(taskId, userId);
-    const latest = await prisma.taskComment.findFirst({
-      where: { taskId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { createdAt: true }
-    });
+    const lastCommentId = typeof rawLastCommentId === 'string' && rawLastCommentId.trim() ? rawLastCommentId.trim() : null;
+    const latest = lastCommentId
+      ? await prisma.taskComment.findFirstOrThrow({
+          where: { id: lastCommentId, taskId },
+          select: { createdAt: true }
+        })
+      : await prisma.taskComment.findFirst({
+          where: { taskId },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { createdAt: true }
+        });
     const lastReadAt = latest?.createdAt ?? new Date();
     await prisma.taskCommentReadState.upsert({
       where: { taskId_userId: { taskId, userId } },
