@@ -29,6 +29,7 @@ export type Task = {
   createdAt?: string;
   updatedAt?: string;
   creatorName?: string;
+  creatorUserId?: string;
   isCollaborative?: boolean;
   creatorColor?: string;
   collaborationColor?: string;
