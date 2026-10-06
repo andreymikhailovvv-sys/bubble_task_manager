@@ -355,7 +355,7 @@ export const taskService = {
     });
 
     if (shouldNotifyForeignSubtaskCompletion) {
-      void notifyCollaborativeSubtaskCompleted({ subtaskId: id, actorUserId: userId });
+      await notifyCollaborativeSubtaskCompleted({ subtaskId: id, actorUserId: userId });
     }
 
     return finalTask;
