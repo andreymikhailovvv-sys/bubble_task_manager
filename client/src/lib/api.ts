@@ -256,7 +256,7 @@ export const api = {
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
   sendTaskParticipantMessage: (taskId: string, payload: { recipientUserId: string; content: string }) =>
-    request<ChatMessage>(`/api/tasks/${taskId}/participant-messages`, {
+    request<ChatMessage & { id: string }>(`/api/tasks/${taskId}/participant-messages`, {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
