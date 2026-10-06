@@ -8,7 +8,7 @@ import { askAiChatWithTools } from './ai-chat-tools.service.js';
 import type { AiChatProgressStatus } from './ai-chat-progress.js';
 import { estimateAiChatTokens, formatAiChatMemory, prepareAiChatSmartContext } from './ai-chat-memory.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
-import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow } from './ai-usage-metering.service.js';
+import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
@@ -111,6 +111,7 @@ type GenerateTaskFromPromptInput = {
   userTimeZone?: string;
 };
 type TranscribeAudioInput = {
+  userId: string;
   fileName: string;
   mimeType: string;
   contentBase64: string;
@@ -1116,9 +1117,15 @@ export const aiAssistantService = {
       const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
       return { ...result, diagnostics: { requestId: actionRequestId, context } };
     };
-    return !isDynamicTextBillingEnabled(input.userId)
-      ? withAiCreditReservation(input.userId, model, operation)
-      : operation();
+    if (isDynamicTextBillingEnabled(input.userId)) return operation();
+    const result = await withAiCreditReservation(input.userId, model, operation);
+    return {
+      ...result,
+      billing: {
+        mode: 'legacy' as const,
+        creditsSpentMilli: creditsToMilli(resolveModelCredits(model))
+      }
+    };
   },
 
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
@@ -1370,15 +1377,18 @@ export const aiAssistantService = {
       throw new Error('Пустой аудиофайл для расшифровки');
     }
 
+    const model = process.env.OPENAI_AUDIO_TRANSCRIBE_MODEL?.trim() || 'gpt-4o-mini-transcribe';
+    const requestId = randomUUID();
     const formData = new FormData();
     formData.append('file', new Blob([binary], { type: input.mimeType || 'audio/ogg' }), input.fileName || `voice-${Date.now()}.ogg`);
-    formData.append('model', process.env.OPENAI_AUDIO_TRANSCRIBE_MODEL?.trim() || 'gpt-4o-mini-transcribe');
+    formData.append('model', model);
     formData.append('language', 'ru');
 
     const response = await openAiFetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
+        'X-Client-Request-Id': requestId
       },
       body: formData
     });
@@ -1388,13 +1398,49 @@ export const aiAssistantService = {
       throw new Error(`Не удалось расшифровать голосовое (${response.status}): ${errorText.slice(0, 300)}`);
     }
 
-    const payload = await response.json() as { text?: unknown };
+    const payload = await response.json() as { text?: unknown; usage?: OpenAiTranscriptionUsage };
     const text = typeof payload.text === 'string' ? payload.text.trim() : '';
     if (!text) {
       throw new Error('Расшифровка голосового вернула пустой текст');
     }
+    if (!payload.usage) {
+      throw new Error('OpenAI не вернул usage для расчёта стоимости расшифровки');
+    }
 
-    return text;
+    const metering = await recordOpenAiTranscriptionUsage({
+      userId: input.userId,
+      requestId,
+      model,
+      usage: payload.usage,
+      billingMode: 'DYNAMIC'
+    });
+    if (metering.estimatedCreditsMilli === null || metering.providerCostNanoUsd === null) {
+      throw new Error(`Неизвестна стоимость модели расшифровки "${model}"`);
+    }
+    if (metering.estimatedCreditsMilli > 0) {
+      await reserveAiCreditsMilli(input.userId, metering.estimatedCreditsMilli);
+    }
+
+    console.info('[AI transcription billing] charged', {
+      userId: input.userId,
+      requestId,
+      model,
+      usageType: metering.usageType,
+      inputTokens: metering.inputTokens,
+      outputTokens: metering.outputTokens,
+      totalTokens: metering.totalTokens,
+      durationSeconds: metering.durationSeconds,
+      creditsSpentMilli: metering.estimatedCreditsMilli
+    });
+
+    return {
+      text,
+      model,
+      billing: {
+        mode: 'dynamic' as const,
+        creditsSpentMilli: metering.estimatedCreditsMilli
+      }
+    };
   },
 
   listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {

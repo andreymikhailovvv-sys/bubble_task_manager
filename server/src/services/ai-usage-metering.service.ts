@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma.js';
-import { OPENAI_PRICING_VERSION, resolveOpenAiTokenRates } from '../config/openai-pricing.js';
+import { OPENAI_PRICING_VERSION, resolveOpenAiTokenRates, resolveOpenAiTranscriptionDurationRate } from '../config/openai-pricing.js';
 
 const TOKENS_PER_MILLION = 1_000_000n;
 export const NANO_USD_PER_MILLICREDIT = 600n;
@@ -11,6 +11,29 @@ export type OpenAiUsage = {
   output_tokens?: unknown;
   output_tokens_details?: { reasoning_tokens?: unknown } | null;
   total_tokens?: unknown;
+};
+
+export type OpenAiTranscriptionUsage =
+  | {
+      type?: 'tokens' | string;
+      input_tokens?: unknown;
+      output_tokens?: unknown;
+      total_tokens?: unknown;
+      input_token_details?: { audio_tokens?: unknown; text_tokens?: unknown } | null;
+    }
+  | {
+      type?: 'duration' | string;
+      seconds?: unknown;
+    };
+
+export type OpenAiTranscriptionUsageCost = {
+  usageType: 'tokens' | 'duration';
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  durationSeconds: number | null;
+  providerCostNanoUsd: bigint | null;
+  estimatedCreditsMilli: number | null;
 };
 
 export type NormalizedOpenAiUsage = {
@@ -108,6 +131,100 @@ export function calculateAffordableOutputTokens(model: string, inputTokens: numb
 }
 
 const formatNanoUsd = (value: bigint) => `${value / 1_000_000_000n}.${(value % 1_000_000_000n).toString().padStart(9, '0')}`;
+
+
+export function calculateOpenAiTranscriptionUsageCost(model: string, usage: OpenAiTranscriptionUsage): OpenAiTranscriptionUsageCost {
+  const source = usage as Record<string, unknown>;
+  const hasTokenUsage = source.type === 'tokens'
+    || typeof source.input_tokens === 'number'
+    || typeof source.output_tokens === 'number';
+
+  if (hasTokenUsage) {
+    const tokenCost = calculateOpenAiUsageCost(model, {
+      input_tokens: source.input_tokens,
+      output_tokens: source.output_tokens,
+      total_tokens: source.total_tokens
+    });
+    return {
+      usageType: 'tokens',
+      inputTokens: tokenCost.inputTokens,
+      outputTokens: tokenCost.outputTokens,
+      totalTokens: tokenCost.totalTokens,
+      durationSeconds: null,
+      providerCostNanoUsd: tokenCost.providerCostNanoUsd,
+      estimatedCreditsMilli: tokenCost.estimatedCreditsMilli
+    };
+  }
+
+  const seconds = typeof source.seconds === 'number' && Number.isFinite(source.seconds) && source.seconds > 0
+    ? source.seconds
+    : 0;
+  const rate = resolveOpenAiTranscriptionDurationRate(model);
+  if (!rate || seconds <= 0) {
+    return {
+      usageType: 'duration',
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      durationSeconds: seconds > 0 ? seconds : null,
+      providerCostNanoUsd: null,
+      estimatedCreditsMilli: null
+    };
+  }
+
+  const milliseconds = BigInt(Math.ceil(seconds * 1000));
+  const providerCostNanoUsd = (rate * milliseconds + 60_000n - 1n) / 60_000n;
+  return {
+    usageType: 'duration',
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    durationSeconds: seconds,
+    providerCostNanoUsd,
+    estimatedCreditsMilli: providerNanoUsdToMilliCredits(providerCostNanoUsd)
+  };
+}
+
+export async function recordOpenAiTranscriptionUsage(input: {
+  userId: string;
+  requestId: string;
+  model: string;
+  usage: OpenAiTranscriptionUsage;
+  billingMode?: 'SHADOW' | 'DYNAMIC';
+}) {
+  const cost = calculateOpenAiTranscriptionUsageCost(input.model, input.usage);
+  try {
+    await prisma.aiUsageEvent.create({
+      data: {
+        userId: input.userId,
+        requestId: input.requestId,
+        actionId: input.requestId,
+        providerCallIndex: 1,
+        feature: 'audio_transcription',
+        model: input.model,
+        openAiResponseId: null,
+        inputTokens: cost.inputTokens,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        outputTokens: cost.outputTokens,
+        reasoningTokens: 0,
+        totalTokens: cost.totalTokens,
+        providerCostNanoUsd: cost.providerCostNanoUsd,
+        estimatedCreditsMilli: cost.estimatedCreditsMilli,
+        billingMode: input.billingMode ?? 'DYNAMIC',
+        pricingVersion: OPENAI_PRICING_VERSION
+      }
+    });
+  } catch (error) {
+    console.warn('[AI transcription usage] recording failed', {
+      userId: input.userId,
+      requestId: input.requestId,
+      model: input.model,
+      error: error instanceof Error ? error.message : 'Unknown transcription metering error'
+    });
+  }
+  return cost;
+}
 
 export async function recordOpenAiUsageShadow(
   input: RecordOpenAiUsageInput,
