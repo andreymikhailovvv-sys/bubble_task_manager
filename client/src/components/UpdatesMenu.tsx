@@ -18,6 +18,10 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   useEffect(() => {
+    if (open && tab === 'news') onNewsViewed?.();
+  }, [open, tab, onNewsViewed]);
+
+  useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKeyDown);
