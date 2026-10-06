@@ -4,7 +4,7 @@ import { telegramFetch } from '../lib/telegram-fetch.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
-const MAX_COMMENT_LENGTH = 4000;
+const MAX_COMMENT_LENGTH = 3000;
 
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
