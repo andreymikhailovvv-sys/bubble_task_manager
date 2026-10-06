@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
+import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
@@ -955,6 +956,7 @@ apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAss
 apiRouter.get('/tasks/:id/ai-chat', requireAuth, aiController.getTaskAssistantHistory);
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
 apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
+apiRouter.post('/tasks/:id/participant-messages', requireAuth, asyncHandler(taskParticipantMessageController.send));
 apiRouter.post('/tasks/:id/ai-subtasks', requireAuth, aiController.generateSubtasks);
 apiRouter.post('/tasks/:id/ai-overdue-nudge', requireAuth, aiController.generateOverdueTaskNudge);
 apiRouter.post('/tasks/ai-generate', requireAuth, aiController.generateTaskFromPrompt);
