@@ -1625,9 +1625,7 @@ export default function App() {
         const parsed = new Date(task.dueDate).getTime();
         return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
       };
-      const authorUserId = subtaskAuthorFilterByTaskId[parentId] ?? null;
-      const filteredItems = authorUserId ? items.filter((task) => task.creatorUserId === authorUserId) : items;
-      acc[parentId] = [...filteredItems].sort((a, b) => {
+      acc[parentId] = [...items].sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
         if (subtaskFilterMode === 'none') return 0;
@@ -1639,8 +1637,13 @@ export default function App() {
       });
       return acc;
     }, {}),
-    [subtaskAuthorFilterByTaskId, subtaskMap, subtaskFilterMode]
+    [subtaskMap, subtaskFilterMode]
   );
+  const getFocusedSubtaskItems = (taskId: string) => {
+    const items = displayedSubtaskMap[taskId] ?? [];
+    const authorUserId = subtaskAuthorFilterByTaskId[taskId] ?? null;
+    return authorUserId ? items.filter((task) => task.creatorUserId === authorUserId) : items;
+  };
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT'), [rootTasks]);
   const activeTimelineItems = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const focusCandidateTasks = useMemo(
@@ -4469,7 +4472,7 @@ ${allContext}`,
                                 <button
                                   key={member.userId}
                                   type="button"
-                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusActiveTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-85 hover:opacity-100'}`}
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusActiveTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-80 hover:opacity-100'}`}
                                   style={{ backgroundColor: member.color }}
                                   onClick={() => {
                                     setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusActiveTask.id]: prev[focusActiveTask.id] === member.userId ? null : member.userId }));
@@ -4487,7 +4490,7 @@ ${allContext}`,
                   </div>
                 </div>
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1" onScroll={() => setIsSubtaskFilterOpen(false)}>
-                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : (displayedSubtaskMap[focusActiveTask.id] ?? [])).map((subtask) => (
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusActiveTask.id).filter((subtask) => subtask.status !== 'DONE') : getFocusedSubtaskItems(focusActiveTask.id)).map((subtask) => (
                     <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status === 'DONE' ? 'opacity-60' : ''} ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
@@ -4498,7 +4501,7 @@ ${allContext}`,
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
                   ))}
-                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : (displayedSubtaskMap[focusActiveTask.id] ?? [])).length === 0 ? <li className="text-sm text-subtle">{hideClosedFocusedSubtasks ? 'Активных подзадач пока нет.' : 'Подзадач пока нет.'}</li> : null}
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusActiveTask.id).filter((subtask) => subtask.status !== 'DONE') : getFocusedSubtaskItems(focusActiveTask.id)).length === 0 ? <li className="text-sm text-subtle">{hideClosedFocusedSubtasks ? 'Активных подзадач пока нет.' : 'Подзадач пока нет.'}</li> : null}
                 </ul>
               </motion.article>
               <button className="focus-stack-arrow absolute bottom-[4.25rem] z-10" onClick={() => switchFocusTask(1)}><ChevronDown size={22} /></button>
@@ -6544,7 +6547,7 @@ ${allContext}`,
                                   <button
                                     key={member.userId}
                                     type="button"
-                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusedTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-85 hover:opacity-100'}`}
+                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusedTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-80 hover:opacity-100'}`}
                                     style={{ backgroundColor: member.color }}
                                     onClick={() => {
                                       setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusedTask.id]: prev[focusedTask.id] === member.userId ? null : member.userId }));
@@ -6605,14 +6608,14 @@ ${allContext}`,
                 ) : null}
                 <Reorder.Group
                   axis="y"
-                  values={hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])}
+                  values={hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)}
                   onReorder={(nextOrder) => {
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
-                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).map((subtask) => (
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)).map((subtask) => (
                     <Reorder.Item
                       key={subtask.id}
                       value={subtask}
@@ -6644,7 +6647,7 @@ ${allContext}`,
                       />
                     </Reorder.Item>
                   ))}
-                  {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
                 </Reorder.Group>
               </div>
             </div>
