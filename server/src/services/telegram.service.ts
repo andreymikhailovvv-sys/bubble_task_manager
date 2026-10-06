@@ -6,6 +6,7 @@ import { aiAssistantService } from './ai-assistant.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
 import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
+import { formatCreditsSpent } from './ai-billing-notification.service.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -1099,11 +1100,13 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         return;
       }
 
-      const transcript = await aiAssistantService.transcribeAudio({
+      const transcription = await aiAssistantService.transcribeAudio({
+        userId: session.userId,
         fileName: voiceAttachment.name,
         mimeType: voiceAttachment.mimeType,
         contentBase64: voiceAttachment.contentBase64
       });
+      const transcript = transcription.text;
 
       const history = quickAiHistoryByChatId.get(chatId) ?? [];
       const result = await aiAssistantService.askAiChat({
@@ -1125,6 +1128,9 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         { role: 'assistant', content: result.answer }
       ] });
 
+      const totalCreditsSpentMilli =
+        transcription.billing.creditsSpentMilli + (result.billing?.creditsSpentMilli ?? 0);
+      const formattedCredits = formatCreditsSpent(totalCreditsSpentMilli).replace(/ кредит(?:а|ов)?$/, '');
       const lines = [
         `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}`,
         '',
@@ -1134,6 +1140,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
       }
       if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
+      lines.push('', `<b>Потрачено кредитов:</b> ${escapeHtml(formattedCredits)}`);
 
       await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
       await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
