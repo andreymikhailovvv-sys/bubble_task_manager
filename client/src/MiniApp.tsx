@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -8,7 +8,7 @@ import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
@@ -692,6 +692,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
+  const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
+  const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
@@ -750,11 +752,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const pendingSubtaskTitleFocusIdRef = useRef<string | null>(null);
   const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
   const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
+  const [commentPanelTaskId, setCommentPanelTaskId] = useState<string | null>(null);
+  const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
+  const [taskCommentsLoading, setTaskCommentsLoading] = useState(false);
+  const [taskCommentDraft, setTaskCommentDraft] = useState('');
+  const [taskCommentReplyTo, setTaskCommentReplyTo] = useState<TaskComment | null>(null);
+  const [taskCommentSending, setTaskCommentSending] = useState(false);
+  const [taskCommentError, setTaskCommentError] = useState<string | null>(null);
+  const taskCommentScrollRef = useRef<HTMLDivElement | null>(null);
+  const [pendingLaunchCommentTaskId, setPendingLaunchCommentTaskId] = useState<string | null>(null);
   const launchParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
     const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
-    return { taskId, openAi };
+    const commentTaskId = params.get('commentTaskId')?.trim() || null;
+    const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
+    return { taskId, openAi, commentTaskId, chatRecipientUserId };
   }, []);
 
   const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
@@ -1442,7 +1455,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
     if (!requestedTask) return;
     openTaskModal(requestedTask);
+    if (launchParams.chatRecipientUserId) {
+      setAiRecipientByTaskId((prev) => ({ ...prev, [requestedTask.id]: launchParams.chatRecipientUserId! }));
+    }
     if (launchParams.openAi) setIsAiDialogOpen(true);
+    if (launchParams.commentTaskId) setPendingLaunchCommentTaskId(launchParams.commentTaskId);
   }, [launchParams, loading, openedTaskId, tasks]);
 
   const closeTaskModal = () => {
