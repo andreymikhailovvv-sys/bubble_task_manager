@@ -333,6 +333,8 @@ model TaskAiMessage {
   @@index([userId])
   @@index([taskId, createdAt])
   @@index([taskId, userId, createdAt])
+  @@index([taskId, messageKind, createdAt])
+  @@index([recipientUserId, createdAt])
 }
 
 model TaskAiConversationMemory {
