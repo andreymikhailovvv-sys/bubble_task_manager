@@ -6330,7 +6330,14 @@ ${allContext}`,
           </div>
         ) : null}
 
-        <aside data-tour="ai-task-help" className="ai-chat-lightweight app-side-panel focused-task-ai-panel focused-task-modal-panel-height relative order-2 hidden min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex">
+        <aside
+          data-tour="ai-task-help"
+          className="ai-chat-lightweight app-side-panel focused-task-ai-panel focused-task-modal-panel-height relative order-2 hidden min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex"
+          onDragOver={(event) => { event.preventDefault(); if ((aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai') setIsFocusedAiDragActive(true); }}
+          onDragLeave={(event) => { if (event.currentTarget === event.target || !event.currentTarget.contains(event.relatedTarget as Node | null)) setIsFocusedAiDragActive(false); }}
+          onDrop={(event) => { event.preventDefault(); setIsFocusedAiDragActive(false); addFocusedAiFiles(Array.from(event.dataTransfer.files ?? [])); }}
+        >
+              {isFocusedAiDragActive ? <div className="focused-task-ai-drop-overlay"><Paperclip size={22} /><span>Перетащите файлы, чтобы прикрепить</span></div> : null}
               <div className="absolute right-4 top-4 z-20 flex items-center gap-1.5">
                 <button
                   className={`focused-task-ai-icon-button ${isFocusedAiSearchOpen ? 'focused-task-ai-icon-button-active' : ''}`}
@@ -6356,7 +6363,7 @@ ${allContext}`,
               </div>
               <div className="relative mb-2 min-h-0 flex-1">
                 <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />
-                <div ref={focusedAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
+                <div ref={focusedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through h-full min-h-0 space-y-2 overflow-y-auto rounded-xl p-3 pt-12">
                 {isFocusedAiSearchOpen ? (
                   <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] text-muted">
                     <Search size={12} />
@@ -6383,6 +6390,7 @@ ${allContext}`,
                 {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
                 </div>
               </div>
+              <div className="focused-task-ai-composer-layer">
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
                   {aiPendingFiles.map((file) => (
@@ -6425,7 +6433,7 @@ ${allContext}`,
               />
               <div className="flex items-center gap-2">
                 <button
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 transition hover:bg-slate-300"
+                  className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition disabled:opacity-40"
                   type="button"
                   onClick={() => focusedAiFileInputRef.current?.click()}
                   disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'}
@@ -6435,6 +6443,7 @@ ${allContext}`,
                 </button>
                 <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={17} /> : <SendHorizontal size={17} />}</button>
               </div></div>
+              </div>
             </aside>
 
         {timelineCreateMenu ? (
@@ -7116,7 +7125,14 @@ ${allContext}`,
 
       {focusedTask && isAiExpanded ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsAiExpanded(false)}>
-          <div className="ai-chat-lightweight ai-chat-lightweight-panel app-card relative flex h-[90vh] w-full max-w-4xl flex-col rounded-3xl border p-5" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="ai-chat-lightweight ai-chat-lightweight-panel app-card focused-task-ai-expanded-panel relative flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border p-5"
+            onClick={(event) => event.stopPropagation()}
+            onDragOver={(event) => { event.preventDefault(); if ((aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai') setIsFocusedAiDragActive(true); }}
+            onDragLeave={(event) => { if (event.currentTarget === event.target || !event.currentTarget.contains(event.relatedTarget as Node | null)) setIsFocusedAiDragActive(false); }}
+            onDrop={(event) => { event.preventDefault(); setIsFocusedAiDragActive(false); addFocusedAiFiles(Array.from(event.dataTransfer.files ?? [])); }}
+          >
+            {isFocusedAiDragActive ? <div className="focused-task-ai-drop-overlay"><Paperclip size={24} /><span>Перетащите файлы, чтобы прикрепить</span></div> : null}
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-base font-semibold ai-panel-title"><Bot size={18} /> Полноэкранный диалог с ИИ</p>
@@ -7148,7 +7164,7 @@ ${allContext}`,
               </div>
             </div>
             <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
-            <div ref={expandedAiDialogContainerRef} className="chat-thread mb-3 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
+            <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
                 <label className="surface-input sticky top-0 z-10 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] text-muted">
                   <Search size={12} />
@@ -7174,15 +7190,17 @@ ${allContext}`,
               ))}
               {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
+            <div className="focused-task-ai-composer-layer focused-task-ai-composer-layer-expanded">
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
             {renderTaskAiRecipientPicker(focusedTask)}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
-              <button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-40" type="button" title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
+              <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
             {aiError ? <p className="mt-2 text-xs text-rose-300">{aiError}</p> : null}
+            </div>
           </div>
         </div>
       ) : null}
