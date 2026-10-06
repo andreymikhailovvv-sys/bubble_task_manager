@@ -3343,7 +3343,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                             {openedTask.collaborationMembers.map((member) => <button
                               key={member.userId}
                               type="button"
-                              className={`miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white transition ${openedTaskSubtaskAuthorFilterUserId === member.userId ? 'ring-2 ring-white/90' : 'opacity-85'}`}
+                              className={`miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white transition ${openedTaskSubtaskAuthorFilterUserId === member.userId ? 'ring-2 ring-white/90' : 'opacity-80'}`}
                               style={{ backgroundColor: member.color }}
                               onClick={() => {
                                 setOpenedTaskSubtaskAuthorFilterUserId((current) => current === member.userId ? null : member.userId);
