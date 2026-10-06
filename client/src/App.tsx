@@ -16,7 +16,7 @@ import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
-import { UpdatesMenu } from './components/UpdatesMenu';
+import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { TaskAiProgress } from './components/TaskAiProgress';
@@ -109,6 +109,7 @@ const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:backgr
 const getThemeStorageKey = (userId: string) => `btm:${userId}:theme-mode`;
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const getOnboardingOfferStorageKey = (userId: string) => `btm:${userId}:onboarding-offer-seen`;
+const getLatestNewsReadStorageKey = (userId: string) => `btm:${userId}:latest-news-read`;
 const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
@@ -776,6 +777,7 @@ export default function App() {
   const [isAiNotificationsDefaultEnabled, setIsAiNotificationsDefaultEnabled] = useState<boolean>(() => localStorage.getItem(AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY) !== '0');
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
+  const [hasUnreadNews, setHasUnreadNews] = useState(false);
   const [isOnboardingOfferOpen, setIsOnboardingOfferOpen] = useState(false);
   const [activeTourStep, setActiveTourStep] = useState<TaskTourStep | AiTourStep | FeatureTourStep | WorkspaceTourStep>(null);
   const tourRestoreStateRef = useRef<{ displayMode: DisplayMode; timelineViewMode: 'day' | 'week' | 'month'; timelineAnchorDate: Date } | null>(null);
@@ -857,6 +859,20 @@ export default function App() {
       setIsTelegramModalOpen(true);
     }
   }, [activeTourStep]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setHasUnreadNews(false);
+      return;
+    }
+    setHasUnreadNews(localStorage.getItem(getLatestNewsReadStorageKey(currentUser.id)) !== LATEST_NEWS_ID);
+  }, [currentUser?.id]);
+
+  const markLatestNewsRead = () => {
+    if (!currentUser?.id) return;
+    localStorage.setItem(getLatestNewsReadStorageKey(currentUser.id), LATEST_NEWS_ID);
+    setHasUnreadNews(false);
+  };
 
   const [timelineCreateMenu, setTimelineCreateMenu] = useState<{ x: number; y: number; date: Date; hour?: number | null; minute?: number | null; taskId?: string | null } | null>(null);
   const [timelineReschedulePicker, setTimelineReschedulePicker] = useState<{ taskId: string; signal: number } | null>(null);
@@ -4274,7 +4290,7 @@ ${allContext}`,
         backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
       }}
     >
-      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} />
+      <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {isOnboardingOfferOpen ? (
         <div className="modal-backdrop fixed inset-0 z-[240] flex items-center justify-center p-4 backdrop-blur-md">
@@ -4340,7 +4356,7 @@ ${allContext}`,
       </header>
 
       {!sectorEditorSphere ? <section className="top-control-bar mb-4 flex flex-wrap items-center gap-2 rounded-2xl border p-2.5 backdrop-blur">
-        <button type="button" className="updates-menu-trigger inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" onClick={() => setIsUpdatesOpen(true)} aria-label="Открыть обновления и обучение" title="Обновления и обучение"><Menu size={20} /></button>
+        <button type="button" className="updates-menu-trigger relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border" onClick={() => setIsUpdatesOpen(true)} aria-label="Открыть обновления и обучение" title="Обновления и обучение"><Menu size={20} />{hasUnreadNews ? <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">1</span> : null}</button>
         <div data-tour="display-modes" className="display-mode-toggle-group inline-flex shrink-0 items-center rounded-xl border p-1">
           {DISPLAY_MODE_OPTIONS.map((option) => (
             <button
