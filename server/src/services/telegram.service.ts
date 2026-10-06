@@ -1092,6 +1092,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
 
   if (isVoiceMessage) {
     await sendMessage(chatId, '🎤 Голосовое получено. Расшифровываю и отправляю в быстрые запросы ИИ...');
+    let voiceCreditsSpentMilli = 0;
 
     try {
       const voiceAttachment = await loadTelegramAttachment(updateMessage);
@@ -1107,6 +1108,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         contentBase64: voiceAttachment.contentBase64
       });
       const transcript = transcription.text;
+      voiceCreditsSpentMilli = transcription.billing.creditsSpentMilli;
 
       const history = quickAiHistoryByChatId.get(chatId) ?? [];
       const result = await aiAssistantService.askAiChat({
@@ -1129,7 +1131,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       ] });
 
       const totalCreditsSpentMilli =
-        transcription.billing.creditsSpentMilli + (result.billing?.creditsSpentMilli ?? 0);
+        voiceCreditsSpentMilli + (result.billing?.creditsSpentMilli ?? 0);
+      voiceCreditsSpentMilli = totalCreditsSpentMilli;
       const formattedCredits = formatCreditsSpent(totalCreditsSpentMilli).replace(/ кредит(?:а|ов)?$/, '');
       const lines = [
         `🎤 <b>Расшифровка:</b> ${escapeHtml(transcript)}`,
@@ -1147,7 +1150,10 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     } catch (error) {
       const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать голосовое.');
-      await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
+      const billingSuffix = voiceCreditsSpentMilli > 0
+        ? `\n\n<b>Потрачено кредитов:</b> ${escapeHtml(formatCreditsSpent(voiceCreditsSpentMilli).replace(/ кредит(?:а|ов)?$/, ''))}`
+        : '';
+      await sendMessage(chatId, `❌ ${escapeHtml(message)}${billingSuffix}`, keyboardReplyMain);
       return;
     }
   }
