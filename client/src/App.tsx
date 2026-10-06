@@ -3281,9 +3281,16 @@ ${allContext}`,
       const response = await api.getTaskComments(subtask.id);
       setSubtaskComments(response.comments);
       await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
-      setTasks((current) => current.map((task) => task.id === subtask.id
-        ? { ...task, commentCount: response.comments.length, unreadCommentCount: 0 }
-        : task));
+      const clearedUnread = subtask.unreadCommentCount ?? 0;
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) {
+          return { ...task, commentCount: response.comments.length, unreadCommentCount: 0 };
+        }
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId && clearedUnread > 0) {
+          return { ...task, unreadCommentCount: Math.max(0, (task.unreadCommentCount ?? 0) - clearedUnread) };
+        }
+        return task;
+      }));
     } catch (error) {
       setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
     } finally {
@@ -3303,9 +3310,15 @@ ${allContext}`,
         parentCommentId: subtaskCommentReplyTo?.id ?? null
       });
       setSubtaskComments((current) => [...current, created]);
-      setTasks((current) => current.map((task) => task.id === panel.task.id
-        ? { ...task, commentCount: (task.commentCount ?? 0) + 1 }
-        : task));
+      setTasks((current) => current.map((task) => {
+        if (task.id === panel.task.id) {
+          return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        }
+        if (panel.task.parentTaskId && task.id === panel.task.parentTaskId) {
+          return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        }
+        return task;
+      }));
       setSubtaskCommentDraft('');
       setSubtaskCommentReplyTo(null);
     } catch (error) {
