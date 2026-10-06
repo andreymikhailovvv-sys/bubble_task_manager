@@ -1452,7 +1452,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
-    const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
+    const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId);
     if (!requestedTask) return;
     openTaskModal(requestedTask);
     if (launchParams.chatRecipientUserId) {
