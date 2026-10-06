@@ -1406,14 +1406,24 @@ export const aiAssistantService = {
     const messages = await prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { role: true, content: true, creditsSpentMilli: true, userId: true, user: { select: { name: true, username: true } } }
+      select: { role: true, content: true, creditsSpentMilli: true, userId: true, messageKind: true, recipientUserId: true, user: { select: { name: true, username: true } } }
     });
+    const recipientIds = Array.from(new Set(messages.map((message) => message.recipientUserId).filter((value): value is string => Boolean(value))));
+    const recipients = recipientIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, name: true, username: true } })
+      : [];
+    const recipientNameById = new Map(recipients.map((user) => [user.id, user.name || user.username || 'Участник']));
 
     return messages.map((message) => ({
       role: message.role,
       content: message.content,
       ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
       ...(message.role === 'user' && dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
+      ...(message.messageKind === 'HUMAN' ? {
+        messageKind: 'HUMAN' as const,
+        recipientUserId: message.recipientUserId ?? undefined,
+        recipientName: message.recipientUserId ? recipientNameById.get(message.recipientUserId) : undefined
+      } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
         : {})
@@ -1423,7 +1433,7 @@ export const aiAssistantService = {
   listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
     await prisma.task.findFirstOrThrow({ where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] }, select: { id: true } });
     return prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId },
+      where: { taskId: input.taskId, messageKind: 'AI' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, role: true, content: true, createdAt: true }
     });
