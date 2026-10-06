@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -11,7 +11,7 @@ import { CustomSelect } from './components/CustomSelect';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -882,6 +882,14 @@ export default function App() {
   const [taskShareDialog, setTaskShareDialog] = useState<{ mode: 'create'; url?: string; loading?: boolean; error?: string } | { mode: 'accept'; token: string; preview?: { title: string; description?: string | null; subtaskCount: number; ownerName: string }; sphereId: string | null; loading?: boolean; error?: string } | null>(null);
   const [isCollaborationSettingsOpen, setIsCollaborationSettingsOpen] = useState(false);
   const [collaborationAction, setCollaborationAction] = useState<{ task: Task; action: 'complete' | 'delete' } | null>(null);
+  const [subtaskCommentContextMenu, setSubtaskCommentContextMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
+  const [subtaskCommentPanel, setSubtaskCommentPanel] = useState<{ task: Task; compose: boolean } | null>(null);
+  const [subtaskComments, setSubtaskComments] = useState<TaskComment[]>([]);
+  const [subtaskCommentsLoading, setSubtaskCommentsLoading] = useState(false);
+  const [subtaskCommentDraft, setSubtaskCommentDraft] = useState('');
+  const [subtaskCommentReplyTo, setSubtaskCommentReplyTo] = useState<TaskComment | null>(null);
+  const [subtaskCommentSending, setSubtaskCommentSending] = useState(false);
+  const [subtaskCommentError, setSubtaskCommentError] = useState<string | null>(null);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
@@ -3044,7 +3052,9 @@ ${allContext}`,
     const score = calcScore(normalized.importance, normalized.urgency);
 
     if (editorState?.task?.id) {
-      await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+      const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
+      void ignoredEditorStatus;
+      await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
     } else {
       const createdTask = await api.createTask({ ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
       if (!isEventPayload && draftSubtasks.length > 0) {
@@ -3076,7 +3086,9 @@ ${allContext}`,
     };
     const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
     const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+    const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
+    void ignoredEditorStatus;
+    await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
