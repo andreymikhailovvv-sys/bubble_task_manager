@@ -34,7 +34,7 @@ const MAX_SPHERES = 8;
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
   { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
   { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol' }
+  { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
 ];
 
 const AI_CHAT_MODEL_SELECT_OPTIONS = AI_CHAT_MODEL_OPTIONS.map(({ value, label }) => ({ value, label }));
@@ -1441,7 +1441,7 @@ export default function App() {
         model === 'fast' || model === 'gpt-5.4-nano'
           ? 'gpt-6-luna'
           : model === 'gpt-5.4'
-            ? 'gpt-6-sol'
+            ? 'gpt-6.1-sol'
             : model === 'smart'
               ? 'gpt-5.4-mini'
               : model
