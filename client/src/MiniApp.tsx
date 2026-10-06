@@ -625,6 +625,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
   const [hideClosedOpenedTaskSubtasks, setHideClosedOpenedTaskSubtasks] = useState(true);
   const [openedTaskSubtaskFilterMode, setOpenedTaskSubtaskFilterMode] = useState<SubtaskFilterMode>('urgency');
+  const [openedTaskSubtaskAuthorFilterUserId, setOpenedTaskSubtaskAuthorFilterUserId] = useState<string | null>(null);
   const [isOpenedTaskSubtaskFilterOpen, setIsOpenedTaskSubtaskFilterOpen] = useState(false);
   const [newSubtaskDraft, setNewSubtaskDraft] = useState<TaskDraft | null>(null);
   const [isTaskSettingsOpen, setIsTaskSettingsOpen] = useState(false);
@@ -1408,6 +1409,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setClosingMiniWindow(null);
     setIsCalendarExportOpen(false);
     setCalendarExportTaskId(null);
+    setOpenedTaskSubtaskAuthorFilterUserId(null);
+    setIsOpenedTaskSubtaskFilterOpen(false);
     setOpenedTaskId(task.id);
   };
 
@@ -1968,6 +1971,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
     return [...(subtasksByParent[openedTask.id] ?? [])]
       .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE')
+      .filter((task) => !openedTaskSubtaskAuthorFilterUserId || task.creatorUserId === openedTaskSubtaskAuthorFilterUserId)
       .sort((a, b) => {
         if (openedTaskSubtaskFilterMode === 'urgency') {
           const aDueDate = dueDateTimestamp(a);
@@ -1985,7 +1989,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         }
         return createdAtTimestamp(a) - createdAtTimestamp(b);
       });
-  }, [hideClosedOpenedTaskSubtasks, openedTask, openedTaskSubtaskFilterMode, subtasksByParent]);
+  }, [hideClosedOpenedTaskSubtasks, openedTask, openedTaskSubtaskAuthorFilterUserId, openedTaskSubtaskFilterMode, subtasksByParent]);
   const openedSubtask = openedSubtaskId
     ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
     : null;
@@ -3205,7 +3209,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
 
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
                 <textarea
                   ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
@@ -3311,14 +3315,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     <div className="relative">
                       <button
                         type="button"
-                        className={`miniapp-focus-action-pill ${openedTaskSubtaskFilterMode !== 'none' ? 'miniapp-focus-action-pill-active' : ''}`}
+                        className={`miniapp-focus-action-pill ${openedTaskSubtaskFilterMode !== 'none' || Boolean(openedTaskSubtaskAuthorFilterUserId) ? 'miniapp-focus-action-pill-active' : ''}`}
                         onClick={() => setIsOpenedTaskSubtaskFilterOpen((current) => !current)}
                         aria-haspopup="menu"
                         aria-expanded={isOpenedTaskSubtaskFilterOpen}
                       >
                         Фильтровать
                       </button>
-                      {isOpenedTaskSubtaskFilterOpen ? <div className="miniapp-subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border p-1.5 shadow-2xl" role="menu">
+                      {isOpenedTaskSubtaskFilterOpen ? <div className="miniapp-subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 max-h-72 w-52 overflow-y-auto rounded-xl border p-1.5 shadow-2xl" role="menu">
                         {SUBTASK_FILTER_OPTIONS.map((option) => <button
                           key={option.mode}
                           type="button"
@@ -3327,11 +3331,29 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                           className={`miniapp-subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${openedTaskSubtaskFilterMode === option.mode ? 'miniapp-subtask-filter-item-active' : ''}`}
                           onClick={() => {
                             setOpenedTaskSubtaskFilterMode(option.mode);
+                            if (option.mode === 'none') setOpenedTaskSubtaskAuthorFilterUserId(null);
                             setIsOpenedTaskSubtaskFilterOpen(false);
                           }}
                         >
                           {option.label}
                         </button>)}
+                        {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? <div className="mt-1 border-t border-slate-500/30 pt-2">
+                          <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
+                          <div className="flex flex-wrap gap-1.5 p-1">
+                            {openedTask.collaborationMembers.map((member) => <button
+                              key={member.userId}
+                              type="button"
+                              className={`miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white transition ${openedTaskSubtaskAuthorFilterUserId === member.userId ? 'ring-2 ring-white/90' : 'opacity-80'}`}
+                              style={{ backgroundColor: member.color }}
+                              onClick={() => {
+                                setOpenedTaskSubtaskAuthorFilterUserId((current) => current === member.userId ? null : member.userId);
+                                setIsOpenedTaskSubtaskFilterOpen(false);
+                              }}
+                            >
+                              {member.name}
+                            </button>)}
+                          </div>
+                        </div> : null}
                       </div> : null}
                     </div>
                   </div>
