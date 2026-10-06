@@ -1,6 +1,7 @@
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import crypto from 'node:crypto';
 import { prisma } from '../db/prisma.js';
+import { notifyCollaborativeSubtaskCompleted } from './collaboration-subtask-notification.service.js';
 
 interface TaskInput {
   title?: string;
@@ -155,6 +156,7 @@ export const taskService = {
       sphereId: !task.parentTaskId && collaboration ? (ownMembership?.sphereId ?? null) : task.sphereId,
       status: !task.parentTaskId && ownMembership?.statusOverride ? ownMembership.statusOverride : task.status,
       creatorName: user.name || user.username || user.email || 'Участник',
+      creatorUserId: task.userId,
       creatorColor: creatorMembership?.color ?? '#8b5cf6',
       collaborationColor: ownMembership?.color ?? '#8b5cf6',
       collaborationOwner: Boolean(collaboration && task.userId === userId && !task.parentTaskId),
@@ -313,7 +315,15 @@ export const taskService = {
       patch.dueDate = computeNextRecurringDueDate(schedule ?? {}, new Date());
     }
 
-    return prisma.$transaction(async (tx) => {
+    const shouldNotifyForeignSubtaskCompletion = Boolean(
+      currentTask.parentTaskId
+      && currentTask.collaborationId
+      && currentTask.userId !== userId
+      && currentTask.status !== 'DONE'
+      && input.status === 'DONE'
+    );
+
+    const finalTask = await prisma.$transaction(async (tx) => {
       if (input.sphereId !== undefined && currentTask.collaborationId && !currentTask.parentTaskId) {
         await tx.collaborativeTaskMember.update({
           where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } },
@@ -343,6 +353,12 @@ export const taskService = {
 
       return finalTask;
     });
+
+    if (shouldNotifyForeignSubtaskCompletion) {
+      void notifyCollaborativeSubtaskCompleted({ subtaskId: id, actorUserId: userId });
+    }
+
+    return finalTask;
   },
   remove: async (id: string, userId: string, scope: 'me' | 'all' = 'me') => {
     const existing = await prisma.task.findFirst({ where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }, select: { id: true, userId: true, parentTaskId: true, status: true, dueDate: true } });
