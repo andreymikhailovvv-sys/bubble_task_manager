@@ -119,6 +119,8 @@ model User {
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
+  taskComments TaskComment[] @relation("TaskCommentAuthor")
+  taskCommentReadStates TaskCommentReadState[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -233,6 +235,8 @@ model Task {
   aiConversationMemory TaskAiConversationMemory?
   collaborationId     String?
   collaboration       CollaborativeTask? @relation(fields: [collaborationId], references: [id], onDelete: SetNull)
+  comments            TaskComment[]
+  commentReadStates   TaskCommentReadState[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -276,6 +280,38 @@ model CollaborativeTaskMember {
   createdAt       DateTime @default(now())
 
   @@unique([collaborationId, userId])
+  @@index([userId])
+}
+
+model TaskComment {
+  id              String   @id @default(cuid())
+  taskId          String
+  task            Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation("TaskCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  parentCommentId String?
+  parentComment   TaskComment? @relation("TaskCommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies         TaskComment[] @relation("TaskCommentReplies")
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([taskId, createdAt])
+  @@index([userId])
+  @@index([parentCommentId])
+}
+
+model TaskCommentReadState {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([taskId, userId])
   @@index([userId])
 }
 

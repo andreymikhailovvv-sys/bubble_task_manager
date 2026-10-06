@@ -148,11 +148,41 @@ export const taskService = {
       include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { include: { user: { select: { name: true, username: true, email: true } } } } } } },
       orderBy: { createdAt: 'desc' }
     });
-    return items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden).map(({ user, collaboration, ...task }) => {
+    const visibleItems = items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden);
+    const collaborativeSubtaskIds = visibleItems
+      .filter((task) => Boolean(task.parentTaskId && task.collaborationId))
+      .map((task) => task.id);
+    const commentStats = new Map<string, { total: number; unread: number }>();
+
+    if (collaborativeSubtaskIds.length > 0) {
+      const [comments, readStates] = await Promise.all([
+        prisma.taskComment.findMany({
+          where: { taskId: { in: collaborativeSubtaskIds } },
+          select: { taskId: true, userId: true, createdAt: true }
+        }),
+        prisma.taskCommentReadState.findMany({
+          where: { taskId: { in: collaborativeSubtaskIds }, userId },
+          select: { taskId: true, lastReadAt: true }
+        })
+      ]);
+      const readAtByTaskId = new Map(readStates.map((state) => [state.taskId, state.lastReadAt]));
+      for (const comment of comments) {
+        const current = commentStats.get(comment.taskId) ?? { total: 0, unread: 0 };
+        current.total += 1;
+        const lastReadAt = readAtByTaskId.get(comment.taskId);
+        if (comment.userId !== userId && (!lastReadAt || comment.createdAt > lastReadAt)) current.unread += 1;
+        commentStats.set(comment.taskId, current);
+      }
+    }
+
+    return visibleItems.map(({ user, collaboration, ...task }) => {
       const ownMembership = collaboration?.members.find((member) => member.userId === userId);
       const creatorMembership = collaboration?.members.find((member) => member.userId === task.userId);
+      const taskCommentStats = commentStats.get(task.id) ?? { total: 0, unread: 0 };
       return ({
       ...task,
+      commentCount: taskCommentStats.total,
+      unreadCommentCount: taskCommentStats.unread,
       sphereId: !task.parentTaskId && collaboration ? (ownMembership?.sphereId ?? null) : task.sphereId,
       status: !task.parentTaskId && ownMembership?.statusOverride ? ownMembership.statusOverride : task.status,
       ...(!task.parentTaskId && ownMembership ? {

@@ -35,6 +35,21 @@ export type Task = {
   collaborationColor?: string;
   collaborationOwner?: boolean;
   collaborationMembers?: CollaborationMember[];
+  commentCount?: number;
+  unreadCommentCount?: number;
+};
+
+export type TaskComment = {
+  id: string;
+  taskId: string;
+  userId: string;
+  authorUserId: string;
+  authorName: string;
+  parentCommentId?: string | null;
+  content: string;
+  isOwn: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CollaborationMember = {

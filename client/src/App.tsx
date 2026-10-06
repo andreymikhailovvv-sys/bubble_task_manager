@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -11,7 +11,7 @@ import { CustomSelect } from './components/CustomSelect';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -882,6 +882,14 @@ export default function App() {
   const [taskShareDialog, setTaskShareDialog] = useState<{ mode: 'create'; url?: string; loading?: boolean; error?: string } | { mode: 'accept'; token: string; preview?: { title: string; description?: string | null; subtaskCount: number; ownerName: string }; sphereId: string | null; loading?: boolean; error?: string } | null>(null);
   const [isCollaborationSettingsOpen, setIsCollaborationSettingsOpen] = useState(false);
   const [collaborationAction, setCollaborationAction] = useState<{ task: Task; action: 'complete' | 'delete' } | null>(null);
+  const [subtaskCommentContextMenu, setSubtaskCommentContextMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
+  const [subtaskCommentPanel, setSubtaskCommentPanel] = useState<{ task: Task; compose: boolean } | null>(null);
+  const [subtaskComments, setSubtaskComments] = useState<TaskComment[]>([]);
+  const [subtaskCommentsLoading, setSubtaskCommentsLoading] = useState(false);
+  const [subtaskCommentDraft, setSubtaskCommentDraft] = useState('');
+  const [subtaskCommentReplyTo, setSubtaskCommentReplyTo] = useState<TaskComment | null>(null);
+  const [subtaskCommentSending, setSubtaskCommentSending] = useState(false);
+  const [subtaskCommentError, setSubtaskCommentError] = useState<string | null>(null);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
@@ -3044,7 +3052,9 @@ ${allContext}`,
     const score = calcScore(normalized.importance, normalized.urgency);
 
     if (editorState?.task?.id) {
-      await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+      const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
+      void ignoredEditorStatus;
+      await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
     } else {
       const createdTask = await api.createTask({ ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
       if (!isEventPayload && draftSubtasks.length > 0) {
@@ -3076,7 +3086,9 @@ ${allContext}`,
     };
     const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
     const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(editorState.task.id, { ...normalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+    const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
+    void ignoredEditorStatus;
+    await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
@@ -3244,6 +3256,83 @@ ${allContext}`,
     }
     await load();
     unmarkTaskAsClosing(subtask.id);
+  };
+
+  const handleSubtaskCommentContextMenu = (event: ReactMouseEvent, subtask: Task, collaborative: boolean) => {
+    if (!collaborative) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSubtaskCommentContextMenu({
+      task: subtask,
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 72)
+    });
+  };
+
+  const openSubtaskComments = async (subtask: Task, compose = false) => {
+    setSubtaskCommentContextMenu(null);
+    setSubtaskCommentPanel({ task: subtask, compose });
+    setSubtaskComments([]);
+    setSubtaskCommentReplyTo(null);
+    setSubtaskCommentDraft('');
+    setSubtaskCommentError(null);
+    setSubtaskCommentsLoading(true);
+    try {
+      const response = await api.getTaskComments(subtask.id);
+      setSubtaskComments(response.comments);
+      await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
+      setTasks((current) => current.map((task) => task.id === subtask.id
+        ? { ...task, commentCount: response.comments.length, unreadCommentCount: 0 }
+        : task));
+    } catch (error) {
+      setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
+    } finally {
+      setSubtaskCommentsLoading(false);
+    }
+  };
+
+  const sendSubtaskComment = async () => {
+    const panel = subtaskCommentPanel;
+    const content = subtaskCommentDraft.trim();
+    if (!panel || !content || subtaskCommentSending) return;
+    setSubtaskCommentSending(true);
+    setSubtaskCommentError(null);
+    try {
+      const created = await api.createTaskComment(panel.task.id, {
+        content,
+        parentCommentId: subtaskCommentReplyTo?.id ?? null
+      });
+      setSubtaskComments((current) => [...current, created]);
+      setTasks((current) => current.map((task) => task.id === panel.task.id
+        ? { ...task, commentCount: (task.commentCount ?? 0) + 1 }
+        : task));
+      setSubtaskCommentDraft('');
+      setSubtaskCommentReplyTo(null);
+    } catch (error) {
+      setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось отправить комментарий');
+    } finally {
+      setSubtaskCommentSending(false);
+    }
+  };
+
+  const renderSubtaskCommentButton = (subtask: Task) => {
+    if ((subtask.commentCount ?? 0) <= 0) return null;
+    const unread = subtask.unreadCommentCount ?? 0;
+    return (
+      <button
+        type="button"
+        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-violet-100 hover:text-violet-700"
+        title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${subtask.commentCount ?? 0}`}
+        aria-label="Открыть комментарии"
+        onClick={(event) => {
+          event.stopPropagation();
+          void openSubtaskComments(subtask);
+        }}
+      >
+        <MessageCircle size={15} />
+        {unread > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{unread > 99 ? '99+' : unread}</span> : null}
+      </button>
+    );
   };
 
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
@@ -4493,12 +4582,14 @@ ${allContext}`,
                 <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1" onScroll={() => setIsSubtaskFilterOpen(false)}>
                   {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusActiveTask.id).filter((subtask) => subtask.status !== 'DONE') : getFocusedSubtaskItems(focusActiveTask.id)).map((subtask) => (
                     <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status === 'DONE' ? 'opacity-60' : ''} ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
-                      style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
+                      style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
+                      onContextMenu={(event) => handleSubtaskCommentContextMenu(event, subtask, Boolean(focusActiveTask.isCollaborative))}>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
-                      {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                      {focusActiveTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
+                      {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
                   ))}
@@ -5873,6 +5964,85 @@ ${allContext}`,
           </section>
         </aside>
       </div>
+      {subtaskCommentContextMenu ? (
+        <div className="fixed inset-0 z-[260]" onMouseDown={() => setSubtaskCommentContextMenu(null)} onContextMenu={(event) => { event.preventDefault(); setSubtaskCommentContextMenu(null); }}>
+          <div
+            className="surface-popover fixed min-w-48 rounded-xl border p-1.5 shadow-2xl"
+            style={{ left: subtaskCommentContextMenu.x, top: subtaskCommentContextMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-primary transition hover:bg-violet-100"
+              onClick={() => void openSubtaskComments(subtaskCommentContextMenu.task, true)}
+            >
+              <MessageCircle size={15} />
+              Комментировать
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {subtaskCommentPanel ? (
+        <div className="modal-backdrop fixed inset-0 z-[270] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSubtaskCommentPanel(null)}>
+          <section className="surface-popover flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Комментарии к подзадаче</p>
+                <h3 className="mt-1 truncate text-base font-semibold text-primary">{subtaskCommentPanel.task.title}</h3>
+              </div>
+              <button type="button" className="focused-task-icon-button h-8 w-8 shrink-0 border" onClick={() => setSubtaskCommentPanel(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+              {subtaskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-500" /></div> : null}
+              {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-muted">Комментариев пока нет.</p> : null}
+              {!subtaskCommentsLoading ? subtaskComments.map((comment) => (
+                <article key={comment.id} className={`rounded-2xl border bg-white px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5 border-violet-200' : 'border-slate-200'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs font-semibold text-violet-700">{comment.authorName}</span>
+                    <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">{comment.content}</p>
+                  <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-600 hover:text-violet-800" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
+                    Ответить
+                  </button>
+                </article>
+              )) : null}
+            </div>
+            <div className="border-t bg-white px-4 py-3">
+              {subtaskCommentReplyTo ? (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                  <span className="min-w-0 truncate">Ответ для {subtaskCommentReplyTo.authorName}: {subtaskCommentReplyTo.content}</span>
+                  <button type="button" className="shrink-0" onClick={() => setSubtaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
+                </div>
+              ) : null}
+              <textarea
+                className="form-field min-h-20 w-full resize-y rounded-2xl border px-3 py-2 text-sm"
+                placeholder={subtaskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
+                value={subtaskCommentDraft}
+                autoFocus={subtaskCommentPanel.compose}
+                maxLength={3000}
+                onChange={(event) => setSubtaskCommentDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    void sendSubtaskComment();
+                  }
+                }}
+              />
+              {subtaskCommentError ? <p className="mt-1 text-xs text-rose-500">{subtaskCommentError}</p> : null}
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-[10px] text-muted">Ctrl/Cmd + Enter для отправки</p>
+                <button type="button" className="primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={!subtaskCommentDraft.trim() || subtaskCommentSending} onClick={() => void sendSubtaskComment()}>
+                  {subtaskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
+                  Отправить
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {editorState ? (
         <TaskEditor
           timelineTasks={timelinePickerTasks}
@@ -6624,6 +6794,7 @@ ${allContext}`,
                       whileDrag={{ scale: 1.02, boxShadow: '0 14px 30px rgba(15,23,42,0.14)', zIndex: 90 }}
                       className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''} ${subtask.status !== 'DONE' && isOverdue(subtask) ? 'subtask-compact-overdue-static' : subtask.status !== 'DONE' && shouldTaskGlow(subtask) ? 'subtask-compact-reminder-static' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
+                      onContextMenu={(event) => handleSubtaskCommentContextMenu(event, subtask, Boolean(focusedTask.isCollaborative))}
                     >
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
@@ -6635,8 +6806,9 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
-                      {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                      {focusedTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
+                      {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       <InlineDateTimePickerIcon
                         value={subtask.dueDate}
                         title="Изменить срок подзадачи"
