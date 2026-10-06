@@ -238,6 +238,15 @@ export const taskService = {
     const patch: Prisma.TaskUpdateInput = {};
     const isCollaborativeRoot = Boolean(currentTask.collaborationId && !currentTask.parentTaskId);
     const personalSettingsPatch: Prisma.CollaborativeTaskMemberUpdateInput = {};
+    const ownMember = isCollaborativeRoot && currentTask.collaborationId
+      ? await prisma.collaborativeTaskMember.findUniqueOrThrow({
+          where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } }
+        })
+      : null;
+    const sharedDueDateChanged = input.dueDate !== undefined
+      && (toDueDate(input.dueDate)?.getTime() ?? null) !== (currentTask.dueDate?.getTime() ?? null);
+    const ownStatusChanged = input.status !== undefined
+      && input.status !== (ownMember?.statusOverride ?? currentTask.status);
     if (isCollaborativeRoot) {
       if (input.importance !== undefined) personalSettingsPatch.importance = toNumber(input.importance, 'importance');
       if (input.urgency !== undefined) personalSettingsPatch.urgency = toNumber(input.urgency, 'urgency');
@@ -248,7 +257,9 @@ export const taskService = {
       if (input.recurrenceJson !== undefined) personalSettingsPatch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
       if (input.recurrenceSummary !== undefined) personalSettingsPatch.recurrenceSummary = input.recurrenceSummary;
       if (input.recurrenceUntil !== undefined) personalSettingsPatch.recurrenceUntil = toDueDate(input.recurrenceUntil);
-      if (input.notifyBeforeMinutes !== undefined || input.status !== undefined || input.dueDate !== undefined) {
+      if ((input.notifyBeforeMinutes !== undefined
+          && toNotifyBeforeMinutes(input.notifyBeforeMinutes) !== ownMember?.notifyBeforeMinutes)
+        || ownStatusChanged || sharedDueDateChanged) {
         personalSettingsPatch.telegramNotifiedAt = null;
       }
       if (input.sphereId) {
@@ -363,7 +374,7 @@ export const taskService = {
             ...(input.sphereId !== undefined ? { sphereId: input.sphereId } : {})
           }
         });
-        if (input.dueDate !== undefined) {
+        if (sharedDueDateChanged || (input.status !== undefined && input.collaborationScope === 'all' && ownStatusChanged)) {
           await tx.collaborativeTaskMember.updateMany({
             where: { collaborationId: currentTask.collaborationId },
             data: { telegramNotifiedAt: null }
@@ -405,6 +416,7 @@ export const taskService = {
       return {
         ...finalTask,
         sphereId: ownSettings.sphereId,
+        status: ownSettings.statusOverride ?? finalTask.status,
         importance: ownSettings.importance,
         urgency: ownSettings.urgency,
         priorityScore: calcScore(ownSettings.importance, ownSettings.urgency),
