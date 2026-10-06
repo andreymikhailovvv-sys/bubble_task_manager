@@ -3617,6 +3617,67 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </div>
         </div>
       ) : null}
+      {commentPanelTaskId ? (() => {
+        const commentTask = tasks.find((task) => task.id === commentPanelTaskId) ?? null;
+        if (!commentTask) return null;
+        return (
+          <div className="fixed inset-0 z-[125] flex items-end bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setCommentPanelTaskId(null)}>
+            <section className="flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl sm:max-w-lg sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-300">Комментарии к подзадаче</p>
+                  <h3 className="mt-1 truncate text-base font-semibold">{commentTask.title}</h3>
+                </div>
+                <button type="button" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800" onClick={() => setCommentPanelTaskId(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
+              </div>
+              <div ref={taskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
+                {taskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-300" /></div> : null}
+                {!taskCommentsLoading && taskComments.length === 0 ? <p className="rounded-xl bg-slate-800 px-3 py-4 text-center text-sm text-slate-400">Комментариев пока нет.</p> : null}
+                {!taskCommentsLoading ? taskComments.map((comment) => (
+                  <article
+                    key={comment.id}
+                    className={`rounded-2xl border px-3 py-2.5 ${comment.parentCommentId ? 'ml-5' : ''}`}
+                    style={{
+                      borderColor: comment.authorColor ?? '#64748b',
+                      backgroundColor: hexToRgba(comment.authorColor ?? '#64748b', comment.isOwn ? 0.25 : 0.14) ?? 'rgba(30,41,59,.9)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold" style={{ color: comment.authorColor ?? '#c4b5fd' }}>{comment.authorName}</span>
+                      <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-100">{comment.content}</p>
+                    <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-300" onClick={() => setTaskCommentReplyTo(comment)}>Ответить</button>
+                  </article>
+                )) : null}
+              </div>
+              <div className="border-t border-slate-700 bg-slate-900 px-3 py-3">
+                {taskCommentReplyTo ? (
+                  <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-950/60 px-3 py-2 text-xs text-violet-200">
+                    <span className="min-w-0 truncate">Ответ для {taskCommentReplyTo.authorName}: {taskCommentReplyTo.content}</span>
+                    <button type="button" onClick={() => setTaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
+                  </div>
+                ) : null}
+                <AutoGrowingTextarea
+                  value={taskCommentDraft}
+                  onChange={(event) => setTaskCommentDraft(event.target.value)}
+                  placeholder={taskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
+                  className="max-h-28 min-h-20 w-full resize-none rounded-2xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                  maxLength={3000}
+                />
+                {taskCommentError ? <p className="mt-1 text-xs text-rose-300">{taskCommentError}</p> : null}
+                <div className="mt-2 flex justify-end">
+                  <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!taskCommentDraft.trim() || taskCommentSending} onClick={() => void sendTaskComment()}>
+                    {taskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
+                    Отправить
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      })() : null}
+
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
