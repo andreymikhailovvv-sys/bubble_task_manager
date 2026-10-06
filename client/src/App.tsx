@@ -5964,6 +5964,85 @@ ${allContext}`,
           </section>
         </aside>
       </div>
+      {subtaskCommentContextMenu ? (
+        <div className="fixed inset-0 z-[260]" onMouseDown={() => setSubtaskCommentContextMenu(null)} onContextMenu={(event) => { event.preventDefault(); setSubtaskCommentContextMenu(null); }}>
+          <div
+            className="surface-popover fixed min-w-48 rounded-xl border p-1.5 shadow-2xl"
+            style={{ left: subtaskCommentContextMenu.x, top: subtaskCommentContextMenu.y }}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-primary transition hover:bg-violet-100"
+              onClick={() => void openSubtaskComments(subtaskCommentContextMenu.task, true)}
+            >
+              <MessageCircle size={15} />
+              Комментировать
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {subtaskCommentPanel ? (
+        <div className="modal-backdrop fixed inset-0 z-[270] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSubtaskCommentPanel(null)}>
+          <section className="surface-popover flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Комментарии к подзадаче</p>
+                <h3 className="mt-1 truncate text-base font-semibold text-primary">{subtaskCommentPanel.task.title}</h3>
+              </div>
+              <button type="button" className="focused-task-icon-button h-8 w-8 shrink-0 border" onClick={() => setSubtaskCommentPanel(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+              {subtaskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-500" /></div> : null}
+              {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-muted">Комментариев пока нет.</p> : null}
+              {!subtaskCommentsLoading ? subtaskComments.map((comment) => (
+                <article key={comment.id} className={`rounded-2xl border bg-white px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5 border-violet-200' : 'border-slate-200'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs font-semibold text-violet-700">{comment.authorName}</span>
+                    <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">{comment.content}</p>
+                  <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-600 hover:text-violet-800" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
+                    Ответить
+                  </button>
+                </article>
+              )) : null}
+            </div>
+            <div className="border-t bg-white px-4 py-3">
+              {subtaskCommentReplyTo ? (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                  <span className="min-w-0 truncate">Ответ для {subtaskCommentReplyTo.authorName}: {subtaskCommentReplyTo.content}</span>
+                  <button type="button" className="shrink-0" onClick={() => setSubtaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
+                </div>
+              ) : null}
+              <textarea
+                className="form-field min-h-20 w-full resize-y rounded-2xl border px-3 py-2 text-sm"
+                placeholder={subtaskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
+                value={subtaskCommentDraft}
+                autoFocus={subtaskCommentPanel.compose}
+                maxLength={4000}
+                onChange={(event) => setSubtaskCommentDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                    event.preventDefault();
+                    void sendSubtaskComment();
+                  }
+                }}
+              />
+              {subtaskCommentError ? <p className="mt-1 text-xs text-rose-500">{subtaskCommentError}</p> : null}
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <p className="text-[10px] text-muted">Ctrl/Cmd + Enter для отправки</p>
+                <button type="button" className="primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={!subtaskCommentDraft.trim() || subtaskCommentSending} onClick={() => void sendSubtaskComment()}>
+                  {subtaskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
+                  Отправить
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {editorState ? (
         <TaskEditor
           timelineTasks={timelinePickerTasks}
