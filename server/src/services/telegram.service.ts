@@ -523,7 +523,10 @@ const getHabitReminderText = (habit: { name: string; icon: string; targetCount: 
 
 const getTaskNotificationText = async (taskId: string, userId: string) => {
   const task = await prisma.task.findFirst({
-    where: { id: taskId, userId },
+    where: {
+      id: taskId,
+      OR: [{ userId }, { collaboration: { members: { some: { userId, isHidden: false } } } }]
+    },
     include: {
       subtasks: {
         where: { status: { not: 'DONE' } },
@@ -1749,9 +1752,11 @@ export const telegramService = {
     const now = new Date();
     const tasks = await prisma.task.findMany({
       where: {
-        status: { not: 'DONE' },
         dueDate: { not: null },
-        notifyBeforeMinutes: { not: null },
+        OR: [
+          { status: { not: 'DONE' }, notifyBeforeMinutes: { not: null } },
+          { collaborationId: { not: null }, parentTaskId: null }
+        ]
       },
       select: {
         id: true,
@@ -1761,50 +1766,113 @@ export const telegramService = {
         notifyBeforeMinutes: true,
         telegramNotifiedAt: true,
         userId: true,
-        user: { select: { telegramChatId: true } }
+        status: true,
+        user: { select: { telegramChatId: true } },
+        collaboration: {
+          select: {
+            members: {
+              where: { isHidden: false },
+              select: {
+                id: true,
+                userId: true,
+                statusOverride: true,
+                notifyBeforeMinutes: true,
+                telegramNotifiedAt: true,
+                user: { select: { telegramChatId: true } }
+              }
+            }
+          }
+        }
       }
     });
 
     for (const task of tasks) {
-      const dueAt = task.dueDate?.getTime() ?? 0;
-      const diffMs = dueAt - now.getTime();
-      const notifyWindowMs = Math.min(task.notifyBeforeMinutes ?? 0, MAX_SHINE_WINDOW_MINUTES) * 60_000;
-      const isShining = task.notifyBeforeMinutes === 0
-        ? diffMs <= 0
-        : diffMs > 0 && diffMs <= notifyWindowMs;
-
-      const notificationKind = diffMs <= 0 ? 'overdue' : isShining ? 'upcoming' : null;
-      if (notificationKind) {
-        const dueKey = task.dueDate?.toISOString() ?? 'no-date';
-        const totalMinutes = Math.max(1, Math.ceil(diffMs / 60_000));
-        const timeLeft = totalMinutes < 60
-          ? `${totalMinutes} мин.`
-          : `${Math.floor(totalMinutes / 60)} ч.${totalMinutes % 60 ? ` ${totalMinutes % 60} мин.` : ''}`;
-        const content = notificationKind === 'overdue'
-          ? `⏰Напоминание о задаче «${task.title}»`
-          : `⏰ До дедлайна задачи «${task.title}» осталось ${timeLeft}`;
-        await prisma.systemNotification.create({
-          data: {
+      const sharedRoot = Boolean(task.collaboration && !task.parentTaskId);
+      const recipients = sharedRoot && task.collaboration
+        ? task.collaboration.members.map((member) => ({
+            memberId: member.id,
+            userId: member.userId,
+            status: member.statusOverride ?? task.status,
+            notifyBeforeMinutes: member.notifyBeforeMinutes,
+            telegramNotifiedAt: member.telegramNotifiedAt,
+            telegramChatId: member.user.telegramChatId
+          }))
+        : [{
+            memberId: null as string | null,
             userId: task.userId,
-            taskId: task.id,
-            eventKey: `${task.id}:${dueKey}:${notificationKind}`,
-            content
-          }
-        }).catch((error: unknown) => {
-          if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
-        });
-      }
+            status: task.status,
+            notifyBeforeMinutes: task.notifyBeforeMinutes,
+            telegramNotifiedAt: task.telegramNotifiedAt,
+            telegramChatId: task.user.telegramChatId
+          }];
 
-      if (isShining && !task.telegramNotifiedAt) {
-        const text = await getTaskNotificationText(task.id, task.userId);
-        if (BOT_TOKEN && text && task.user.telegramChatId) {
-          await sendMessage(task.user.telegramChatId, text, keyboardMain(task.parentTaskId ?? task.id));
-          await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: now } });
+      for (const recipient of recipients) {
+        if (recipient.status === 'DONE' || recipient.notifyBeforeMinutes === null) continue;
+
+        const dueAt = task.dueDate?.getTime() ?? 0;
+        const diffMs = dueAt - now.getTime();
+        const notifyWindowMs = Math.min(recipient.notifyBeforeMinutes, MAX_SHINE_WINDOW_MINUTES) * 60_000;
+        const isShining = recipient.notifyBeforeMinutes === 0
+          ? diffMs <= 0
+          : diffMs > 0 && diffMs <= notifyWindowMs;
+
+        const notificationKind = diffMs <= 0 ? 'overdue' : isShining ? 'upcoming' : null;
+        if (notificationKind) {
+          const dueKey = task.dueDate?.toISOString() ?? 'no-date';
+          const totalMinutes = Math.max(1, Math.ceil(diffMs / 60_000));
+          const timeLeft = totalMinutes < 60
+            ? `${totalMinutes} мин.`
+            : `${Math.floor(totalMinutes / 60)} ч.${totalMinutes % 60 ? ` ${totalMinutes % 60} мин.` : ''}`;
+          const content = notificationKind === 'overdue'
+            ? `⏰Напоминание о задаче «${task.title}»`
+            : `⏰ До дедлайна задачи «${task.title}» осталось ${timeLeft}`;
+          await prisma.systemNotification.create({
+            data: {
+              userId: recipient.userId,
+              taskId: task.id,
+              eventKey: sharedRoot
+                ? `${task.id}:${recipient.userId}:${dueKey}:${notificationKind}`
+                : `${task.id}:${dueKey}:${notificationKind}`,
+              content
+            }
+          }).catch((error: unknown) => {
+            if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
+          });
         }
-      }
 
-      if (!isShining && task.telegramNotifiedAt) {
-        await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: null } });
+        if (isShining && !recipient.telegramNotifiedAt) {
+          const text = await getTaskNotificationText(task.id, recipient.userId);
+          if (BOT_TOKEN && text && recipient.telegramChatId) {
+            const keyboard = sharedRoot && recipient.userId !== task.userId
+              ? {
+                  inline_keyboard: [
+                    [{ text: '📱 Посмотреть задачу', web_app: { url: buildMiniAppTaskUrl(task.id) } }],
+                    [{ text: '🤖 Написать ИИ', web_app: { url: buildMiniAppTaskAiUrl(task.id) } }]
+                  ]
+                }
+              : keyboardMain(task.parentTaskId ?? task.id);
+            await sendMessage(recipient.telegramChatId, text, keyboard);
+            if (recipient.memberId) {
+              await prisma.collaborativeTaskMember.update({
+                where: { id: recipient.memberId },
+                data: { telegramNotifiedAt: now }
+              });
+            } else {
+              await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: now } });
+            }
+          }
+        }
+
+        if (!isShining && recipient.telegramNotifiedAt) {
+          if (recipient.memberId) {
+            await prisma.collaborativeTaskMember.update({
+              where: { id: recipient.memberId },
+              data: { telegramNotifiedAt: null }
+            });
+          } else {
+            await prisma.task.update({ where: { id: task.id }, data: { telegramNotifiedAt: null } });
+          }
+        }
       }
     }
 
