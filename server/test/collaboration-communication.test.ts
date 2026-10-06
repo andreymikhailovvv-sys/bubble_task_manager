@@ -26,7 +26,7 @@ test('адресные сообщения task chat исключаются из 
   assert.match(source, /where: \{ taskId: input\.taskId, messageKind: 'AI' \}/);
   assert.match(source, /messageKind === 'HUMAN'/);
 
-  const migration = await readFile(new URL('../prisma/migrations/20261006143000_task_chat_direct_messages/migration.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../prisma/migrations/20261006142500_task_chat_direct_messages/migration.sql', import.meta.url), 'utf8');
   assert.match(migration, /"messageKind" TEXT NOT NULL DEFAULT 'AI'/);
   assert.match(migration, /"recipientUserId" TEXT/);
 });
