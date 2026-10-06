@@ -929,6 +929,7 @@ export default function App() {
   const [isAiSubtasksPromptOpen, setIsAiSubtasksPromptOpen] = useState(false);
   const [aiSubtasksPrompt, setAiSubtasksPrompt] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
+  const [isFocusedAiDragActive, setIsFocusedAiDragActive] = useState(false);
   const [focusedTaskAttachments, setFocusedTaskAttachments] = useState<TaskAttachment[]>([]);
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
@@ -2178,9 +2179,12 @@ export default function App() {
     contentBase64: await toBase64(file)
   });
 
-  const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
+  const addFocusedAiFiles = (selectedFiles: File[]) => {
     if (selectedFiles.length === 0) return;
+    if (focusedTask && (aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai') {
+      setAiError('Вложения можно отправлять только ИИ. Сначала выберите получателем ИИ.');
+      return;
+    }
 
     const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
     if (normalized.length !== selectedFiles.length) {
@@ -2190,7 +2194,6 @@ export default function App() {
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) {
       setAiError(`Файл ${oversized.name} превышает лимит 8MB.`);
-      event.target.value = '';
       return;
     }
 
@@ -2202,6 +2205,10 @@ export default function App() {
       }
       return merged;
     });
+  };
+
+  const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
+    addFocusedAiFiles(Array.from(event.target.files ?? []));
     event.target.value = '';
   };
 
