@@ -155,6 +155,18 @@ export const taskService = {
       ...task,
       sphereId: !task.parentTaskId && collaboration ? (ownMembership?.sphereId ?? null) : task.sphereId,
       status: !task.parentTaskId && ownMembership?.statusOverride ? ownMembership.statusOverride : task.status,
+      ...(!task.parentTaskId && ownMembership ? {
+        importance: ownMembership.importance,
+        urgency: ownMembership.urgency,
+        priorityScore: calcScore(ownMembership.importance, ownMembership.urgency),
+        notifyBeforeMinutes: ownMembership.notifyBeforeMinutes,
+        aiNotificationsEnabled: ownMembership.aiNotificationsEnabled,
+        isRecurring: ownMembership.isRecurring,
+        recurrenceText: ownMembership.recurrenceText,
+        recurrenceJson: ownMembership.recurrenceJson,
+        recurrenceSummary: ownMembership.recurrenceSummary,
+        recurrenceUntil: ownMembership.recurrenceUntil
+      } : {}),
       creatorName: user.name || user.username || user.email || 'Участник',
       creatorUserId: task.userId,
       creatorColor: creatorMembership?.color ?? '#8b5cf6',
@@ -224,6 +236,25 @@ export const taskService = {
     });
     if (currentTask.collaborationId && input.collaborationScope === 'all' && currentTask.userId !== userId) throw new Error('Only collaboration owner can update everyone');
     const patch: Prisma.TaskUpdateInput = {};
+    const isCollaborativeRoot = Boolean(currentTask.collaborationId && !currentTask.parentTaskId);
+    const personalSettingsPatch: Prisma.CollaborativeTaskMemberUpdateInput = {};
+    if (isCollaborativeRoot) {
+      if (input.importance !== undefined) personalSettingsPatch.importance = toNumber(input.importance, 'importance');
+      if (input.urgency !== undefined) personalSettingsPatch.urgency = toNumber(input.urgency, 'urgency');
+      if (input.notifyBeforeMinutes !== undefined) personalSettingsPatch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
+      if (input.aiNotificationsEnabled !== undefined) personalSettingsPatch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
+      if (input.isRecurring !== undefined) personalSettingsPatch.isRecurring = Boolean(input.isRecurring);
+      if (input.recurrenceText !== undefined) personalSettingsPatch.recurrenceText = input.recurrenceText;
+      if (input.recurrenceJson !== undefined) personalSettingsPatch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
+      if (input.recurrenceSummary !== undefined) personalSettingsPatch.recurrenceSummary = input.recurrenceSummary;
+      if (input.recurrenceUntil !== undefined) personalSettingsPatch.recurrenceUntil = toDueDate(input.recurrenceUntil);
+      if (input.notifyBeforeMinutes !== undefined || input.status !== undefined || input.dueDate !== undefined) {
+        personalSettingsPatch.telegramNotifiedAt = null;
+      }
+      if (input.sphereId) {
+        await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
+      }
+    }
     if (currentTask.collaborationId && !currentTask.parentTaskId && input.status !== undefined && input.collaborationScope !== 'all') {
       await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } }, data: { statusOverride: input.status } });
       input = { ...input, status: undefined };
@@ -250,14 +281,14 @@ export const taskService = {
     if (input.parentTaskId !== undefined) {
       patch.parentTask = input.parentTaskId ? { connect: { id: input.parentTaskId } } : { disconnect: true };
     }
-    if (input.importance !== undefined) {
+    if (!isCollaborativeRoot && input.importance !== undefined) {
       patch.importance = toNumber(input.importance, 'importance');
     }
-    if (input.urgency !== undefined) {
+    if (!isCollaborativeRoot && input.urgency !== undefined) {
       patch.urgency = toNumber(input.urgency, 'urgency');
     }
 
-    if (input.importance !== undefined || input.urgency !== undefined) {
+    if (!isCollaborativeRoot && (input.importance !== undefined || input.urgency !== undefined)) {
       const importance = toNumber(input.importance ?? currentTask.importance, 'importance');
       const urgency = toNumber(input.urgency ?? currentTask.urgency, 'urgency');
       patch.priorityScore = calcScore(importance, urgency);
@@ -266,7 +297,7 @@ export const taskService = {
     if (input.dueDate !== undefined) {
       patch.dueDate = toDueDate(input.dueDate);
     }
-    if (input.notifyBeforeMinutes !== undefined) {
+    if (!isCollaborativeRoot && input.notifyBeforeMinutes !== undefined) {
       patch.notifyBeforeMinutes = toNotifyBeforeMinutes(input.notifyBeforeMinutes);
     }
     const nextDueDate = input.dueDate !== undefined ? toDueDate(input.dueDate) : currentTask.dueDate;
@@ -277,30 +308,30 @@ export const taskService = {
       || (input.dueDate !== undefined && nextDueTime !== currentDueTime)
       || (input.notifyBeforeMinutes !== undefined && toNotifyBeforeMinutes(input.notifyBeforeMinutes) !== currentTask.notifyBeforeMinutes);
 
-    if (shouldResetTelegramNotification) {
+    if (shouldResetTelegramNotification && !isCollaborativeRoot) {
       patch.telegramNotifiedAt = null;
     }
     if (currentTask.taskType === 'EVENT') {
-      patch.aiNotificationsEnabled = false;
+      if (!isCollaborativeRoot) patch.aiNotificationsEnabled = false;
       patch.parentTask = { disconnect: true };
-    } else if (input.aiNotificationsEnabled !== undefined) {
+    } else if (!isCollaborativeRoot && input.aiNotificationsEnabled !== undefined) {
       patch.aiNotificationsEnabled = Boolean(input.aiNotificationsEnabled);
     }
 
     const isSubtask = Boolean(currentTask.parentTaskId);
-    if (!isSubtask) {
+    if (!isSubtask && !isCollaborativeRoot) {
       if (input.isRecurring !== undefined) patch.isRecurring = Boolean(input.isRecurring);
       if (input.recurrenceText !== undefined) patch.recurrenceText = input.recurrenceText;
       if (input.recurrenceJson !== undefined) patch.recurrenceJson = toRecurrenceJson(input.recurrenceJson);
       if (input.recurrenceSummary !== undefined) patch.recurrenceSummary = input.recurrenceSummary;
       if (input.recurrenceUntil !== undefined) patch.recurrenceUntil = toDueDate(input.recurrenceUntil);
-    } else if (
+    } else if (isSubtask && (
       input.isRecurring !== undefined
       || input.recurrenceText !== undefined
       || input.recurrenceJson !== undefined
       || input.recurrenceSummary !== undefined
       || input.recurrenceUntil !== undefined
-    ) {
+    )) {
       patch.isRecurring = false;
       patch.recurrenceText = null;
       patch.recurrenceJson = Prisma.JsonNull;
@@ -308,7 +339,7 @@ export const taskService = {
       patch.recurrenceUntil = null;
     }
 
-    if (!isSubtask && (input.isRecurring === true || input.recurrenceJson !== undefined) && (input.dueDate === undefined || input.dueDate === null)) {
+    if (!isSubtask && !isCollaborativeRoot && (input.isRecurring === true || input.recurrenceJson !== undefined) && (input.dueDate === undefined || input.dueDate === null)) {
       const schedule = (input.recurrenceJson && typeof input.recurrenceJson === 'object'
         ? input.recurrenceJson as unknown as RecurrenceSchedule
         : currentTask.recurrenceJson as unknown as RecurrenceSchedule | null);
@@ -324,11 +355,20 @@ export const taskService = {
     );
 
     const finalTask = await prisma.$transaction(async (tx) => {
-      if (input.sphereId !== undefined && currentTask.collaborationId && !currentTask.parentTaskId) {
+      if (isCollaborativeRoot && currentTask.collaborationId) {
         await tx.collaborativeTaskMember.update({
           where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } },
-          data: { sphereId: input.sphereId }
+          data: {
+            ...personalSettingsPatch,
+            ...(input.sphereId !== undefined ? { sphereId: input.sphereId } : {})
+          }
         });
+        if (input.dueDate !== undefined) {
+          await tx.collaborativeTaskMember.updateMany({
+            where: { collaborationId: currentTask.collaborationId },
+            data: { telegramNotifiedAt: null }
+          });
+        }
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
       let finalTask = updatedTask;
@@ -358,6 +398,25 @@ export const taskService = {
       await notifyCollaborativeSubtaskCompleted({ subtaskId: id, actorUserId: userId });
     }
 
+    if (isCollaborativeRoot && currentTask.collaborationId) {
+      const ownSettings = await prisma.collaborativeTaskMember.findUniqueOrThrow({
+        where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } }
+      });
+      return {
+        ...finalTask,
+        sphereId: ownSettings.sphereId,
+        importance: ownSettings.importance,
+        urgency: ownSettings.urgency,
+        priorityScore: calcScore(ownSettings.importance, ownSettings.urgency),
+        notifyBeforeMinutes: ownSettings.notifyBeforeMinutes,
+        aiNotificationsEnabled: ownSettings.aiNotificationsEnabled,
+        isRecurring: ownSettings.isRecurring,
+        recurrenceText: ownSettings.recurrenceText,
+        recurrenceJson: ownSettings.recurrenceJson,
+        recurrenceSummary: ownSettings.recurrenceSummary,
+        recurrenceUntil: ownSettings.recurrenceUntil
+      };
+    }
     return finalTask;
   },
   remove: async (id: string, userId: string, scope: 'me' | 'all' = 'me') => {
