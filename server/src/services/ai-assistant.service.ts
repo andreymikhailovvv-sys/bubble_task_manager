@@ -157,7 +157,10 @@ const FAST_MODEL = process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
 const FULL_MODEL = process.env.OPENAI_MODEL_FULL?.trim() || 'gpt-5.4-mini';
 const AI_CHAT_MODEL_NANO = process.env.OPENAI_MODEL_AI_CHAT_NANO?.trim() || 'gpt-6-luna';
 const AI_CHAT_MODEL_MINI = process.env.OPENAI_MODEL_AI_CHAT_MINI?.trim() || 'gpt-5.4-mini';
-const AI_CHAT_MODEL_FULL = process.env.OPENAI_MODEL_AI_CHAT_FULL?.trim() || 'gpt-6.1-sol';
+const configuredAiChatFullModel = process.env.OPENAI_MODEL_AI_CHAT_FULL?.trim();
+const AI_CHAT_MODEL_FULL = !configuredAiChatFullModel || configuredAiChatFullModel === 'gpt-6-sol'
+  ? 'gpt-6.1-sol'
+  : configuredAiChatFullModel;
 const ATTACHMENTS_MODEL = process.env.OPENAI_MODEL_ATTACHMENTS?.trim() || 'gpt-6-luna';
 const RECURRENCE_MODEL = process.env.OPENAI_MODEL_RECURRENCE?.trim() || 'gpt-5-nano';
 const GENERAL_CHAT_MODEL = process.env.OPENAI_MODEL_GENERAL_CHAT?.trim() || 'gpt-6-luna';
