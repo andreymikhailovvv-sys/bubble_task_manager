@@ -890,6 +890,7 @@ export default function App() {
   const [subtaskCommentReplyTo, setSubtaskCommentReplyTo] = useState<TaskComment | null>(null);
   const [subtaskCommentSending, setSubtaskCommentSending] = useState(false);
   const [subtaskCommentError, setSubtaskCommentError] = useState<string | null>(null);
+  const subtaskCommentScrollRef = useRef<HTMLDivElement | null>(null);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
@@ -917,6 +918,8 @@ export default function App() {
   const [isTaskAttachmentDragActive, setIsTaskAttachmentDragActive] = useState(false);
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiModelByTask, setAiModelByTask] = useState<Record<string, AiChatModel>>({});
+  const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
+  const [isAiRecipientMenuOpen, setIsAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, TaskAiMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
   const [generalAiMessages, setGeneralAiMessages] = useState<GeneralAiMessage[]>([]);
@@ -2061,6 +2064,26 @@ export default function App() {
   }) => {
     if (!focusedTask) return;
     const question = options?.questionOverride?.trim() ?? aiDraft.trim();
+    const selectedRecipientUserId = aiRecipientByTaskId[focusedTask.id] ?? 'ai';
+    if (selectedRecipientUserId !== 'ai') {
+      if (!question) return;
+      if (aiPendingFiles.length > 0) {
+        setAiError('Вложения можно отправлять только ИИ. Для сообщения участнику оставьте только текст.');
+        return;
+      }
+      setAiLoadingTaskId(focusedTask.id);
+      setAiError(null);
+      try {
+        const directMessage = await api.sendTaskParticipantMessage(focusedTask.id, { recipientUserId: selectedRecipientUserId, content: question }) as TaskAiMessage;
+        setAiDialogByTask((prev) => ({ ...prev, [focusedTask.id]: [...(prev[focusedTask.id] ?? []), directMessage] }));
+        setAiDraft('');
+      } catch (error) {
+        setAiError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
+      } finally {
+        setAiLoadingTaskId(null);
+      }
+      return;
+    }
     if (!question && aiPendingFiles.length === 0) return;
 
     const fileNames = aiPendingFiles.map((file) => file.name);
@@ -3349,13 +3372,13 @@ ${allContext}`,
   };
 
   const renderSubtaskCommentButton = (subtask: Task) => {
-    if ((subtask.commentCount ?? 0) <= 0) return null;
     const unread = subtask.unreadCommentCount ?? 0;
+    const total = subtask.commentCount ?? 0;
     return (
       <button
         type="button"
         className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-violet-100 hover:text-violet-700"
-        title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${subtask.commentCount ?? 0}`}
+        title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : total > 0 ? `Комментариев: ${total}` : 'Открыть комментарии'}
         aria-label="Открыть комментарии"
         onClick={(event) => {
           event.stopPropagation();
@@ -3367,6 +3390,15 @@ ${allContext}`,
       </button>
     );
   };
+
+  useEffect(() => {
+    if (!subtaskCommentPanel || subtaskCommentsLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const container = subtaskCommentScrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [subtaskCommentPanel?.task.id, subtaskCommentsLoading, subtaskComments.length]);
 
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
     const createdSubtask = await api.createTask({
@@ -6028,11 +6060,18 @@ ${allContext}`,
               </div>
               <button type="button" className="focused-task-icon-button h-8 w-8 shrink-0 border" onClick={() => setSubtaskCommentPanel(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
             </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+            <div ref={subtaskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
               {subtaskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-500" /></div> : null}
               {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-muted">Комментариев пока нет.</p> : null}
               {!subtaskCommentsLoading ? subtaskComments.map((comment) => (
-                <article key={comment.id} className={`rounded-2xl border bg-white px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5 border-violet-200' : 'border-slate-200'}`}>
+                <article
+                  key={comment.id}
+                  className={`rounded-2xl border px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5' : ''}`}
+                  style={{
+                    borderColor: comment.authorColor ?? '#94a3b8',
+                    backgroundColor: hexToRgba(comment.authorColor ?? '#64748b', comment.isOwn ? 0.18 : 0.1) ?? 'rgba(248,250,252,0.96)'
+                  }}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-xs font-semibold text-violet-700">{comment.authorName}</span>
                     <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
