@@ -137,7 +137,7 @@ async function notifyCommentRecipient(input: {
 
 export const taskCommentService = {
   list: async (taskId: string, userId: string) => {
-    await getAccessibleCollaborativeSubtask(taskId, userId);
+    const task = await getAccessibleCollaborativeSubtask(taskId, userId);
     const comments = await prisma.taskComment.findMany({
       where: { taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
