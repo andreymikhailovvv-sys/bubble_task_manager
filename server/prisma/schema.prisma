@@ -290,7 +290,7 @@ model TaskComment {
   userId          String
   user            User     @relation("TaskCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
   parentCommentId String?
-  parentComment   TaskComment? @relation("TaskCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  parentComment   TaskComment? @relation("TaskCommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
   replies         TaskComment[] @relation("TaskCommentReplies")
   content         String
   createdAt       DateTime @default(now())
