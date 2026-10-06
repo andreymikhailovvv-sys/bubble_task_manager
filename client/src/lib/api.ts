@@ -1,4 +1,4 @@
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment, WebCitation, WebSource } from './types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource } from './types';
 
 export type ApiError = Error & { status?: number; code?: string };
 type UnauthorizedHandler = () => void;
@@ -212,6 +212,10 @@ export const api = {
   updateTaskCollaboration: (id: string, color: string) => request<{ color: string }>(`/api/tasks/${id}/collaboration`, { method: 'PATCH', body: JSON.stringify({ color }) }),
   removeTaskCollaborator: (id: string, userId: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration/members/${userId}`, { method: 'DELETE' }),
   disableTaskCollaboration: (id: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration`, { method: 'DELETE' }),
+  getTaskComments: (id: string) => request<{ comments: TaskComment[] }>(`/api/tasks/${id}/comments`),
+  createTaskComment: (id: string, payload: { content: string; parentCommentId?: string | null }) =>
+    request<TaskComment>(`/api/tasks/${id}/comments`, { method: 'POST', body: JSON.stringify(payload) }),
+  markTaskCommentsRead: (id: string) => request<{ ok: true; lastReadAt: string }>(`/api/tasks/${id}/comments/read`, { method: 'POST' }),
   createTaskCalendarIcsLink: (id: string, payload: { startAt: string; durationMinutes: 30 | 60 | 90 | 120; reminderMinutes: 10 | 30 | 60 | null }) =>
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>
