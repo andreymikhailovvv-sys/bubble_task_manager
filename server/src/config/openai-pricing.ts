@@ -21,9 +21,9 @@ export const OPENAI_STANDARD_PRICING: Readonly<Record<string, OpenAiModelPricing
     short: rates(0.10, 0.01, 0.125, 0.50),
     long: rates(0.20, 0.02, 0.25, 0.75)
   },
-  'gpt-6-sol': {
-    short: rates(2.00, 0.20, 2.50, 10.00),
-    long: rates(4.00, 0.40, 5.00, 15.00)
+  'gpt-6.1-sol': {
+    short: rates(2.00, 0.10, 2.50, 10.00),
+    long: rates(4.00, 0.20, 5.00, 15.00)
   },
   'gpt-5.4-mini': { short: rates(0.75, 0.075, null, 4.50) },
   'gpt-5-mini': { short: rates(0.25, 0.025, null, 2.00) },
