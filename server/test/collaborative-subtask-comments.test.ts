@@ -3,6 +3,15 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { formatCollaborativeSubtaskCommentNotification } from '../src/services/task-comment.service.js';
 
+test('миграция комментариев создаёт обе таблицы и безопасную связь ответов', async () => {
+  const sql = await readFile(new URL('../prisma/migrations/20261006122500_collaborative_subtask_comments/migration.sql', import.meta.url), 'utf8');
+  assert.match(sql, /CREATE TABLE "TaskComment"/);
+  assert.match(sql, /CREATE TABLE "TaskCommentReadState"/);
+  assert.match(sql, /TaskCommentReadState_taskId_userId_key/);
+  assert.match(sql, /TaskComment_parentCommentId_fkey/);
+  assert.match(sql, /ON DELETE SET NULL/);
+});
+
 test('уведомление о комментарии использует требуемую формулировку', () => {
   assert.equal(
     formatCollaborativeSubtaskCommentNotification({
