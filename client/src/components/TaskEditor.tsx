@@ -422,8 +422,15 @@ export function TaskEditor({
     setDraftSubtaskTitle("");
     setIsAddingDraftSubtask(false);
     window.requestAnimationFrame(() => {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
+      const titleInput = titleInputRef.current;
+      if (!titleInput) return;
+      titleInput.focus();
+      if (task?.parentTaskId) {
+        const caret = titleInput.value.length;
+        titleInput.setSelectionRange(caret, caret);
+      } else {
+        titleInput.select();
+      }
     });
     autosaveSignatureRef.current = task
       ? JSON.stringify({

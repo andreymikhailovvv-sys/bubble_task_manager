@@ -83,7 +83,7 @@ export type WebSource = { title: string; url: string };
 export type WebCitation = { startIndex: number; endIndex: number; sourceIndex: number };
 
 export type ChatMode = 'fast' | 'smart';
-export type AiChatModel = 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol';
+export type AiChatModel = 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
 
 export type ChatAttachmentPayload = {
   name: string;

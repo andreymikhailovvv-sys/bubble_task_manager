@@ -7452,3 +7452,119 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
   border-color: rgba(124, 58, 237, 0.5);
   box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
+
+
+/* Task AI help: Mini App-style floating composer and drag/drop attachment affordance. */
+.focused-task-ai-thread-through {
+  padding-bottom: 10.5rem !important;
+  scroll-padding-bottom: 10.5rem;
+}
+
+.focused-task-ai-composer-layer {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 28;
+  padding: 1.35rem 0.15rem 0.1rem;
+  border-radius: 1.65rem;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 58%, transparent) 22%,
+    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 82%, transparent) 62%,
+    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 90%, transparent) 100%
+  );
+  backdrop-filter: blur(10px) saturate(115%);
+  -webkit-backdrop-filter: blur(10px) saturate(115%);
+}
+
+.focused-task-ai-composer-layer-expanded {
+  right: 1.25rem;
+  bottom: 1.25rem;
+  left: 1.25rem;
+}
+
+.focused-task-ai-composer-layer .ai-chat-composer {
+  border-color: color-mix(in srgb, var(--panel-border) 72%, transparent);
+  background: color-mix(in srgb, var(--input-bg) 82%, transparent);
+  box-shadow: 0 7px 22px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.focused-task-ai-attach-button {
+  border: 1px solid color-mix(in srgb, var(--field-border) 88%, transparent);
+  background: color-mix(in srgb, var(--muted-bg) 90%, transparent);
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.focused-task-ai-attach-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, #8b5cf6 42%, var(--field-border));
+  background: color-mix(in srgb, #8b5cf6 10%, var(--muted-bg));
+  color: var(--text-primary);
+}
+
+body[data-theme='dark'] .focused-task-ai-attach-button {
+  border-color: rgba(100, 116, 139, 0.42) !important;
+  background: rgba(30, 41, 59, 0.68) !important;
+  color: #94a3b8 !important;
+}
+
+body[data-theme='dark'] .focused-task-ai-attach-button:not(:disabled):hover {
+  border-color: rgba(139, 92, 246, 0.52) !important;
+  background: rgba(51, 65, 85, 0.76) !important;
+  color: #e2e8f0 !important;
+}
+
+body[data-theme='dark'] .focused-task-ai-composer-layer {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(15, 23, 42, 0.42) 22%,
+    rgba(15, 23, 42, 0.72) 62%,
+    rgba(15, 23, 42, 0.82) 100%
+  );
+}
+
+body[data-theme='light'] .focused-task-ai-composer-layer {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.42) 22%,
+    rgba(255, 255, 255, 0.72) 62%,
+    rgba(255, 255, 255, 0.86) 100%
+  );
+}
+
+.focused-task-ai-drop-overlay {
+  position: absolute;
+  inset: 0.75rem;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border: 2px dashed color-mix(in srgb, #8b5cf6 62%, var(--panel-border));
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 78%, transparent);
+  color: color-mix(in srgb, #8b5cf6 76%, var(--text-primary));
+  font-size: 0.82rem;
+  font-weight: 700;
+  pointer-events: none;
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+}
+
+body[data-theme='dark'] .focused-task-ai-drop-overlay {
+  background: rgba(15, 23, 42, 0.82);
+  color: #ddd6fe;
+}
+
+@media (max-height: 720px) {
+  .focused-task-ai-thread-through {
+    padding-bottom: 9rem !important;
+    scroll-padding-bottom: 9rem;
+  }
+}

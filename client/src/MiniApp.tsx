@@ -157,7 +157,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
   { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
   { value: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
-  { value: 'gpt-6-sol', label: 'GPT-6 Sol' }
+  { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }
 ];
 const MINI_AI_PROJECT_COLORS = ['#8b5cf6', '#06b6d4', '#22c55e', '#f97316', '#ec4899', '#6366f1', '#14b8a6', '#f43f5e'];
 const MINI_AI_PROJECT_ICONS = ['✨', '🤖', '🧠', '🚀', '📌', '🗂️', '💬', '⚡', '🌙', '🎯', '🧩', '🪄'];
@@ -2527,7 +2527,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage,
-        mode: selectedAiChatModel === 'gpt-6-sol' ? 'smart' : 'fast',
+        mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
         clientSurface,
         attachments: attachmentsPayload
