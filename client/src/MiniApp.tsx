@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
@@ -8,7 +8,7 @@ import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment } from './lib/types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
@@ -692,6 +692,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const lastMainScrollTopRef = useRef(0);
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
+  const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
+  const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
@@ -750,11 +752,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const pendingSubtaskTitleFocusIdRef = useRef<string | null>(null);
   const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
   const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
+  const [commentPanelTaskId, setCommentPanelTaskId] = useState<string | null>(null);
+  const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
+  const [taskCommentsLoading, setTaskCommentsLoading] = useState(false);
+  const [taskCommentDraft, setTaskCommentDraft] = useState('');
+  const [taskCommentReplyTo, setTaskCommentReplyTo] = useState<TaskComment | null>(null);
+  const [taskCommentSending, setTaskCommentSending] = useState(false);
+  const [taskCommentError, setTaskCommentError] = useState<string | null>(null);
+  const taskCommentScrollRef = useRef<HTMLDivElement | null>(null);
+  const [pendingLaunchCommentTaskId, setPendingLaunchCommentTaskId] = useState<string | null>(null);
   const launchParams = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
     const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
-    return { taskId, openAi };
+    const commentTaskId = params.get('commentTaskId')?.trim() || null;
+    const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
+    return { taskId, openAi, commentTaskId, chatRecipientUserId };
   }, []);
 
   const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
@@ -1439,10 +1452,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     if (!launchParams.taskId || loading || tasks.length === 0 || openedTaskId) return;
-    const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId && task.status !== 'DONE');
+    const requestedTask = tasks.find((task) => task.id === launchParams.taskId && !task.parentTaskId);
     if (!requestedTask) return;
     openTaskModal(requestedTask);
+    if (launchParams.chatRecipientUserId) {
+      setAiRecipientByTaskId((prev) => ({ ...prev, [requestedTask.id]: launchParams.chatRecipientUserId! }));
+    }
     if (launchParams.openAi) setIsAiDialogOpen(true);
+    if (launchParams.commentTaskId) setPendingLaunchCommentTaskId(launchParams.commentTaskId);
   }, [launchParams, loading, openedTaskId, tasks]);
 
   const closeTaskModal = () => {
@@ -2350,6 +2367,75 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   };
 
+  const openTaskComments = async (subtask: Task) => {
+    setCommentPanelTaskId(subtask.id);
+    setTaskComments([]);
+    setTaskCommentDraft('');
+    setTaskCommentReplyTo(null);
+    setTaskCommentError(null);
+    setTaskCommentsLoading(true);
+    try {
+      const response = await api.getTaskComments(subtask.id);
+      setTaskComments(response.comments);
+      await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
+      const clearedUnread = subtask.unreadCommentCount ?? 0;
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) return { ...task, commentCount: response.comments.length, unreadCommentCount: 0 };
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId && clearedUnread > 0) {
+          return { ...task, unreadCommentCount: Math.max(0, (task.unreadCommentCount ?? 0) - clearedUnread) };
+        }
+        return task;
+      }));
+    } catch (error) {
+      setTaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
+    } finally {
+      setTaskCommentsLoading(false);
+    }
+  };
+
+  const sendTaskComment = async () => {
+    const subtask = commentPanelTaskId ? tasks.find((task) => task.id === commentPanelTaskId) ?? null : null;
+    const content = taskCommentDraft.trim();
+    if (!subtask || !content || taskCommentSending) return;
+    setTaskCommentSending(true);
+    setTaskCommentError(null);
+    try {
+      const created = await api.createTaskComment(subtask.id, {
+        content,
+        parentCommentId: taskCommentReplyTo?.id ?? null
+      });
+      setTaskComments((current) => [...current, created]);
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId) return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        return task;
+      }));
+      setTaskCommentDraft('');
+      setTaskCommentReplyTo(null);
+    } catch (error) {
+      setTaskCommentError(error instanceof Error ? error.message : 'Не удалось отправить комментарий');
+    } finally {
+      setTaskCommentSending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!commentPanelTaskId || taskCommentsLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const container = taskCommentScrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [commentPanelTaskId, taskCommentsLoading, taskComments.length]);
+
+  useEffect(() => {
+    if (!pendingLaunchCommentTaskId || loading || tasks.length === 0) return;
+    const subtask = tasks.find((task) => task.id === pendingLaunchCommentTaskId && Boolean(task.parentTaskId));
+    if (!subtask) return;
+    setPendingLaunchCommentTaskId(null);
+    void openTaskComments(subtask);
+  }, [pendingLaunchCommentTaskId, loading, tasks]);
+
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
@@ -2395,6 +2481,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const sendAiMessage = async () => {
     if (!openedTask) return;
     const question = aiDraft.trim();
+    const selectedRecipientUserId = aiRecipientByTaskId[openedTask.id] ?? 'ai';
+    if (selectedRecipientUserId !== 'ai') {
+      if (!question) return;
+      if (aiPendingFiles.length > 0) {
+        setError('Вложения можно отправлять только ИИ. Для сообщения участнику оставьте только текст.');
+        return;
+      }
+      setAiLoadingTaskId(openedTask.id);
+      setError(null);
+      try {
+        const directMessage = await api.sendTaskParticipantMessage(openedTask.id, { recipientUserId: selectedRecipientUserId, content: question });
+        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: [...(prev[openedTask.id] ?? []), directMessage] }));
+        setAiDraft('');
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
+      } finally {
+        setAiLoadingTaskId(null);
+      }
+      return;
+    }
     if (!question && aiPendingFiles.length === 0) return;
     setAiLoadingTaskId(openedTask.id);
     setAiProgressByTask((current) => ({ ...current, [openedTask.id]: 'analyzing_request' }));
@@ -3363,12 +3469,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     {openedTaskSubtasks.map((subtask) => {
                       return (
                         <article key={subtask.id} className={`miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
-                          <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left">
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
-                            <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
-                            {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
-                            {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
+                              <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+                              <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
+                              {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                              {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
+                            </button>
+                            {openedTask.isCollaborative ? (
+                              <button type="button" onClick={() => void openTaskComments(subtask)} className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-400/40 text-violet-500" aria-label="Открыть комментарии" title="Комментарии">
+                                <MessageCircle size={15} />
+                                {(subtask.unreadCommentCount ?? 0) > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{(subtask.unreadCommentCount ?? 0) > 99 ? '99+' : subtask.unreadCommentCount}</span> : null}
+                              </button>
+                            ) : null}
+                          </div>
                         </article>
                       );
                     })}
@@ -3503,6 +3617,67 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           </div>
         </div>
       ) : null}
+      {commentPanelTaskId ? (() => {
+        const commentTask = tasks.find((task) => task.id === commentPanelTaskId) ?? null;
+        if (!commentTask) return null;
+        return (
+          <div className="fixed inset-0 z-[125] flex items-end bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setCommentPanelTaskId(null)}>
+            <section className="flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl sm:max-w-lg sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-300">Комментарии к подзадаче</p>
+                  <h3 className="mt-1 truncate text-base font-semibold">{commentTask.title}</h3>
+                </div>
+                <button type="button" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800" onClick={() => setCommentPanelTaskId(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
+              </div>
+              <div ref={taskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
+                {taskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-300" /></div> : null}
+                {!taskCommentsLoading && taskComments.length === 0 ? <p className="rounded-xl bg-slate-800 px-3 py-4 text-center text-sm text-slate-400">Комментариев пока нет.</p> : null}
+                {!taskCommentsLoading ? taskComments.map((comment) => (
+                  <article
+                    key={comment.id}
+                    className={`rounded-2xl border px-3 py-2.5 ${comment.parentCommentId ? 'ml-5' : ''}`}
+                    style={{
+                      borderColor: comment.authorColor ?? '#64748b',
+                      backgroundColor: hexToRgba(comment.authorColor ?? '#64748b', comment.isOwn ? 0.25 : 0.14) ?? 'rgba(30,41,59,.9)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold" style={{ color: comment.authorColor ?? '#c4b5fd' }}>{comment.authorName}</span>
+                      <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-100">{comment.content}</p>
+                    <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-300" onClick={() => setTaskCommentReplyTo(comment)}>Ответить</button>
+                  </article>
+                )) : null}
+              </div>
+              <div className="border-t border-slate-700 bg-slate-900 px-3 py-3">
+                {taskCommentReplyTo ? (
+                  <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-950/60 px-3 py-2 text-xs text-violet-200">
+                    <span className="min-w-0 truncate">Ответ для {taskCommentReplyTo.authorName}: {taskCommentReplyTo.content}</span>
+                    <button type="button" onClick={() => setTaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
+                  </div>
+                ) : null}
+                <AutoGrowingTextarea
+                  value={taskCommentDraft}
+                  onChange={(event) => setTaskCommentDraft(event.target.value)}
+                  placeholder={taskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
+                  className="max-h-28 min-h-20 w-full resize-none rounded-2xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                  maxLength={3000}
+                />
+                {taskCommentError ? <p className="mt-1 text-xs text-rose-300">{taskCommentError}</p> : null}
+                <div className="mt-2 flex justify-end">
+                  <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!taskCommentDraft.trim() || taskCommentSending} onClick={() => void sendTaskComment()}>
+                    {taskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
+                    Отправить
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      })() : null}
+
       {openedTask && isAiDialogOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
@@ -3524,7 +3699,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor, color: '#fff' } as CSSProperties) : undefined}>
-                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
@@ -3542,6 +3717,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 className="hidden"
                 onChange={handleAiFileSelect}
               />
+              {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
+                <div className="relative mb-2 flex justify-end">
+                  <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
+                    <span className="text-slate-400">Получатель:</span>
+                    <span>{openedTask.collaborationMembers.find((member) => member.userId === (aiRecipientByTaskId[openedTask.id] ?? 'ai'))?.name ?? 'ИИ'}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {isTaskAiRecipientMenuOpen ? (
+                    <div className="absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
+                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
+                      {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
+                        <button key={member.userId} type="button" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
+                          <span className="truncate">{member.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {aiPendingFiles.map((file) => (
@@ -3567,7 +3762,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     }
                   }}
                 />
-                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title="Прикрепить файл">
+                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" disabled={(aiRecipientByTaskId[openedTask.id] ?? 'ai') !== 'ai'} onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title={(aiRecipientByTaskId[openedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}>
                   <Paperclip size={17} />
                 </button>
                 <button

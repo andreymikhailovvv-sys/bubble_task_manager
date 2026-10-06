@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Newspaper, Sparkles, X } from 'lucide-react';
+import { BookOpen, MessageCircle, Newspaper, SendHorizontal, Sparkles, X } from 'lucide-react';
+
+export const LATEST_NEWS_ID = '2026-10-06-collaboration-comments-messages';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -9,10 +11,15 @@ type UpdatesMenuProps = {
   onStartFeatureTour: () => void;
   onStartWorkspaceTour: () => void;
   completedLessonIds: string[];
+  onNewsViewed?: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, onNewsViewed }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
+
+  useEffect(() => {
+    if (open && tab === 'news') onNewsViewed?.();
+  }, [open, tab, onNewsViewed]);
 
   useEffect(() => {
     if (!open) return;
@@ -32,7 +39,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
         </div>
         <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl p-1 updates-menu-tabs">
           <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'training' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => setTab('training')}><BookOpen className="mr-1.5 inline" size={15} />Обучение</button>
-          <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'news' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => setTab('news')}><Newspaper className="mr-1.5 inline" size={15} />Новости и изменения</button>
+          <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'news' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => { setTab('news'); onNewsViewed?.(); }}><Newspaper className="mr-1.5 inline" size={15} />Новости и изменения</button>
         </div>
         {tab === 'training' ? (
           <div className="mt-5 space-y-3">
@@ -49,7 +56,25 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
               </article>
             ))}
           </div>
-        ) : <div className="mt-8 rounded-2xl border border-dashed p-8 text-center text-sm text-muted">Раздел появится позже</div>}
+        ) : (
+          <div className="mt-5 space-y-3 overflow-y-auto pr-1">
+            <article className="updates-lesson rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-400">6 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Совместные задачи стали удобнее для общения</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><MessageCircle size={17} /></span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
+                <p><strong className="text-primary">Комментарии теперь доступны у любой подзадачи</strong> на сайте, мобильной версии и в Mini App. Лента сразу открывается на свежих сообщениях, а цвета помогают быстро понять, кто что написал.</p>
+                <p><strong className="text-primary">Ответы приходят именно тому человеку, которому вы ответили.</strong> В Telegram-уведомлении появилась кнопка «Ответить», она сразу открывает нужную переписку по подзадаче.</p>
+                <p><strong className="text-primary">В чате задачи можно писать не только ИИ, но и участникам.</strong> Перед отправкой выберите получателя. Если выбран человек, ИИ сообщение не обрабатывает, а получатель получает обычное уведомление на сайте и в Telegram.</p>
+              </div>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300"><SendHorizontal size={13} /> Всё работает внутри совместной задачи</div>
+            </article>
+          </div>
+        )}
       </aside>
     </div>
   );

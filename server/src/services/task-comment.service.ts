@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
+import { buildMiniAppTaskCommentsUrl } from '../lib/miniapp-url.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -28,7 +29,19 @@ const getAccessibleCollaborativeSubtask = async (taskId: string, userId: string)
       userId: true,
       collaborationId: true,
       parentTask: { select: { id: true, title: true } },
-      user: { select: { telegramChatId: true } }
+      user: { select: { telegramChatId: true } },
+      collaboration: {
+        select: {
+          members: {
+            where: { isHidden: false },
+            select: {
+              userId: true,
+              color: true,
+              user: { select: { name: true, username: true, email: true, telegramChatId: true } }
+            }
+          }
+        }
+      }
     }
   });
 
@@ -36,40 +49,38 @@ export const formatCollaborativeSubtaskCommentNotification = (input: {
   actorName: string;
   subtaskTitle: string;
   comment: string;
-}) => `Пользователь ${input.actorName} оставил комментарий по подзадаче «${input.subtaskTitle}»: ${input.comment}`;
+  isReply?: boolean;
+}) => input.isReply
+  ? `Пользователь ${input.actorName} ответил на ваш комментарий по подзадаче «${input.subtaskTitle}»: ${input.comment}`
+  : `Пользователь ${input.actorName} оставил комментарий по подзадаче «${input.subtaskTitle}»: ${input.comment}`;
 
-async function notifySubtaskCreator(input: {
+async function notifyCommentRecipient(input: {
   commentId: string;
   task: Awaited<ReturnType<typeof getAccessibleCollaborativeSubtask>>;
   actorUserId: string;
   actorName: string;
   content: string;
+  recipientUserId: string;
+  isReply: boolean;
 }) {
-  if (input.task.userId === input.actorUserId) return;
+  if (input.recipientUserId === input.actorUserId) return;
 
-  const recipientMembership = await prisma.collaborativeTaskMember.findUnique({
-    where: {
-      collaborationId_userId: {
-        collaborationId: input.task.collaborationId!,
-        userId: input.task.userId
-      }
-    },
-    select: { isHidden: true }
-  });
-  if (!recipientMembership || recipientMembership.isHidden) return;
+  const recipient = input.task.collaboration?.members.find((member) => member.userId === input.recipientUserId);
+  if (!recipient) return;
 
   const notificationContent = formatCollaborativeSubtaskCommentNotification({
     actorName: input.actorName,
     subtaskTitle: input.task.title,
-    comment: input.content
+    comment: input.content,
+    isReply: input.isReply
   });
 
   try {
     await prisma.systemNotification.create({
       data: {
-        userId: input.task.userId,
+        userId: input.recipientUserId,
         taskId: input.task.parentTask!.id,
-        eventKey: `collaboration-subtask-comment:${input.commentId}`,
+        eventKey: `collaboration-subtask-comment:${input.commentId}:${input.recipientUserId}`,
         content: notificationContent
       }
     });
@@ -78,30 +89,38 @@ async function notifySubtaskCreator(input: {
       console.error('[Subtask comment] system notification failed', {
         commentId: input.commentId,
         taskId: input.task.id,
-        recipientUserId: input.task.userId,
+        recipientUserId: input.recipientUserId,
         error
       });
     }
   }
 
-  if (!BOT_TOKEN || !input.task.user.telegramChatId) return;
+  if (!BOT_TOKEN || !recipient.user.telegramChatId) return;
 
   try {
-    const telegramText = `Пользователь <b>${escapeHtml(input.actorName)}</b> оставил комментарий по подзадаче <b>${escapeHtml(input.task.title)}</b>: ${escapeHtml(input.content)}`;
+    const telegramText = input.isReply
+      ? `Пользователь <b>${escapeHtml(input.actorName)}</b> ответил на ваш комментарий по подзадаче <b>${escapeHtml(input.task.title)}</b>: ${escapeHtml(input.content)}`
+      : `Пользователь <b>${escapeHtml(input.actorName)}</b> оставил комментарий по подзадаче <b>${escapeHtml(input.task.title)}</b>: ${escapeHtml(input.content)}`;
     const response = await telegramFetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: input.task.user.telegramChatId,
+        chat_id: recipient.user.telegramChatId,
         text: telegramText,
-        parse_mode: 'HTML'
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{
+            text: 'Ответить',
+            web_app: { url: buildMiniAppTaskCommentsUrl(input.task.parentTask!.id, input.task.id) }
+          }]]
+        }
       })
     });
     if (!response.ok) {
       console.error('[Subtask comment] Telegram API error', {
         commentId: input.commentId,
         taskId: input.task.id,
-        recipientUserId: input.task.userId,
+        recipientUserId: input.recipientUserId,
         status: response.status,
         response: (await response.text()).slice(0, 500)
       });
@@ -110,7 +129,7 @@ async function notifySubtaskCreator(input: {
     console.error('[Subtask comment] Telegram delivery failed', {
       commentId: input.commentId,
       taskId: input.task.id,
-      recipientUserId: input.task.userId,
+      recipientUserId: input.recipientUserId,
       error
     });
   }
@@ -118,16 +137,18 @@ async function notifySubtaskCreator(input: {
 
 export const taskCommentService = {
   list: async (taskId: string, userId: string) => {
-    await getAccessibleCollaborativeSubtask(taskId, userId);
+    const task = await getAccessibleCollaborativeSubtask(taskId, userId);
     const comments = await prisma.taskComment.findMany({
       where: { taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: { user: { select: { name: true, username: true, email: true } } }
     });
+    const memberColorByUserId = new Map(task.collaboration?.members.map((member) => [member.userId, member.color]) ?? []);
     return comments.map(({ user, ...comment }) => ({
       ...comment,
       authorName: displayName(user),
       authorUserId: comment.userId,
+      authorColor: memberColorByUserId.get(comment.userId) ?? '#64748b',
       isOwn: comment.userId === userId
     }));
   },
@@ -142,9 +163,9 @@ export const taskCommentService = {
       ? rawParentCommentId.trim()
       : null;
 
-    if (parentCommentId) {
-      await prisma.taskComment.findFirstOrThrow({ where: { id: parentCommentId, taskId } });
-    }
+    const parentComment = parentCommentId
+      ? await prisma.taskComment.findFirstOrThrow({ where: { id: parentCommentId, taskId }, select: { id: true, userId: true } })
+      : null;
 
     const comment = await prisma.taskComment.create({
       data: { taskId, userId, parentCommentId, content },
@@ -158,18 +179,22 @@ export const taskCommentService = {
       update: { lastReadAt: comment.createdAt }
     });
 
-    await notifySubtaskCreator({
+    const actorColor = task.collaboration?.members.find((member) => member.userId === userId)?.color ?? '#64748b';
+    await notifyCommentRecipient({
       commentId: comment.id,
       task,
       actorUserId: userId,
       actorName,
-      content
+      content,
+      recipientUserId: parentComment?.userId ?? task.userId,
+      isReply: Boolean(parentComment)
     });
 
     return {
       ...comment,
       authorName: actorName,
       authorUserId: comment.userId,
+      authorColor: actorColor,
       isOwn: true
     };
   },
