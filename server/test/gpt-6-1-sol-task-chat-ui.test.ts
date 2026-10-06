@@ -30,6 +30,12 @@ test('продуктовые селекторы и сервер использу
   assert.match(files[1], /GPT-6\.1 Sol/);
 });
 
+test('устаревший env override GPT-6 Sol нормализуется на GPT-6.1 Sol', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /configuredAiChatFullModel === 'gpt-6-sol'/);
+  assert.match(source, /\? 'gpt-6\.1-sol'/);
+});
+
 test('существующая подзадача открывается с кареткой без выделения всего названия', async () => {
   const source = await readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8');
   const start = source.indexOf('window.requestAnimationFrame(() => {');
