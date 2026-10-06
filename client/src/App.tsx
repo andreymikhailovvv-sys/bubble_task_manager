@@ -952,6 +952,7 @@ export default function App() {
   const [subtaskOrderMap, setSubtaskOrderMap] = useState<Record<string, string[]>>({});
   const [habits, setHabits] = useState<Habit[]>([]);
   const [subtaskFilterMode, setSubtaskFilterMode] = useState<SubtaskFilterMode>('urgency');
+  const [subtaskAuthorFilterByTaskId, setSubtaskAuthorFilterByTaskId] = useState<Record<string, string | null>>({});
   const [isSubtaskFilterOpen, setIsSubtaskFilterOpen] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
@@ -1624,7 +1625,9 @@ export default function App() {
         const parsed = new Date(task.dueDate).getTime();
         return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
       };
-      acc[parentId] = [...items].sort((a, b) => {
+      const authorUserId = subtaskAuthorFilterByTaskId[parentId] ?? null;
+      const filteredItems = authorUserId ? items.filter((task) => task.creatorUserId === authorUserId) : items;
+      acc[parentId] = [...filteredItems].sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
         if (subtaskFilterMode === 'none') return 0;
@@ -1636,7 +1639,7 @@ export default function App() {
       });
       return acc;
     }, {}),
-    [subtaskMap, subtaskFilterMode]
+    [subtaskAuthorFilterByTaskId, subtaskMap, subtaskFilterMode]
   );
   const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT'), [rootTasks]);
   const activeTimelineItems = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
@@ -4437,13 +4440,13 @@ ${allContext}`,
                   <div className="relative">
                     <button
                       type="button"
-                      className={`focused-task-action-pill ${subtaskFilterMode !== 'none' ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
+                      className={`focused-task-action-pill ${subtaskFilterMode !== 'none' || Boolean(subtaskAuthorFilterByTaskId[focusActiveTask.id]) ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
                       onClick={() => setIsSubtaskFilterOpen((prev) => !prev)}
                     >
                       Фильтровать
                     </button>
                     {isSubtaskFilterOpen ? (
-                      <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                      <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 max-h-72 w-52 overflow-y-auto rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
                         {SUBTASK_FILTER_OPTIONS.map((option) => (
                           <button
                             key={option.mode}
@@ -4451,23 +4454,46 @@ ${allContext}`,
                             className={`subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'subtask-filter-item-active bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
                             onClick={() => {
                               setSubtaskFilterMode(option.mode);
+                              if (option.mode === 'none') setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusActiveTask.id]: null }));
                               setIsSubtaskFilterOpen(false);
                             }}
                           >
                             {option.label}
                           </button>
                         ))}
+                        {focusActiveTask.isCollaborative && focusActiveTask.collaborationMembers?.length ? (
+                          <div className="mt-1 border-t border-slate-700/70 pt-2">
+                            <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
+                            <div className="flex flex-wrap gap-1.5 p-1">
+                              {focusActiveTask.collaborationMembers.map((member) => (
+                                <button
+                                  key={member.userId}
+                                  type="button"
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusActiveTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-85 hover:opacity-100'}`}
+                                  style={{ backgroundColor: member.color }}
+                                  onClick={() => {
+                                    setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusActiveTask.id]: prev[focusActiveTask.id] === member.userId ? null : member.userId }));
+                                    setIsSubtaskFilterOpen(false);
+                                  }}
+                                >
+                                  {member.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
                 </div>
-                <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1">
+                <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1" onScroll={() => setIsSubtaskFilterOpen(false)}>
                   {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusActiveTask.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : (displayedSubtaskMap[focusActiveTask.id] ?? [])).map((subtask) => (
                     <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status === 'DONE' ? 'opacity-60' : ''} ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}>
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       <InlineDateTimePickerIcon value={subtask.dueDate} title="Изменить срок подзадачи" timelineTasks={timelinePickerTasks} onChange={async (dueDate) => { await api.updateTask(subtask.id, { dueDate }); await load(); }} />
                     </li>
@@ -6200,6 +6226,7 @@ ${allContext}`,
                   className={`min-h-0 flex-1 overflow-y-auto px-1 ${
                     isFocusedTitleSingleLine ? 'focused-task-single-line-title' : ''
                   }`}
+                  onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
                   <div className="flex items-center gap-2"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус задачи</p>{focusedTask.isCollaborative ? <button type="button" className="rounded-full border border-amber-300/70 bg-gradient-to-r from-amber-100 to-yellow-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 shadow-sm" onClick={() => setIsCollaborationSettingsOpen(true)}>Совместная задача</button> : null}</div>
                   <div className="mt-4 flex items-start gap-3">
@@ -6488,13 +6515,13 @@ ${allContext}`,
                     <div className="relative">
                       <button
                         type="button"
-                        className={`focused-task-action-pill ${subtaskFilterMode !== 'none' ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
+                        className={`focused-task-action-pill ${subtaskFilterMode !== 'none' || Boolean(subtaskAuthorFilterByTaskId[focusedTask.id]) ? 'focused-task-action-pill-active' : 'focused-task-action-pill-filter'}`}
                         onClick={() => setIsSubtaskFilterOpen((prev) => !prev)}
                       >
                         Фильтровать
                       </button>
                       {isSubtaskFilterOpen ? (
-                        <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 w-44 rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
+                        <div className="subtask-filter-panel absolute right-0 top-[calc(100%+6px)] z-20 max-h-72 w-52 overflow-y-auto rounded-xl border border-slate-700/70 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur">
                           {SUBTASK_FILTER_OPTIONS.map((option) => (
                             <button
                               key={option.mode}
@@ -6502,12 +6529,34 @@ ${allContext}`,
                               className={`subtask-filter-item block w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition ${subtaskFilterMode === option.mode ? 'subtask-filter-item-active bg-cyan-500/25 text-cyan-100' : 'text-slate-200 hover:bg-slate-800/80'}`}
                               onClick={() => {
                                 setSubtaskFilterMode(option.mode);
+                                if (option.mode === 'none') setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusedTask.id]: null }));
                                 setIsSubtaskFilterOpen(false);
                               }}
                             >
                               {option.label}
                             </button>
                           ))}
+                          {focusedTask.isCollaborative && focusedTask.collaborationMembers?.length ? (
+                            <div className="mt-1 border-t border-slate-700/70 pt-2">
+                              <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
+                              <div className="flex flex-wrap gap-1.5 p-1">
+                                {focusedTask.collaborationMembers.map((member) => (
+                                  <button
+                                    key={member.userId}
+                                    type="button"
+                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm transition ${subtaskAuthorFilterByTaskId[focusedTask.id] === member.userId ? 'ring-2 ring-white/90' : 'opacity-85 hover:opacity-100'}`}
+                                    style={{ backgroundColor: member.color }}
+                                    onClick={() => {
+                                      setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusedTask.id]: prev[focusedTask.id] === member.userId ? null : member.userId }));
+                                      setIsSubtaskFilterOpen(false);
+                                    }}
+                                  >
+                                    {member.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
@@ -6561,6 +6610,7 @@ ${allContext}`,
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
+                  onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
                   {(hideClosedFocusedSubtasks ? (displayedSubtaskMap[focusedTask.id] ?? []).filter((task) => task.status !== 'DONE') : (displayedSubtaskMap[focusedTask.id] ?? [])).map((subtask) => (
                     <Reorder.Item
