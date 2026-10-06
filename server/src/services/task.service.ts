@@ -440,7 +440,17 @@ export const taskService = {
       collaboration = await prisma.$transaction(async (tx) => {
         const created = await tx.collaborativeTask.create({ data: { token: crypto.randomBytes(24).toString('base64url'), rootTaskId: task.id } });
         await tx.task.updateMany({ where: { OR: [{ id: task.id }, { parentTaskId: task.id }] }, data: { collaborationId: created.id } });
-        await tx.collaborativeTaskMember.create({ data: { collaborationId: created.id, userId, sphereId: task.sphereId } });
+        await tx.collaborativeTaskMember.create({ data: {
+          collaborationId: created.id, userId, sphereId: task.sphereId,
+          importance: task.importance, urgency: task.urgency,
+          notifyBeforeMinutes: task.notifyBeforeMinutes,
+          aiNotificationsEnabled: task.aiNotificationsEnabled,
+          isRecurring: task.isRecurring,
+          recurrenceText: task.recurrenceText,
+          recurrenceJson: task.recurrenceJson ?? Prisma.JsonNull,
+          recurrenceSummary: task.recurrenceSummary,
+          recurrenceUntil: task.recurrenceUntil
+        } });
         return created;
       });
     }
@@ -480,9 +490,26 @@ export const taskService = {
     const root = await prisma.task.findFirstOrThrow({ where: { id, userId, parentTaskId: null, collaborationId: { not: null } }, include: { subtasks: true, collaboration: { include: { members: true } } } });
     await prisma.$transaction(async (tx) => {
       const ownerMembership = root.collaboration!.members.find((item) => item.userId === userId);
-      if (ownerMembership?.statusOverride) await tx.task.update({ where: { id: root.id }, data: { status: ownerMembership.statusOverride } });
+      if (ownerMembership) await tx.task.update({
+        where: { id: root.id },
+        data: {
+          ...(ownerMembership.statusOverride ? { status: ownerMembership.statusOverride } : {}),
+          sphereId: ownerMembership.sphereId,
+          importance: ownerMembership.importance,
+          urgency: ownerMembership.urgency,
+          priorityScore: calcScore(ownerMembership.importance, ownerMembership.urgency),
+          notifyBeforeMinutes: ownerMembership.notifyBeforeMinutes,
+          aiNotificationsEnabled: ownerMembership.aiNotificationsEnabled,
+          isRecurring: ownerMembership.isRecurring,
+          recurrenceText: ownerMembership.recurrenceText,
+          recurrenceJson: ownerMembership.recurrenceJson ?? Prisma.JsonNull,
+          recurrenceSummary: ownerMembership.recurrenceSummary,
+          recurrenceUntil: ownerMembership.recurrenceUntil,
+          telegramNotifiedAt: null
+        }
+      });
       for (const member of root.collaboration!.members.filter((item) => item.userId !== userId && !item.isHidden)) {
-        const clone = await tx.task.create({ data: { title: root.title, description: root.description, userId: member.userId, sphereId: member.sphereId, taskType: root.taskType, location: root.location, importance: root.importance, urgency: root.urgency, priorityScore: root.priorityScore, status: member.statusOverride ?? root.status, dueDate: root.dueDate, notifyBeforeMinutes: root.notifyBeforeMinutes, isRecurring: root.isRecurring, recurrenceText: root.recurrenceText, recurrenceJson: root.recurrenceJson ?? Prisma.JsonNull, recurrenceSummary: root.recurrenceSummary, recurrenceUntil: root.recurrenceUntil, aiNotificationsEnabled: root.aiNotificationsEnabled } });
+        const clone = await tx.task.create({ data: { title: root.title, description: root.description, userId: member.userId, sphereId: member.sphereId, taskType: root.taskType, location: root.location, importance: member.importance, urgency: member.urgency, priorityScore: calcScore(member.importance, member.urgency), status: member.statusOverride ?? root.status, dueDate: root.dueDate, notifyBeforeMinutes: member.notifyBeforeMinutes, isRecurring: member.isRecurring, recurrenceText: member.recurrenceText, recurrenceJson: member.recurrenceJson ?? Prisma.JsonNull, recurrenceSummary: member.recurrenceSummary, recurrenceUntil: member.recurrenceUntil, aiNotificationsEnabled: member.aiNotificationsEnabled } });
         if (root.subtasks.length) await tx.task.createMany({ data: root.subtasks.map((subtask) => ({ title: subtask.title, description: subtask.description, userId: member.userId, parentTaskId: clone.id, importance: subtask.importance, urgency: subtask.urgency, priorityScore: subtask.priorityScore, status: subtask.status, dueDate: subtask.dueDate, notifyBeforeMinutes: subtask.notifyBeforeMinutes })) });
       }
       await tx.task.updateMany({ where: { collaborationId: root.collaborationId }, data: { collaborationId: null } });
