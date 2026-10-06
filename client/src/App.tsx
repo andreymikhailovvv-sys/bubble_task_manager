@@ -6021,7 +6021,7 @@ ${allContext}`,
                 placeholder={subtaskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
                 value={subtaskCommentDraft}
                 autoFocus={subtaskCommentPanel.compose}
-                maxLength={4000}
+                maxLength={3000}
                 onChange={(event) => setSubtaskCommentDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
