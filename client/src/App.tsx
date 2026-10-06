@@ -1920,7 +1920,7 @@ export default function App() {
         recurrenceJson: parsed.schedule,
         recurrenceSummary: parsed.summary,
         recurrenceUntil: parsed.schedule.until,
-        dueDate: parsed.nextDueDate
+        ...(focusedTask?.isCollaborative ? {} : { dueDate: parsed.nextDueDate })
       } : p));
     } finally {
       setFocusedRecurrenceLoading(false);
@@ -4468,6 +4468,7 @@ ${allContext}`,
                           <div className="mt-1 border-t border-slate-700/70 pt-2">
                             <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
                             <div className="flex flex-wrap gap-1.5 p-1">
+                              <button type="button" aria-pressed={!subtaskAuthorFilterByTaskId[focusActiveTask.id]} className={`shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-semibold text-white transition ${!subtaskAuthorFilterByTaskId[focusActiveTask.id] ? 'ring-2 ring-white/90' : 'opacity-80 hover:opacity-100'}`} onClick={() => { setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusActiveTask.id]: null })); setIsSubtaskFilterOpen(false); }}>Все</button>
                               {focusActiveTask.collaborationMembers.map((member) => (
                                 <button
                                   key={member.userId}
@@ -6543,6 +6544,7 @@ ${allContext}`,
                             <div className="mt-1 border-t border-slate-700/70 pt-2">
                               <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
                               <div className="flex flex-wrap gap-1.5 p-1">
+                                <button type="button" aria-pressed={!subtaskAuthorFilterByTaskId[focusedTask.id]} className={`shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-semibold text-white transition ${!subtaskAuthorFilterByTaskId[focusedTask.id] ? 'ring-2 ring-white/90' : 'opacity-80 hover:opacity-100'}`} onClick={() => { setSubtaskAuthorFilterByTaskId((prev) => ({ ...prev, [focusedTask.id]: null })); setIsSubtaskFilterOpen(false); }}>Все</button>
                                 {focusedTask.collaborationMembers.map((member) => (
                                   <button
                                     key={member.userId}

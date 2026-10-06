@@ -263,6 +263,16 @@ model CollaborativeTaskMember {
   color           String   @default("#8b5cf6")
   statusOverride  TaskStatus?
   isHidden        Boolean  @default(false)
+  importance      Int      @default(3)
+  urgency         Int      @default(3)
+  notifyBeforeMinutes Int? @default(0)
+  aiNotificationsEnabled Boolean @default(true)
+  isRecurring     Boolean  @default(false)
+  recurrenceText  String?
+  recurrenceJson  Json?
+  recurrenceSummary String?
+  recurrenceUntil DateTime?
+  telegramNotifiedAt DateTime?
   createdAt       DateTime @default(now())
 
   @@unique([collaborationId, userId])
