@@ -3469,12 +3469,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     {openedTaskSubtasks.map((subtask) => {
                       return (
                         <article key={subtask.id} className={`miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
-                          <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left">
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
-                            <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
-                            {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
-                            {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
+                              <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+                              <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
+                              {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
+                              {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
+                            </button>
+                            {openedTask.isCollaborative ? (
+                              <button type="button" onClick={() => void openTaskComments(subtask)} className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-400/40 text-violet-500" aria-label="Открыть комментарии" title="Комментарии">
+                                <MessageCircle size={15} />
+                                {(subtask.unreadCommentCount ?? 0) > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{(subtask.unreadCommentCount ?? 0) > 99 ? '99+' : subtask.unreadCommentCount}</span> : null}
+                              </button>
+                            ) : null}
+                          </div>
                         </article>
                       );
                     })}
@@ -3630,7 +3638,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor, color: '#fff' } as CSSProperties) : undefined}>
-                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
+                    <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
@@ -3648,6 +3656,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 className="hidden"
                 onChange={handleAiFileSelect}
               />
+              {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
+                <div className="relative mb-2 flex justify-end">
+                  <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
+                    <span className="text-slate-400">Получатель:</span>
+                    <span>{openedTask.collaborationMembers.find((member) => member.userId === (aiRecipientByTaskId[openedTask.id] ?? 'ai'))?.name ?? 'ИИ'}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {isTaskAiRecipientMenuOpen ? (
+                    <div className="absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
+                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
+                      {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
+                        <button key={member.userId} type="button" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
+                          <span className="truncate">{member.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {aiPendingFiles.map((file) => (
@@ -3673,7 +3701,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     }
                   }}
                 />
-                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title="Прикрепить файл">
+                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" disabled={(aiRecipientByTaskId[openedTask.id] ?? 'ai') !== 'ai'} onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title={(aiRecipientByTaskId[openedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}>
                   <Paperclip size={17} />
                 </button>
                 <button
