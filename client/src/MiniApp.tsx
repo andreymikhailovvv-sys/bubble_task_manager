@@ -3621,39 +3621,36 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         const commentTask = tasks.find((task) => task.id === commentPanelTaskId) ?? null;
         if (!commentTask) return null;
         return (
-          <div className="fixed inset-0 z-[125] flex items-end bg-slate-950/65 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setCommentPanelTaskId(null)}>
-            <section className="flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-3xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl sm:max-w-lg sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
-              <div className="flex items-start justify-between gap-3 border-b border-slate-700 px-4 py-3">
+          <div className="miniapp-comment-backdrop fixed inset-0 z-[125] flex items-end p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4" onClick={() => setCommentPanelTaskId(null)}>
+            <section className="miniapp-comment-panel flex max-h-[82vh] w-full flex-col overflow-hidden rounded-t-3xl border shadow-2xl sm:max-w-lg sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+              <div className="miniapp-comment-header flex items-start justify-between gap-3 border-b px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-300">Комментарии к подзадаче</p>
+                  <p className="miniapp-comment-kicker text-[10px] font-semibold uppercase tracking-[0.14em]">Комментарии к подзадаче</p>
                   <h3 className="mt-1 truncate text-base font-semibold">{commentTask.title}</h3>
                 </div>
-                <button type="button" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800" onClick={() => setCommentPanelTaskId(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
+                <button type="button" className="miniapp-comment-close inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border" onClick={() => setCommentPanelTaskId(null)} aria-label="Закрыть комментарии"><X size={14} /></button>
               </div>
               <div ref={taskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
                 {taskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-300" /></div> : null}
-                {!taskCommentsLoading && taskComments.length === 0 ? <p className="rounded-xl bg-slate-800 px-3 py-4 text-center text-sm text-slate-400">Комментариев пока нет.</p> : null}
+                {!taskCommentsLoading && taskComments.length === 0 ? <p className="miniapp-comment-empty rounded-xl px-3 py-4 text-center text-sm">Комментариев пока нет.</p> : null}
                 {!taskCommentsLoading ? taskComments.map((comment) => (
                   <article
                     key={comment.id}
-                    className={`rounded-2xl border px-3 py-2.5 ${comment.parentCommentId ? 'ml-5' : ''}`}
-                    style={{
-                      borderColor: comment.authorColor ?? '#64748b',
-                      backgroundColor: hexToRgba(comment.authorColor ?? '#64748b', comment.isOwn ? 0.25 : 0.14) ?? 'rgba(30,41,59,.9)'
-                    }}
+                    className={`miniapp-comment-card rounded-2xl border px-3 py-2.5 ${comment.parentCommentId ? 'ml-5' : ''}`}
+                    style={{ '--comment-author-color': comment.authorColor ?? '#64748b' } as CSSProperties}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs font-semibold" style={{ color: comment.authorColor ?? '#c4b5fd' }}>{comment.authorName}</span>
-                      <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                      <span className="miniapp-comment-author truncate text-xs font-semibold">{comment.authorName}</span>
+                      <time className="miniapp-comment-time shrink-0 text-[10px]">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-100">{comment.content}</p>
-                    <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-300" onClick={() => setTaskCommentReplyTo(comment)}>Ответить</button>
+                    <p className="miniapp-comment-text mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.content}</p>
+                    <button type="button" className="miniapp-comment-reply mt-1.5 text-[11px] font-semibold" onClick={() => setTaskCommentReplyTo(comment)}>Ответить</button>
                   </article>
                 )) : null}
               </div>
-              <div className="border-t border-slate-700 bg-slate-900 px-3 py-3">
+              <div className="miniapp-comment-composer border-t px-3 py-3">
                 {taskCommentReplyTo ? (
-                  <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-950/60 px-3 py-2 text-xs text-violet-200">
+                  <div className="miniapp-comment-reply-preview mb-2 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs">
                     <span className="min-w-0 truncate">Ответ для {taskCommentReplyTo.authorName}: {taskCommentReplyTo.content}</span>
                     <button type="button" onClick={() => setTaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
                   </div>
@@ -3662,7 +3659,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   value={taskCommentDraft}
                   onChange={(event) => setTaskCommentDraft(event.target.value)}
                   placeholder={taskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
-                  className="max-h-28 min-h-20 w-full resize-none rounded-2xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                  className="miniapp-comment-input max-h-28 min-h-20 w-full resize-none rounded-2xl border px-3 py-2 text-sm outline-none"
                   maxLength={3000}
                 />
                 {taskCommentError ? <p className="mt-1 text-xs text-rose-300">{taskCommentError}</p> : null}
@@ -3698,7 +3695,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                 ) : null}
                 {openedTaskAiDialog.map((message, index) => (
-                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor, color: '#fff' } as CSSProperties) : undefined}>
+                  <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
@@ -3719,16 +3716,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               />
               {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
                 <div className="relative mb-2 flex justify-end">
-                  <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
-                    <span className="text-slate-400">Получатель:</span>
+                  <button type="button" className="miniapp-task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
+                    <span className="miniapp-task-ai-recipient-label">Получатель:</span>
                     <span>{openedTask.collaborationMembers.find((member) => member.userId === (aiRecipientByTaskId[openedTask.id] ?? 'ai'))?.name ?? 'ИИ'}</span>
                     <ChevronDown size={12} />
                   </button>
                   {isTaskAiRecipientMenuOpen ? (
-                    <div className="absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border border-slate-700 bg-slate-900 p-1.5 shadow-2xl">
-                      <button type="button" className="block w-full rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
+                    <div className="miniapp-task-ai-recipient-menu absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl">
+                      <button type="button" className={`miniapp-task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${(aiRecipientByTaskId[openedTask.id] ?? 'ai') === 'ai' ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
                       {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
-                        <button key={member.userId} type="button" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800" onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
+                        <button key={member.userId} type="button" className={`miniapp-task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${(aiRecipientByTaskId[openedTask.id] ?? 'ai') === member.userId ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
                           <span className="truncate">{member.name}</span>
                         </button>

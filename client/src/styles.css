@@ -7178,3 +7178,277 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message .collapsible-us
   color: inherit !important;
   -webkit-tap-highlight-color: transparent;
 }
+
+
+/* Collaborative communication: theme-safe recipient menus, authored chat messages and comments. */
+.task-ai-recipient-trigger {
+  border-color: var(--field-border);
+  background: var(--control-bg);
+  color: var(--text-primary);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+.task-ai-recipient-trigger:hover {
+  border-color: color-mix(in srgb, #8b5cf6 42%, var(--field-border));
+  background: color-mix(in srgb, #8b5cf6 7%, var(--control-bg));
+}
+.task-ai-recipient-label { color: var(--text-muted); }
+.task-ai-recipient-menu {
+  border-color: var(--panel-border);
+  background: var(--popover-bg);
+  color: var(--text-primary);
+}
+.task-ai-recipient-item {
+  color: var(--text-primary);
+  transition: background-color .15s ease, color .15s ease;
+}
+.task-ai-recipient-item:hover {
+  background: color-mix(in srgb, #8b5cf6 9%, var(--muted-bg));
+}
+.task-ai-recipient-item-active {
+  background: color-mix(in srgb, #8b5cf6 16%, var(--card-bg));
+  color: color-mix(in srgb, #7c3aed 82%, var(--text-primary));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #8b5cf6 30%, transparent);
+}
+body[data-theme='dark'] .task-ai-recipient-item-active {
+  background: rgba(124, 58, 237, 0.24);
+  color: #ede9fe;
+}
+
+.chat-message-user.collaboration-chat-message-authored {
+  border: 1px solid color-mix(in srgb, var(--message-author-color) 42%, transparent);
+  border-left: 3px solid var(--message-author-color);
+  background: color-mix(in srgb, var(--message-author-color) 34%, #111827);
+  color: #f8fafc;
+}
+body[data-theme='light'] .chat-message-user.collaboration-chat-message-authored {
+  border-color: color-mix(in srgb, var(--message-author-color) 28%, #cbd5e1) !important;
+  border-left-color: var(--message-author-color) !important;
+  background: color-mix(in srgb, var(--message-author-color) 13%, #ffffff) !important;
+  color: #0f172a !important;
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.08);
+}
+body[data-theme='light'] .chat-message-user.collaboration-chat-message-authored .chat-message-label {
+  color: color-mix(in srgb, var(--message-author-color) 72%, #0f172a) !important;
+  opacity: 1;
+}
+
+.collaboration-comment-panel {
+  border-color: var(--panel-border);
+  background: var(--popover-bg);
+  color: var(--text-primary);
+}
+.collaboration-comment-header,
+.collaboration-comment-composer {
+  border-color: var(--panel-border);
+}
+.collaboration-comment-composer {
+  background: color-mix(in srgb, var(--panel-bg) 94%, var(--muted-bg));
+}
+.collaboration-comment-empty {
+  background: var(--muted-bg);
+  color: var(--text-muted);
+}
+.collaboration-comment-card {
+  border-color: color-mix(in srgb, var(--panel-border) 82%, transparent);
+  border-left: 3px solid var(--comment-author-color);
+  background: color-mix(in srgb, var(--comment-author-color) 11%, var(--card-bg));
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+}
+body[data-theme='dark'] .collaboration-comment-card {
+  border-color: color-mix(in srgb, var(--comment-author-color) 22%, rgba(71, 85, 105, 0.76));
+  border-left-color: var(--comment-author-color);
+  background: color-mix(in srgb, var(--comment-author-color) 15%, #111827);
+  box-shadow: 0 5px 14px rgba(2, 6, 23, 0.24);
+}
+.collaboration-comment-author {
+  color: color-mix(in srgb, var(--comment-author-color) 76%, var(--text-primary));
+}
+body[data-theme='dark'] .collaboration-comment-author {
+  color: color-mix(in srgb, var(--comment-author-color) 72%, #ffffff);
+}
+.collaboration-comment-time { color: var(--text-subtle); }
+.collaboration-comment-text { color: var(--text-primary); }
+.collaboration-comment-reply {
+  color: color-mix(in srgb, #7c3aed 82%, var(--text-primary));
+}
+.collaboration-comment-reply:hover { color: #7c3aed; }
+.collaboration-comment-reply-preview {
+  border: 1px solid color-mix(in srgb, #8b5cf6 20%, var(--panel-border));
+  background: color-mix(in srgb, #8b5cf6 9%, var(--muted-bg));
+  color: var(--text-primary);
+}
+.collaboration-comment-input {
+  border-color: var(--field-border);
+  background: var(--field-bg);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+}
+.collaboration-comment-input::placeholder { color: var(--field-placeholder); }
+.collaboration-comment-input:focus {
+  border-color: color-mix(in srgb, #8b5cf6 56%, var(--field-border));
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+/* Mini App recipient selector. */
+.miniapp-task-ai-recipient-trigger {
+  border-color: rgba(71, 85, 105, 0.86);
+  background: rgba(30, 41, 59, 0.92);
+  color: #f8fafc;
+  box-shadow: 0 5px 14px rgba(2, 6, 23, 0.2);
+}
+.miniapp-task-ai-recipient-label { color: #94a3b8; }
+.miniapp-task-ai-recipient-menu {
+  border-color: rgba(71, 85, 105, 0.92);
+  background: #111827;
+  color: #f8fafc;
+}
+.miniapp-task-ai-recipient-item {
+  color: #e2e8f0;
+  transition: background-color .15s ease, color .15s ease;
+}
+.miniapp-task-ai-recipient-item:hover { background: rgba(51, 65, 85, 0.82); }
+.miniapp-task-ai-recipient-item-active {
+  background: rgba(124, 58, 237, 0.26);
+  color: #f5f3ff;
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.28);
+}
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-trigger {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
+}
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-label { color: #64748b; }
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-menu {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-item { color: #334155; }
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.miniapp-shell.miniapp-light .miniapp-task-ai-recipient-item-active {
+  background: #ede9fe;
+  color: #5b21b6;
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.18);
+}
+
+/* Preserve participant colors in task chat without sacrificing light-theme contrast. */
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored,
+body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai-chat-message-authored {
+  border-color: color-mix(in srgb, var(--message-author-color) 28%, #cbd5e1) !important;
+  border-left: 3px solid var(--message-author-color) !important;
+  background: color-mix(in srgb, var(--message-author-color) 13%, #ffffff) !important;
+  color: #0f172a !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Mini App comment sheet: dark defaults, explicit light overrides. */
+.miniapp-comment-backdrop {
+  background: rgba(2, 6, 23, 0.7);
+}
+.miniapp-comment-panel {
+  border-color: rgba(71, 85, 105, 0.9);
+  background: #0f172a;
+  color: #f8fafc;
+}
+.miniapp-comment-header,
+.miniapp-comment-composer {
+  border-color: rgba(71, 85, 105, 0.82);
+}
+.miniapp-comment-composer { background: #111827; }
+.miniapp-comment-kicker { color: #c4b5fd; }
+.miniapp-comment-close {
+  border-color: rgba(71, 85, 105, 0.9);
+  background: rgba(30, 41, 59, 0.94);
+  color: #e2e8f0;
+}
+.miniapp-comment-empty {
+  background: rgba(30, 41, 59, 0.82);
+  color: #94a3b8;
+}
+.miniapp-comment-card {
+  border-color: color-mix(in srgb, var(--comment-author-color) 22%, rgba(71, 85, 105, 0.76));
+  border-left: 3px solid var(--comment-author-color);
+  background: color-mix(in srgb, var(--comment-author-color) 14%, #111827);
+  color: #f8fafc;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.2);
+}
+.miniapp-comment-author {
+  color: color-mix(in srgb, var(--comment-author-color) 72%, #ffffff);
+}
+.miniapp-comment-time { color: #94a3b8; }
+.miniapp-comment-text { color: #e2e8f0; }
+.miniapp-comment-reply { color: #c4b5fd; }
+.miniapp-comment-reply:hover { color: #ddd6fe; }
+.miniapp-comment-reply-preview {
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  background: rgba(76, 29, 149, 0.24);
+  color: #ddd6fe;
+}
+.miniapp-comment-input {
+  border-color: rgba(71, 85, 105, 0.92);
+  background: rgba(30, 41, 59, 0.96);
+  color: #f8fafc;
+}
+.miniapp-comment-input::placeholder { color: #94a3b8; }
+.miniapp-comment-input:focus {
+  border-color: rgba(167, 139, 250, 0.7);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+}
+
+.miniapp-shell.miniapp-light .miniapp-comment-backdrop { background: rgba(15, 23, 42, 0.28); }
+.miniapp-shell.miniapp-light .miniapp-comment-panel {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.16);
+}
+.miniapp-shell.miniapp-light .miniapp-comment-header,
+.miniapp-shell.miniapp-light .miniapp-comment-composer {
+  border-color: rgba(226, 232, 240, 0.98);
+}
+.miniapp-shell.miniapp-light .miniapp-comment-composer { background: #f8fafc; }
+.miniapp-shell.miniapp-light .miniapp-comment-kicker { color: #6d28d9; }
+.miniapp-shell.miniapp-light .miniapp-comment-close {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: #f8fafc;
+  color: #475569;
+}
+.miniapp-shell.miniapp-light .miniapp-comment-empty {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.miniapp-shell.miniapp-light .miniapp-comment-card {
+  border-color: rgba(203, 213, 225, 0.88);
+  border-left-color: var(--comment-author-color);
+  background: color-mix(in srgb, var(--comment-author-color) 8%, #ffffff);
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+.miniapp-shell.miniapp-light .miniapp-comment-author {
+  color: color-mix(in srgb, var(--comment-author-color) 72%, #0f172a);
+}
+.miniapp-shell.miniapp-light .miniapp-comment-time { color: #64748b; }
+.miniapp-shell.miniapp-light .miniapp-comment-text { color: #334155; }
+.miniapp-shell.miniapp-light .miniapp-comment-reply { color: #6d28d9; }
+.miniapp-shell.miniapp-light .miniapp-comment-reply:hover { color: #5b21b6; }
+.miniapp-shell.miniapp-light .miniapp-comment-reply-preview {
+  border-color: rgba(124, 58, 237, 0.18);
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+.miniapp-shell.miniapp-light .miniapp-comment-input {
+  border-color: rgba(203, 213, 225, 0.96);
+  background: #ffffff;
+  color: #0f172a;
+}
+.miniapp-shell.miniapp-light .miniapp-comment-input::placeholder { color: #94a3b8; }
+.miniapp-shell.miniapp-light .miniapp-comment-input:focus {
+  border-color: rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}

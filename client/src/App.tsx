@@ -3375,20 +3375,20 @@ ${allContext}`,
       <div className="relative mb-1 flex justify-end">
         <button
           type="button"
-          className="secondary-button inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold"
+          className="task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold"
           onClick={() => setIsAiRecipientMenuOpen((open) => !open)}
           aria-haspopup="menu"
           aria-expanded={isAiRecipientMenuOpen}
         >
-          <span className="text-muted">Получатель:</span>
+          <span className="task-ai-recipient-label">Получатель:</span>
           <span>{selectedMember?.name ?? 'ИИ'}</span>
           <ChevronDown size={12} />
         </button>
         {isAiRecipientMenuOpen ? (
-          <div className="surface-popover absolute bottom-full right-0 z-30 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl" role="menu">
+          <div className="task-ai-recipient-menu absolute bottom-full right-0 z-30 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl" role="menu">
             <button
               type="button"
-              className={`block w-full rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === 'ai' ? 'bg-violet-500/20 text-violet-200' : 'text-primary hover:bg-slate-700/30'}`}
+              className={`task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === 'ai' ? 'task-ai-recipient-item-active' : ''}`}
               onClick={() => {
                 setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: 'ai' }));
                 setIsAiRecipientMenuOpen(false);
@@ -3400,7 +3400,7 @@ ${allContext}`,
               <button
                 key={member.userId}
                 type="button"
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === member.userId ? 'bg-violet-500/20 text-violet-200' : 'text-primary hover:bg-slate-700/30'}`}
+                className={`task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${selectedUserId === member.userId ? 'task-ai-recipient-item-active' : ''}`}
                 onClick={() => {
                   setAiRecipientByTaskId((prev) => ({ ...prev, [task.id]: member.userId }));
                   setIsAiRecipientMenuOpen(false);
@@ -6117,8 +6117,8 @@ ${allContext}`,
 
       {subtaskCommentPanel ? (
         <div className="modal-backdrop fixed inset-0 z-[270] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSubtaskCommentPanel(null)}>
-          <section className="surface-popover flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
+          <section className="collaboration-comment-panel flex max-h-[min(72vh,620px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="collaboration-comment-header flex items-start justify-between gap-3 border-b px-5 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Комментарии к подзадаче</p>
                 <h3 className="mt-1 truncate text-base font-semibold text-primary">{subtaskCommentPanel.task.title}</h3>
@@ -6127,36 +6127,33 @@ ${allContext}`,
             </div>
             <div ref={subtaskCommentScrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
               {subtaskCommentsLoading ? <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-violet-500" /></div> : null}
-              {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-muted">Комментариев пока нет.</p> : null}
+              {!subtaskCommentsLoading && subtaskComments.length === 0 ? <p className="collaboration-comment-empty rounded-xl px-3 py-4 text-center text-sm">Комментариев пока нет.</p> : null}
               {!subtaskCommentsLoading ? subtaskComments.map((comment) => (
                 <article
                   key={comment.id}
-                  className={`rounded-2xl border px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5' : ''}`}
-                  style={{
-                    borderColor: comment.authorColor ?? '#94a3b8',
-                    backgroundColor: hexToRgba(comment.authorColor ?? '#64748b', comment.isOwn ? 0.18 : 0.1) ?? 'rgba(248,250,252,0.96)'
-                  }}
+                  className={`collaboration-comment-card rounded-2xl border px-3 py-2.5 shadow-sm ${comment.parentCommentId ? 'ml-5' : ''}`}
+                  style={{ '--comment-author-color': comment.authorColor ?? '#64748b' } as CSSProperties}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-semibold text-violet-700">{comment.authorName}</span>
-                    <time className="shrink-0 text-[10px] text-slate-400">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
+                    <span className="collaboration-comment-author truncate text-xs font-semibold">{comment.authorName}</span>
+                    <time className="collaboration-comment-time shrink-0 text-[10px]">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-slate-700">{comment.content}</p>
-                  <button type="button" className="mt-1.5 text-[11px] font-semibold text-violet-600 hover:text-violet-800" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
+                  <p className="collaboration-comment-text mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.content}</p>
+                  <button type="button" className="collaboration-comment-reply mt-1.5 text-[11px] font-semibold" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
                     Ответить
                   </button>
                 </article>
               )) : null}
             </div>
-            <div className="border-t bg-white px-4 py-3">
+            <div className="collaboration-comment-composer border-t px-4 py-3">
               {subtaskCommentReplyTo ? (
-                <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-violet-50 px-3 py-2 text-xs text-violet-700">
+                <div className="collaboration-comment-reply-preview mb-2 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs">
                   <span className="min-w-0 truncate">Ответ для {subtaskCommentReplyTo.authorName}: {subtaskCommentReplyTo.content}</span>
                   <button type="button" className="shrink-0" onClick={() => setSubtaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
                 </div>
               ) : null}
               <textarea
-                className="form-field min-h-20 w-full resize-y rounded-2xl border px-3 py-2 text-sm"
+                className="collaboration-comment-input min-h-20 w-full resize-y rounded-2xl border px-3 py-2 text-sm outline-none"
                 placeholder={subtaskCommentReplyTo ? 'Напишите ответ…' : 'Оставьте комментарий…'}
                 value={subtaskCommentDraft}
                 autoFocus={subtaskCommentPanel.compose}
@@ -6368,8 +6365,8 @@ ${allContext}`,
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
                     key={message.id}
-                    className={`chat-message max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
-                    style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
+                    className={`chat-message max-w-[88%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : `chat-message-user ml-auto ${message.authorColor ? 'collaboration-chat-message-authored' : ''}`}`}
+                    style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
@@ -7160,8 +7157,8 @@ ${allContext}`,
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-${message.id}`}
-                  className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : 'chat-message-user ml-auto'}`}
-                  style={message.role === 'user' && message.authorColor ? { backgroundColor: message.authorColor, color: '#fff' } : undefined}
+                  className={`chat-message max-w-[72ch] rounded-2xl px-4 py-3 text-sm leading-7 whitespace-pre-line break-words [overflow-wrap:anywhere] ${message.role === 'assistant' ? 'chat-message-assistant mr-auto' : `chat-message-user ml-auto ${message.authorColor ? 'collaboration-chat-message-authored' : ''}`}`}
+                  style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTask={setFocusedTaskId} /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>

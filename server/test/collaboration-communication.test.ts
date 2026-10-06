@@ -71,6 +71,33 @@ test('комментарии доступны из каждой совместн
   assert.match(mini, /pendingLaunchCommentTaskId/);
 });
 
+test('совместные комментарии и получатели используют theme-aware стили', async () => {
+  const [web, mini, styles] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(web, /task-ai-recipient-trigger/);
+  assert.match(web, /collaboration-chat-message-authored/);
+  assert.match(web, /collaboration-comment-panel/);
+  assert.match(web, /collaboration-comment-card/);
+  assert.match(web, /collaboration-comment-input/);
+  assert.doesNotMatch(web, /className="border-t bg-white px-4 py-3"/);
+
+  assert.match(mini, /miniapp-task-ai-recipient-trigger/);
+  assert.match(mini, /miniapp-comment-panel/);
+  assert.match(mini, /miniapp-comment-card/);
+  assert.match(mini, /miniapp-comment-input/);
+  assert.doesNotMatch(mini, /border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100/);
+
+  assert.match(styles, /body\[data-theme='light'\] \.chat-message-user\.collaboration-chat-message-authored/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-light \.miniapp-ai-chat-message-user\.miniapp-ai-chat-message-authored/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-light \.miniapp-task-ai-recipient-menu/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-light \.miniapp-comment-panel/);
+  assert.match(styles, /border-left: 3px solid var\(--comment-author-color\)/);
+});
+
 test('новости описывают коммуникации и unread badge связан с последней новостью', async () => {
   const [updates, web] = await Promise.all([
     readFile(new URL('../../client/src/components/UpdatesMenu.tsx', import.meta.url), 'utf8'),
