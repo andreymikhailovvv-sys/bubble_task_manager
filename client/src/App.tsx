@@ -3315,6 +3315,26 @@ ${allContext}`,
     }
   };
 
+  const renderSubtaskCommentButton = (subtask: Task) => {
+    if ((subtask.commentCount ?? 0) <= 0) return null;
+    const unread = subtask.unreadCommentCount ?? 0;
+    return (
+      <button
+        type="button"
+        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-violet-100 hover:text-violet-700"
+        title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${subtask.commentCount ?? 0}`}
+        aria-label="Открыть комментарии"
+        onClick={(event) => {
+          event.stopPropagation();
+          void openSubtaskComments(subtask);
+        }}
+      >
+        <MessageCircle size={15} />
+        {unread > 0 ? <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{unread > 99 ? '99+' : unread}</span> : null}
+      </button>
+    );
+  };
+
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
     const createdSubtask = await api.createTask({
       ...payload,
