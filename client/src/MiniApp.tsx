@@ -2367,6 +2367,75 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   };
 
+  const openTaskComments = async (subtask: Task) => {
+    setCommentPanelTaskId(subtask.id);
+    setTaskComments([]);
+    setTaskCommentDraft('');
+    setTaskCommentReplyTo(null);
+    setTaskCommentError(null);
+    setTaskCommentsLoading(true);
+    try {
+      const response = await api.getTaskComments(subtask.id);
+      setTaskComments(response.comments);
+      await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
+      const clearedUnread = subtask.unreadCommentCount ?? 0;
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) return { ...task, commentCount: response.comments.length, unreadCommentCount: 0 };
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId && clearedUnread > 0) {
+          return { ...task, unreadCommentCount: Math.max(0, (task.unreadCommentCount ?? 0) - clearedUnread) };
+        }
+        return task;
+      }));
+    } catch (error) {
+      setTaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
+    } finally {
+      setTaskCommentsLoading(false);
+    }
+  };
+
+  const sendTaskComment = async () => {
+    const subtask = commentPanelTaskId ? tasks.find((task) => task.id === commentPanelTaskId) ?? null : null;
+    const content = taskCommentDraft.trim();
+    if (!subtask || !content || taskCommentSending) return;
+    setTaskCommentSending(true);
+    setTaskCommentError(null);
+    try {
+      const created = await api.createTaskComment(subtask.id, {
+        content,
+        parentCommentId: taskCommentReplyTo?.id ?? null
+      });
+      setTaskComments((current) => [...current, created]);
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId) return { ...task, commentCount: (task.commentCount ?? 0) + 1 };
+        return task;
+      }));
+      setTaskCommentDraft('');
+      setTaskCommentReplyTo(null);
+    } catch (error) {
+      setTaskCommentError(error instanceof Error ? error.message : 'Не удалось отправить комментарий');
+    } finally {
+      setTaskCommentSending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!commentPanelTaskId || taskCommentsLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const container = taskCommentScrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [commentPanelTaskId, taskCommentsLoading, taskComments.length]);
+
+  useEffect(() => {
+    if (!pendingLaunchCommentTaskId || loading || tasks.length === 0) return;
+    const subtask = tasks.find((task) => task.id === pendingLaunchCommentTaskId && Boolean(task.parentTaskId));
+    if (!subtask) return;
+    setPendingLaunchCommentTaskId(null);
+    void openTaskComments(subtask);
+  }, [pendingLaunchCommentTaskId, loading, tasks]);
+
   useEffect(() => {
     if (!openedTaskId || !isAiDialogOpen) return;
     const loadTaskChatHistory = async () => {
@@ -2412,6 +2481,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const sendAiMessage = async () => {
     if (!openedTask) return;
     const question = aiDraft.trim();
+    const selectedRecipientUserId = aiRecipientByTaskId[openedTask.id] ?? 'ai';
+    if (selectedRecipientUserId !== 'ai') {
+      if (!question) return;
+      if (aiPendingFiles.length > 0) {
+        setError('Вложения можно отправлять только ИИ. Для сообщения участнику оставьте только текст.');
+        return;
+      }
+      setAiLoadingTaskId(openedTask.id);
+      setError(null);
+      try {
+        const directMessage = await api.sendTaskParticipantMessage(openedTask.id, { recipientUserId: selectedRecipientUserId, content: question });
+        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: [...(prev[openedTask.id] ?? []), directMessage] }));
+        setAiDraft('');
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
+      } finally {
+        setAiLoadingTaskId(null);
+      }
+      return;
+    }
     if (!question && aiPendingFiles.length === 0) return;
     setAiLoadingTaskId(openedTask.id);
     setAiProgressByTask((current) => ({ ...current, [openedTask.id]: 'analyzing_request' }));
