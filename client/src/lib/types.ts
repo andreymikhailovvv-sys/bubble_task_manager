@@ -45,6 +45,7 @@ export type TaskComment = {
   userId: string;
   authorUserId: string;
   authorName: string;
+  authorColor?: string;
   parentCommentId?: string | null;
   content: string;
   isOwn: boolean;
@@ -73,6 +74,9 @@ export type ChatMessage = {
   webCitations?: WebCitation[];
   authorName?: string;
   authorColor?: string;
+  messageKind?: 'AI' | 'HUMAN';
+  recipientUserId?: string;
+  recipientName?: string;
 };
 
 export type WebSource = { title: string; url: string };
