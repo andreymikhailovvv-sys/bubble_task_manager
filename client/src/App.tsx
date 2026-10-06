@@ -3258,6 +3258,63 @@ ${allContext}`,
     unmarkTaskAsClosing(subtask.id);
   };
 
+  const handleSubtaskCommentContextMenu = (event: ReactMouseEvent, subtask: Task, collaborative: boolean) => {
+    if (!collaborative) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSubtaskCommentContextMenu({
+      task: subtask,
+      x: Math.min(event.clientX, window.innerWidth - 220),
+      y: Math.min(event.clientY, window.innerHeight - 72)
+    });
+  };
+
+  const openSubtaskComments = async (subtask: Task, compose = false) => {
+    setSubtaskCommentContextMenu(null);
+    setSubtaskCommentPanel({ task: subtask, compose });
+    setSubtaskComments([]);
+    setSubtaskCommentReplyTo(null);
+    setSubtaskCommentDraft('');
+    setSubtaskCommentError(null);
+    setSubtaskCommentsLoading(true);
+    try {
+      const response = await api.getTaskComments(subtask.id);
+      setSubtaskComments(response.comments);
+      await api.markTaskCommentsRead(subtask.id);
+      setTasks((current) => current.map((task) => task.id === subtask.id
+        ? { ...task, commentCount: response.comments.length, unreadCommentCount: 0 }
+        : task));
+    } catch (error) {
+      setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
+    } finally {
+      setSubtaskCommentsLoading(false);
+    }
+  };
+
+  const sendSubtaskComment = async () => {
+    const panel = subtaskCommentPanel;
+    const content = subtaskCommentDraft.trim();
+    if (!panel || !content || subtaskCommentSending) return;
+    setSubtaskCommentSending(true);
+    setSubtaskCommentError(null);
+    try {
+      const created = await api.createTaskComment(panel.task.id, {
+        content,
+        parentCommentId: subtaskCommentReplyTo?.id ?? null
+      });
+      setSubtaskComments((current) => [...current, created]);
+      setTasks((current) => current.map((task) => task.id === panel.task.id
+        ? { ...task, commentCount: (task.commentCount ?? 0) + 1 }
+        : task));
+      setSubtaskCommentDraft('');
+      setSubtaskCommentReplyTo(null);
+    } catch (error) {
+      setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось отправить комментарий');
+    } finally {
+      setSubtaskCommentSending(false);
+    }
+  };
+
   const createSubtaskForParent = async (parentTask: Task, payload: Partial<Task>) => {
     const createdSubtask = await api.createTask({
       ...payload,
