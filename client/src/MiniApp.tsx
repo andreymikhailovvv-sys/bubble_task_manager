@@ -3340,6 +3340,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? <div className="mt-1 border-t border-slate-500/30 pt-2">
                           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">По участнику</p>
                           <div className="flex flex-wrap gap-1.5 p-1">
+                            <button type="button" aria-pressed={!openedTaskSubtaskAuthorFilterUserId} className={`miniapp-collaboration-author shrink-0 rounded-full bg-slate-500 px-2 py-0.5 text-[10px] font-semibold text-white ${!openedTaskSubtaskAuthorFilterUserId ? 'ring-2 ring-white/90' : 'opacity-80'}`} style={{ backgroundColor: '#64748b' }} onClick={() => { setOpenedTaskSubtaskAuthorFilterUserId(null); setIsOpenedTaskSubtaskFilterOpen(false); }}>Все</button>
                             {openedTask.collaborationMembers.map((member) => <button
                               key={member.userId}
                               type="button"
