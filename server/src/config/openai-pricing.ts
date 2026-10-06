@@ -1,5 +1,5 @@
 // Token prices, transcription and hosted web_search pricing verified 2026-10-06.
-export const OPENAI_PRICING_VERSION = 'openai-standard-transcription-and-web-search-2026-10-06';
+export const OPENAI_PRICING_VERSION = 'openai-gpt61-transcription-and-web-search-2026-10-06';
 export const OPENAI_WEB_SEARCH_COST_NANO_USD = 10_000_000n;
 
 export type OpenAiTokenRates = {
