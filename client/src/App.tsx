@@ -6390,7 +6390,7 @@ ${allContext}`,
                 {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
                 </div>
               </div>
-              <div className="focused-task-ai-composer-layer">
+              <div className="focused-task-ai-composer">
               {aiPendingFiles.length > 0 ? (
                 <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
                   {aiPendingFiles.map((file) => (
@@ -7190,7 +7190,7 @@ ${allContext}`,
               ))}
               {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
-            <div className="focused-task-ai-composer-layer focused-task-ai-composer-layer-expanded">
+            <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
             {renderTaskAiRecipientPicker(focusedTask)}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">

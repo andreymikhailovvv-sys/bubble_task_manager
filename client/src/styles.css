@@ -7454,43 +7454,24 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-message-user.miniapp-ai
 }
 
 
-/* Task AI help: Mini App-style floating composer and drag/drop attachment affordance. */
+/* Task AI help: Mini App-style composer and drag/drop attachment affordance. */
 .focused-task-ai-thread-through {
   padding-bottom: 10.5rem !important;
   scroll-padding-bottom: 10.5rem;
 }
 
-.focused-task-ai-composer-layer {
+.focused-task-ai-composer {
   position: absolute;
   right: 1rem;
   bottom: 1rem;
   left: 1rem;
   z-index: 28;
-  padding: 1.35rem 0.15rem 0.1rem;
-  border-radius: 1.65rem;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 58%, transparent) 22%,
-    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 82%, transparent) 62%,
-    color-mix(in srgb, var(--app-card-bg, var(--panel-bg)) 90%, transparent) 100%
-  );
-  backdrop-filter: blur(10px) saturate(115%);
-  -webkit-backdrop-filter: blur(10px) saturate(115%);
 }
 
-.focused-task-ai-composer-layer-expanded {
+.focused-task-ai-composer-expanded {
   right: 1.25rem;
   bottom: 1.25rem;
   left: 1.25rem;
-}
-
-.focused-task-ai-composer-layer .ai-chat-composer {
-  border-color: color-mix(in srgb, var(--panel-border) 72%, transparent);
-  background: color-mix(in srgb, var(--input-bg) 82%, transparent);
-  box-shadow: 0 7px 22px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 .focused-task-ai-attach-button {
@@ -7516,26 +7497,6 @@ body[data-theme='dark'] .focused-task-ai-attach-button:not(:disabled):hover {
   border-color: rgba(139, 92, 246, 0.52) !important;
   background: rgba(51, 65, 85, 0.76) !important;
   color: #e2e8f0 !important;
-}
-
-body[data-theme='dark'] .focused-task-ai-composer-layer {
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(15, 23, 42, 0.42) 22%,
-    rgba(15, 23, 42, 0.72) 62%,
-    rgba(15, 23, 42, 0.82) 100%
-  );
-}
-
-body[data-theme='light'] .focused-task-ai-composer-layer {
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.42) 22%,
-    rgba(255, 255, 255, 0.72) 62%,
-    rgba(255, 255, 255, 0.86) 100%
-  );
 }
 
 .focused-task-ai-drop-overlay {
