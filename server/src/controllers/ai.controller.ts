@@ -79,7 +79,7 @@ export const aiController = {
       }
       if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content })) : [];
-      const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
+      const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const projectTitle = typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined;
       const chatTitle = typeof req.body?.chatTitle === 'string' ? req.body.chatTitle : undefined;
@@ -206,7 +206,7 @@ export const aiController = {
         question?: string;
         userMessage?: string;
         mode?: 'fast' | 'smart';
-        model?: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol';
+        model?: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
         attachments?: ChatAttachment[];
         skipEfficiencyBonus?: boolean;
       };
@@ -226,7 +226,7 @@ export const aiController = {
       }
 
       const mode = req.body?.mode === 'smart' ? 'smart' : 'fast';
-      const model = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6-sol' : undefined;
+      const model = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol' : undefined;
       console.info('[AI] /tasks/:id/ai-chat request received', {
         userId: req.user!.id,
         taskId: req.params.id,
