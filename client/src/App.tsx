@@ -3280,7 +3280,7 @@ ${allContext}`,
     try {
       const response = await api.getTaskComments(subtask.id);
       setSubtaskComments(response.comments);
-      await api.markTaskCommentsRead(subtask.id, response.comments.at(-1)?.id ?? null);
+      await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
       setTasks((current) => current.map((task) => task.id === subtask.id
         ? { ...task, commentCount: response.comments.length, unreadCommentCount: 0 }
         : task));
