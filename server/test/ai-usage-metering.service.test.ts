@@ -62,7 +62,7 @@ test('не прибавляет reasoning tokens поверх output tokens', ()
 
 for (const [model, expectedNanoUsd] of [
   ['gpt-6-luna', 600_000n],
-  ['gpt-6-sol', 12_000_000n],
+  ['gpt-6.1-sol', 12_000_000n],
   ['gpt-5.4-mini', 5_250_000n],
   ['gpt-5-mini', 2_250_000n],
   ['gpt-5-nano', 450_000n]
@@ -74,8 +74,8 @@ for (const [model, expectedNanoUsd] of [
 }
 
 test('применяет long-context pricing GPT-6 только выше 272000 input tokens', () => {
-  const short = calculateOpenAiUsageCost('gpt-6-sol', { input_tokens: 272_000 });
-  const long = calculateOpenAiUsageCost('gpt-6-sol', { input_tokens: 272_001 });
+  const short = calculateOpenAiUsageCost('gpt-6.1-sol', { input_tokens: 272_000 });
+  const long = calculateOpenAiUsageCost('gpt-6.1-sol', { input_tokens: 272_001 });
   assert.equal(short.providerCostNanoUsd, 544_000_000n);
   assert.equal(long.providerCostNanoUsd, 1_088_004_000n);
 });
