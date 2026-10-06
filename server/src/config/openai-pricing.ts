@@ -1,5 +1,5 @@
-// Token prices plus hosted web_search at $10 / 1,000 calls, verified 2026-10-02.
-export const OPENAI_PRICING_VERSION = 'openai-standard-and-web-search-2026-10-02';
+// Token prices, transcription and hosted web_search pricing verified 2026-10-06.
+export const OPENAI_PRICING_VERSION = 'openai-standard-transcription-and-web-search-2026-10-06';
 export const OPENAI_WEB_SEARCH_COST_NANO_USD = 10_000_000n;
 
 export type OpenAiTokenRates = {
@@ -27,8 +27,24 @@ export const OPENAI_STANDARD_PRICING: Readonly<Record<string, OpenAiModelPricing
   },
   'gpt-5.4-mini': { short: rates(0.75, 0.075, null, 4.50) },
   'gpt-5-mini': { short: rates(0.25, 0.025, null, 2.00) },
-  'gpt-5-nano': { short: rates(0.05, 0.005, null, 0.40) }
+  'gpt-5-nano': { short: rates(0.05, 0.005, null, 0.40) },
+  'gpt-4o-mini-transcribe': { short: rates(1.25, 1.25, null, 5.00) },
+  'gpt-4o-transcribe': { short: rates(2.50, 2.50, null, 10.00) },
+  'gpt-4o-transcribe-diarize': { short: rates(2.50, 2.50, null, 10.00) }
 };
+
+export const OPENAI_TRANSCRIPTION_DURATION_NANO_USD_PER_MINUTE: Readonly<Record<string, bigint>> = {
+  'gpt-transcribe': 4_500_000n,
+  'whisper-1': 6_000_000n
+};
+
+export function resolveOpenAiTranscriptionDurationRate(model: string): bigint | null {
+  const normalizedModel = model.trim().toLowerCase();
+  const modelName = Object.keys(OPENAI_TRANSCRIPTION_DURATION_NANO_USD_PER_MINUTE)
+    .sort((left, right) => right.length - left.length)
+    .find((candidate) => normalizedModel === candidate || normalizedModel.startsWith(`${candidate}-`));
+  return modelName ? OPENAI_TRANSCRIPTION_DURATION_NANO_USD_PER_MINUTE[modelName] : null;
+}
 
 function rates(input: number, cachedInput: number, cacheWrite: number | null, output: number): OpenAiTokenRates {
   const toNanoUsd = (dollars: number) => BigInt(Math.round(dollars * 1_000_000_000));
