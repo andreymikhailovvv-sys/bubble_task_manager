@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPlannerToolsService, rankPlannerSearchCandidates, validatePlannerActionResolution, type PlannerActionInput, type PlannerCandidate } from '../src/services/planner-tools.service.js';
+import { createPlannerToolsService, plannerTaskAccessWhere, rankPlannerSearchCandidates, validatePlannerActionResolution, type PlannerActionInput, type PlannerCandidate } from '../src/services/planner-tools.service.js';
 
 const candidate = (id: string, title: string, extra: Partial<PlannerCandidate> = {}): PlannerCandidate => ({ id, title, description: null, status: 'TODO', dueDate: null, taskType: 'TASK', parentTaskId: null, updatedAt: new Date('2026-01-01'), sphere: null, parentTask: null, ...extra });
 const action = (override: Partial<PlannerActionInput>): PlannerActionInput => ({ operation: 'reschedule', itemId: 'item-1', parentTaskId: null, title: null, description: null, dueDate: '2026-10-02T18:00:00+03:00', importance: null, urgency: null, notifyBeforeMinutes: null, sphereId: null, location: null, ...override });
@@ -42,4 +42,53 @@ test('задача другого пользователя и root-only опер
   const subtask = createPlannerToolsService({ task: { findFirst: async () => ({ id: 'item-1', title: 'Подзадача', dueDate: null, status: 'TODO', parentTaskId: 'parent', importance: 3, urgency: 3 }) } });
   const denied = await subtask.action('user-1', action({ operation: 'set_priority', dueDate: null, importance: 5 }), new Set(['item-1']), new Set(), 'Europe/Moscow');
   assert.equal(denied.code, 'SUBTASK_OPERATION_NOT_ALLOWED');
+});
+
+
+test('общий ИИ считает активное участие в совместной задаче полноценным доступом', () => {
+  assert.deepEqual(plannerTaskAccessWhere('member-1'), {
+    OR: [
+      { userId: 'member-1', collaborationId: null },
+      { collaboration: { members: { some: { userId: 'member-1', isHidden: false } } } }
+    ]
+  });
+});
+
+test('участник совместной задачи может изменить её через planner action', async () => {
+  let applied: { id: string; userId: string; patch: unknown } | null = null;
+  const service = createPlannerToolsService(
+    {
+      task: {
+        findFirst: async () => ({
+          id: 'item-1',
+          title: 'Совместная задача',
+          dueDate: null,
+          status: 'TODO',
+          parentTaskId: null,
+          importance: 3,
+          urgency: 3,
+          collaborationId: 'collab-1'
+        })
+      }
+    },
+    {
+      create: async () => { throw new Error('not expected'); },
+      update: async (id: string, userId: string, patch: unknown) => {
+        applied = { id, userId, patch };
+        return { id, title: 'Новое название' } as never;
+      },
+      remove: async () => undefined
+    }
+  );
+
+  const result = await service.action(
+    'member-1',
+    action({ operation: 'rename', dueDate: null, title: 'Новое название' }),
+    new Set(['item-1']),
+    new Set(),
+    'Europe/Moscow'
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(applied, { id: 'item-1', userId: 'member-1', patch: { title: 'Новое название' } });
 });
