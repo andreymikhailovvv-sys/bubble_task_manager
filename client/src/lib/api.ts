@@ -169,15 +169,20 @@ export type CreditUsageStatistics = {
   trackingStartedAt: string | null;
 };
 
-type AdminUser = {
+export type AdminSubscriptionPlan = 'free' | 'start' | 'pro' | 'max';
+export type AdminUser = {
   id: string;
   name?: string | null;
   email?: string | null;
   username?: string | null;
   aiCredits: number;
   aiCreditsPeriod: string;
+  subscriptionPlan: AdminSubscriptionPlan;
+  telegramLinked: boolean;
   createdAt: string;
 };
+export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
+export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
@@ -410,5 +415,15 @@ export const api = {
     const disposition = response.headers.get('content-disposition') ?? '';
     const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
     return { blob: await response.blob(), fileName: fileNameMatch?.[1] ?? `credit-usage-${payload.month}.xls` };
-  }
+  },
+  adminSetSubscriptionPlan: (payload: { password: string; userId: string; subscriptionPlan: AdminSubscriptionPlan }) =>
+    request<{ user: { id: string; subscriptionPlan: AdminSubscriptionPlan } }>(`/api/admin/users/${payload.userId}/subscription`, {
+      method: 'POST',
+      body: JSON.stringify({ password: payload.password, subscriptionPlan: payload.subscriptionPlan })
+    }),
+  adminSendBroadcast: (payload: { password: string; target: AdminBroadcastTarget; userId?: string; text: string; image?: AdminBroadcastImage | null }) =>
+    request<{ requested: number; sent: number; failed: number }>('/api/admin/broadcasts', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
 };
