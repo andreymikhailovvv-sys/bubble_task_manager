@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -27,6 +27,7 @@ import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { WebCitations } from './components/WebCitations';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
+import { CreditUsageStats } from './components/CreditUsageStats';
 
 const MAX_SPHERES = 8;
 
@@ -722,6 +723,10 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
+  const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
+  const [creditUsageStatisticsLoading, setCreditUsageStatisticsLoading] = useState(false);
+  const [creditUsageStatisticsError, setCreditUsageStatisticsError] = useState<string | null>(null);
   const [isFocusSetupOpen, setIsFocusSetupOpen] = useState(false);
   const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
   const [focusSelectedTaskIds, setFocusSelectedTaskIds] = useState<string[]>([]);
@@ -751,6 +756,18 @@ export default function App() {
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
   const creditPurchase = useCreditPurchase({ surface: 'web', openConfirmation: (url) => window.location.assign(url), onSucceeded: async () => { const me = await api.getMe(); setCurrentUser(me.user); } });
+  const loadCreditUsageStatistics = async () => {
+    setCreditUsageStatisticsLoading(true);
+    setCreditUsageStatisticsError(null);
+    try {
+      const result = await api.getCreditUsageStatistics();
+      setCreditUsageStatistics(result.statistics);
+    } catch (error) {
+      setCreditUsageStatisticsError(error instanceof Error ? error.message : 'Не удалось загрузить статистику');
+    } finally {
+      setCreditUsageStatisticsLoading(false);
+    }
+  };
 
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramLinkUrl, setTelegramLinkUrl] = useState<string | null>(null);
@@ -4442,7 +4459,7 @@ ${allContext}`,
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
-          <button data-tour="credits" type="button" onClick={() => setIsSubscriptionModalOpen(true)} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
+          <button data-tour="credits" type="button" onClick={() => { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
             {isAddMenuOpen || isTourAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button data-tour="create-event" className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button data-tour="create-sector" className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
@@ -4856,9 +4873,19 @@ ${allContext}`,
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
-              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted">Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.</p>
+              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? 'Статистика расхода AI-кредитов' : 'Чтобы увеличить количество ИИ кредитов, приобретите платную подписку'}</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.' : 'Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.'}</p>
+              <div className="mt-4 inline-flex rounded-xl border border-white/10 bg-black/10 p-1">
+                <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'purchase' ? 'bg-fuchsia-500/20 text-primary' : 'text-muted'}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
+                <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'statistics' ? 'bg-cyan-500/20 text-primary' : 'text-muted'}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
+              </div>
             </div>
+            {creditModalView === 'statistics' ? (
+              <div className="max-h-[68vh] overflow-y-auto p-4 sm:p-5">
+                <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} />
+              </div>
+            ) : (
+              <>
             <div className="grid gap-3 p-4 sm:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const link = subscriptionLinks[plan.key]?.trim();
@@ -4919,6 +4946,9 @@ ${allContext}`,
                 Публичной оферты
               </a>.
             </p>
+              </>
+            )}
+
           </div>
         </div>
       ) : null}

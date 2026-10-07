@@ -226,6 +226,54 @@ export async function recordOpenAiTranscriptionUsage(input: {
   return cost;
 }
 
+export async function recordAiCreditCharge(
+  input: {
+    userId: string;
+    requestId: string;
+    actionId?: string | null;
+    providerCallIndex?: number | null;
+    feature: string;
+    model: string;
+    creditsSpentMilli: number;
+  },
+  repository: UsageEventRepository = prisma.aiUsageEvent
+): Promise<void> {
+  if (!Number.isSafeInteger(input.creditsSpentMilli) || input.creditsSpentMilli <= 0) return;
+  try {
+    await repository.create({
+      data: {
+        userId: input.userId,
+        actionId: input.actionId ?? null,
+        requestId: input.requestId,
+        providerCallIndex: input.providerCallIndex ?? null,
+        feature: input.feature,
+        model: input.model,
+        openAiResponseId: null,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        totalTokens: 0,
+        providerCostNanoUsd: null,
+        estimatedCreditsMilli: input.creditsSpentMilli,
+        billingMode: 'CHARGE',
+        pricingVersion: OPENAI_PRICING_VERSION
+      }
+    });
+  } catch (error) {
+    console.warn('[AI credit charge] recording failed', {
+      userId: input.userId,
+      actionId: input.actionId ?? null,
+      requestId: input.requestId,
+      feature: input.feature,
+      model: input.model,
+      creditsSpentMilli: input.creditsSpentMilli,
+      error: error instanceof Error ? error.message : 'Unknown charge recording error'
+    });
+  }
+}
+
 export async function recordOpenAiUsageShadow(
   input: RecordOpenAiUsageInput,
   repository: UsageEventRepository = prisma.aiUsageEvent

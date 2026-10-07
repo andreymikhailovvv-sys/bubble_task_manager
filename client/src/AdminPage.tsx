@@ -1,5 +1,6 @@
-import { FormEvent, useState } from 'react';
-import { api, type SubscriptionLinks } from './lib/api';
+import { FormEvent, useEffect, useState } from 'react';
+import { api, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
+import { CreditUsageStats } from './components/CreditUsageStats';
 
 type AdminUser = {
   id: string;
@@ -21,6 +22,11 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState(false);
   const [subscriptionLinks, setSubscriptionLinks] = useState<SubscriptionLinks>({ start: '', pro: '', max: '' });
   const [subscriptionLinksSaving, setSubscriptionLinksSaving] = useState(false);
+  const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
+  const [creditUsageLoading, setCreditUsageLoading] = useState(false);
+  const [creditUsageError, setCreditUsageError] = useState<string | null>(null);
+  const [creditUsageMonth, setCreditUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [creditUsageExporting, setCreditUsageExporting] = useState(false);
 
   async function loadUsers(event?: FormEvent) {
     event?.preventDefault();
@@ -41,6 +47,52 @@ export default function AdminPage() {
   }
 
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
+
+  useEffect(() => {
+    if (!selectedUserId || !password) {
+      setCreditUsageStatistics(null);
+      return;
+    }
+    let cancelled = false;
+    setCreditUsageLoading(true);
+    setCreditUsageError(null);
+    void api.adminGetCreditUsageStatistics({ password, userId: selectedUserId })
+      .then((result) => {
+        if (!cancelled) setCreditUsageStatistics(result.statistics);
+      })
+      .catch((error) => {
+        if (!cancelled) setCreditUsageError(error instanceof Error ? error.message : 'Не удалось загрузить статистику');
+      })
+      .finally(() => {
+        if (!cancelled) setCreditUsageLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedUserId, password]);
+
+  async function exportCreditUsage() {
+    if (!selectedUser) return;
+    setCreditUsageExporting(true);
+    setCreditUsageError(null);
+    try {
+      const result = await api.adminDownloadCreditUsageExcel({
+        password,
+        userId: selectedUser.id,
+        month: creditUsageMonth
+      });
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setCreditUsageError(error instanceof Error ? error.message : 'Не удалось выгрузить статистику');
+    } finally {
+      setCreditUsageExporting(false);
+    }
+  }
 
   async function addCredits(event: FormEvent) {
     event.preventDefault();
@@ -175,7 +227,25 @@ export default function AdminPage() {
                   <div>Email: {selectedUser.email || '—'}</div>
                   <div>Текущие кредиты: {selectedUser.aiCredits}</div>
                 </div>
-                <form onSubmit={addCredits} className="mt-4 flex items-end gap-3">
+                <div className="mt-5 border-t border-slate-700 pt-4">
+                  <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold">Траты AI-кредитов</h3>
+                      <p className="mt-1 text-xs text-slate-400">Подтверждённые списания по моделям и ИИ-инструментам.</p>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <label className="text-xs text-slate-300">
+                        Месяц выгрузки
+                        <input type="month" value={creditUsageMonth} onChange={(event) => setCreditUsageMonth(event.target.value)} className="mt-1 block rounded-md border border-slate-600 bg-slate-950 px-2 py-1.5 text-sm" />
+                      </label>
+                      <button type="button" disabled={creditUsageExporting || !creditUsageMonth} onClick={() => void exportCreditUsage()} className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+                        {creditUsageExporting ? 'Выгрузка…' : 'Выгрузить Excel'}
+                      </button>
+                    </div>
+                  </div>
+                  <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageLoading} error={creditUsageError} />
+                </div>
+                <form onSubmit={addCredits} className="mt-5 flex items-end gap-3 border-t border-slate-700 pt-4">
                   <label className="text-sm">
                     Добавить кредитов
                     <input

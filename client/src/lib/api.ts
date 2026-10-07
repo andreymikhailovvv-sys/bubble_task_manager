@@ -157,6 +157,17 @@ export type CreditPackKey = 'credit_start' | 'credit_pro' | 'credit_max';
 export type CreditPack = { key: CreditPackKey; name: string; creditsAmount: number; price: number; isActive: boolean };
 export type CreditPackLinks = Record<CreditPackKey, string>;
 export type CreditPurchase = { id: string; creditPackKey: CreditPackKey; creditsAmount: number; price: number; status: string; credited: boolean };
+export type CreditUsageBreakdownItem = { key: string; label: string; creditsMilli: number };
+export type CreditUsageStatistics = {
+  todayCreditsMilli: number;
+  weekCreditsMilli: number;
+  monthCreditsMilli: number;
+  averageDailyCreditsMilli: number;
+  byModel: CreditUsageBreakdownItem[];
+  byFeature: CreditUsageBreakdownItem[];
+  daily: Array<{ date: string; creditsMilli: number }>;
+  trackingStartedAt: string | null;
+};
 
 type AdminUser = {
   id: string;
@@ -353,6 +364,7 @@ export const api = {
   createCreditPurchase: (payload: { packKey: CreditPackKey; clientRequestId: string; clientSurface: 'web' | 'miniapp'; receiptEmail?: string }) =>
     request<{ purchaseId: string; status: string; confirmationUrl: string | null }>(`/api/payments/yookassa/credit-packs/${payload.packKey}`, { method: 'POST', body: JSON.stringify({ clientRequestId: payload.clientRequestId, clientSurface: payload.clientSurface, ...(payload.receiptEmail ? { receiptEmail: payload.receiptEmail } : {}) }) }),
   getCreditPurchaseStatus: (purchaseId: string) => request<{ purchase: CreditPurchase }>(`/api/payments/yookassa/purchases/${encodeURIComponent(purchaseId)}`),
+  getCreditUsageStatistics: () => request<{ statistics: CreditUsageStatistics }>('/api/credits/statistics'),
   adminGetUsers: (payload: { password: string }) =>
     request<{ users: AdminUser[] }>('/api/admin/users', {
       method: 'POST',
@@ -372,5 +384,31 @@ export const api = {
     request<{ user: { id: string; aiCredits: number; aiCreditsMilli: number; aiCreditsPeriod: string } }>(`/api/admin/users/${payload.userId}/credits`, {
       method: 'POST',
       body: JSON.stringify({ password: payload.password, creditsToAdd: payload.creditsToAdd })
-    })
+    }),
+  adminGetCreditUsageStatistics: (payload: { password: string; userId: string }) =>
+    request<{ statistics: CreditUsageStatistics }>(`/api/admin/users/${payload.userId}/credit-statistics`, {
+      method: 'POST',
+      body: JSON.stringify({ password: payload.password })
+    }),
+  adminDownloadCreditUsageExcel: async (payload: { password: string; userId: string; month: string }) => {
+    const response = await fetch(`/api/admin/users/${payload.userId}/credit-usage-export`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: payload.password, month: payload.month })
+    });
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const data = await response.json() as { error?: unknown };
+        if (typeof data.error === 'string' && data.error.trim()) message = data.error.trim();
+      } catch {
+        // keep HTTP status fallback
+      }
+      throw new Error(message);
+    }
+    const disposition = response.headers.get('content-disposition') ?? '';
+    const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+    return { blob: await response.blob(), fileName: fileNameMatch?.[1] ?? `credit-usage-${payload.month}.xls` };
+  }
 };

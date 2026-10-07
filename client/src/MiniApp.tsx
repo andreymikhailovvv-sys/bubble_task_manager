@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -16,6 +16,7 @@ import { WebCitations } from './components/WebCitations';
 import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
+import { CreditUsageStats } from './components/CreditUsageStats';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -702,6 +703,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiCredits, setAiCredits] = useState(100);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isCreditPurchaseOpen, setIsCreditPurchaseOpen] = useState(false);
+  const [creditPopoverView, setCreditPopoverView] = useState<'purchase' | 'statistics'>('purchase');
+  const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
+  const [creditUsageStatisticsLoading, setCreditUsageStatisticsLoading] = useState(false);
+  const [creditUsageStatisticsError, setCreditUsageStatisticsError] = useState<string | null>(null);
   const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
   const [creditPurchaseAvailable, setCreditPurchaseAvailable] = useState(false);
   const creditPurchase = useCreditPurchase({
@@ -709,6 +714,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     openConfirmation: (url) => { const webApp = (window as TelegramWindow).Telegram?.WebApp; if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener,noreferrer'); },
     onSucceeded: async () => { const { user } = await api.getMe(); setCurrentUser(user); setAiCredits(user.aiCredits ?? 0); }
   });
+  const loadCreditUsageStatistics = async () => {
+    setCreditUsageStatisticsLoading(true);
+    setCreditUsageStatisticsError(null);
+    try {
+      const result = await api.getCreditUsageStatistics();
+      setCreditUsageStatistics(result.statistics);
+    } catch (error) {
+      setCreditUsageStatisticsError(error instanceof Error ? error.message : 'Не удалось загрузить статистику');
+    } finally {
+      setCreditUsageStatisticsLoading(false);
+    }
+  };
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -2661,22 +2678,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             />
             </div>
             <div className="relative inline-flex shrink-0 items-center gap-1">
-              <button type="button" onClick={() => setIsCreditPurchaseOpen((open) => !open)} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Купить AI-кредиты" aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
+              <button type="button" onClick={() => { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Купить AI-кредиты" aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
                 <span>{aiCredits}</span>
               </button>
-              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
+              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
                 <div className="flex items-center justify-between"><h2 className="font-semibold">AI-кредиты</h2><button type="button" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button></div>
                 <p className="mt-1 text-xs text-slate-400">Текущий баланс: {aiCredits}</p>
-                <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="flex items-center justify-between gap-2 rounded-xl border border-slate-700 p-2">
-                  <span className="text-xs font-medium">{pack.creditsAmount.toLocaleString('ru-RU')} — {pack.price.toLocaleString('ru-RU')} ₽</span>
-                  <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
-                </div>)}</div>
-                {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
-                  <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs" />
-                  <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
-                </div> : null}
-                {creditPurchase.message ? <p className="mt-3 text-xs text-cyan-300" role="status">{creditPurchase.message}</p> : null}
+                <div className="mt-3 flex gap-1 rounded-xl border border-slate-700 bg-slate-950/40 p-1">
+                  <button type="button" className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'purchase' ? 'bg-violet-600 text-white' : 'text-slate-400'}`} onClick={() => setCreditPopoverView('purchase')}>Пополнить</button>
+                  <button type="button" className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
+                </div>
+                {creditPopoverView === 'statistics' ? (
+                  <div className="mt-3"><CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact /></div>
+                ) : (
+                  <>
+                    <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="flex items-center justify-between gap-2 rounded-xl border border-slate-700 p-2">
+                      <span className="text-xs font-medium">{pack.creditsAmount.toLocaleString('ru-RU')} — {pack.price.toLocaleString('ru-RU')} ₽</span>
+                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
+                    </div>)}</div>
+                    {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
+                      <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs" />
+                      <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+                    </div> : null}
+                    {creditPurchase.message ? <p className="mt-3 text-xs text-cyan-300" role="status">{creditPurchase.message}</p> : null}
+                  </>
+                )}
               </div> : null}
               <button
                 type="button"
