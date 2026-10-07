@@ -4875,9 +4875,9 @@ ${allContext}`,
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
               <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? 'Статистика расхода AI-кредитов' : 'Чтобы увеличить количество ИИ кредитов, приобретите платную подписку'}</h2>
               <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.' : 'Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.'}</p>
-              <div className="mt-4 inline-flex rounded-xl border border-white/10 bg-black/10 p-1">
-                <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'purchase' ? 'bg-fuchsia-500/20 text-primary' : 'text-muted'}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
-                <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'statistics' ? 'bg-cyan-500/20 text-primary' : 'text-muted'}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
+              <div className="credit-view-toggle mt-4 inline-flex rounded-xl border p-1">
+                <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'purchase' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
+                <button type="button" className={`credit-view-toggle-button rounded-lg px-3 py-1.5 text-sm font-semibold ${creditModalView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
               </div>
             </div>
             {creditModalView === 'statistics' ? (
