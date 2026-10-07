@@ -31,4 +31,11 @@ test('смена сектора обновляет только локальну
   assert.doesNotMatch(focusBlock, /load\(/);
   assert.doesNotMatch(focusBlock, /getTasks\(/);
   assert.doesNotMatch(focusBlock, /setInterval/);
+
+  const focusedInitStart = app.indexOf('if (!focusedTask) {');
+  const focusedInitEnd = app.indexOf('useEffect(() => {', focusedInitStart + 1);
+  assert.ok(focusedInitStart >= 0 && focusedInitEnd > focusedInitStart);
+  const focusedInitTail = app.slice(Math.max(0, focusedInitEnd - 180), focusedInitEnd);
+  assert.match(focusedInitTail, /\[focusedTask\?\.id, isAiNotificationsDefaultEnabled\]/);
+  assert.doesNotMatch(focusedInitTail, /\[focusedTask, isAiNotificationsDefaultEnabled\]/);
 });
