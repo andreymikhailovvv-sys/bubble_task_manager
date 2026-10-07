@@ -6226,6 +6226,12 @@ ${allContext}`,
           onCancel={() => setEditorState(null)}
           onSave={persistTask}
           onAutoSave={editorState.task?.id ? autosaveEditorTask : undefined}
+          onSphereChange={editorState.task?.id ? (sphereId) => {
+            const taskId = editorState.task!.id;
+            setTasks((current) => current.map((task) => (
+              task.id === taskId ? { ...task, sphereId } : task
+            )));
+          } : undefined}
           editorType={editorState.task?.taskType === 'EVENT' ? 'event' : 'task'}
           onGenerateWithAi={createTaskFromAi}
           parentTaskTitle={editorState.task?.parentTaskId ? (taskById.get(editorState.task.parentTaskId)?.title ?? null) : null}
@@ -6735,7 +6741,14 @@ ${allContext}`,
                         {isFocusedSphereDropdownOpen ? (
                           <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border bg-white p-1 shadow-2xl">
                             {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
-                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => { setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: sphere.id || null })); setIsFocusedSphereDropdownOpen(false); }}>
+                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => {
+                                const nextSphereId = sphere.id || null;
+                                setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: nextSphereId }));
+                                setTasks((current) => current.map((task) => (
+                                  task.id === focusedTask.id ? { ...task, sphereId: nextSphereId } : task
+                                )));
+                                setIsFocusedSphereDropdownOpen(false);
+                              }}>
                                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sphere.color }} />
                                 <span className="font-medium">{sphere.name}</span>
                                 {(focusedDraft.sphereId ?? '') === sphere.id ? <Check size={14} className="ml-auto text-violet-600" /> : null}
