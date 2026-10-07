@@ -90,6 +90,7 @@ model User {
   lastMorningAiCheckupDate String?
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
+  subscriptionPlan String @default("free")
   aiCredits    Int      @default(100)
   aiCreditsPeriod String @default("")
   aiIncludedCreditsMilli Int @default(100000)
@@ -125,6 +126,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   @@index([createdAt])
+  @@index([subscriptionPlan])
 }
 
 model AiChatConversationMemory {
