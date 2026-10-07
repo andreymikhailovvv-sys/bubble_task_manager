@@ -182,11 +182,13 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
     const offset = Math.max(0, Math.round(input.offset || 0));
     const limit = Math.max(1, Math.min(100, Math.round(input.limit || 50)));
     const where = {
-      ...plannerTaskAccessWhere(userId),
+      AND: [
+        plannerTaskAccessWhere(userId),
+        ...(input.sphereId ? [{ OR: [{ sphereId: input.sphereId }, { parentTask: { sphereId: input.sphereId } }] }] : [])
+      ],
       ...(input.itemType === 'task' ? { parentTaskId: null } : input.itemType === 'subtask' ? { parentTaskId: { not: null } } : {}),
       ...(input.statusScope === 'active' ? { status: { not: 'DONE' } } : input.statusScope === 'completed' ? { status: 'DONE' } : {}),
-      ...(dueFrom || dueTo ? { dueDate: { ...(dueFrom ? { gte: dueFrom } : {}), ...(dueTo ? { lte: dueTo } : {}) } } : {}),
-      ...(input.sphereId ? { OR: [{ sphereId: input.sphereId }, { parentTask: { sphereId: input.sphereId } }] } : {})
+      ...(dueFrom || dueTo ? { dueDate: { ...(dueFrom ? { gte: dueFrom } : {}), ...(dueTo ? { lte: dueTo } : {}) } } : {})
     };
     const [total, items] = await db.$transaction([
       db.task.count({ where }),
