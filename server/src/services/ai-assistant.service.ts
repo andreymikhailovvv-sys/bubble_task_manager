@@ -13,6 +13,7 @@ import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextD
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
+import { taskService } from './task.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -2087,7 +2088,7 @@ export const aiAssistantService = {
             continue;
           }
           if ('subtaskId' in action) {
-            const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: task.id }, select: { id: true, title: true } });
+            const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, parentTaskId: task.id }, select: { id: true, title: true } });
             if (!subtask) {
               actionReports.push('Действие с подзадачей пропущено: подзадача не найдена в текущей задаче.');
               continue;
@@ -2098,13 +2099,13 @@ export const aiAssistantService = {
                 actionReports.push(`Перенос подзадачи "${subtask.title}" пропущен: неверная дата.`);
                 continue;
               }
-              await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
+              await taskService.update(subtask.id, input.userId, { dueDate });
               actionReports.push(`Перенёс подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'rename_subtask') {
-              await prisma.task.update({ where: { id: subtask.id }, data: { title: action.title.slice(0, 180) } });
+              await taskService.update(subtask.id, input.userId, { title: action.title.slice(0, 180) });
               actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
@@ -2115,19 +2116,19 @@ export const aiAssistantService = {
                 actionReports.push(`Обновление подзадачи "${subtask.title}" пропущено: неверный формат dueDate.`);
                 continue;
               }
-              await prisma.task.update({ where: { id: subtask.id }, data: { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) } });
+              await taskService.update(subtask.id, input.userId, { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) });
               actionReports.push(`Обновил подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'delete_subtask') {
-              await prisma.task.delete({ where: { id: subtask.id } });
+              await taskService.remove(subtask.id, input.userId);
               actionReports.push(`Удалил подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             }
             if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
-              await prisma.task.update({ where: { id: subtask.id }, data: { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' } });
+              await taskService.update(subtask.id, input.userId, { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' });
               actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
