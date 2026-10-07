@@ -14,7 +14,7 @@ export const formatCollaborativeSubtaskCompletedNotification = (input: {
   actorName: string;
   subtaskTitle: string;
   taskTitle: string;
-}) => `Пользователь ${input.actorName} закрыл подзадачу «${input.subtaskTitle}» в совместной задаче «${input.taskTitle}»`;
+}) => `${input.actorName} закрыл вашу подзадачу «${input.subtaskTitle}» в совместной задаче «${input.taskTitle}»`;
 
 export async function notifyCollaborativeSubtaskCompleted(input: {
   subtaskId: string;

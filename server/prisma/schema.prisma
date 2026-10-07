@@ -294,7 +294,6 @@ model TaskComment {
   parentCommentId String?
   parentComment   TaskComment? @relation("TaskCommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
   replies         TaskComment[] @relation("TaskCommentReplies")
-  attachments     TaskCommentAttachment[]
   content         String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -302,19 +301,6 @@ model TaskComment {
   @@index([taskId, createdAt])
   @@index([userId])
   @@index([parentCommentId])
-}
-
-model TaskCommentAttachment {
-  id            String      @id @default(cuid())
-  commentId     String
-  comment       TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  name          String
-  mimeType      String
-  size          Int
-  contentBase64 String
-  createdAt     DateTime    @default(now())
-
-  @@index([commentId, createdAt])
 }
 
 model TaskCommentReadState {

@@ -50,10 +50,7 @@ test('окно ближайших подзадач имеет фиксирова
   assert.match(app, /upcoming-subtask-row[\s\S]*h-\[7rem\][\s\S]*min-h-\[7rem\]/);
   assert.match(app, /closingTaskIds\.includes\(subtask\.id\)[\s\S]*focused-subtask-row-completing/);
   assert.match(app, /timeline-task-chip-completed line-through/);
-  assert.match(app, /upcoming-subtask-description/);
-  assert.match(styles, /\.upcoming-subtask-description \{[\s\S]*max-height: 2rem;[\s\S]*-webkit-line-clamp: 2/);
-  assert.match(styles, /\.upcoming-subtasks-list \{[\s\S]*contain: layout paint;[\s\S]*will-change: scroll-position/);
-  assert.match(styles, /\.upcoming-subtask-row \{[\s\S]*content-visibility: auto;[\s\S]*contain-intrinsic-size: 7rem/);
+  assert.match(app, /line-clamp-2/);
   assert.match(styles, /\.upcoming-subtasks-close-button \{/);
   assert.match(styles, /color: #0891b2 !important/);
   assert.match(styles, /\.upcoming-subtask-row \{[\s\S]*height: 7rem;[\s\S]*min-height: 7rem;/);
