@@ -1865,7 +1865,7 @@ export default function App() {
       ,
       aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled
     });
-  }, [focusedTask, isAiNotificationsDefaultEnabled]);
+  }, [focusedTask?.id, isAiNotificationsDefaultEnabled]);
 
   useEffect(() => {
     if (!focusedTask || !focusedDraft) return;
