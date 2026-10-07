@@ -89,7 +89,7 @@ const localDateKey = (date: Date, timeZone: string) => {
     month: '2-digit',
     day: '2-digit'
   }).formatToParts(date);
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  const value = (type: 'year' | 'month' | 'day') => parts.find((part) => part.type === type)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')}`;
 };
 
@@ -230,27 +230,14 @@ export async function getMonthlyCreditUsageExport(userId: string, month: string)
     }
   });
 
-  const grouped = new Map<string, { createdAt: Date; feature: string; model: string; creditsMilli: number }>();
-  for (const event of events) {
-    const date = localDateKey(event.createdAt, timeZone);
-    if (date.slice(0, 7) !== month) continue;
-    const amount = chargeAmount(event);
-    if (amount <= 0) continue;
-    const actionKey = event.actionId || event.requestId || event.id;
-    const key = `${actionKey}|${event.feature}|${event.model}`;
-    const current = grouped.get(key);
-    if (current) current.creditsMilli += amount;
-    else grouped.set(key, { createdAt: event.createdAt, feature: event.feature, model: event.model, creditsMilli: amount });
-  }
-
-  const rows = [...grouped.values()]
-    .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime())
+  const rows = events
+    .filter((event) => localDateKey(event.createdAt, timeZone).slice(0, 7) === month && chargeAmount(event) > 0)
     .map((event) => ({
       date: localDateKey(event.createdAt, timeZone),
       time: localTimeLabel(event.createdAt, timeZone),
       feature: featureLabel(event.feature),
       model: modelLabel(event.model),
-      creditsMilli: event.creditsMilli
+      creditsMilli: chargeAmount(event)
     }));
 
   return { timeZone, rows };
