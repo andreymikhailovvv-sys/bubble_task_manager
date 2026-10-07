@@ -193,12 +193,23 @@ export function DateTimePickerWithApply({
   const today = useMemo(() => new Date(), []);
   const monthCells = useMemo(() => {
     const monthStart = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), 1);
-    const monthDays = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 0).getDate();
-    const firstWeekDay = (monthStart.getDay() + 6) % 7;
-    return Array.from({ length: firstWeekDay + monthDays }, (_, index) => {
-      if (index < firstWeekDay) return null;
-      return new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth(), index - firstWeekDay + 1);
-    });
+    const monthEnd = new Date(previewMonthDate.getFullYear(), previewMonthDate.getMonth() + 1, 1);
+    const monthLastDay = new Date(monthEnd);
+    monthLastDay.setDate(monthLastDay.getDate() - 1);
+
+    const start = new Date(monthStart);
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+
+    const lastWeekStart = new Date(monthLastDay);
+    lastWeekStart.setDate(lastWeekStart.getDate() - ((lastWeekStart.getDay() + 6) % 7));
+    const end = new Date(lastWeekStart);
+    end.setDate(end.getDate() + 7);
+
+    const dates: Date[] = [];
+    for (let date = new Date(start); date < end; date.setDate(date.getDate() + 1)) {
+      dates.push(new Date(date));
+    }
+    return dates;
   }, [previewMonthDate]);
   const timelineTasksByDate = useMemo(() => {
     const grouped = new Map<string, typeof timelineTasks>();
