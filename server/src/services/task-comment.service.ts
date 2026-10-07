@@ -27,10 +27,12 @@ const normalizeCommentAttachments = (raw: unknown): CommentAttachmentInput[] => 
     const mimeType = typeof value.mimeType === 'string' ? value.mimeType.trim().toLowerCase() : '';
     const size = typeof value.size === 'number' ? value.size : Number(value.size);
     const contentBase64 = typeof value.contentBase64 === 'string' ? value.contentBase64.trim() : '';
-    if (!name || !COMMENT_ATTACHMENT_MIME_TYPES.has(mimeType) || !Number.isFinite(size) || size <= 0 || size > MAX_COMMENT_ATTACHMENT_SIZE || !contentBase64) {
-      throw new TypeError('Comment attachments must be PNG/JPEG/WEBP screenshots up to 3MB each');
+    const roundedSize = Math.round(size);
+    const decodedSize = contentBase64 ? Buffer.from(contentBase64, 'base64').byteLength : 0;
+    if (!name || !COMMENT_ATTACHMENT_MIME_TYPES.has(mimeType) || !Number.isFinite(size) || roundedSize <= 0 || roundedSize > MAX_COMMENT_ATTACHMENT_SIZE || !contentBase64 || decodedSize !== roundedSize) {
+      throw new TypeError('Comment attachments must be valid PNG/JPEG/WEBP screenshots up to 3MB each');
     }
-    return { name, mimeType, size: Math.round(size), contentBase64 };
+    return { name, mimeType, size: roundedSize, contentBase64 };
   });
 };
 
