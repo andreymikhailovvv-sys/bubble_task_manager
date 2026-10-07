@@ -1,5 +1,6 @@
 import { authService } from '../auth/auth.service.js';
 import crypto from 'node:crypto';
+import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
@@ -1745,7 +1746,13 @@ const sendAdminBroadcastPhoto = async (chatId: string, image: AdminBroadcastImag
 const sendAdminBroadcastText = async (chatId: string, rawText: string) => {
   const normalized = rawText.trim();
   if (!normalized) return true;
-  const chunks = splitTextByLimit(normalized.split('\n'), SAFE_MAX_MESSAGE_LENGTH);
+  const safeLines = normalized.split('\n').flatMap((line) => {
+    if (line.length <= SAFE_MAX_MESSAGE_LENGTH) return [line];
+    const chunks: string[] = [];
+    for (let offset = 0; offset < line.length; offset += SAFE_MAX_MESSAGE_LENGTH) chunks.push(line.slice(offset, offset + SAFE_MAX_MESSAGE_LENGTH));
+    return chunks;
+  });
+  const chunks = splitTextByLimit(safeLines, SAFE_MAX_MESSAGE_LENGTH);
   for (const chunk of chunks) {
     const sent = await sendMessage(chatId, formatAiTextWithBold(chunk), keyboardReplyMain);
     if (!sent) return false;
