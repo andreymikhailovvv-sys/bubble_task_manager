@@ -259,13 +259,19 @@ export function buildCreditUsageExcelXml(input: {
   const totalMilli = input.rows.reduce((sum, row) => sum + row.creditsMilli, 0);
   const row = (cells: Array<{ value: string | number; type?: 'String' | 'Number' }>) =>
     `<Row>${cells.map((cell) => `<Cell><Data ss:Type="${cell.type ?? (typeof cell.value === 'number' ? 'Number' : 'String')}">${xmlEscape(String(cell.value))}</Data></Cell>`).join('')}</Row>`;
-  const dataRows = input.rows.map((item) => row([
-    { value: item.date },
-    { value: item.time },
-    { value: item.feature },
-    { value: item.model },
-    { value: Math.round(item.creditsMilli) / 1000, type: 'Number' }
-  ])).join('');
+  let currentDate = '';
+  const dataRows = input.rows.map((item) => {
+    const daySeparator = item.date !== currentDate
+      ? (currentDate = item.date, row([{ value: `День: ${item.date}` }, { value: '' }, { value: '' }, { value: '' }, { value: '' }]))
+      : '';
+    return daySeparator + row([
+      { value: item.date },
+      { value: item.time },
+      { value: item.feature },
+      { value: item.model },
+      { value: Math.round(item.creditsMilli) / 1000, type: 'Number' }
+    ]);
+  }).join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <?mso-application progid="Excel.Sheet"?>
