@@ -12,7 +12,7 @@ type StubSubtask = {
   createdAt: Date;
 };
 
-function installTaskStubs(t: Parameters<typeof test>[1] extends (context: infer T) => unknown ? T : never, subtasks: StubSubtask[]) {
+function installTaskStubs(t: Parameters<typeof test>[1] extends (context: infer T) => unknown ? T : never, subtasks: StubSubtask[], observedWhere: Array<Record<string, unknown>> = []) {
   const filtered = (where: { status?: 'DONE' | { not: 'DONE' } }) => where.status === 'DONE'
     ? subtasks.filter((item) => item.status === 'DONE')
     : where.status && typeof where.status === 'object'
@@ -21,8 +21,12 @@ function installTaskStubs(t: Parameters<typeof test>[1] extends (context: infer 
   const taskDelegate = prisma.task as unknown as { count: unknown; findMany: unknown };
   const originalCount = taskDelegate.count;
   const originalFindMany = taskDelegate.findMany;
-  taskDelegate.count = async ({ where }: { where: { status?: 'DONE' | { not: 'DONE' } } }) => filtered(where).length;
+  taskDelegate.count = async ({ where }: { where: { status?: 'DONE' | { not: 'DONE' } } }) => {
+    observedWhere.push(where as Record<string, unknown>);
+    return filtered(where).length;
+  };
   taskDelegate.findMany = async ({ where, skip = 0, take }: { where: { status?: 'DONE' | { not: 'DONE' } }; skip?: number; take?: number }) => {
+    observedWhere.push(where as Record<string, unknown>);
     const matches = filtered(where);
     return typeof take === 'number' ? matches.slice(skip, skip + take) : matches;
   };
@@ -77,4 +81,31 @@ test('search_subtasks остаётся точечным поиском макс�
   const { result } = await lookup({ operation: 'search_subtasks', query: 'Telegram', status: 'active' });
   assert.equal('totalMatches' in result && result.totalMatches, 25);
   assert.equal('results' in result && result.results.length, 10);
+});
+
+
+test('task chat lookup видит подзадачи всех авторов внутри текущей задачи', async (t) => {
+  const observedWhere: Array<Record<string, unknown>> = [];
+  installTaskStubs(t, makeSubtasks(3), observedWhere);
+
+  const { result } = await lookup({ operation: 'list_subtasks', status: 'all', offset: 0, limit: 100 });
+  assert.equal(result.ok, true);
+  assert.equal('count' in result && result.count, 3);
+
+  assert.ok(observedWhere.length >= 2);
+  for (const where of observedWhere) {
+    assert.equal(where.parentTaskId, 'task-1');
+    assert.equal('userId' in where, false);
+  }
+});
+
+test('task chat lookup search_subtasks не ограничивает результаты автором подзадачи', async (t) => {
+  const observedWhere: Array<Record<string, unknown>> = [];
+  installTaskStubs(t, makeSubtasks(4), observedWhere);
+
+  await lookup({ operation: 'search_subtasks', query: 'Подзадача', status: 'active' });
+
+  assert.ok(observedWhere.length >= 1);
+  assert.equal(observedWhere[0]?.parentTaskId, 'task-1');
+  assert.equal('userId' in (observedWhere[0] ?? {}), false);
 });
