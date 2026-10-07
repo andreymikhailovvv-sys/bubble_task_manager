@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { taskService } from './task.service.js';
 
 export const PLANNER_OPERATIONS = [
   'create_task', 'create_event', 'create_subtask', 'rename', 'set_description',
@@ -120,6 +121,13 @@ export function rankPlannerSearchCandidates(candidates: PlannerCandidate[], inpu
 const errorResult = (code: string, message: string) => ({ ok: false as const, code, message });
 const validIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(new Date(value).getTime());
 
+export const plannerTaskAccessWhere = (userId: string) => ({
+  OR: [
+    { userId, collaborationId: null },
+    { collaboration: { members: { some: { userId, isHidden: false } } } }
+  ]
+});
+
 export function validatePlannerActionResolution(action: PlannerActionInput, resolvedItemIds: Set<string>, resolvedSphereIds: Set<string>) {
   if (!PLANNER_OPERATIONS.includes(action.operation)) return errorResult('INVALID_OPERATION', 'Неизвестная операция planner_action.');
   if (action.operation === 'create_subtask' && (!action.parentTaskId || !resolvedItemIds.has(action.parentTaskId))) return errorResult('ITEM_NOT_RESOLVED', 'Сначала найдите родительскую задачу через search_planner_items.');
@@ -132,13 +140,13 @@ export function validatePlannerActionResolution(action: PlannerActionInput, reso
   return null;
 }
 
-export function createPlannerToolsService(db: any = prisma) {
+export function createPlannerToolsService(db: any = prisma, mutations: Pick<typeof taskService, 'create' | 'update' | 'remove'> = taskService) {
   const search = async (userId: string, input: PlannerSearchInput) => {
     const dueFrom = input.dueFrom && validIsoDate(input.dueFrom) ? new Date(input.dueFrom) : undefined;
     const dueTo = input.dueTo && validIsoDate(input.dueTo) ? new Date(input.dueTo) : undefined;
     const candidates: PlannerCandidate[] = await db.task.findMany({
       where: {
-        userId,
+        ...plannerTaskAccessWhere(userId),
         ...(input.itemType === 'task' ? { parentTaskId: null } : input.itemType === 'subtask' ? { parentTaskId: { not: null } } : {}),
         ...(input.statusScope === 'active' ? { status: { not: 'DONE' } } : input.statusScope === 'completed' ? { status: 'DONE' } : {}),
         ...(dueFrom || dueTo ? { dueDate: { ...(dueFrom ? { gte: dueFrom } : {}), ...(dueTo ? { lte: dueTo } : {}) } } : {})
@@ -165,7 +173,7 @@ export function createPlannerToolsService(db: any = prisma) {
   };
 
   const getItem = async (userId: string, id: string) => db.task.findFirst({
-    where: { id, userId },
+    where: { id, ...plannerTaskAccessWhere(userId) },
     select: { id: true, title: true, description: true, status: true, dueDate: true, taskType: true, parentTaskId: true, importance: true, urgency: true, notifyBeforeMinutes: true, location: true, sphere: { select: { id: true, name: true } }, parentTask: { select: { id: true, title: true, sphere: { select: { id: true, name: true } } } }, subtasks: { select: { id: true, title: true, description: true, status: true, dueDate: true }, orderBy: { createdAt: 'asc' } } }
   });
   const list = async (userId: string, input: PlannerListInput) => {
@@ -174,7 +182,7 @@ export function createPlannerToolsService(db: any = prisma) {
     const offset = Math.max(0, Math.round(input.offset || 0));
     const limit = Math.max(1, Math.min(100, Math.round(input.limit || 50)));
     const where = {
-      userId,
+      ...plannerTaskAccessWhere(userId),
       ...(input.itemType === 'task' ? { parentTaskId: null } : input.itemType === 'subtask' ? { parentTaskId: { not: null } } : {}),
       ...(input.statusScope === 'active' ? { status: { not: 'DONE' } } : input.statusScope === 'completed' ? { status: 'DONE' } : {}),
       ...(dueFrom || dueTo ? { dueDate: { ...(dueFrom ? { gte: dueFrom } : {}), ...(dueTo ? { lte: dueTo } : {}) } } : {}),
@@ -195,14 +203,14 @@ export function createPlannerToolsService(db: any = prisma) {
     const createOperation = ['create_task', 'create_event', 'create_subtask'].includes(value.operation);
     let item: any = null;
     if (!createOperation) {
-      item = await db.task.findFirst({ where: { id: value.itemId!, userId }, select: { id: true, title: true, dueDate: true, status: true, parentTaskId: true, importance: true, urgency: true } });
-      if (!item) return errorResult('ITEM_NOT_FOUND', 'Объект не найден или принадлежит другому пользователю.');
+      item = await db.task.findFirst({ where: { id: value.itemId!, ...plannerTaskAccessWhere(userId) }, select: { id: true, title: true, dueDate: true, status: true, parentTaskId: true, importance: true, urgency: true, collaborationId: true } });
+      if (!item) return errorResult('ITEM_NOT_FOUND', 'Объект не найден или недоступен этому пользователю.');
       if (item.parentTaskId && ['set_priority', 'set_notification', 'change_sphere'].includes(value.operation)) return errorResult('SUBTASK_OPERATION_NOT_ALLOWED', 'Эта операция недоступна для подзадачи.');
     }
     if (value.operation === 'create_subtask') {
-      const parent = await db.task.findFirst({ where: { id: value.parentTaskId!, userId, parentTaskId: null }, select: { id: true, title: true } });
+      const parent = await db.task.findFirst({ where: { id: value.parentTaskId!, parentTaskId: null, ...plannerTaskAccessWhere(userId) }, select: { id: true, title: true } });
       if (!parent) return errorResult('PARENT_NOT_FOUND', 'Родительская задача не найдена.');
-      item = await db.task.create({ data: { userId, parentTaskId: parent.id, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? '').slice(0, 2000), dueDate: value.dueDate ? new Date(value.dueDate) : null, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', sphereId: null, notifyBeforeMinutes: 0 } });
+      item = await mutations.create(userId, { parentTaskId: parent.id, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? '').slice(0, 2000), dueDate: value.dueDate ? new Date(value.dueDate) : null, importance: 3, urgency: 3, status: 'TODO', sphereId: null, notifyBeforeMinutes: 0 });
       return { ok: true, operation: value.operation, itemId: item.id, report: `Добавлена подзадача «${item.title}» к задаче «${parent.title}».` };
     }
     if (value.operation === 'create_task' || value.operation === 'create_event') {
@@ -212,17 +220,21 @@ export function createPlannerToolsService(db: any = prisma) {
       return { ok: true, operation: value.operation, itemId: item.id, report: `Создан${value.operation === 'create_event' ? 'о событие' : 'а задача'} «${item.title}».` };
     }
     const undoOperation: PlannerUndoOperation | undefined = ['reschedule', 'clear_due_date', 'complete', 'reopen'].includes(value.operation) ? { taskId: item.id, previous: { dueDate: item.dueDate?.toISOString() ?? null, status: item.status } } : undefined;
-    const data: Record<string, unknown> = {};
-    if (value.operation === 'rename') data.title = (value.title ?? '').trim().slice(0, 180);
-    if (value.operation === 'set_description') data.description = (value.description ?? '').slice(0, item.parentTaskId ? 2000 : 4000);
-    if (value.operation === 'reschedule') data.dueDate = new Date(value.dueDate!);
-    if (value.operation === 'clear_due_date') data.dueDate = null;
-    if (value.operation === 'complete') data.status = 'DONE';
-    if (value.operation === 'reopen') data.status = 'TODO';
-    if (value.operation === 'set_priority') { const importance = Math.max(1, Math.min(5, Math.round(value.importance ?? item.importance))); const urgency = Math.max(1, Math.min(5, Math.round(value.urgency ?? item.urgency))); Object.assign(data, { importance, urgency, priorityScore: Number((importance * .6 + urgency * .4).toFixed(2)) }); }
-    if (value.operation === 'set_notification') data.notifyBeforeMinutes = Math.round(value.notifyBeforeMinutes ?? 0);
-    if (value.operation === 'change_sphere') data.sphereId = value.sphereId;
-    if (value.operation === 'delete') await db.task.deleteMany({ where: { id: item.id, userId } }); else await db.task.updateMany({ where: { id: item.id, userId }, data });
+    const patch: Record<string, unknown> = {};
+    if (value.operation === 'rename') patch.title = (value.title ?? '').trim().slice(0, 180);
+    if (value.operation === 'set_description') patch.description = (value.description ?? '').slice(0, item.parentTaskId ? 2000 : 4000);
+    if (value.operation === 'reschedule') patch.dueDate = new Date(value.dueDate!);
+    if (value.operation === 'clear_due_date') patch.dueDate = null;
+    if (value.operation === 'complete') patch.status = 'DONE';
+    if (value.operation === 'reopen') patch.status = 'TODO';
+    if (value.operation === 'set_priority') {
+      patch.importance = Math.max(1, Math.min(5, Math.round(value.importance ?? item.importance)));
+      patch.urgency = Math.max(1, Math.min(5, Math.round(value.urgency ?? item.urgency)));
+    }
+    if (value.operation === 'set_notification') patch.notifyBeforeMinutes = Math.round(value.notifyBeforeMinutes ?? 0);
+    if (value.operation === 'change_sphere') patch.sphereId = value.sphereId;
+    if (value.operation === 'delete') await mutations.remove(item.id, userId);
+    else await mutations.update(item.id, userId, patch);
     const labels: Record<string, string> = { rename: `Переименован объект «${item.title}».`, set_description: `Обновлено описание «${item.title}».`, reschedule: `Перенесён объект «${item.title}» на ${new Date(value.dueDate!).toLocaleString('ru-RU', { timeZone: userTimeZone })}.`, clear_due_date: `Срок объекта «${item.title}» очищен.`, complete: `Объект «${item.title}» отмечен выполненным.`, reopen: `Объект «${item.title}» снова открыт.`, delete: `Удалён объект «${item.title}».`, set_priority: `Обновлён приоритет «${item.title}».`, set_notification: `Обновлено уведомление «${item.title}».`, change_sphere: `Изменён сектор «${item.title}».` };
     return { ok: true, operation: value.operation, itemId: item.id, report: labels[value.operation], ...(undoOperation ? { undoOperation } : {}) };
   };
