@@ -31,7 +31,12 @@ export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
 const ADMIN_PANEL_PASSWORD_ENV = 'ADMIN_PANEL_PASSWORD';
 const SUBSCRIPTION_PLAN_KEYS = ['start', 'pro', 'max'] as const;
+const ADMIN_SUBSCRIPTION_PLAN_KEYS = ['free', ...SUBSCRIPTION_PLAN_KEYS] as const;
 type SubscriptionPlanKey = typeof SUBSCRIPTION_PLAN_KEYS[number];
+type AdminSubscriptionPlanKey = typeof ADMIN_SUBSCRIPTION_PLAN_KEYS[number];
+const ADMIN_BROADCAST_TARGETS = ['user', 'all', 'paid', 'free'] as const;
+const ADMIN_BROADCAST_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+const ADMIN_BROADCAST_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const sanitizeLogin = normalizeAccountLogin;
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -491,6 +496,8 @@ apiRouter.post('/admin/users', async (req, res) => {
       name: true,
       email: true,
       username: true,
+      telegramChatId: true,
+      subscriptionPlan: true,
       aiCredits: true,
       aiCreditsPeriod: true,
       aiIncludedCreditsMilli: true,
@@ -500,7 +507,7 @@ apiRouter.post('/admin/users', async (req, res) => {
     }
   });
 
-  res.json({ users });
+  res.json({ users: users.map(({ telegramChatId, ...user }) => ({ ...user, telegramLinked: Boolean(telegramChatId) })) });
 });
 
 
@@ -548,6 +555,125 @@ apiRouter.post('/admin/credit-packs', async (req, res) => {
   })));
 
   res.json({ links });
+});
+
+apiRouter.post('/admin/users/:userId/subscription', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const userId = String(req.params.userId ?? '').trim();
+  const subscriptionPlan = String(req.body?.subscriptionPlan ?? '').trim() as AdminSubscriptionPlanKey;
+  if (!userId) {
+    res.status(400).json({ error: 'Не указан пользователь' });
+    return;
+  }
+  if (!(ADMIN_SUBSCRIPTION_PLAN_KEYS as readonly string[]).includes(subscriptionPlan)) {
+    res.status(400).json({ error: 'Неизвестный тариф' });
+    return;
+  }
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { subscriptionPlan },
+    select: { id: true, subscriptionPlan: true }
+  }).catch((error) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return null;
+    throw error;
+  });
+  if (!user) {
+    res.status(404).json({ error: 'Пользователь не найден' });
+    return;
+  }
+  res.json({ user });
+});
+
+apiRouter.post('/admin/broadcasts', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const target = String(req.body?.target ?? '').trim();
+  const text = String(req.body?.text ?? '').trim();
+  const userId = String(req.body?.userId ?? '').trim();
+  if (!(ADMIN_BROADCAST_TARGETS as readonly string[]).includes(target)) {
+    res.status(400).json({ error: 'Неизвестная аудитория рассылки' });
+    return;
+  }
+
+  let image: { fileName: string; mimeType: string; contentBase64: string } | null = null;
+  if (req.body?.image) {
+    const mimeType = String(req.body.image.mimeType ?? '').trim();
+    const fileName = String(req.body.image.fileName ?? 'broadcast-image').trim().slice(0, 160) || 'broadcast-image';
+    const contentBase64 = String(req.body.image.contentBase64 ?? '').replace(/^data:[^;]+;base64,/, '').trim();
+    if (!(ADMIN_BROADCAST_IMAGE_TYPES as readonly string[]).includes(mimeType)) {
+      res.status(400).json({ error: 'Для рассылки поддерживаются JPG, PNG и WEBP' });
+      return;
+    }
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(contentBase64, 'base64');
+    } catch {
+      res.status(400).json({ error: 'Не удалось прочитать изображение' });
+      return;
+    }
+    if (!contentBase64 || bytes.byteLength === 0) {
+      res.status(400).json({ error: 'Изображение пустое' });
+      return;
+    }
+    if (bytes.byteLength > ADMIN_BROADCAST_MAX_IMAGE_BYTES) {
+      res.status(413).json({ error: 'Изображение должно быть не больше 8 МБ' });
+      return;
+    }
+    image = { fileName, mimeType, contentBase64 };
+  }
+
+  if (!text && !image) {
+    res.status(400).json({ error: 'Введите текст или прикрепите изображение' });
+    return;
+  }
+  if (text.length > 20_000) {
+    res.status(400).json({ error: 'Текст рассылки слишком длинный' });
+    return;
+  }
+  if (target === 'user' && !userId) {
+    res.status(400).json({ error: 'Выберите пользователя' });
+    return;
+  }
+
+  if (target === 'user') {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, telegramChatId: true }
+    });
+    if (!user) {
+      res.status(404).json({ error: 'Пользователь не найден' });
+      return;
+    }
+    if (!user.telegramChatId) {
+      res.status(409).json({ error: 'У пользователя не подключён Telegram-бот' });
+      return;
+    }
+  }
+
+  const where: Prisma.UserWhereInput = target === 'user'
+    ? { id: userId, telegramChatId: { not: null } }
+    : target === 'paid'
+      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
+      : target === 'free'
+        ? { telegramChatId: { not: null }, subscriptionPlan: 'free' }
+        : { telegramChatId: { not: null } };
+
+  const recipients = await prisma.user.findMany({
+    where,
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, telegramChatId: true }
+  });
+
+  let sent = 0;
+  let failed = 0;
+  for (const recipient of recipients) {
+    if (!recipient.telegramChatId) continue;
+    const delivered = await telegramService.sendAdminBroadcast(recipient.telegramChatId, { text, image });
+    if (delivered) sent += 1;
+    else failed += 1;
+    if (recipients.length > 1) await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  res.json({ requested: recipients.length, sent, failed });
 });
 
 apiRouter.post('/admin/users/:userId/credit-statistics', async (req, res) => {
