@@ -3188,10 +3188,9 @@ ${allContext}`,
     const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
     void ignoredEditorStatus;
     const updatedTask = await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
+    // Keep the workspace in sync without replacing TaskEditor props: replacing editorState.task
+    // would reset the local form and focus on every debounced autosave.
     setTasks((current) => current.map((task) => task.id === updatedTask.id ? { ...task, ...updatedTask } : task));
-    setEditorState((current) => current?.task?.id === updatedTask.id
-      ? { ...current, task: { ...current.task, ...updatedTask } }
-      : current);
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
