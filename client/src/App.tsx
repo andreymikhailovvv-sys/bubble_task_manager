@@ -599,12 +599,15 @@ function buildTimelineViewData(
   };
   const monthStart = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth(), 1);
   const monthEnd = new Date(timelineAnchorDate.getFullYear(), timelineAnchorDate.getMonth() + 1, 1);
+  const monthLastDay = addDays(monthEnd, -1);
+  const monthGridStart = normalizeToMonday(monthStart);
+  const monthGridEnd = addDays(normalizeToMonday(monthLastDay), 7);
   const dayStart = startOfDay(timelineAnchorDate);
   const dayEnd = addDays(dayStart, 1);
   const weekStart = normalizeToMonday(timelineAnchorDate);
   const weekEnd = addDays(weekStart, 7);
-  const rangeStart = timelineViewMode === 'day' ? dayStart : timelineViewMode === 'week' ? weekStart : monthStart;
-  const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthEnd;
+  const rangeStart = timelineViewMode === 'day' ? dayStart : timelineViewMode === 'week' ? weekStart : monthGridStart;
+  const rangeEnd = timelineViewMode === 'day' ? dayEnd : timelineViewMode === 'week' ? weekEnd : monthGridEnd;
 
   const tasksWithoutDate: Task[] = [];
   const datedTasks = listTasks
@@ -658,20 +661,13 @@ function buildTimelineViewData(
     };
   });
 
-  const firstDayWeekday = (monthStart.getDay() + 6) % 7;
-  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
-  const monthCells: TimelineViewData['monthCells'] = Array.from({ length: firstDayWeekday }, (_, index) => ({
-    key: `empty-${index}`,
-    date: null,
-    tasks: []
-  }));
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+  const monthCells: TimelineViewData['monthCells'] = [];
+  for (let date = new Date(monthGridStart); date < monthGridEnd; date = addDays(date, 1)) {
     const start = startOfDay(date);
     const end = addDays(start, 1);
     monthCells.push({
-      key: date.toISOString(),
-      date,
+      key: start.toISOString(),
+      date: start,
       tasks: tasksInRange
         .filter(({ dueDate }) => dueDate >= start && dueDate < end)
         .sort(sortByDueDateAsc)
@@ -5128,6 +5124,7 @@ ${allContext}`,
             onRenameSphere={(sphere) => setSectorEditorSphere(sphere)}
             onRescheduleTask={(task) => setTimelineReschedulePicker({ taskId: task.id, signal: Date.now() })}
             forceTaskContextMenuOpen={activeTourStep === 'task-context-menu'}
+            isSearchFiltering={Boolean(search.trim())}
             />
           </div>
         ) : displayMode === 'list' ? (
@@ -5949,7 +5946,7 @@ ${allContext}`,
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-500">Фокус на сроках</p>
                     <h4 className="mt-1 text-2xl font-bold tracking-tight text-primary">Ближайшие подзадачи</h4>
                   </div>
-                  <button type="button" className="focused-task-icon-button h-9 w-9" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
+                  <button type="button" className="focused-task-icon-button upcoming-subtasks-close-button h-9 w-9" onClick={() => setIsUpcomingSubtasksModalOpen(false)} title="Закрыть">
                     <X size={16} />
                   </button>
                 </div>
@@ -5977,18 +5974,19 @@ ${allContext}`,
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
                     <li
                       key={subtask.id}
-                      className="upcoming-subtask-row upcoming-subtask-row-sector flex items-start gap-3 rounded-2xl border px-4 py-3"
+                      className={`upcoming-subtask-row upcoming-subtask-row-sector relative flex h-[7rem] min-h-[7rem] items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''}`}
                       style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
                     >
-                      <input type="checkbox" className="mt-1" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-primary"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 text-[11px] text-subtle">
+                      <input type="checkbox" className="shrink-0" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
+                      {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className={`truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 line-clamp-2 overflow-hidden text-xs leading-4 text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 truncate text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex shrink-0 items-center gap-1">
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
