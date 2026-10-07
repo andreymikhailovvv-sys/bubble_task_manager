@@ -4873,15 +4873,15 @@ ${allContext}`,
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
-              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">Чтобы увеличить количество ИИ кредитов, приобретите платную подписку</h2>
-              <p className="mt-2 max-w-2xl text-sm text-muted">Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.</p>
+              <h2 className="mt-3 max-w-2xl text-2xl font-bold text-primary">{creditModalView === 'statistics' ? 'Статистика расхода AI-кредитов' : 'Чтобы увеличить количество ИИ кредитов, приобретите платную подписку'}</h2>
+              <p className="mt-2 max-w-2xl text-sm text-muted">{creditModalView === 'statistics' ? 'Посмотрите расход за день, неделю и 30 дней, а также разбивку по моделям и ИИ-инструментам.' : 'Выберите тариф под свой сценарий: от дополнительного запаса кредитов до полного доступа к продвинутым ИИ-функциям.'}</p>
               <div className="mt-4 inline-flex rounded-xl border border-white/10 bg-black/10 p-1">
                 <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'purchase' ? 'bg-fuchsia-500/20 text-primary' : 'text-muted'}`} onClick={() => setCreditModalView('purchase')}>Пополнить</button>
                 <button type="button" className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${creditModalView === 'statistics' ? 'bg-cyan-500/20 text-primary' : 'text-muted'}`} onClick={() => { setCreditModalView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
               </div>
             </div>
             {creditModalView === 'statistics' ? (
-              <div className="p-4 sm:p-5">
+              <div className="max-h-[68vh] overflow-y-auto p-4 sm:p-5">
                 <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} />
               </div>
             ) : (
