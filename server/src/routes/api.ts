@@ -649,13 +649,13 @@ apiRouter.post('/admin/broadcasts', async (req, res) => {
     }
   }
 
-  const where = target === 'user'
-    ? { id: userId, telegramChatId: { not: null as null } }
+  const where: Prisma.UserWhereInput = target === 'user'
+    ? { id: userId, telegramChatId: { not: null } }
     : target === 'paid'
-      ? { telegramChatId: { not: null as null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
+      ? { telegramChatId: { not: null }, subscriptionPlan: { in: [...SUBSCRIPTION_PLAN_KEYS] } }
       : target === 'free'
-        ? { telegramChatId: { not: null as null }, subscriptionPlan: 'free' }
-        : { telegramChatId: { not: null as null } };
+        ? { telegramChatId: { not: null }, subscriptionPlan: 'free' }
+        : { telegramChatId: { not: null } };
 
   const recipients = await prisma.user.findMany({
     where,
