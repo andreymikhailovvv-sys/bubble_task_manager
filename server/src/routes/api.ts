@@ -1053,7 +1053,6 @@ apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.get('/tasks/:id/comments', requireAuth, taskCommentController.list);
 apiRouter.post('/tasks/:id/comments', requireAuth, taskCommentController.create);
-apiRouter.get('/tasks/:id/comments/:commentId/attachments/:attachmentId/download', requireAuth, taskCommentController.downloadAttachment);
 apiRouter.post('/tasks/:id/comments/read', requireAuth, taskCommentController.markRead);
 apiRouter.post('/tasks/:id/share', requireAuth, asyncHandler(taskController.createShareLink));
 apiRouter.patch('/tasks/:id/collaboration', requireAuth, asyncHandler(taskController.updateCollaboration));

@@ -427,13 +427,9 @@ body {
 
 /* Upcoming subtasks borrows the calm, rounded surfaces of the task focus window. */
 .upcoming-subtasks-backdrop {
-  isolation: isolate;
   background: transparent !important;
   backdrop-filter: blur(14px) saturate(0.92);
   -webkit-backdrop-filter: blur(14px) saturate(0.92);
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: backdrop-filter;
 }
 
 .upcoming-subtasks-dialog {
@@ -7669,116 +7665,4 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
 .upcoming-subtask-row {
   height: 7rem;
   min-height: 7rem;
-}
-
-
-/* Keep the fixed upcoming-subtask cards visually dense without allowing rich text to escape them. */
-.upcoming-subtasks-dialog {
-  isolation: isolate;
-  contain: layout paint style;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-.upcoming-subtasks-list {
-  contain: layout paint;
-  overscroll-behavior: contain;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  will-change: scroll-position;
-}
-
-.upcoming-subtask-row {
-  contain: layout paint style;
-  content-visibility: auto;
-  contain-intrinsic-size: 7rem;
-  transform: translateZ(0);
-  backface-visibility: hidden;
-}
-
-.upcoming-subtask-copy {
-  display: flex;
-  height: 100%;
-  max-height: 100%;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.upcoming-subtask-title,
-.upcoming-subtask-deadline {
-  flex: 0 0 auto;
-  min-width: 0;
-}
-
-.upcoming-subtask-description {
-  display: -webkit-box;
-  min-height: 0;
-  max-height: 2rem;
-  overflow: hidden;
-  line-height: 1rem;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.upcoming-subtask-description > *,
-.upcoming-subtask-description a {
-  display: inline;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-/* Comment screenshots stay cheap to render and visually consistent with comment cards. */
-.collaboration-comment-attachment {
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--field-border));
-  background: var(--field-bg);
-  contain: content;
-}
-
-.collaboration-comment-attachment img {
-  display: block;
-  transform: translateZ(0);
-}
-
-.collaboration-comment-file-pill,
-.collaboration-comment-attach {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--field-border));
-  background: color-mix(in srgb, var(--field-bg) 88%, var(--accent-soft));
-  color: var(--text-muted);
-}
-
-.collaboration-comment-attach:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--field-border));
-  color: var(--accent);
-}
-
-.collaboration-comment-attach:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-
-.miniapp-comment-attachment {
-  border-color: color-mix(in srgb, #8b5cf6 35%, var(--panel-border));
-  background: var(--card-bg);
-  contain: content;
-}
-
-.miniapp-comment-attachment img {
-  display: block;
-  transform: translateZ(0);
-}
-
-.miniapp-comment-file-pill,
-.miniapp-comment-attach {
-  border-color: color-mix(in srgb, #8b5cf6 34%, var(--panel-border));
-  background: color-mix(in srgb, var(--card-bg) 88%, #8b5cf6 12%);
-  color: var(--text-muted);
-}
-
-.miniapp-comment-attach:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
 }

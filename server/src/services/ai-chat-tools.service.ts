@@ -38,7 +38,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
     parameters: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } }
   },
   {
-    type: 'function', name: 'list_sectors', strict: true, description: 'Получить реальные сектора пользователя и их ID. Используй перед созданием задачи, если нужно выбрать подходящий сектор, и перед любой сменой сектора. Не придумывай sphereId.',
+    type: 'function', name: 'list_sectors', strict: true, description: 'Получить сектора пользователя без их инструкций.',
     parameters: { type: 'object', additionalProperties: false, required: [], properties: {} }
   },
   {

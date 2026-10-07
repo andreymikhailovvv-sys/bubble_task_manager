@@ -55,9 +55,6 @@ const SUBSCRIPTION_PLANS: Array<{ key: keyof SubscriptionLinks; name: string; pr
 ];
 const MAX_AI_ATTACHMENTS = 3;
 const MAX_AI_ATTACHMENT_SIZE = 8 * 1024 * 1024;
-const MAX_COMMENT_SCREENSHOTS = 3;
-const MAX_COMMENT_SCREENSHOT_SIZE = 3 * 1024 * 1024;
-const COMMENT_SCREENSHOT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const SUPPORTED_AI_FILE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -922,9 +919,7 @@ export default function App() {
   const [subtaskCommentReplyTo, setSubtaskCommentReplyTo] = useState<TaskComment | null>(null);
   const [subtaskCommentSending, setSubtaskCommentSending] = useState(false);
   const [subtaskCommentError, setSubtaskCommentError] = useState<string | null>(null);
-  const [subtaskCommentPendingFiles, setSubtaskCommentPendingFiles] = useState<File[]>([]);
   const subtaskCommentScrollRef = useRef<HTMLDivElement | null>(null);
-  const subtaskCommentFileInputRef = useRef<HTMLInputElement | null>(null);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
@@ -1154,22 +1149,6 @@ export default function App() {
     setHabits(habitData);
   }
 
-  async function refreshTaskCommentIndicators() {
-    try {
-      const latestTasks = await api.getTasks();
-      const commentStateById = new Map(latestTasks.map((task) => [
-        task.id,
-        { commentCount: task.commentCount ?? 0, unreadCommentCount: task.unreadCommentCount ?? 0 }
-      ]));
-      setTasks((current) => current.map((task) => {
-        const next = commentStateById.get(task.id);
-        return next ? { ...task, ...next } : task;
-      }));
-    } catch (error) {
-      console.error('[Collaborative comments] indicator sync failed', error);
-    }
-  }
-
   const updateUserSettings = async (
     payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string },
     savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime'
@@ -1307,24 +1286,6 @@ export default function App() {
     if (!currentUser) return;
     void load();
   }, [currentUser?.id]);
-
-  const hasCollaborativeTasks = useMemo(
-    () => tasks.some((task) => !task.parentTaskId && task.isCollaborative),
-    [tasks]
-  );
-
-  useEffect(() => {
-    if (!currentUser || !hasCollaborativeTasks) return;
-    const sync = () => {
-      if (document.visibilityState !== 'hidden') void refreshTaskCommentIndicators();
-    };
-    const intervalId = window.setInterval(sync, 10_000);
-    document.addEventListener('visibilitychange', sync);
-    return () => {
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', sync);
-    };
-  }, [currentUser?.id, hasCollaborativeTasks]);
   useEffect(() => {
     if (!currentUser) return;
     const token = new URLSearchParams(window.location.search).get('joinTask');
@@ -1936,9 +1897,8 @@ export default function App() {
     }
     focusedAutosaveTimeoutRef.current = setTimeout(() => {
       const score = calcScore(normalized.importance, normalized.urgency);
-      void api.updateTask(focusedTask.id, { ...normalized, priorityScore: score }).then((updatedTask) => {
+      void api.updateTask(focusedTask.id, { ...normalized, priorityScore: score }).then(() => {
         focusedAutosaveSignatureRef.current = payloadSignature;
-        setTasks((current) => current.map((task) => task.id === updatedTask.id ? { ...task, ...updatedTask } : task));
       });
     }, 700);
     return () => {
@@ -3187,10 +3147,7 @@ ${allContext}`,
     const score = calcScore(normalized.importance, normalized.urgency);
     const { status: ignoredEditorStatus, ...editableNormalized } = normalized;
     void ignoredEditorStatus;
-    const updatedTask = await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
-    // Keep the workspace in sync without replacing TaskEditor props: replacing editorState.task
-    // would reset the local form and focus on every debounced autosave.
-    setTasks((current) => current.map((task) => task.id === updatedTask.id ? { ...task, ...updatedTask } : task));
+    await api.updateTask(editorState.task.id, { ...editableNormalized, taskType: isEventPayload ? 'EVENT' : 'TASK', aiNotificationsEnabled: isEventPayload ? false : normalized.aiNotificationsEnabled, priorityScore: score });
   };
 
   const createTaskFromAi = async (payload: { prompt: string; sphereId?: string | null; autoAssignSphere?: boolean; attachments: ChatAttachmentPayload[] }) => {
@@ -3377,14 +3334,22 @@ ${allContext}`,
     setSubtaskComments([]);
     setSubtaskCommentReplyTo(null);
     setSubtaskCommentDraft('');
-    setSubtaskCommentPendingFiles([]);
     setSubtaskCommentError(null);
     setSubtaskCommentsLoading(true);
     try {
       const response = await api.getTaskComments(subtask.id);
       setSubtaskComments(response.comments);
       await api.markTaskCommentsRead(subtask.id, response.comments[response.comments.length - 1]?.id ?? null);
-      await refreshTaskCommentIndicators();
+      const clearedUnread = subtask.unreadCommentCount ?? 0;
+      setTasks((current) => current.map((task) => {
+        if (task.id === subtask.id) {
+          return { ...task, commentCount: response.comments.length, unreadCommentCount: 0 };
+        }
+        if (subtask.parentTaskId && task.id === subtask.parentTaskId && clearedUnread > 0) {
+          return { ...task, unreadCommentCount: Math.max(0, (task.unreadCommentCount ?? 0) - clearedUnread) };
+        }
+        return task;
+      }));
     } catch (error) {
       setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось загрузить комментарии');
     } finally {
@@ -3392,38 +3357,16 @@ ${allContext}`,
     }
   };
 
-  const addSubtaskCommentScreenshots = (files: File[]) => {
-    if (files.length === 0) return;
-    const valid = files.filter((file) => COMMENT_SCREENSHOT_TYPES.has(file.type));
-    if (valid.length !== files.length) {
-      setSubtaskCommentError('К комментарию можно прикреплять скриншоты PNG, JPG или WEBP.');
-    }
-    const oversized = valid.find((file) => file.size > MAX_COMMENT_SCREENSHOT_SIZE);
-    if (oversized) {
-      setSubtaskCommentError(`Скриншот «${oversized.name}» превышает лимит 3 МБ.`);
-      return;
-    }
-    setSubtaskCommentPendingFiles((current) => {
-      const existing = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
-      return [
-        ...current,
-        ...valid.filter((file) => !existing.has(`${file.name}:${file.size}:${file.lastModified}`))
-      ].slice(0, MAX_COMMENT_SCREENSHOTS);
-    });
-  };
-
   const sendSubtaskComment = async () => {
     const panel = subtaskCommentPanel;
     const content = subtaskCommentDraft.trim();
-    if (!panel || (!content && subtaskCommentPendingFiles.length === 0) || subtaskCommentSending) return;
+    if (!panel || !content || subtaskCommentSending) return;
     setSubtaskCommentSending(true);
     setSubtaskCommentError(null);
     try {
-      const attachments = await Promise.all(subtaskCommentPendingFiles.map((file) => fileToAttachmentPayload(file)));
       const created = await api.createTaskComment(panel.task.id, {
         content,
-        parentCommentId: subtaskCommentReplyTo?.id ?? null,
-        attachments
+        parentCommentId: subtaskCommentReplyTo?.id ?? null
       });
       setSubtaskComments((current) => [...current, created]);
       setTasks((current) => current.map((task) => {
@@ -3436,7 +3379,6 @@ ${allContext}`,
         return task;
       }));
       setSubtaskCommentDraft('');
-      setSubtaskCommentPendingFiles([]);
       setSubtaskCommentReplyTo(null);
     } catch (error) {
       setSubtaskCommentError(error instanceof Error ? error.message : 'Не удалось отправить комментарий');
@@ -6037,10 +5979,10 @@ ${allContext}`,
                     >
                       <input type="checkbox" className="shrink-0" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
-                      <div className="upcoming-subtask-copy min-h-0 min-w-0 flex-1 overflow-hidden">
-                        <p className={`upcoming-subtask-title truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <div className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></div>
-                        <p className="upcoming-subtask-deadline mt-1 truncate text-[11px] text-subtle">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className={`truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 line-clamp-2 overflow-hidden text-xs leading-4 text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                        <p className="mt-1 truncate text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
                       </div>
@@ -6231,27 +6173,7 @@ ${allContext}`,
                     <span className="collaboration-comment-author truncate text-xs font-semibold">{comment.authorName}</span>
                     <time className="collaboration-comment-time shrink-0 text-[10px]">{new Date(comment.createdAt).toLocaleString('ru-RU')}</time>
                   </div>
-                  {comment.content ? <p className="collaboration-comment-text mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.content}</p> : null}
-                  {comment.attachments?.length ? (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      {comment.attachments.map((attachment) => (
-                        <a
-                          key={attachment.id}
-                          href={api.getTaskCommentAttachmentDownloadUrl(subtaskCommentPanel.task.id, comment.id, attachment.id)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="collaboration-comment-attachment block overflow-hidden rounded-xl border"
-                        >
-                          <img
-                            src={api.getTaskCommentAttachmentDownloadUrl(subtaskCommentPanel.task.id, comment.id, attachment.id)}
-                            alt={attachment.name}
-                            loading="lazy"
-                            className="h-28 w-full object-cover"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  ) : null}
+                  <p className="collaboration-comment-text mt-1 whitespace-pre-wrap break-words text-sm leading-5">{comment.content}</p>
                   <button type="button" className="collaboration-comment-reply mt-1.5 text-[11px] font-semibold" onClick={() => { setSubtaskCommentReplyTo(comment); setSubtaskCommentPanel((current) => current ? { ...current, compose: true } : current); }}>
                     Ответить
                   </button>
@@ -6263,34 +6185,6 @@ ${allContext}`,
                 <div className="collaboration-comment-reply-preview mb-2 flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-xs">
                   <span className="min-w-0 truncate">Ответ для {subtaskCommentReplyTo.authorName}: {subtaskCommentReplyTo.content}</span>
                   <button type="button" className="shrink-0" onClick={() => setSubtaskCommentReplyTo(null)} aria-label="Отменить ответ"><X size={13} /></button>
-                </div>
-              ) : null}
-              <input
-                ref={subtaskCommentFileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  addSubtaskCommentScreenshots(Array.from(event.target.files ?? []));
-                  event.target.value = '';
-                }}
-              />
-              {subtaskCommentPendingFiles.length > 0 ? (
-                <div className="mb-2 flex flex-wrap gap-1.5">
-                  {subtaskCommentPendingFiles.map((file) => (
-                    <button
-                      key={`${file.name}:${file.size}:${file.lastModified}`}
-                      type="button"
-                      className="collaboration-comment-file-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]"
-                      onClick={() => setSubtaskCommentPendingFiles((current) => current.filter((item) => item !== file))}
-                      title="Убрать скриншот"
-                    >
-                      <Paperclip size={11} />
-                      <span className="truncate">{file.name}</span>
-                      <X size={11} />
-                    </button>
-                  ))}
                 </div>
               ) : null}
               <textarea
@@ -6310,22 +6204,10 @@ ${allContext}`,
               {subtaskCommentError ? <p className="mt-1 text-xs text-rose-500">{subtaskCommentError}</p> : null}
               <div className="mt-2 flex items-center justify-between gap-3">
                 <p className="text-[10px] text-muted">Ctrl/Cmd + Enter для отправки</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="collaboration-comment-attach inline-flex h-9 w-9 items-center justify-center rounded-xl border"
-                    onClick={() => subtaskCommentFileInputRef.current?.click()}
-                    disabled={subtaskCommentSending || subtaskCommentPendingFiles.length >= MAX_COMMENT_SCREENSHOTS}
-                    title="Прикрепить скриншот"
-                    aria-label="Прикрепить скриншот"
-                  >
-                    <Paperclip size={15} />
-                  </button>
-                  <button type="button" className="primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={(!subtaskCommentDraft.trim() && subtaskCommentPendingFiles.length === 0) || subtaskCommentSending} onClick={() => void sendSubtaskComment()}>
-                    {subtaskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
-                    Отправить
-                  </button>
-                </div>
+                <button type="button" className="primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={!subtaskCommentDraft.trim() || subtaskCommentSending} onClick={() => void sendSubtaskComment()}>
+                  {subtaskCommentSending ? <Loader2 size={14} className="animate-spin" /> : <SendHorizontal size={14} />}
+                  Отправить
+                </button>
               </div>
             </div>
           </section>
@@ -6853,12 +6735,7 @@ ${allContext}`,
                         {isFocusedSphereDropdownOpen ? (
                           <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border bg-white p-1 shadow-2xl">
                             {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
-                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => {
-                                const nextSphereId = sphere.id || null;
-                                setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: nextSphereId }));
-                                setTasks((current) => current.map((task) => task.id === focusedTask.id ? { ...task, sphereId: nextSphereId } : task));
-                                setIsFocusedSphereDropdownOpen(false);
-                              }}>
+                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => { setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: sphere.id || null })); setIsFocusedSphereDropdownOpen(false); }}>
                                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sphere.color }} />
                                 <span className="font-medium">{sphere.name}</span>
                                 {(focusedDraft.sphereId ?? '') === sphere.id ? <Check size={14} className="ml-auto text-violet-600" /> : null}
