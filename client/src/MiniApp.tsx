@@ -2652,6 +2652,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       onScroll={(event) => {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
+        setIsCreditPurchaseOpen(false);
         const nextTop = event.currentTarget.scrollTop;
         const prevTop = lastMainScrollTopRef.current;
         if (nextTop <= 8) setIsHeaderVisible(true);
@@ -2662,6 +2663,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       onTouchMove={() => {
         setIsEfficiencyDetailsOpen(false);
         setIsSettingsOpen(false);
+        setIsCreditPurchaseOpen(false);
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
@@ -2682,26 +2684,33 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Coins size={15} />
                 <span>{aiCredits}</span>
               </button>
-              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
-                <div className="flex items-center justify-between"><h2 className="font-semibold">AI-кредиты</h2><button type="button" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button></div>
-                <p className="mt-1 text-xs text-slate-400">Текущий баланс: {aiCredits}</p>
-                <div className="mt-3 flex gap-1 rounded-xl border border-slate-700 bg-slate-950/40 p-1">
-                  <button type="button" className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'purchase' ? 'bg-violet-600 text-white' : 'text-slate-400'}`} onClick={() => setCreditPopoverView('purchase')}>Пополнить</button>
-                  <button type="button" className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
+              {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
+                <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="miniapp-credit-popover-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Coins size={17} /></span>
+                      <div><h2 className="font-semibold text-primary">AI-кредиты</h2><p className="mt-0.5 text-xs text-muted">Баланс: <strong className="text-primary">{aiCredits}</strong></p></div>
+                    </div>
+                    <button type="button" className="miniapp-credit-popover-close rounded-full p-1.5 text-muted" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button>
+                  </div>
+                </div>
+                <div className="credit-view-toggle flex gap-1 rounded-xl border p-1">
+                  <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'purchase' ? 'is-active is-purchase' : ''}`} onClick={() => setCreditPopoverView('purchase')}>Пополнить</button>
+                  <button type="button" className={`credit-view-toggle-button flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold ${creditPopoverView === 'statistics' ? 'is-active is-statistics' : ''}`} onClick={() => { setCreditPopoverView('statistics'); void loadCreditUsageStatistics(); }}>Статистика</button>
                 </div>
                 {creditPopoverView === 'statistics' ? (
                   <div className="mt-3"><CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} compact /></div>
                 ) : (
                   <>
-                    <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="flex items-center justify-between gap-2 rounded-xl border border-slate-700 p-2">
-                      <span className="text-xs font-medium">{pack.creditsAmount.toLocaleString('ru-RU')} — {pack.price.toLocaleString('ru-RU')} ₽</span>
-                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
+                    <div className="mt-3 space-y-2">{creditPacks.filter((pack) => pack.isActive).map((pack) => <div key={pack.key} className="miniapp-credit-pack-card flex items-center justify-between gap-2 rounded-xl border p-2.5">
+                      <div><div className="text-xs font-bold text-primary">{pack.creditsAmount.toLocaleString('ru-RU')} AI-кредитов</div><div className="mt-0.5 text-[11px] text-muted">{pack.price.toLocaleString('ru-RU')} ₽</div></div>
+                      <button type="button" disabled={!creditPurchaseAvailable || creditPurchase.creatingPackKey !== null} onClick={() => void creditPurchase.start(pack.key)} className="miniapp-credit-buy-button rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey === pack.key ? 'Создаём…' : 'Купить'}</button>
                     </div>)}</div>
                     {creditPurchase.isReceiptEmailRequired ? <div className="mt-3 space-y-2">
-                      <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-xs" />
-                      <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="w-full rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
+                      <input type="email" autoComplete="email" value={creditPurchase.receiptEmail} onChange={(event) => creditPurchase.setReceiptEmail(event.target.value)} placeholder="Email для чека" aria-label="Email для чека" className="miniapp-credit-email-input w-full rounded-lg border px-3 py-2 text-xs" />
+                      <button type="button" disabled={creditPurchase.creatingPackKey !== null || !creditPurchase.receiptEmail.trim()} onClick={() => void creditPurchase.retryWithReceiptEmail()} className="miniapp-credit-buy-button w-full rounded-lg px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{creditPurchase.creatingPackKey ? 'Создаём платёж…' : 'Продолжить'}</button>
                     </div> : null}
-                    {creditPurchase.message ? <p className="mt-3 text-xs text-cyan-300" role="status">{creditPurchase.message}</p> : null}
+                    {creditPurchase.message ? <p className="miniapp-credit-message mt-3 rounded-xl border p-2.5 text-xs" role="status">{creditPurchase.message}</p> : null}
                   </>
                 )}
               </div> : null}
