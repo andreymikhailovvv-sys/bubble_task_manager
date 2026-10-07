@@ -229,8 +229,10 @@ export const api = {
   removeTaskCollaborator: (id: string, userId: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration/members/${userId}`, { method: 'DELETE' }),
   disableTaskCollaboration: (id: string) => request<{ ok: true }>(`/api/tasks/${id}/collaboration`, { method: 'DELETE' }),
   getTaskComments: (id: string) => request<{ comments: TaskComment[] }>(`/api/tasks/${id}/comments`),
-  createTaskComment: (id: string, payload: { content: string; parentCommentId?: string | null }) =>
+  createTaskComment: (id: string, payload: { content: string; parentCommentId?: string | null; attachments?: ChatAttachmentPayload[] }) =>
     request<TaskComment>(`/api/tasks/${id}/comments`, { method: 'POST', body: JSON.stringify(payload) }),
+  getTaskCommentAttachmentDownloadUrl: (taskId: string, commentId: string, attachmentId: string) =>
+    `/api/tasks/${taskId}/comments/${commentId}/attachments/${attachmentId}/download`,
   markTaskCommentsRead: (id: string, lastCommentId?: string | null) => request<{ ok: true; lastReadAt: string }>(`/api/tasks/${id}/comments/read`, { method: 'POST', body: JSON.stringify({ lastCommentId: lastCommentId ?? null }) }),
   createTaskCalendarIcsLink: (id: string, payload: { startAt: string; durationMinutes: 30 | 60 | 90 | 120; reminderMinutes: 10 | 30 | 60 | null }) =>
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),

@@ -39,6 +39,15 @@ export type Task = {
   unreadCommentCount?: number;
 };
 
+export type TaskCommentAttachment = {
+  id: string;
+  commentId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+};
+
 export type TaskComment = {
   id: string;
   taskId: string;
@@ -48,6 +57,7 @@ export type TaskComment = {
   authorColor?: string;
   parentCommentId?: string | null;
   content: string;
+  attachments?: TaskCommentAttachment[];
   isOwn: boolean;
   createdAt: string;
   updatedAt: string;

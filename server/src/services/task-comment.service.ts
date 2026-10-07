@@ -6,6 +6,35 @@ import { buildMiniAppTaskCommentsUrl } from '../lib/miniapp-url.js';
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const MAX_COMMENT_LENGTH = 3000;
+const MAX_COMMENT_ATTACHMENTS = 3;
+const MAX_COMMENT_ATTACHMENT_SIZE = 3 * 1024 * 1024;
+const COMMENT_ATTACHMENT_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+type CommentAttachmentInput = {
+  name: string;
+  mimeType: string;
+  size: number;
+  contentBase64: string;
+};
+
+const normalizeCommentAttachments = (raw: unknown): CommentAttachmentInput[] => {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > MAX_COMMENT_ATTACHMENTS) throw new TypeError(`Too many comment attachments (max ${MAX_COMMENT_ATTACHMENTS})`);
+  return raw.map((item, index) => {
+    if (!item || typeof item !== 'object') throw new TypeError(`Invalid comment attachment #${index + 1}`);
+    const value = item as Record<string, unknown>;
+    const name = typeof value.name === 'string' ? value.name.trim().slice(0, 180) : '';
+    const mimeType = typeof value.mimeType === 'string' ? value.mimeType.trim().toLowerCase() : '';
+    const size = typeof value.size === 'number' ? value.size : Number(value.size);
+    const contentBase64 = typeof value.contentBase64 === 'string' ? value.contentBase64.trim() : '';
+    const roundedSize = Math.round(size);
+    const decodedSize = contentBase64 ? Buffer.from(contentBase64, 'base64').byteLength : 0;
+    if (!name || !COMMENT_ATTACHMENT_MIME_TYPES.has(mimeType) || !Number.isFinite(size) || roundedSize <= 0 || roundedSize > MAX_COMMENT_ATTACHMENT_SIZE || !contentBase64 || decodedSize !== roundedSize) {
+      throw new TypeError('Comment attachments must be valid PNG/JPEG/WEBP screenshots up to 3MB each');
+    }
+    return { name, mimeType, size: roundedSize, contentBase64 };
+  });
+};
 
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
@@ -141,7 +170,10 @@ export const taskCommentService = {
     const comments = await prisma.taskComment.findMany({
       where: { taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      include: { user: { select: { name: true, username: true, email: true } } }
+      include: {
+        user: { select: { name: true, username: true, email: true } },
+        attachments: { select: { id: true, commentId: true, name: true, mimeType: true, size: true, createdAt: true } }
+      }
     });
     const memberColorByUserId = new Map(task.collaboration?.members.map((member) => [member.userId, member.color]) ?? []);
     return comments.map(({ user, ...comment }) => ({
@@ -153,9 +185,10 @@ export const taskCommentService = {
     }));
   },
 
-  create: async (taskId: string, userId: string, rawContent: unknown, rawParentCommentId?: unknown) => {
+  create: async (taskId: string, userId: string, rawContent: unknown, rawParentCommentId?: unknown, rawAttachments?: unknown) => {
     const content = typeof rawContent === 'string' ? rawContent.trim() : '';
-    if (!content) throw new TypeError('Comment text is required');
+    const attachments = normalizeCommentAttachments(rawAttachments);
+    if (!content && attachments.length === 0) throw new TypeError('Comment text or screenshot is required');
     if (content.length > MAX_COMMENT_LENGTH) throw new TypeError(`Comment is too long (max ${MAX_COMMENT_LENGTH})`);
 
     const task = await getAccessibleCollaborativeSubtask(taskId, userId);
@@ -168,8 +201,26 @@ export const taskCommentService = {
       : null;
 
     const comment = await prisma.taskComment.create({
-      data: { taskId, userId, parentCommentId, content },
-      include: { user: { select: { name: true, username: true, email: true } } }
+      data: {
+        taskId,
+        userId,
+        parentCommentId,
+        content,
+        ...(attachments.length > 0 ? {
+          attachments: {
+            create: attachments.map((attachment) => ({
+              name: attachment.name,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+              contentBase64: attachment.contentBase64
+            }))
+          }
+        } : {})
+      },
+      include: {
+        user: { select: { name: true, username: true, email: true } },
+        attachments: { select: { id: true, commentId: true, name: true, mimeType: true, size: true, createdAt: true } }
+      }
     });
     const actorName = displayName(comment.user);
 
@@ -185,7 +236,7 @@ export const taskCommentService = {
       task,
       actorUserId: userId,
       actorName,
-      content,
+      content: content || '📎 Скриншот',
       recipientUserId: parentComment?.userId ?? task.userId,
       isReply: Boolean(parentComment)
     });
@@ -197,6 +248,14 @@ export const taskCommentService = {
       authorColor: actorColor,
       isOwn: true
     };
+  },
+
+  getAttachment: async (taskId: string, userId: string, commentId: string, attachmentId: string) => {
+    await getAccessibleCollaborativeSubtask(taskId, userId);
+    return prisma.taskCommentAttachment.findFirstOrThrow({
+      where: { id: attachmentId, commentId, comment: { taskId } },
+      select: { id: true, name: true, mimeType: true, size: true, contentBase64: true }
+    });
   },
 
   markRead: async (taskId: string, userId: string, rawLastCommentId?: unknown) => {
