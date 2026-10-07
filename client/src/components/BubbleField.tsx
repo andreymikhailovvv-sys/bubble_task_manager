@@ -33,6 +33,7 @@ type Props = {
   onAddTaskToSphere?: (sphere: Sphere) => void;
   onRescheduleTask?: (task: Task) => void;
   forceTaskContextMenuOpen?: boolean;
+  isSearchFiltering?: boolean;
   themeMode?: 'dark' | 'light';
   className?: string;
 };
@@ -261,6 +262,7 @@ export function BubbleField({
   onAddTaskToSphere,
   onRescheduleTask,
   forceTaskContextMenuOpen = false,
+  isSearchFiltering = false,
   themeMode = 'dark',
   className
 }: Props) {
@@ -619,10 +621,12 @@ export function BubbleField({
         data-bubble-task-id={bubble.task.id}
         initial={false}
         animate={isPopping ? { opacity: 0, scale: 1.28 } : { opacity: 1, scale: isHovered ? BUBBLE_HOVER_SCALE : 1, x: displayPoint.x, y: displayPoint.y }}
-        exit={{ opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
+        exit={isSearchFiltering ? { opacity: 0, scale: 0.96, x: displayPoint.x, y: displayPoint.y } : { opacity: 1, scale: 1, x: displayPoint.x, y: displayPoint.y }}
         transition={isPopping
           ? { type: 'tween', duration: 0.33, ease: 'easeOut' }
-          : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
+          : isSearchFiltering
+            ? { type: 'tween', duration: 0.12, ease: 'easeOut' }
+            : { type: 'spring', damping: 24, stiffness: 105, mass: 0.82, restDelta: 0.001 }}
         style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
         onClick={() => !isPopping && onSelect(bubble.task)}
         onMouseEnter={() => activateHover(bubble.task.id)}
