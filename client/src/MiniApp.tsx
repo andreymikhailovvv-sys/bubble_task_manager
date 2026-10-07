@@ -2682,7 +2682,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Coins size={15} />
                 <span>{aiCredits}</span>
               </button>
-              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
+              {isCreditPurchaseOpen ? <div className="absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-600 bg-slate-900 p-4 text-slate-100 shadow-2xl">
                 <div className="flex items-center justify-between"><h2 className="font-semibold">AI-кредиты</h2><button type="button" onClick={() => setIsCreditPurchaseOpen(false)} aria-label="Закрыть"><X size={16} /></button></div>
                 <p className="mt-1 text-xs text-slate-400">Текущий баланс: {aiCredits}</p>
                 <div className="mt-3 flex gap-1 rounded-xl border border-slate-700 bg-slate-950/40 p-1">
