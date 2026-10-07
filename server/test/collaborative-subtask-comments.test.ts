@@ -91,12 +91,20 @@ test('индикаторы комментариев отображаются н�
   assert.match(timelineSlice, /const isSubtaskChip = options\?\.isSubtask/);
 });
 
-test('локальное чтение и отправка комментария синхронизируют индикатор основной задачи', async () => {
-  const source = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
-  assert.match(source, /task\.id === subtask\.parentTaskId && clearedUnread > 0/);
-  assert.match(source, /Math\.max\(0, \(task\.unreadCommentCount \?\? 0\) - clearedUnread\)/);
-  assert.match(source, /task\.id === panel\.task\.parentTaskId/);
-  assert.match(source, /commentCount: \(task\.commentCount \?\? 0\) \+ 1/);
+test('чтение комментариев синхронизирует персональные индикаторы с сервером для всех участников', async () => {
+  const [web, mini] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+  ]);
+  for (const source of [web, mini]) {
+    assert.match(source, /refreshTaskCommentIndicators/);
+    assert.match(source, /api\.getTasks\(\)/);
+    assert.match(source, /unreadCommentCount: task\.unreadCommentCount \?\? 0/);
+    assert.match(source, /setInterval\(sync, 10_000\)/);
+    assert.match(source, /await refreshTaskCommentIndicators\(\)/);
+  }
+  assert.doesNotMatch(web, /clearedUnread/);
+  assert.doesNotMatch(mini, /clearedUnread/);
 });
 
 test('web UI показывает контекстное меню, ответы и корректный порядок правых элементов', async () => {
@@ -114,4 +122,33 @@ test('web UI показывает контекстное меню, ответы 
   const creator = row.indexOf('subtask.creatorName');
   const calendar = row.indexOf('<InlineDateTimePickerIcon');
   assert.ok(due >= 0 && comments > due && creator > comments && calendar > creator);
+});
+
+
+test('комментарии поддерживают до трёх скриншотов и защищённую загрузку', async () => {
+  const [service, controller, routes, schema, web, mini] = await Promise.all([
+    readFile(new URL('../src/services/task-comment.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/task-comment.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(schema, /model TaskCommentAttachment/);
+  assert.match(service, /MAX_COMMENT_ATTACHMENTS = 3/);
+  assert.match(service, /MAX_COMMENT_ATTACHMENT_SIZE = 3 \* 1024 \* 1024/);
+  assert.match(service, /image\/png/);
+  assert.match(service, /image\/jpeg/);
+  assert.match(service, /image\/webp/);
+  assert.match(service, /taskCommentAttachment\.findFirstOrThrow/);
+  assert.match(controller, /downloadAttachment/);
+  assert.match(routes, /comments\/:commentId\/attachments\/:attachmentId\/download/);
+
+  for (const source of [web, mini]) {
+    assert.match(source, /MAX_COMMENT_SCREENSHOTS = 3/);
+    assert.match(source, /getTaskCommentAttachmentDownloadUrl/);
+    assert.match(source, /Paperclip/);
+    assert.match(source, /attachments/);
+  }
 });
