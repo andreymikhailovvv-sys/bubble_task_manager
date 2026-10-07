@@ -12,6 +12,14 @@ test('миграция комментариев создаёт обе табли
   assert.match(sql, /ON DELETE SET NULL/);
 });
 
+test('миграция скриншотов комментариев создаёт каскадную связь с комментарием', async () => {
+  const sql = await readFile(new URL('../prisma/migrations/20261007165000_task_comment_attachments/migration.sql', import.meta.url), 'utf8');
+  assert.match(sql, /CREATE TABLE "TaskCommentAttachment"/);
+  assert.match(sql, /TaskCommentAttachment_commentId_fkey/);
+  assert.match(sql, /REFERENCES "TaskComment"\("id"\)/);
+  assert.match(sql, /ON DELETE CASCADE/);
+});
+
 test('уведомление о комментарии использует требуемую формулировку', () => {
   assert.equal(
     formatCollaborativeSubtaskCommentNotification({
