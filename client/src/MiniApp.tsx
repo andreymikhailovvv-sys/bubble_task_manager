@@ -2684,7 +2684,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Coins size={15} />
                 <span>{aiCredits}</span>
               </button>
-              {isCreditPurchaseOpen ? <div className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
+              {isCreditPurchaseOpen ? <div onScroll={(event) => event.stopPropagation()} onTouchMove={(event) => event.stopPropagation()} className="miniapp-credit-popover absolute right-0 top-full z-[60] mt-2 max-h-[75vh] w-[min(21rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border p-4 shadow-2xl">
                 <div className="miniapp-credit-popover-hero -m-4 mb-3 rounded-t-2xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
