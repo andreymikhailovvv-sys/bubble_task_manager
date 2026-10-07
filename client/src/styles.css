@@ -427,9 +427,13 @@ body {
 
 /* Upcoming subtasks borrows the calm, rounded surfaces of the task focus window. */
 .upcoming-subtasks-backdrop {
+  isolation: isolate;
   background: transparent !important;
   backdrop-filter: blur(14px) saturate(0.92);
   -webkit-backdrop-filter: blur(14px) saturate(0.92);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: backdrop-filter;
 }
 
 .upcoming-subtasks-dialog {
