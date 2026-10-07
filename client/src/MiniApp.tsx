@@ -1106,7 +1106,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const map: Record<string, Task[]> = {};
     for (const task of tasks) {
       if (!task.parentTaskId) continue;
-      if (task.status === 'DONE') continue;
       if (!map[task.parentTaskId]) map[task.parentTaskId] = [];
       map[task.parentTaskId].push(task);
     }
@@ -2007,14 +2006,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE')
       .filter((task) => !openedTaskSubtaskAuthorFilterUserId || task.creatorUserId === openedTaskSubtaskAuthorFilterUserId)
       .sort((a, b) => {
+        const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
+        if (statusDiff !== 0) return statusDiff;
         if (openedTaskSubtaskFilterMode === 'urgency') {
           const aDueDate = dueDateTimestamp(a);
           const bDueDate = dueDateTimestamp(b);
           if (aDueDate !== bDueDate) return aDueDate - bDueDate;
           return createdAtTimestamp(a) - createdAtTimestamp(b);
         }
-        const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
-        if (statusDiff !== 0) return statusDiff;
         if (openedTaskSubtaskFilterMode === 'importance') {
           const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
           if (importanceDiff !== 0) return importanceDiff;
