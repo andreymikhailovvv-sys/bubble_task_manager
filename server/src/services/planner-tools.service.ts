@@ -220,7 +220,7 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
       return { ok: true, operation: value.operation, itemId: item.id, report: `Создан${value.operation === 'create_event' ? 'о событие' : 'а задача'} «${item.title}».` };
     }
     const undoOperation: PlannerUndoOperation | undefined = ['reschedule', 'clear_due_date', 'complete', 'reopen'].includes(value.operation) ? { taskId: item.id, previous: { dueDate: item.dueDate?.toISOString() ?? null, status: item.status } } : undefined;
-    const patch: Record<string, unknown> = {};
+    const patch: Parameters<typeof taskService.update>[2] = {};
     if (value.operation === 'rename') patch.title = (value.title ?? '').trim().slice(0, 180);
     if (value.operation === 'set_description') patch.description = (value.description ?? '').slice(0, item.parentTaskId ? 2000 : 4000);
     if (value.operation === 'reschedule') patch.dueDate = new Date(value.dueDate!);
