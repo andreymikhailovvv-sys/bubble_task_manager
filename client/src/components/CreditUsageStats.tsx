@@ -23,7 +23,7 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
     ['Сегодня', statistics.todayCreditsMilli],
     ['7 дней', statistics.weekCreditsMilli],
     ['30 дней', statistics.monthCreditsMilli],
-    ['В среднем / день', statistics.averageDailyCreditsMilli]
+    ['Среднее / день · 30 дн.', statistics.averageDailyCreditsMilli]
   ] as const;
 
   const renderBreakdown = (title: string, items: CreditUsageStatistics['byModel']) => (
@@ -53,8 +53,8 @@ export function CreditUsageStats({ statistics, loading = false, error = null, co
         ))}
       </div>
       <div className={compact ? 'space-y-2' : 'grid gap-3 md:grid-cols-2'}>
-        {renderBreakdown('По моделям', statistics.byModel)}
-        {renderBreakdown('По ИИ-инструментам', statistics.byFeature)}
+        {renderBreakdown('По моделям · 30 дней', statistics.byModel)}
+        {renderBreakdown('По ИИ-инструментам · 30 дней', statistics.byFeature)}
       </div>
       <p className="text-[10px] leading-relaxed text-muted">
         Учитываются подтверждённые списания, записанные после включения этой статистики.
