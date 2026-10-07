@@ -110,7 +110,7 @@ const shiftDateKey = (dateKey: string, deltaDays: number) => {
 const dateKeySet = (todayKey: string, days: number) =>
   new Set(Array.from({ length: days }, (_, index) => shiftDateKey(todayKey, -index)));
 
-const featureLabel = (feature: string) => FEATURE_LABELS[feature] ?? feature.replaceAll('_', ' ');
+const featureLabel = (feature: string) => FEATURE_LABELS[feature] ?? feature.replace(/_/g, ' ');
 
 const modelLabel = (model: string) => {
   const normalized = model.trim().toLowerCase();
