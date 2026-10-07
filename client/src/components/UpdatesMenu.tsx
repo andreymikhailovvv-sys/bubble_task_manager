@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, MessageCircle, Newspaper, SendHorizontal, Sparkles, X } from 'lucide-react';
+import { BookOpen, Coins, MessageCircle, Newspaper, SendHorizontal, Sparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-06-collaboration-comments-messages';
+export const LATEST_NEWS_ID = '2026-10-07-credit-usage-statistics';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -58,6 +58,21 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
+            <article className="updates-lesson rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-400">7 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Теперь можно посмотреть, куда уходят AI-кредиты</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><Coins size={17} /></span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
+                <p><strong className="text-primary">В окне «Кредиты» появился раздел «Статистика».</strong> Там видно расход за сегодня, последние 7 и 30 дней, а также средний расход в день.</p>
+                <p><strong className="text-primary">Расход разбит по моделям и ИИ-инструментам.</strong> Можно быстро понять, сколько кредитов ушло на GPT-6.1 Sol, Luna, чаты с ИИ, создание задач, оптимизацию таймлайна и другие функции.</p>
+                <p><strong className="text-primary">Учитываются именно подтверждённые списания.</strong> Резервы и возвращённые кредиты в статистику не попадают.</p>
+              </div>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300"><Coins size={13} /> Расход кредитов стал прозрачнее</div>
+            </article>
             <article className="updates-lesson rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
