@@ -1,5 +1,5 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
-import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
+import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { readOpenAiResponsesStream } from './openai-responses-stream.service.js';
 
@@ -90,6 +90,11 @@ export function getOpenAiPreflightErrorDiagnostics(body: unknown) {
 }
 
 export type DynamicResponsesCall = {
+  userId: string;
+  actionId: string;
+  providerCallIndex: number;
+  feature: DynamicTextFeature;
+  model: string;
   responseJson: { id?: unknown; usage?: OpenAiUsage; [key: string]: unknown };
   reservation: AiCreditReservation;
   actualCreditsMilli: number;
@@ -154,12 +159,26 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
     const actualCreditsMilli = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
     if (actualCreditsMilli === null) throw new Error(`Unknown OpenAI pricing for model "${model}"`);
     const webSearchCreditsMilliProvider = Number((extraProviderCostNanoUsd + 599n) / 600n);
-    return { responseJson, reservation, actualCreditsMilli, webSearchCallsActual, webSearchSearchItemsRaw: webSearchAnalysis.searchActionsRaw, webSearchDuplicateItems: webSearchAnalysis.duplicateSearchItems, webSearchCallsWithoutId: webSearchAnalysis.searchCallsWithoutId, webSearchActionTypes: webSearchAnalysis.actionTypes, webSearchCreditsMilliProvider, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliProvider };
+    return { userId: input.userId, actionId: input.actionId, providerCallIndex: input.providerCallIndex, feature: input.feature, model, responseJson, reservation, actualCreditsMilli, webSearchCallsActual, webSearchSearchItemsRaw: webSearchAnalysis.searchActionsRaw, webSearchDuplicateItems: webSearchAnalysis.duplicateSearchItems, webSearchCallsWithoutId: webSearchAnalysis.searchCallsWithoutId, webSearchActionTypes: webSearchAnalysis.actionTypes, webSearchCreditsMilliProvider, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliProvider };
   } catch (error) {
     await refundAiCreditReservation(reservation);
     throw error;
   }
 }
 
-export const settleDynamicResponsesCall = (call: DynamicResponsesCall) => settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
+export async function settleDynamicResponsesCall(call: DynamicResponsesCall) {
+  const settlement = await settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
+  if (settlement.chargedMilli > 0) {
+    await recordAiCreditCharge({
+      userId: call.userId,
+      actionId: call.actionId,
+      requestId: `${call.actionId}:charge:${call.providerCallIndex}`,
+      providerCallIndex: call.providerCallIndex,
+      feature: call.feature,
+      model: call.model,
+      creditsSpentMilli: settlement.chargedMilli
+    });
+  }
+  return settlement;
+}
 export const refundDynamicResponsesCall = (call: DynamicResponsesCall) => refundAiCreditReservation(call.reservation);
