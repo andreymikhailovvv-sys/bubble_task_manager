@@ -132,7 +132,7 @@ export function validatePlannerActionResolution(action: PlannerActionInput, reso
   if (!PLANNER_OPERATIONS.includes(action.operation)) return errorResult('INVALID_OPERATION', 'Неизвестная операция planner_action.');
   if (action.operation === 'create_subtask' && (!action.parentTaskId || !resolvedItemIds.has(action.parentTaskId))) return errorResult('ITEM_NOT_RESOLVED', 'Сначала найдите родительскую задачу через search_planner_items.');
   if (!['create_task', 'create_event', 'create_subtask'].includes(action.operation) && (!action.itemId || !resolvedItemIds.has(action.itemId))) return errorResult('ITEM_NOT_RESOLVED', 'Сначала найдите объект через search_planner_items.');
-  if (action.operation === 'change_sphere' && action.sphereId !== null && !resolvedSphereIds.has(action.sphereId)) return errorResult('SPHERE_NOT_RESOLVED', 'Сначала получите сектор через list_planner_spheres.');
+  if (action.operation === 'change_sphere' && action.sphereId !== null && !resolvedSphereIds.has(action.sphereId)) return errorResult('SPHERE_NOT_RESOLVED', 'Сначала получите сектор через list_sectors.');
   if (action.dueDate !== null && !validIsoDate(action.dueDate)) return errorResult('INVALID_DUE_DATE', 'dueDate должен быть корректной датой ISO-8601.');
   if (action.operation === 'reschedule' && action.dueDate === null) return errorResult('DUE_DATE_REQUIRED', 'Для переноса необходимо указать dueDate.');
   if (['create_task', 'create_event', 'create_subtask', 'rename'].includes(action.operation) && !action.title?.trim()) return errorResult('TITLE_REQUIRED', 'Название не может быть пустым.');
@@ -216,7 +216,7 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
       return { ok: true, operation: value.operation, itemId: item.id, report: `Добавлена подзадача «${item.title}» к задаче «${parent.title}».` };
     }
     if (value.operation === 'create_task' || value.operation === 'create_event') {
-      if (value.sphereId && !resolvedSphereIds.has(value.sphereId)) return errorResult('SPHERE_NOT_RESOLVED', 'Сначала получите сектор через list_planner_spheres.');
+      if (value.sphereId && !resolvedSphereIds.has(value.sphereId)) return errorResult('SPHERE_NOT_RESOLVED', 'Сначала получите сектор через list_sectors.');
       const importance = Math.max(1, Math.min(5, Math.round(value.importance ?? 3))); const urgency = Math.max(1, Math.min(5, Math.round(value.urgency ?? 3)));
       item = await db.task.create({ data: { userId, title: (value.title ?? '').trim().slice(0, 180), description: (value.description ?? '').slice(0, 4000), dueDate: value.dueDate ? new Date(value.dueDate) : null, taskType: value.operation === 'create_event' ? 'EVENT' : 'TASK', location: value.location?.slice(0, 500) ?? null, importance, urgency, priorityScore: Number((importance * .6 + urgency * .4).toFixed(2)), status: 'TODO', sphereId: value.sphereId, notifyBeforeMinutes: Math.round(value.notifyBeforeMinutes ?? 0) } });
       return { ok: true, operation: value.operation, itemId: item.id, report: `Создан${value.operation === 'create_event' ? 'о событие' : 'а задача'} «${item.title}».` };
