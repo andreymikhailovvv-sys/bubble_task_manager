@@ -47,7 +47,7 @@ export async function executeTaskContextLookup(input: {
   if (args.operation === 'search_subtasks') {
     const status = args.status ?? 'active';
     const candidates = await prisma.task.findMany({
-      where: { userId: input.userId, parentTaskId: input.taskId, ...(status === 'active' ? { status: { not: 'DONE' } } : status === 'done' ? { status: 'DONE' } : {}) },
+      where: { parentTaskId: input.taskId, ...(status === 'active' ? { status: { not: 'DONE' } } : status === 'done' ? { status: 'DONE' } : {}) },
       select: { id: true, title: true, description: true, status: true, dueDate: true, createdAt: true },
       orderBy: { createdAt: 'asc' }
     });
@@ -65,7 +65,7 @@ export async function executeTaskContextLookup(input: {
     const offset = Number.isInteger(args.offset) && Number(args.offset) >= 0 ? Number(args.offset) : 0;
     const requestedLimit = Number.isInteger(args.limit) && Number(args.limit) > 0 ? Number(args.limit) : 100;
     const limit = Math.min(requestedLimit, 100);
-    const where = { userId: input.userId, parentTaskId: input.taskId, ...(status === 'active' ? { status: { not: 'DONE' as const } } : status === 'done' ? { status: 'DONE' as const } : {}) };
+    const where = { parentTaskId: input.taskId, ...(status === 'active' ? { status: { not: 'DONE' as const } } : status === 'done' ? { status: 'DONE' as const } : {}) };
     const [total, subtasks] = await Promise.all([
       prisma.task.count({ where }),
       prisma.task.findMany({
@@ -95,7 +95,7 @@ export async function executeTaskContextLookup(input: {
   }
   if (args.operation === 'get_subtask') {
     if (!args.subtaskId) return { result: { ok: false, code: 'INVALID_ARGUMENTS' } };
-    const subtask = await prisma.task.findFirst({ where: { id: args.subtaskId, userId: input.userId, parentTaskId: input.taskId }, select: { id: true, title: true, description: true, status: true, dueDate: true } });
+    const subtask = await prisma.task.findFirst({ where: { id: args.subtaskId, parentTaskId: input.taskId }, select: { id: true, title: true, description: true, status: true, dueDate: true } });
     return { result: subtask ? { ok: true, subtask } : { ok: false, code: 'NOT_FOUND' } };
   }
   if (args.operation === 'list_attachments') {
