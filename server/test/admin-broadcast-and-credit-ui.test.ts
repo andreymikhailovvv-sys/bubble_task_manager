@@ -28,7 +28,7 @@ test('переключатель кредитов адаптирован под 
 test('Mini App закрывает окно кредитов при прокрутке основного экрана', async () => {
   const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
   assert.match(mini, /onScroll=\{\(event\) => \{[\s\S]*setIsCreditPurchaseOpen\(false\)/);
-  assert.match(mini, /miniapp-credit-popover[\s\S]*onTouchMove/);
+  assert.match(mini, /onTouchMove=\{\(event\) => event\.stopPropagation\(\)\}[\s\S]*miniapp-credit-popover/);
 });
 
 test('админская рассылка поддерживает аудитории, подписки и изображения', async () => {
