@@ -871,7 +871,7 @@ export function TaskEditor({
               <div className="mt-2 flex items-start justify-between gap-3">
                 <textarea
                   ref={titleInputRef}
-                  className="task-edit-title-input invisible-scrollbar min-h-[2.6rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent p-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
+                  className="task-edit-title-input invisible-scrollbar min-h-[2.8rem] min-w-0 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-0 pb-[0.2rem] pt-0 text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
                   placeholder={
                     isEventEditor
                       ? "Введите название события"
