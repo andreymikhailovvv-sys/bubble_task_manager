@@ -8,7 +8,7 @@ import { askAiChatWithTools } from './ai-chat-tools.service.js';
 import type { AiChatProgressStatus } from './ai-chat-progress.js';
 import { estimateAiChatTokens, formatAiChatMemory, prepareAiChatSmartContext } from './ai-chat-memory.service.js';
 import { isDynamicTextBillingEnabled, refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall, type DynamicTextFeature } from './dynamic-responses-billing.service.js';
-import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
+import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiTranscriptionUsage, recordOpenAiUsageShadow, type OpenAiTranscriptionUsage } from './ai-usage-metering.service.js';
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
@@ -280,16 +280,17 @@ async function clampUserEfficiencyScore(userId: string, score: number) {
 }
 
 type AiCreditReservation = WalletReservation & { cost: number };
+type AiCreditChargeTracking = { actionId: string; feature: string; model: string; requestId?: string; providerCallIndex?: number };
 
-async function chargeAiCredits(userId: string, model: string, options?: { deferCommit?: boolean }): Promise<AiCreditReservation> {
+async function chargeAiCredits(userId: string, model: string, options?: { deferCommit?: boolean; tracking?: AiCreditChargeTracking }): Promise<AiCreditReservation> {
   const cost = resolveModelCredits(model);
   const walletReservation = await reserveAiCreditsMilli(userId, creditsToMilli(cost));
   const reservation = { ...walletReservation, cost };
-  if (!options?.deferCommit) await commitAiCreditReservation(userId, reservation);
+  if (!options?.deferCommit) await commitAiCreditReservation(userId, reservation, options?.tracking);
   return reservation;
 }
 
-async function commitAiCreditReservation(userId: string, reservation: AiCreditReservation) {
+async function commitAiCreditReservation(userId: string, reservation: AiCreditReservation, tracking?: AiCreditChargeTracking) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   if (!user) throw new Error('User not found');
   const updated = await prisma.user.update({
@@ -298,6 +299,17 @@ async function commitAiCreditReservation(userId: string, reservation: AiCreditRe
     select: { efficiencyScore: true }
   });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (tracking) {
+    await recordAiCreditCharge({
+      userId,
+      actionId: tracking.actionId,
+      requestId: tracking.requestId ?? `${tracking.actionId}:charge`,
+      providerCallIndex: tracking.providerCallIndex,
+      feature: tracking.feature,
+      model: tracking.model,
+      creditsSpentMilli: reservation.totalMilli
+    });
+  }
 }
 
 async function refundAiCreditReservation(userId: string, reservation: AiCreditReservation, requestId?: string) {
@@ -305,11 +317,11 @@ async function refundAiCreditReservation(userId: string, reservation: AiCreditRe
   console.info('[AI] AI credits refunded', { requestId, userId, credits: reservation.cost });
 }
 
-async function withAiCreditReservation<T>(userId: string, model: string, operation: () => Promise<T>, options?: { requestId?: string }): Promise<T> {
+async function withAiCreditReservation<T>(userId: string, model: string, operation: () => Promise<T>, options?: { requestId?: string; tracking?: AiCreditChargeTracking }): Promise<T> {
   const reservation = await chargeAiCredits(userId, model, { deferCommit: true });
   try {
     const result = await operation();
-    await commitAiCreditReservation(userId, reservation);
+    await commitAiCreditReservation(userId, reservation, options?.tracking);
     return result;
   } catch (error) {
     await refundAiCreditReservation(userId, reservation, options?.requestId);
@@ -317,20 +329,42 @@ async function withAiCreditReservation<T>(userId: string, model: string, operati
   }
 }
 
-async function chargeFixedAiCredits(userId: string, cost: number) {
+async function chargeFixedAiCredits(userId: string, cost: number, tracking?: AiCreditChargeTracking) {
   const period = currentAiCreditsPeriod();
   await reserveAiCreditsMilli(userId, creditsToMilli(cost));
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(cost, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (tracking) {
+    await recordAiCreditCharge({
+      userId,
+      actionId: tracking.actionId,
+      requestId: tracking.requestId ?? `${tracking.actionId}:charge`,
+      providerCallIndex: tracking.providerCallIndex,
+      feature: tracking.feature,
+      model: tracking.model,
+      creditsSpentMilli: creditsToMilli(cost)
+    });
+  }
 }
 
-async function chargeSingleAiNotificationCredit(userId: string) {
+async function chargeSingleAiNotificationCredit(userId: string, tracking?: AiCreditChargeTracking) {
   const period = currentAiCreditsPeriod();
   await reserveAiCreditsMilli(userId, creditsToMilli(1));
   const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
   const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
   await clampUserEfficiencyScore(userId, updated.efficiencyScore);
+  if (tracking) {
+    await recordAiCreditCharge({
+      userId,
+      actionId: tracking.actionId,
+      requestId: tracking.requestId ?? `${tracking.actionId}:charge`,
+      providerCallIndex: tracking.providerCallIndex,
+      feature: tracking.feature,
+      model: tracking.model,
+      creditsSpentMilli: creditsToMilli(1)
+    });
+  }
 }
 
 async function runTextWorkflow<T extends object>(input: {
@@ -1121,7 +1155,7 @@ export const aiAssistantService = {
       return { ...result, diagnostics: { requestId: actionRequestId, context } };
     };
     if (isDynamicTextBillingEnabled(input.userId)) return operation();
-    const result = await withAiCreditReservation(input.userId, model, operation);
+    const result = await withAiCreditReservation(input.userId, model, operation, { requestId: actionRequestId, tracking: { actionId: actionRequestId, feature: 'ai_chat', model } });
     return {
       ...result,
       billing: {
@@ -1142,7 +1176,7 @@ export const aiAssistantService = {
       { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
       { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
     ] };
-    const result = await runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model), complete: (responseJson) => {
+    const result = await runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model, { tracking: { actionId: requestId, feature: 'recurrence', model } }), complete: (responseJson) => {
       const raw = extractOutputText(responseJson);
       if (!raw) throw new Error('Empty AI response');
       const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
@@ -1154,7 +1188,7 @@ export const aiAssistantService = {
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
-    if (!isDynamicTextBillingEnabled(input.userId)) await chargeFixedAiCredits(input.userId, 2);
+    if (!isDynamicTextBillingEnabled(input.userId)) await chargeFixedAiCredits(input.userId, 2, { actionId: randomUUID(), feature: 'daily_checkup', model: 'fixed-credit' });
     const userTimeZone = user?.timeZone || MOSCOW_TIMEZONE;
     const now = new Date();
     const localNow = new Date(now.toLocaleString('en-US', { timeZone: userTimeZone }));
@@ -1422,6 +1456,15 @@ export const aiAssistantService = {
     }
     if (metering.estimatedCreditsMilli > 0) {
       await reserveAiCreditsMilli(input.userId, metering.estimatedCreditsMilli);
+      await recordAiCreditCharge({
+        userId: input.userId,
+        actionId: requestId,
+        requestId: `${requestId}:charge`,
+        providerCallIndex: 1,
+        feature: 'audio_transcription',
+        model,
+        creditsSpentMilli: metering.estimatedCreditsMilli
+      });
     }
 
     console.info('[AI transcription billing] charged', {
@@ -1770,7 +1813,7 @@ export const aiAssistantService = {
 
     let providerCallIndex = 0;
     for (const model of modelCandidates) {
-      const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost> }> = [];
+      const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
       try {
         const providerInput: TaskChatProviderInput[] = [...messages];
@@ -1822,7 +1865,7 @@ export const aiAssistantService = {
           if (dynamicReservation) {
             const usageCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {});
             if (usageCost.estimatedCreditsMilli === null) { await refundWalletReservation(dynamicReservation); pendingDynamicReservation = null; throw new Error(`Unknown OpenAI pricing for model "${model}"`); }
-            dynamicCalls.push({ reservation: dynamicReservation, actualCreditsMilli: usageCost.estimatedCreditsMilli, usageCost });
+            dynamicCalls.push({ reservation: dynamicReservation, actualCreditsMilli: usageCost.estimatedCreditsMilli, usageCost, providerCallIndex });
             pendingDynamicReservation = null;
           }
           const output = Array.isArray(responseJson.output) ? responseJson.output : [];
@@ -2111,13 +2154,22 @@ ${parsed.answer}`
           actionReports
         });
 
-        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation);
+        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation, { actionId: requestId, feature: 'task_chat', model });
         let creditsSpentMilli = creditReservation?.totalMilli ?? 0;
         if (dynamicBilling && dynamicCalls.length > 0) {
           creditsSpentMilli = 0;
           for (const call of dynamicCalls) {
             const settlement = await settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
             creditsSpentMilli += settlement.chargedMilli;
+            await recordAiCreditCharge({
+              userId: input.userId,
+              actionId: requestId,
+              requestId: `${requestId}:charge:${call.providerCallIndex}`,
+              providerCallIndex: call.providerCallIndex,
+              feature: 'task_chat',
+              model,
+              creditsSpentMilli: settlement.chargedMilli
+            });
           }
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
@@ -2284,7 +2336,7 @@ ${parsed.answer}`
       model: GENERAL_CHAT_MODEL,
       apiKey,
       payload,
-      legacyCharge: () => chargeAiCredits(input.userId, GENERAL_CHAT_MODEL),
+      legacyCharge: () => chargeAiCredits(input.userId, GENERAL_CHAT_MODEL, { tracking: { actionId: requestId, feature: 'general_assistant', model: GENERAL_CHAT_MODEL } }),
       complete: async (responseJson) => {
     const rawAnswer = extractOutputText(responseJson);
     if (!rawAnswer) {
@@ -2714,7 +2766,7 @@ ${parsed.answer}`
 
     try {
       const dynamicBilling = isDynamicTextBillingEnabled(input.userId);
-      if (!dynamicBilling) await chargeSingleAiNotificationCredit(input.userId);
+      if (!dynamicBilling) await chargeSingleAiNotificationCredit(input.userId, { actionId: `${input.taskId}:${now.toISOString()}`, feature: 'overdue_nudge', model: 'fixed-credit' });
       const result = await aiAssistantService.askTaskAssistant({
         userId: input.userId,
         taskId: input.taskId,
@@ -2767,7 +2819,7 @@ ${parsed.answer}`
       `сфера=${t.sphere?.name ?? 'null'}`,
       `основнаяЗадача=${t.parentTask ? `${t.parentTask.title} (${t.parentTask.id})` : 'null'}`
     ].join(' | ')).join('\n');
-    await chargeAiCredits(input.userId, OTHER_AI_MODEL);
+    await chargeAiCredits(input.userId, OTHER_AI_MODEL, { tracking: { actionId: requestId, feature: 'optimize_timeline', model: OTHER_AI_MODEL } });
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: JSON.stringify({ model: OTHER_AI_MODEL, input: [{ role: 'system', content: 'Ты помощник по планированию. Верни только JSON.' }, { role: 'user', content: `Оптимизируй задачи в режиме ${input.scope}. Текущее время пользователя (${formatTimeZoneLabel(input.userTimeZone ?? MOSCOW_TIMEZONE)}): ${new Date().toISOString()}. Учитывай пожелание пользователя: ${input.userNote ?? 'нет'}. Не оптимизируй без необходимости. Просроченные задачи перенеси на ближайшие доступные окна. Если пользователь не указал пожелания ("нет"), то приоритетно раздвигай задачи, которые стоят на одном времени или слишком близко друг к другу, чтобы между задачами было больше свободного пространства. Верни JSON: {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO|null"}]}. Каждая задача/подзадача ниже указана отдельной строкой:\n${payloadLines}` }] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const responseJson = await response.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; [key: string]: unknown };
@@ -2811,7 +2863,7 @@ ${parsed.answer}`
     if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[], billing: { mode: 'legacy' as const, creditsSpentMilli: 0 } };
     const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
     const overdueIds = overdue.map((t) => t.id);
-    await chargeFixedAiCredits(input.userId, 2);
+    await chargeFixedAiCredits(input.userId, 2, { actionId: requestId, feature: 'overdue_postpone', model: OTHER_AI_MODEL });
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}, body: JSON.stringify({ model: OTHER_AI_MODEL, input:[{ role:'system', content:'Ты помощник планировщик. Верни только JSON.'},{ role:'user', content:`Перераспредели только просроченные задачи и подзадачи по ближайшим окнам: сначала сегодня, если окон нет — завтра. Учитывай паттерны недели пользователя (время задач по секторам). Верни JSON {"summary":"...","tasks":[{"taskId":"...","dueDate":"ISO"}]}. Переноси только taskId из списка overdueIds. now=${now.toISOString()} overdueIds=${JSON.stringify(overdueIds)} weekTasks:
 ${lines}`}] }) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
@@ -2879,7 +2931,7 @@ ${lines}`}] }) });
 
     const now = new Date();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
-    await chargeAiCredits(input.userId, modelForSubtasks);
+    await chargeAiCredits(input.userId, modelForSubtasks, { tracking: { actionId: requestId, feature: 'generate_subtasks', model: modelForSubtasks } });
     const response = await openAiFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
@@ -2994,7 +3046,7 @@ ${lines}`}] }) });
     const spheresPromptLine = userSpheres.length > 0
       ? userSpheres.map((sphere, index) => `${index + 1}. ${sphere.name}`).join('; ')
       : 'список пуст';
-    await chargeAiCredits(input.userId, modelForPrompt);
+    await chargeAiCredits(input.userId, modelForPrompt, { tracking: { actionId: requestId, feature: 'generate_task', model: modelForPrompt } });
     const response = await openAiFetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
