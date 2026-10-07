@@ -41,6 +41,7 @@ type Props = {
     draftSubtasks?: Array<Pick<Task, "title" | "description">>,
   ) => Promise<void>;
   onAutoSave?: (payload: Partial<Task>) => Promise<void>;
+  onSphereChange?: (sphereId: string | null) => void;
   onGenerateWithAi: (payload: {
     prompt: string;
     sphereId?: string | null;
@@ -288,6 +289,7 @@ export function TaskEditor({
   spheres,
   onSave,
   onAutoSave,
+  onSphereChange,
   onGenerateWithAi,
   onDelete,
   onCancel,
@@ -720,7 +722,11 @@ export function TaskEditor({
   const renderSphereDropdown = () => (
     <CustomSelect
       value={form.sphereId ?? ""}
-      onChange={(value) => setForm((prev) => ({ ...prev, sphereId: value || null }))}
+      onChange={(value) => {
+        const nextSphereId = value || null;
+        setForm((prev) => ({ ...prev, sphereId: nextSphereId }));
+        if (isEditing) onSphereChange?.(nextSphereId);
+      }}
       options={[
         { value: "", label: "Без сектора", color: "#7c3aed" },
         ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color })),
