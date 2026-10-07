@@ -4940,14 +4940,15 @@ ${allContext}`,
               </div> : null}
               {creditPurchase.message ? <div className="mt-3 rounded-xl border border-cyan-400/30 bg-cyan-950/30 p-3 text-sm text-secondary" role="status">{creditPurchase.message}{creditPurchase.message.includes('войдите') ? <button type="button" className="ml-2 underline" onClick={() => setAuthModalMode('login')}>Войти</button> : null}</div> : null}
             </section>
-              </>
-            )}
             <p className="px-4 pb-4 text-center text-xs leading-5 text-muted sm:px-5 sm:pb-4">
               Приобретая платные функции Сервиса, вы принимаете условия{' '}
               <a className="public-secondary-link underline" href="/legal/offer" target="_blank" rel="noreferrer">
                 Публичной оферты
               </a>.
             </p>
+              </>
+            )}
+
           </div>
         </div>
       ) : null}
