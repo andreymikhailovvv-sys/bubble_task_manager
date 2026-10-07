@@ -25,6 +25,7 @@ import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCr
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
+import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -397,6 +398,10 @@ apiRouter.get('/credit-packs', async (_req, res) => {
   res.json(await creditPacksResponse());
 });
 
+apiRouter.get('/credits/statistics', requireAuth, asyncHandler(async (req, res) => {
+  res.json({ statistics: await getCreditUsageStatistics(req.user!.id) });
+}));
+
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
   res.json({ ok: true });
@@ -544,6 +549,60 @@ apiRouter.post('/admin/credit-packs', async (req, res) => {
 
   res.json({ links });
 });
+
+apiRouter.post('/admin/users/:userId/credit-statistics', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const userId = String(req.params.userId ?? '').trim();
+  if (!userId) {
+    res.status(400).json({ error: 'Не указан пользователь' });
+    return;
+  }
+  try {
+    res.json({ statistics: await getCreditUsageStatistics(userId) });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'User not found') {
+      res.status(404).json({ error: 'Пользователь не найден' });
+      return;
+    }
+    throw error;
+  }
+});
+
+apiRouter.post('/admin/users/:userId/credit-usage-export', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  const userId = String(req.params.userId ?? '').trim();
+  const month = String(req.body?.month ?? '').trim();
+  if (!userId) {
+    res.status(400).json({ error: 'Не указан пользователь' });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, username: true, email: true }
+  });
+  if (!user) {
+    res.status(404).json({ error: 'Пользователь не найден' });
+    return;
+  }
+
+  try {
+    const usage = await getMonthlyCreditUsageExport(userId, month);
+    const userLabel = user.name || user.username || user.email || userId;
+    const xml = buildCreditUsageExcelXml({ userLabel, month, timeZone: usage.timeZone, rows: usage.rows });
+    const safeLabel = userLabel.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 48) || 'user';
+    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="credit-usage-${safeLabel}-${month}.xls"`);
+    res.send('\uFEFF' + xml);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
 
 apiRouter.post('/admin/users/:userId/credits', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
