@@ -1,10 +1,12 @@
 import { authService } from '../auth/auth.service.js';
 import crypto from 'node:crypto';
+import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
+import { FormData } from 'undici';
 import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
 import { formatCreditsSpent } from './ai-billing-notification.service.js';
 
@@ -353,12 +355,13 @@ const telegramRequest = async <T>(method: string, payload: Record<string, unknow
 };
 
 const sendMessage = async (chatId: string, text: string, replyMarkup?: Record<string, unknown>) => {
-  await telegramRequest('sendMessage', {
+  const result = await telegramRequest('sendMessage', {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
     reply_markup: replyMarkup ?? keyboardReplyMain
   });
+  return Boolean(result);
 };
 
 const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
@@ -1715,9 +1718,67 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
   }
 };
 
+type AdminBroadcastImage = {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+};
+
+const sendAdminBroadcastPhoto = async (chatId: string, image: AdminBroadcastImage, caption?: string) => {
+  if (!BOT_TOKEN) return false;
+  const bytes = Buffer.from(image.contentBase64, 'base64');
+  const form = new FormData();
+  form.append('chat_id', chatId);
+  form.append('photo', new Blob([bytes], { type: image.mimeType }), image.fileName || 'broadcast-image.jpg');
+  if (caption) {
+    form.append('caption', caption);
+    form.append('parse_mode', 'HTML');
+  }
+  const response = await telegramFetch(`${TELEGRAM_API}/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: form });
+  if (!response.ok) {
+    const text = await response.text();
+    console.error('[Telegram] broadcast photo error', { chatId, status: response.status, text: text.slice(0, 500) });
+    return false;
+  }
+  return true;
+};
+
+const sendAdminBroadcastText = async (chatId: string, rawText: string) => {
+  const normalized = rawText.trim();
+  if (!normalized) return true;
+  const safeLines = normalized.split('\n').flatMap((line) => {
+    if (line.length <= SAFE_MAX_MESSAGE_LENGTH) return [line];
+    const chunks: string[] = [];
+    for (let offset = 0; offset < line.length; offset += SAFE_MAX_MESSAGE_LENGTH) chunks.push(line.slice(offset, offset + SAFE_MAX_MESSAGE_LENGTH));
+    return chunks;
+  });
+  const chunks = splitTextByLimit(safeLines, SAFE_MAX_MESSAGE_LENGTH);
+  for (const chunk of chunks) {
+    const sent = await sendMessage(chatId, formatAiTextWithBold(chunk), keyboardReplyMain);
+    if (!sent) return false;
+  }
+  return true;
+};
+
+const sendAdminBroadcast = async (chatId: string, input: { text?: string; image?: AdminBroadcastImage | null }) => {
+  const rawText = input.text?.trim() ?? '';
+  if (!rawText && !input.image) return false;
+
+  if (input.image) {
+    const caption = rawText && rawText.length <= 900 ? formatAiTextWithBold(rawText) : undefined;
+    const photoSent = await sendAdminBroadcastPhoto(chatId, input.image, caption);
+    if (!photoSent) return false;
+    if (!caption && rawText) return sendAdminBroadcastText(chatId, rawText);
+    return true;
+  }
+
+  return sendAdminBroadcastText(chatId, rawText);
+};
+
 export const telegramService = {
   isEnabled,
   createTelegramLinkToken,
+  sendAdminBroadcast,
   async completeWebLogin(chatId: string, user: { id: string; name: string | null; username: string | null }, isNewAccount = false) {
     await prisma.$transaction(async (tx) => {
       await tx.user.updateMany({ where: { telegramChatId: chatId, id: { not: user.id } }, data: { telegramChatId: null, telegramLinkedAt: null } });
