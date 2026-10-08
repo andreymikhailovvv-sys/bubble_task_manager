@@ -142,6 +142,13 @@ export async function executePlannerBatchActions(options: {
   return { ok: failureCount === 0, requestedCount: actions.length, successCount, failureCount, partial: successCount > 0 && failureCount > 0, failures };
 }
 
+/** Add a link only after planner tools successfully create an item. */
+export function formatPlannerActionReport(result: { operation?: string; itemId?: string; report?: string }): string {
+  const report = result.report ?? '';
+  if (!['create_task', 'create_event', 'create_subtask'].includes(result.operation ?? '') || !result.itemId) return report;
+  return `${report} [[task_ref=${result.itemId}]]`;
+}
+
 export async function runAiChatToolLoop(options: ToolLoopOptions) {
   const input = [...options.initialInput];
   let providerCalls = 0;
@@ -307,7 +314,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         if (name === 'task_action') {
           const result = await plannerToolsService.action(input.userId, value as PlannerActionInput, resolvedItemIds, resolvedSphereIds, input.userTimeZone);
-          if (result.ok) { actionReports.push(result.report); if ('undoOperation' in result && result.undoOperation) undoOperations.push(result.undoOperation); }
+          if (result.ok) { actionReports.push(formatPlannerActionReport(result)); if ('undoOperation' in result && result.undoOperation) undoOperations.push(result.undoOperation); }
           console.info('[AI tools] action', { requestId, operation: (value as PlannerActionInput).operation, itemId: (value as PlannerActionInput).itemId, ok: result.ok });
           return result;
         }
@@ -315,7 +322,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           batchToolCalls += 1;
           const result = await executePlannerBatchActions({ value,
             execute: (action) => plannerToolsService.action(input.userId, action, resolvedItemIds, resolvedSphereIds, input.userTimeZone),
-            onSuccess: (success) => { actionReports.push(success.report); if (success.undoOperation) undoOperations.push(success.undoOperation); }
+            onSuccess: (success) => { actionReports.push(formatPlannerActionReport(success)); if (success.undoOperation) undoOperations.push(success.undoOperation); }
           });
           if (typeof result.requestedCount === 'number' && typeof result.successCount === 'number' && typeof result.failureCount === 'number') {
             batchActionsRequested += result.requestedCount; batchActionsSucceeded += result.successCount; batchActionsFailed += result.failureCount;
