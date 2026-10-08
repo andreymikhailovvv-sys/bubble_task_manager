@@ -2308,7 +2308,7 @@ export const aiAssistantService = {
             const subtask = await prisma.task.create({
               data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
             });
-            actionReports.push(`Добавил подзадачу "${subtask.title}".`);
+            actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
             appliedActionsCount += 1;
             console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
             continue;
