@@ -353,7 +353,14 @@ export const wordDocumentService = {
   },
 
   getForDownload: async (userId: string, id: string) => prisma.aiGeneratedDocument.findFirst({
-    where: { id, userId },
+    where: {
+      id,
+      OR: [
+        { userId },
+        { task: { userId } },
+        { task: { collaboration: { members: { some: { userId, isHidden: false } } } } }
+      ]
+    },
     select: { id: true, fileName: true, mimeType: true, size: true, contentBase64: true }
   })
 };
