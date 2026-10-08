@@ -26,7 +26,8 @@ import {
 import type { ChatAttachmentPayload, Sphere, Task, TaskAttachment } from "../lib/types";
 import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
 import { api } from "../lib/api";
-import { noteHtmlToPlainText } from "../lib/notes";
+import { LinkifiedText } from "./LinkifiedText";
+import { TaskDescriptionInput } from "./TaskDescriptionInput";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
 import { CalendarExportDialog } from "./CalendarExportDialog";
@@ -338,7 +339,6 @@ export function TaskEditor({
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const subtaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
-  const subtaskDescriptionInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
 
@@ -932,24 +932,17 @@ export function TaskEditor({
                   buttonClassName="focused-task-icon-button"
                 />
               </div>
-              <div
-                className="focused-task-description-surface mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3"
-                onClick={() => subtaskDescriptionInputRef.current?.focus()}
-              >
+              <div className="focused-task-description-surface mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3">
                 {isEditing && !isSubtask && !isEventEditor ? (
                   <p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">
-                    {noteHtmlToPlainText(descriptionValue, { trimEnd: true }) ||
-                      "Описание не заполнено."}
+                    <LinkifiedText text={descriptionValue} fallback="Описание не заполнено." stopPropagationOnLinkClick />
                   </p>
                 ) : (
-                  <textarea
-                    ref={subtaskDescriptionInputRef}
+                  <TaskDescriptionInput
                     className="subtask-description-inline invisible-scrollbar h-full min-h-0 w-full flex-1 resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
-                    value={noteHtmlToPlainText(descriptionValue, {
-                      trimEnd: false,
-                    })}
-                    onChange={(e) => updateDescription(e.target.value)}
+                    value={descriptionValue}
+                    onChange={updateDescription}
                   />
                 )}
               </div>

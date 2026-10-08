@@ -7226,17 +7226,12 @@ body[data-theme='dark'] .task-ai-recipient-item-active {
 }
 
 .chat-message-user.collaboration-chat-message-authored {
-  border: 1px solid color-mix(in srgb, var(--message-author-color) 42%, transparent);
-  border-left: 3px solid var(--message-author-color);
   background: color-mix(in srgb, var(--message-author-color) 34%, #111827);
   color: #f8fafc;
 }
 body[data-theme='light'] .chat-message-user.collaboration-chat-message-authored {
-  border-color: color-mix(in srgb, var(--message-author-color) 28%, #cbd5e1) !important;
-  border-left-color: var(--message-author-color) !important;
   background: color-mix(in srgb, var(--message-author-color) 13%, #ffffff) !important;
   color: #0f172a !important;
-  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.08);
 }
 body[data-theme='light'] .chat-message-user.collaboration-chat-message-authored .chat-message-label {
   color: color-mix(in srgb, var(--message-author-color) 72%, #0f172a) !important;
@@ -7755,4 +7750,50 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
 body[data-theme='dark'] .ai-generated-document-icon,
 .miniapp-shell:not(.miniapp-light) .ai-generated-document-icon {
   color: #67e8f9;
+}
+
+/* Formatted notes are previewed until inline editing is requested. */
+.task-description-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.task-description-preview:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.task-description-placeholder {
+  color: var(--field-placeholder);
+}
+.task-description-preview .note-checkbox-item:has(> input:checked) > span,
+.task-description-preview .note-checkbox-item-checked > span {
+  text-decoration: line-through;
+  color: var(--text-subtle);
+}
+.task-description-preview .note-checkbox-item > input {
+  pointer-events: none;
+}
+
+/* Mini App focus dialogs: retain dark buttons, icons and selects in dark theme. */
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-icon-button,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-subtask-icon-button,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-subtask-visibility-button {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(30, 41, 59, 0.92);
+  color: #ddd6fe;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-icon-button:hover,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-subtask-icon-button:hover,
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-subtask-visibility-button:hover {
+  border-color: rgba(167, 139, 250, 0.78);
+  background: rgba(76, 29, 149, 0.35);
+  color: #f5f3ff;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .miniapp-focus-subtask-visibility-button-active {
+  color: #67e8f9;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-focus-panel .focused-task-pill-select {
+  border-color: rgba(139, 92, 246, 0.5) !important;
+  background: rgba(30, 41, 59, 0.92) !important;
+  color: #ddd6fe !important;
 }
