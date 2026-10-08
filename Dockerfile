@@ -8,10 +8,20 @@ RUN apt-get update -y \
 
 COPY . .
 
-RUN npm ci \
-  && npm run build \
-  && npm prune --omit=dev \
-  && npm cache clean --force
+RUN set -eu; \
+  if npm ci --no-audit --no-fund > /tmp/npm-ci.log 2>&1; then \
+    cat /tmp/npm-ci.log; \
+  else \
+    npm_status=$?; \
+    cat /tmp/npm-ci.log; \
+    if grep -Fq "Exit handler never called!" /tmp/npm-ci.log; then \
+      echo "npm hit the known exit-handler bug; validating the installed tree via the full application build"; \
+    else \
+      exit "$npm_status"; \
+    fi; \
+  fi; \
+  npm run build; \
+  rm -f /tmp/npm-ci.log
 
 ENV NODE_ENV=production \
   PORT=4000
