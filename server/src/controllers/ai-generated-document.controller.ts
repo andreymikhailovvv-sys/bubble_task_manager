@@ -15,6 +15,7 @@ const sendDocument = (res: Response, document: { fileName: string; mimeType: str
   res.setHeader('Content-Type', document.mimeType);
   res.setHeader('Content-Length', String(buffer.length));
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeContentDispositionFileName(document.fileName)}`);
+  res.setHeader('Access-Control-Allow-Origin', 'https://web.telegram.org');
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(buffer);
