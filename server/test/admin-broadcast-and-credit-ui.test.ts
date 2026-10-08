@@ -14,7 +14,12 @@ test('новость о Word-файлах опубликована поверх 
   assert.match(updates, /Сделай это Word-файлом/);
   assert.match(updates, /дополнительный расход AI-кредитов минимален/);
   assert.match(updates, /hasUnreadNews/);
+  assert.match(updates, /Новости и изменения\{hasUnreadNews \? <span/);
+
+  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  assert.match(web, /hasUnreadNews=\{hasUnreadNews\}/);
 });
+
 
 test('переключатель кредитов адаптирован под светлую тему сайта и Mini App', async () => {
   const [web, mini, styles] = await Promise.all([
