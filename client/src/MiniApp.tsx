@@ -3301,7 +3301,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {openedTask && openedTaskDraft ? (
         <div
-          className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} fixed inset-0 ${isAiChatOpen ? 'z-[180]' : 'z-[90]'} flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
+          className={`miniapp-slide-backdrop ${isWebRuntime ? 'miniapp-web-task-backdrop' : ''} fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[90]'} flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('task')}`}
           style={isWebRuntime ? { top: webVisualViewport.top, bottom: 'auto', height: webVisualViewport.height } : undefined}
         >
           <div className="miniapp-slide-panel miniapp-focus-panel miniapp-focus-task-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-2xl sm:rounded-[2rem]">
@@ -3629,7 +3629,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         variant="miniapp"
       /> : null}
       {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[180]' : 'z-[100]'} flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
+        <div className={`miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[100]'} flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
           <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -3780,7 +3780,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       })() : null}
 
       {openedTask && isAiDialogOpen ? (
-        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 z-[110] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
+        <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-task miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[130]' : 'z-[110]'} bg-slate-950/75 p-0 ${getMiniWindowMotionClass('task-ai')}`}>
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
