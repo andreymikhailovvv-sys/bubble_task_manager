@@ -772,7 +772,7 @@ function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | n
     .slice(0, 6000);
 }
 
-const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\\s,.!?;:])(?:сейчас\\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\\s,.!?;:]|$)/iu;
+const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
 
 export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number): string {
   const normalized = answer.trim();
