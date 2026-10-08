@@ -3040,6 +3040,11 @@ ${allContext}`,
     saveTaskAiRecipientSelection(userId, aiRecipientByTaskId);
   }, [aiRecipientByTaskId, aiRecipientStorageUserId, currentUser?.id]);
 
+  useEffect(() => {
+    setIsAiRecipientPickerVisible(false);
+    setIsAiRecipientMenuOpen(false);
+  }, [focusedTask?.id, isAiExpanded]);
+
 
   useEffect(() => {
     setCompletedVisibleCount(40);
