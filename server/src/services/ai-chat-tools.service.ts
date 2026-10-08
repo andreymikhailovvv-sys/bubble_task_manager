@@ -268,7 +268,16 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       executeTool: async (name, value, round) => {
         toolOperations.push(name);
         
-        const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes', task_actions: 'applying_changes', create_word_document: 'forming_answer' } as const)[name as 'search_tasks'];
+        const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
+          search_tasks: 'searching_tasks',
+          list_tasks: 'listing_tasks',
+          get_task: 'reading_task',
+          list_sectors: 'checking_sectors',
+          task_action: 'applying_changes',
+          task_actions: 'applying_changes',
+          create_word_document: 'forming_answer'
+        };
+        const progress = progressByTool[name];
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
