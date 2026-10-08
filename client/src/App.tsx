@@ -13,6 +13,7 @@ import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/lay
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
+import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -6697,11 +6698,11 @@ ${allContext}`,
                     />
                   </div>
                   <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
-                    <textarea
+                    <TaskDescriptionInput
                       className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
-                      value={noteHtmlToPlainText(focusedDraft.description ?? '', { trimEnd: false })}
-                      onChange={(event) => setFocusedDraft((p) => ({ ...(p ?? {}), description: event.target.value }))}
+                      value={focusedDraft.description ?? ''}
+                      onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                     />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center justify-start gap-2">

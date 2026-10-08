@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
+import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -3449,9 +3450,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <span>{openedTaskDraft.dueDate ? `До дедлайна: ${formatRemaining(openedTaskDraft.dueDate)}` : 'Дедлайн не задан'}</span>
                 </div>
                 <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
-                  <textarea
-                    value={noteHtmlToPlainText(openedTaskDraft.description, { trimEnd: false })}
-                    onChange={(event) => onChangeDraft(openedTask.id, { description: event.target.value })}
+                  <TaskDescriptionInput
+                    value={openedTaskDraft.description}
+                    onChange={(description) => onChangeDraft(openedTask.id, { description })}
                     className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                   />
@@ -3656,9 +3657,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <span>{openedSubtaskDraft.dueDate ? formatSubtaskRelativeDeadline(fromInputDateTime(openedSubtaskDraft.dueDate)) : 'Срок не задан'}</span>
             </div>
             <div className="miniapp-focus-description-surface mt-3 rounded-2xl px-3 pb-1 pt-2">
-              <textarea
-                value={noteHtmlToPlainText(openedSubtaskDraft.description, { trimEnd: false })}
-                onChange={(event) => changeSubtaskDraft({ description: event.target.value })}
+              <TaskDescriptionInput
+                value={openedSubtaskDraft.description}
+                onChange={(description) => changeSubtaskDraft({ description })}
                 className="miniapp-focus-description-input invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />

@@ -64,8 +64,15 @@ const createFormattedNoteNode = (node: ChildNode, onClick: (event: MouseEvent<HT
     case 'H2':
       return <span key={key} className="note-formatted-h2">{children}</span>;
     case 'P':
-    case 'DIV':
-      return <span key={key} className={element.getAttribute('class') || 'note-formatted-block'}>{children}</span>;
+    case 'DIV': {
+      const className = element.getAttribute('class') || 'note-formatted-block';
+      const isCompletedChecklistItem = className.split(/\s+/).includes('note-checkbox-item')
+        && element.querySelector('input[type="checkbox"][checked]') !== null;
+      const completedClass = isCompletedChecklistItem && !className.split(/\s+/).includes('note-checkbox-item-checked')
+        ? ' note-checkbox-item-checked'
+        : '';
+      return <span key={key} className={className + completedClass}>{children}</span>;
+    }
     case 'UL':
       return <ul key={key} className={element.getAttribute('class') || 'note-list note-list-unordered'}>{children}</ul>;
     case 'OL':
