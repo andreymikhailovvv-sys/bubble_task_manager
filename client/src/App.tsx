@@ -28,6 +28,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { WebCitations } from './components/WebCitations';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
+import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 
 const MAX_SPHERES = 8;
 
@@ -949,6 +950,8 @@ export default function App() {
   const [isAiExpanded, setIsAiExpanded] = useState(false);
   const [aiModelByTask, setAiModelByTask] = useState<Record<string, AiChatModel>>({});
   const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
+  const [aiRecipientStorageUserId, setAiRecipientStorageUserId] = useState<string | null>(null);
+  const [isAiRecipientPickerVisible, setIsAiRecipientPickerVisible] = useState(false);
   const [isAiRecipientMenuOpen, setIsAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, TaskAiMessage[]>>({});
   const [aiReadCursorByTask, setAiReadCursorByTask] = useState<Record<string, number>>({});
@@ -2094,7 +2097,7 @@ export default function App() {
   }) => {
     if (!focusedTask) return;
     const question = options?.questionOverride?.trim() ?? aiDraft.trim();
-    const selectedRecipientUserId = aiRecipientByTaskId[focusedTask.id] ?? 'ai';
+    const selectedRecipientUserId = getTaskAiRecipientId(focusedTask);
     if (selectedRecipientUserId !== 'ai') {
       if (!question) return;
       if (aiPendingFiles.length > 0) {
@@ -2197,7 +2200,7 @@ export default function App() {
 
   const addFocusedAiFiles = (selectedFiles: File[]) => {
     if (selectedFiles.length === 0) return;
-    if (focusedTask && (aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai') {
+    if (focusedTask && getTaskAiRecipientId(focusedTask) !== 'ai') {
       setAiError('Вложения можно отправлять только ИИ. Сначала выберите получателем ИИ.');
       return;
     }
@@ -3012,6 +3015,36 @@ ${allContext}`,
   const efficiencyFocusRating = currentUser?.efficiencyFocusScore ?? 0;
   const formatRatingDelta = (value: number) => value.toFixed(1).replace(/\.0$/, '');
 
+  const getTaskAiRecipientId = (task: Task) => {
+    const selectedRecipientId = aiRecipientByTaskId[task.id] ?? 'ai';
+    if (selectedRecipientId === 'ai') return 'ai';
+    return task.collaborationMembers?.some((member) => member.userId === selectedRecipientId && member.userId !== currentUser?.id)
+      ? selectedRecipientId
+      : 'ai';
+  };
+
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!userId) {
+      setAiRecipientByTaskId({});
+      setAiRecipientStorageUserId(null);
+      return;
+    }
+    setAiRecipientByTaskId(loadTaskAiRecipientSelection(userId));
+    setAiRecipientStorageUserId(userId);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!userId || aiRecipientStorageUserId !== userId) return;
+    saveTaskAiRecipientSelection(userId, aiRecipientByTaskId);
+  }, [aiRecipientByTaskId, aiRecipientStorageUserId, currentUser?.id]);
+
+  useEffect(() => {
+    setIsAiRecipientPickerVisible(false);
+    setIsAiRecipientMenuOpen(false);
+  }, [focusedTask?.id, isAiExpanded]);
+
 
   useEffect(() => {
     setCompletedVisibleCount(40);
@@ -3392,7 +3425,7 @@ ${allContext}`,
 
   const renderTaskAiRecipientPicker = (task: Task) => {
     if (!task.isCollaborative || !task.collaborationMembers?.length) return null;
-    const selectedUserId = aiRecipientByTaskId[task.id] ?? 'ai';
+    const selectedUserId = getTaskAiRecipientId(task);
     const selectedMember = task.collaborationMembers.find((member) => member.userId === selectedUserId);
     return (
       <div className="relative mb-1 flex justify-end">
@@ -5982,10 +6015,10 @@ ${allContext}`,
                     >
                       <input type="checkbox" className="shrink-0" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <p className={`truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 line-clamp-2 overflow-hidden text-xs leading-4 text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                        <p className="mt-1 truncate text-[11px] text-subtle">
+                      <div className="upcoming-subtask-copy min-h-0 min-w-0 flex-1 overflow-hidden">
+                        <p className={`upcoming-subtask-title truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                        <div className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></div>
+                        <p className="upcoming-subtask-deadline mt-1 truncate text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
                       </div>
@@ -6370,7 +6403,7 @@ ${allContext}`,
         <aside
           data-tour="ai-task-help"
           className="ai-chat-lightweight app-side-panel focused-task-ai-panel focused-task-modal-panel-height relative order-2 hidden min-h-0 w-[450px] shrink-0 flex-col overflow-hidden rounded-[2rem] border p-4 lg:flex"
-          onDragOver={(event) => { event.preventDefault(); if ((aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai') setIsFocusedAiDragActive(true); }}
+          onDragOver={(event) => { event.preventDefault(); if (getTaskAiRecipientId(focusedTask) === 'ai') setIsFocusedAiDragActive(true); }}
           onDragLeave={(event) => { if (event.currentTarget === event.target || !event.currentTarget.contains(event.relatedTarget as Node | null)) setIsFocusedAiDragActive(false); }}
           onDrop={(event) => { event.preventDefault(); setIsFocusedAiDragActive(false); addFocusedAiFiles(Array.from(event.dataTransfer.files ?? [])); }}
         >
@@ -6446,7 +6479,17 @@ ${allContext}`,
                 </div>
               ) : null}
               {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
-              {renderTaskAiRecipientPicker(focusedTask)}
+              <div
+                className="task-ai-recipient-interaction"
+                onFocusCapture={() => setIsAiRecipientPickerVisible(true)}
+                onBlurCapture={(event) => {
+                  const nextTarget = event.relatedTarget;
+                  if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+                  setIsAiRecipientPickerVisible(false);
+                  setIsAiRecipientMenuOpen(false);
+                }}
+              >
+              {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
               <div className="ai-chat-composer mt-2 flex shrink-0 items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea
                 className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0"
@@ -6473,13 +6516,14 @@ ${allContext}`,
                   className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition disabled:opacity-40"
                   type="button"
                   onClick={() => focusedAiFileInputRef.current?.click()}
-                  disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'}
-                  title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
+                  disabled={getTaskAiRecipientId(focusedTask) !== 'ai'}
+                  title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
                 >
                   <Paperclip size={16} />
                 </button>
                 <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg transition hover:bg-violet-500 disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={17} /> : <SendHorizontal size={17} />}</button>
               </div></div>
+              </div>
               </div>
             </aside>
 
@@ -7172,7 +7216,7 @@ ${allContext}`,
           <div
             className="ai-chat-lightweight ai-chat-lightweight-panel app-card focused-task-ai-expanded-panel relative flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border p-5"
             onClick={(event) => event.stopPropagation()}
-            onDragOver={(event) => { event.preventDefault(); if ((aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai') setIsFocusedAiDragActive(true); }}
+            onDragOver={(event) => { event.preventDefault(); if (getTaskAiRecipientId(focusedTask) === 'ai') setIsFocusedAiDragActive(true); }}
             onDragLeave={(event) => { if (event.currentTarget === event.target || !event.currentTarget.contains(event.relatedTarget as Node | null)) setIsFocusedAiDragActive(false); }}
             onDrop={(event) => { event.preventDefault(); setIsFocusedAiDragActive(false); addFocusedAiFiles(Array.from(event.dataTransfer.files ?? [])); }}
           >
@@ -7236,12 +7280,23 @@ ${allContext}`,
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
-            {renderTaskAiRecipientPicker(focusedTask)}
+            <div
+              className="task-ai-recipient-interaction"
+              onFocusCapture={() => setIsAiRecipientPickerVisible(true)}
+              onBlurCapture={(event) => {
+                const nextTarget = event.relatedTarget;
+                if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+                setIsAiRecipientPickerVisible(false);
+                setIsAiRecipientMenuOpen(false);
+              }}
+            >
+            {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
               <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
-              <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={(aiRecipientByTaskId[focusedTask.id] ?? 'ai') !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
+              <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
+            </div>
             </div>
             {aiError ? <p className="mt-2 text-xs text-rose-300">{aiError}</p> : null}
             </div>

@@ -7666,3 +7666,57 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
   height: 7rem;
   min-height: 7rem;
 }
+
+
+/* Collaborative task chat recipient: keep the picker unobtrusive until the composer is active. */
+.task-ai-recipient-interaction,
+.miniapp-task-ai-recipient-interaction {
+  min-width: 0;
+}
+
+.task-ai-recipient-trigger,
+.miniapp-task-ai-recipient-trigger {
+  animation: task-ai-recipient-reveal 140ms ease-out;
+}
+
+@keyframes task-ai-recipient-reveal {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Fixed upcoming-subtask cards also need a fixed inner text box. */
+.upcoming-subtask-copy {
+  display: flex;
+  height: 5.5rem;
+  max-height: 5.5rem;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.upcoming-subtask-title,
+.upcoming-subtask-deadline {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.upcoming-subtask-description {
+  display: -webkit-box;
+  min-height: 0;
+  max-height: 2rem;
+  overflow: hidden;
+  line-height: 1rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.upcoming-subtask-description > *,
+.upcoming-subtask-description a {
+  display: inline;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

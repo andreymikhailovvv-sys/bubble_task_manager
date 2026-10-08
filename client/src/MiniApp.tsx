@@ -17,6 +17,7 @@ import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
+import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -694,6 +695,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiDraft, setAiDraft] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
+  const [aiRecipientStorageUserId, setAiRecipientStorageUserId] = useState<string | null>(null);
+  const [isTaskAiRecipientPickerVisible, setIsTaskAiRecipientPickerVisible] = useState(false);
   const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
@@ -786,6 +789,36 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
     return { taskId, openAi, commentTaskId, chatRecipientUserId };
   }, []);
+
+  const getTaskAiRecipientId = (task: Task) => {
+    const selectedRecipientId = aiRecipientByTaskId[task.id] ?? 'ai';
+    if (selectedRecipientId === 'ai') return 'ai';
+    return task.collaborationMembers?.some((member) => member.userId === selectedRecipientId && member.userId !== currentUser?.id)
+      ? selectedRecipientId
+      : 'ai';
+  };
+
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!userId) {
+      setAiRecipientByTaskId({});
+      setAiRecipientStorageUserId(null);
+      return;
+    }
+    setAiRecipientByTaskId(loadTaskAiRecipientSelection(userId));
+    setAiRecipientStorageUserId(userId);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const userId = currentUser?.id;
+    if (!userId || aiRecipientStorageUserId !== userId) return;
+    saveTaskAiRecipientSelection(userId, aiRecipientByTaskId);
+  }, [aiRecipientByTaskId, aiRecipientStorageUserId, currentUser?.id]);
+
+  useEffect(() => {
+    setIsTaskAiRecipientPickerVisible(false);
+    setIsTaskAiRecipientMenuOpen(false);
+  }, [isAiDialogOpen, openedTaskId]);
 
   const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
     if (options.showInitialLoader ?? false) {
@@ -2497,7 +2530,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const sendAiMessage = async () => {
     if (!openedTask) return;
     const question = aiDraft.trim();
-    const selectedRecipientUserId = aiRecipientByTaskId[openedTask.id] ?? 'ai';
+    const selectedRecipientUserId = getTaskAiRecipientId(openedTask);
     if (selectedRecipientUserId !== 'ai') {
       if (!question) return;
       if (aiPendingFiles.length > 0) {
@@ -2742,16 +2775,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Settings size={16} className="text-amber-400" />
               </button>
               {isEfficiencyDetailsOpen ? (
-                <div data-miniapp-popover="efficiency" className="miniapp-efficiency-popover absolute right-0 top-full z-50 mt-2 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border p-4 text-xs shadow-2xl backdrop-blur">
+                <div data-miniapp-popover="efficiency" className="efficiency-details-popover-modern absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-[1.6rem] border p-4 text-xs shadow-2xl backdrop-blur">
                   <div className="text-center">
-                    <div className="miniapp-efficiency-score tabular-nums">{formattedEfficiencyScore}/100</div>
-                    <p className="mt-1 text-sm font-semibold">{efficiencyGradeMessage}</p>
+                    <div className="efficiency-score-hero tabular-nums">{formattedEfficiencyScore}/100</div>
+                    <p className="mt-1 text-sm font-semibold text-primary">{efficiencyGradeMessage}</p>
                   </div>
                   <div className="mt-4 space-y-2">
-                    <div className="miniapp-efficiency-row"><span>Задачи</span><b>+{formatRatingDelta(currentUser?.efficiencyTaskScore ?? 0)} рейтинга</b></div>
-                    <div className="miniapp-efficiency-row"><span>Привычки</span><b>+{formatRatingDelta(currentUser?.efficiencyHabitScore ?? 0)} рейтинга</b></div>
-                    <div className="miniapp-efficiency-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
-                    <div className="miniapp-efficiency-row miniapp-efficiency-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(currentUser?.efficiencyFocusScore ?? 0)} рейтинга</b></div>
+                    <div className="efficiency-detail-row"><span>Задачи</span><b>+{formatRatingDelta(currentUser?.efficiencyTaskScore ?? 0)} рейтинга</b></div>
+                    <div className="efficiency-detail-row"><span>Привычки</span><b>+{formatRatingDelta(currentUser?.efficiencyHabitScore ?? 0)} рейтинга</b></div>
+                    <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
+                    <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(currentUser?.efficiencyFocusScore ?? 0)} рейтинга</b></div>
                   </div>
                 </div>
               ) : null}
@@ -3753,18 +3786,28 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 className="hidden"
                 onChange={handleAiFileSelect}
               />
-              {openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
-                <div className="relative mb-2 flex justify-end">
+              <div
+                className="miniapp-task-ai-recipient-interaction"
+                onFocusCapture={() => setIsTaskAiRecipientPickerVisible(true)}
+                onBlurCapture={(event) => {
+                  const nextTarget = event.relatedTarget;
+                  if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+                  setIsTaskAiRecipientPickerVisible(false);
+                  setIsTaskAiRecipientMenuOpen(false);
+                }}
+              >
+              {isTaskAiRecipientPickerVisible && openedTask.isCollaborative && openedTask.collaborationMembers?.length ? (
+                <div className="relative mb-2 flex justify-end miniapp-task-ai-recipient-reveal">
                   <button type="button" className="miniapp-task-ai-recipient-trigger inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-semibold" onClick={() => setIsTaskAiRecipientMenuOpen((open) => !open)}>
                     <span className="miniapp-task-ai-recipient-label">Получатель:</span>
-                    <span>{openedTask.collaborationMembers.find((member) => member.userId === (aiRecipientByTaskId[openedTask.id] ?? 'ai'))?.name ?? 'ИИ'}</span>
+                    <span>{openedTask.collaborationMembers.find((member) => member.userId === getTaskAiRecipientId(openedTask))?.name ?? 'ИИ'}</span>
                     <ChevronDown size={12} />
                   </button>
                   {isTaskAiRecipientMenuOpen ? (
                     <div className="miniapp-task-ai-recipient-menu absolute bottom-full right-0 z-40 mb-1 min-w-48 rounded-xl border p-1.5 shadow-2xl">
-                      <button type="button" className={`miniapp-task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${(aiRecipientByTaskId[openedTask.id] ?? 'ai') === 'ai' ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
+                      <button type="button" className={`miniapp-task-ai-recipient-item block w-full rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === 'ai' ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: 'ai' })); setIsTaskAiRecipientMenuOpen(false); }}>ИИ</button>
                       {openedTask.collaborationMembers.filter((member) => member.userId !== currentUser?.id).map((member) => (
-                        <button key={member.userId} type="button" className={`miniapp-task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${(aiRecipientByTaskId[openedTask.id] ?? 'ai') === member.userId ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
+                        <button key={member.userId} type="button" className={`miniapp-task-ai-recipient-item flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs ${getTaskAiRecipientId(openedTask) === member.userId ? 'miniapp-task-ai-recipient-item-active' : ''}`} onClick={() => { setAiRecipientByTaskId((prev) => ({ ...prev, [openedTask.id]: member.userId })); setIsTaskAiRecipientMenuOpen(false); }}>
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: member.color }} />
                           <span className="truncate">{member.name}</span>
                         </button>
@@ -3798,7 +3841,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     }
                   }}
                 />
-                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" disabled={(aiRecipientByTaskId[openedTask.id] ?? 'ai') !== 'ai'} onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title={(aiRecipientByTaskId[openedTask.id] ?? 'ai') === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}>
+                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" disabled={getTaskAiRecipientId(openedTask) !== 'ai'} onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title={getTaskAiRecipientId(openedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}>
                   <Paperclip size={17} />
                 </button>
                 <button
@@ -3811,6 +3854,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 >
                   <SendHorizontal size={17} />
                 </button>
+              </div>
               </div>
             </div>
           </div>
