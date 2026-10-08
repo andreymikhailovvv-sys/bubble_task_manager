@@ -2147,9 +2147,12 @@ export default function App() {
         model: options?.modelOverride ?? focusedAiModel,
         attachments: attachmentsPayload
       }, (status) => setAiProgressByTask((current) => ({ ...current, [taskId]: status })));
+      const actionSummary = (result.actionReports?.length ?? 0) > 0
+        ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
+        : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli }]
       }));
       try {
         await load();

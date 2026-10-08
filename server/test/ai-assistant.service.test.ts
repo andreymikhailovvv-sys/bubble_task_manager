@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   MAX_ASSISTANT_ACTIONS,
+  normalizeTaskAssistantActionAnswer,
   parseGeneralAssistantPayload,
   toOpenAiGeneralHistory
 } from '../src/services/ai-assistant.service.js';
@@ -14,6 +15,39 @@ const makeCreateSubtaskActions = (count: number) => Array.from({ length: count }
   description: `Описание ${index + 1}`,
   dueDate: null
 }));
+
+test('task assistant не обещает изменение без action', () => {
+  const failure = 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
+
+  assert.equal(normalizeTaskAssistantActionAnswer('Сейчас обновляю описание подзадачи.', 0), failure);
+  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0), failure);
+  assert.equal(
+    normalizeTaskAssistantActionAnswer('Могу обновить описание после подтверждения.', 0),
+    'Могу обновить описание после подтверждения.'
+  );
+  assert.equal(normalizeTaskAssistantActionAnswer('Обновляю описание.', 1), 'Обновляю описание.');
+});
+
+test('task chat считает прямую команду пользователя подтверждением action', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const method = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('generateOverdueTaskNudge:'));
+
+  assert.match(method, /Прямой приказ пользователя изменить данные задачи уже является явным подтверждением/);
+  assert.match(method, /«да», «делай», «обновляй», «выполняй», «подтверждаю»/);
+  assert.match(method, /Не пиши «сделаю», «обновляю», «выполняю», «добавлю» или «сделал», если в этом же ответе actions пустой/);
+  assert.doesNotMatch(method, /без явного подтверждения пользователя не выполняй никакие actions/);
+});
+
+test('клиенты показывают подтвержденные actions и Mini App обновляет измененные данные', async () => {
+  const miniApp = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const api = await readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8');
+
+  assert.match(api, /TaskAssistantResult = \{ answer: string; model: string; taskDataChanged: boolean;/);
+  assert.match(miniApp, /result\.actionReports/);
+  assert.match(miniApp, /if \(result\.taskDataChanged\) await loadData\(\);/);
+  assert.match(app, /result\.actionReports/);
+});
 
 test('сохраняет все действия при создании списка из 30 подзадач', () => {
   const payload = JSON.stringify({
