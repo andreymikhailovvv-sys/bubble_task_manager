@@ -65,6 +65,13 @@ export type Insight = {
   text: string;
 };
 
+export type GeneratedDocument = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+};
+
 export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -77,6 +84,7 @@ export type ChatMessage = {
   messageKind?: 'AI' | 'HUMAN';
   recipientUserId?: string;
   recipientName?: string;
+  generatedDocument?: GeneratedDocument;
 };
 
 export type WebSource = { title: string; url: string };
