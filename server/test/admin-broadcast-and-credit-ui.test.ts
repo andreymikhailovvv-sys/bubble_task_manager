@@ -2,14 +2,24 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('новость о статистике кредитов опубликована поверх новости о совместных задачах', async () => {
+test('новость о Word-файлах опубликована поверх статистики кредитов и совместных задач', async () => {
   const updates = await readFile(new URL('../../client/src/components/UpdatesMenu.tsx', import.meta.url), 'utf8');
+  const wordIndex = updates.indexOf('ИИ теперь может присылать готовые Word-файлы');
   const creditIndex = updates.indexOf('Теперь можно посмотреть, куда уходят AI-кредиты');
   const collaborationIndex = updates.indexOf('Совместные задачи стали удобнее для общения');
-  assert.ok(creditIndex >= 0);
+  assert.ok(wordIndex >= 0);
+  assert.ok(creditIndex > wordIndex);
   assert.ok(collaborationIndex > creditIndex);
-  assert.match(updates, /LATEST_NEWS_ID = '2026-10-07-credit-usage-statistics'/);
+  assert.match(updates, /LATEST_NEWS_ID = '2026-10-08-ai-word-documents'/);
+  assert.match(updates, /Сделай это Word-файлом/);
+  assert.match(updates, /дополнительный расход AI-кредитов минимален/);
+  assert.match(updates, /hasUnreadNews/);
+  assert.match(updates, /Новости и изменения\{hasUnreadNews \? <span/);
+
+  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  assert.match(web, /hasUnreadNews=\{hasUnreadNews\}/);
 });
+
 
 test('переключатель кредитов адаптирован под светлую тему сайта и Mini App', async () => {
   const [web, mini, styles] = await Promise.all([

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Coins, MessageCircle, Newspaper, SendHorizontal, Sparkles, X } from 'lucide-react';
+import { BookOpen, Coins, FileText, MessageCircle, Newspaper, SendHorizontal, Sparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-07-credit-usage-statistics';
+export const LATEST_NEWS_ID = '2026-10-08-ai-word-documents';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -11,10 +11,11 @@ type UpdatesMenuProps = {
   onStartFeatureTour: () => void;
   onStartWorkspaceTour: () => void;
   completedLessonIds: string[];
+  hasUnreadNews?: boolean;
   onNewsViewed?: () => void;
 };
 
-export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, onNewsViewed }: UpdatesMenuProps) {
+export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onStartFeatureTour, onStartWorkspaceTour, completedLessonIds, hasUnreadNews = false, onNewsViewed }: UpdatesMenuProps) {
   const [tab, setTab] = useState<'training' | 'news'>('training');
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
         </div>
         <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl p-1 updates-menu-tabs">
           <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'training' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => setTab('training')}><BookOpen className="mr-1.5 inline" size={15} />Обучение</button>
-          <button type="button" className={`rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'news' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => { setTab('news'); onNewsViewed?.(); }}><Newspaper className="mr-1.5 inline" size={15} />Новости и изменения</button>
+          <button type="button" className={`relative rounded-lg px-2 py-2 text-sm font-semibold ${tab === 'news' ? 'updates-menu-tab-active' : 'text-muted'}`} onClick={() => { setTab('news'); onNewsViewed?.(); }}><Newspaper className="mr-1.5 inline" size={15} />Новости и изменения{hasUnreadNews ? <span className="absolute right-2 top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">1</span> : null}</button>
         </div>
         {tab === 'training' ? (
           <div className="mt-5 space-y-3">
@@ -58,6 +59,21 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
+            <article className="updates-lesson rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-fuchsia-400">8 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">ИИ теперь может присылать готовые Word-файлы</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><FileText size={17} /></span>
+              </div>
+              <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
+                <p><strong className="text-primary">Попросите ИИ оформить результат в Word</strong> прямо в обычном чате или в чате внутри задачи. Например: «Сделай это Word-файлом» или «Оформи результат в Word и пришли файл».</p>
+                <p><strong className="text-primary">Файл появится прямо в сообщении ИИ.</strong> Его можно скачать и открыть в Microsoft Word, LibreOffice или другом редакторе DOCX.</p>
+                <p><strong className="text-primary">Сборка документа происходит быстро на сервере.</strong> Сам DOCX формируется без отдельной долгой генерации, поэтому дополнительный расход AI-кредитов минимален.</p>
+              </div>
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-fuchsia-500/10 px-3 py-1 text-xs font-semibold text-fuchsia-300"><FileText size={13} /> Документы без ручного копирования</div>
+            </article>
             <article className="updates-lesson rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
