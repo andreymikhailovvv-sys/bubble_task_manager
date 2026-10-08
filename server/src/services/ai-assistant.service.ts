@@ -61,6 +61,146 @@ type OpenAiFunctionCall = { type: 'function_call'; call_id: string; name: string
 type OpenAiFunctionCallOutput = { type: 'function_call_output'; call_id: string; output: string };
 type TaskChatProviderInput = OpenAiTextMessage | OpenAiUserAttachmentMessage | OpenAiFunctionCall | OpenAiFunctionCallOutput;
 
+const nullableStringSchema = { anyOf: [{ type: 'string' }, { type: 'null' }] };
+const nullableNumberSchema = { anyOf: [{ type: 'number' }, { type: 'null' }] };
+
+const taskActionSchemas = [
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['reschedule_task'] }, taskId: { type: 'string' }, dueDate: { type: 'string' } },
+    required: ['type', 'taskId', 'dueDate']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['reschedule_subtask'] }, subtaskId: { type: 'string' }, dueDate: { type: 'string' } },
+    required: ['type', 'subtaskId', 'dueDate']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['create_subtask'] },
+      parentTaskId: { type: 'string' },
+      title: { type: 'string' },
+      description: nullableStringSchema,
+      dueDate: nullableStringSchema
+    },
+    required: ['type', 'parentTaskId', 'title', 'description', 'dueDate']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['rename_task'] }, taskId: { type: 'string' }, title: { type: 'string' } },
+    required: ['type', 'taskId', 'title']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['update_task'] },
+      taskId: { type: 'string' },
+      title: nullableStringSchema,
+      description: nullableStringSchema,
+      dueDate: nullableStringSchema,
+      importance: nullableNumberSchema,
+      urgency: nullableNumberSchema,
+      notifyBeforeMinutes: nullableNumberSchema
+    },
+    required: ['type', 'taskId', 'title', 'description', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['rename_subtask'] }, subtaskId: { type: 'string' }, title: { type: 'string' } },
+    required: ['type', 'subtaskId', 'title']
+  },
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['update_subtask'] },
+      subtaskId: { type: 'string' },
+      description: nullableStringSchema,
+      dueDate: nullableStringSchema
+    },
+    required: ['type', 'subtaskId', 'description', 'dueDate']
+  },
+  ...['complete_subtask', 'reopen_subtask', 'delete_subtask'].map((type) => ({
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: [type] }, subtaskId: { type: 'string' } },
+    required: ['type', 'subtaskId']
+  })),
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['change_task_sphere'] }, taskId: { type: 'string' }, sphereId: nullableStringSchema },
+    required: ['type', 'taskId', 'sphereId']
+  }
+];
+
+const wordDocumentBlockSchemas = [
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: ['heading'] }, text: { type: 'string' }, level: { type: 'integer', enum: [1, 2, 3] } },
+    required: ['type', 'text', 'level']
+  },
+  ...['paragraph', 'quote'].map((type) => ({
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: [type] }, text: { type: 'string' } },
+    required: ['type', 'text']
+  })),
+  ...['bullets', 'numbered'].map((type) => ({
+    type: 'object',
+    additionalProperties: false,
+    properties: { type: { type: 'string', enum: [type] }, items: { type: 'array', items: { type: 'string' } } },
+    required: ['type', 'items']
+  })),
+  {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['table'] },
+      rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } }
+    },
+    required: ['type', 'rows']
+  }
+];
+
+export const TASK_ASSISTANT_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  name: 'task_assistant_response',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      answer: { type: 'string' },
+      actions: { type: 'array', items: { anyOf: taskActionSchemas } },
+      document: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              fileName: { type: 'string' },
+              title: { type: 'string' },
+              blocks: { type: 'array', items: { anyOf: wordDocumentBlockSchemas } }
+            },
+            required: ['fileName', 'title', 'blocks']
+          }
+        ]
+      }
+    },
+    required: ['answer', 'actions', 'document']
+  }
+};
+
 export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean }) {
   const allowTools = options?.allowTools !== false;
   return {
@@ -70,6 +210,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       if (message.type === 'function_call') return { type: message.type, call_id: message.call_id, name: message.name, arguments: message.arguments };
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
+    text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
     ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
@@ -767,6 +908,8 @@ type GeneralAssistantAction =
   | { type: 'change_task_sphere'; taskId: string; sphereId: string | null };
 
 
+export const TASK_ASSISTANT_MAX_ANSWER_CHARS = 24_000;
+
 function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | null {
   const answerMatch = rawAnswer.match(/"answer"\s*:\s*"([\s\S]*?)"\s*,\s*"actions"\s*:/);
   if (!answerMatch?.[1]) return null;
@@ -778,7 +921,34 @@ function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | n
     .replace(/\\"/g, '"')
     .replace(/\\\\/g, '\\')
     .trim()
-    .slice(0, 6000);
+    .slice(0, TASK_ASSISTANT_MAX_ANSWER_CHARS);
+}
+
+function extractUnexpectedTaskAssistantText(source: Record<string, unknown>): string[] {
+  const extras: string[] = [];
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 3) return;
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      if (normalized.length >= 120) extras.push(normalized);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const nested of Object.values(value as Record<string, unknown>)) visit(nested, depth + 1);
+    }
+  };
+
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'answer' || key === 'actions') continue;
+    if (key === 'document' && value && typeof value === 'object') continue;
+    visit(value);
+  }
+
+  return Array.from(new Set(extras));
 }
 
 const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
@@ -803,9 +973,16 @@ export function parseGeneralAssistantPayload(rawAnswer: string): { answer: strin
   }
 
   const source = parsed as Record<string, unknown>;
-  const answer = typeof source.answer === 'string' && source.answer.trim()
-    ? source.answer.trim().slice(0, 6000)
-    : rawAnswer.trim().slice(0, 6000);
+  const primaryAnswer = typeof source.answer === 'string' && source.answer.trim()
+    ? source.answer.trim()
+    : '';
+  const unexpectedText = extractUnexpectedTaskAssistantText(source);
+  const answer = [primaryAnswer, ...unexpectedText]
+    .filter(Boolean)
+    .join('\n\n')
+    .trim()
+    .slice(0, TASK_ASSISTANT_MAX_ANSWER_CHARS)
+    || rawAnswer.trim().slice(0, TASK_ASSISTANT_MAX_ANSWER_CHARS);
   const actions = Array.isArray(source.actions) ? source.actions : [];
   const normalizedActions = actions
     .map((action): GeneralAssistantAction | null => {

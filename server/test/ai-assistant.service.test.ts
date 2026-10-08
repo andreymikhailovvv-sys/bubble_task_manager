@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   MAX_ASSISTANT_ACTIONS,
+  TASK_ASSISTANT_MAX_ANSWER_CHARS,
+  TASK_ASSISTANT_RESPONSE_FORMAT,
+  createTaskChatOpenAiPayload,
   normalizeTaskAssistantActionAnswer,
   parseGeneralAssistantPayload,
   toOpenAiGeneralHistory
@@ -26,6 +29,53 @@ test('task assistant не обещает изменение без action', () =
     'Могу обновить описание после подтверждения.'
   );
   assert.equal(normalizeTaskAssistantActionAnswer('Обновляю описание.', 1), 'Обновляю описание.');
+});
+
+test('task assistant сохраняет длинный полезный текст вместо обрезания до 6000 символов', () => {
+  const longText = 'А'.repeat(10_200);
+  const payload = JSON.stringify({ answer: longText, actions: [], document: null });
+  const parsed = parseGeneralAssistantPayload(payload);
+
+  assert.equal(parsed.answer.length, longText.length);
+  assert.equal(parsed.answer, longText);
+  assert.ok(TASK_ASSISTANT_MAX_ANSWER_CHARS > 10_200);
+});
+
+test('task assistant не выбрасывает содержательный текст из неожиданного поля payload', () => {
+  const editedText = 'Исправленный текст. '.repeat(700);
+  const payload = JSON.stringify({
+    answer: 'Готово. Ниже — аккуратно вычитанный текст.',
+    actions: [],
+    document: null,
+    editedText
+  });
+  const parsed = parseGeneralAssistantPayload(payload);
+
+  assert.match(parsed.answer, /^Готово\./);
+  assert.ok(parsed.answer.includes(editedText.slice(0, 500)));
+  assert.ok(parsed.answer.length > 6000);
+});
+
+test('task assistant восстанавливает текст, если модель ошибочно положила его строкой в document', () => {
+  const documentText = 'Вычитанный документ. '.repeat(500);
+  const payload = JSON.stringify({
+    answer: 'Готово.',
+    actions: [],
+    document: documentText
+  });
+  const parsed = parseGeneralAssistantPayload(payload);
+
+  assert.ok(parsed.answer.includes(documentText.slice(0, 500)));
+});
+
+test('task chat использует строгий Structured Output с фиксированными top-level полями', () => {
+  assert.equal(TASK_ASSISTANT_RESPONSE_FORMAT.type, 'json_schema');
+  assert.equal(TASK_ASSISTANT_RESPONSE_FORMAT.strict, true);
+  assert.equal(TASK_ASSISTANT_RESPONSE_FORMAT.schema.additionalProperties, false);
+  assert.deepEqual(TASK_ASSISTANT_RESPONSE_FORMAT.schema.required, ['answer', 'actions', 'document']);
+
+  const payload = createTaskChatOpenAiPayload('gpt-5.4-mini', [{ role: 'user', content: 'Проверь текст' }]);
+  assert.deepEqual(payload.text, { format: TASK_ASSISTANT_RESPONSE_FORMAT });
 });
 
 test('task chat считает прямую команду пользователя подтверждением action', async () => {
