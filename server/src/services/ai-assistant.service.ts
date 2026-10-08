@@ -926,22 +926,29 @@ function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | n
 
 function extractUnexpectedTaskAssistantText(source: Record<string, unknown>): string[] {
   const extras: string[] = [];
-  const append = (value: unknown) => {
-    if (typeof value !== 'string') return;
-    const normalized = value.trim();
-    if (normalized.length >= 120) extras.push(normalized);
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 3) return;
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      if (normalized.length >= 120) extras.push(normalized);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const nested of Object.values(value as Record<string, unknown>)) visit(nested, depth + 1);
+    }
   };
 
   for (const [key, value] of Object.entries(source)) {
     if (key === 'answer' || key === 'actions') continue;
-    if (key === 'document') {
-      if (typeof value === 'string') append(value);
-      continue;
-    }
-    append(value);
+    if (key === 'document' && value && typeof value === 'object') continue;
+    visit(value);
   }
 
-  return extras;
+  return Array.from(new Set(extras));
 }
 
 const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
