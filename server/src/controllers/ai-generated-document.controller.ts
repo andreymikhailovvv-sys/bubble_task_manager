@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import { wordDocumentService } from '../services/word-document.service.js';
 
-const encodeContentDispositionFileName = (value: string) => encodeURIComponent(value).replace(/['()]/g, escape);
+const encodeContentDispositionFileName = (value: string) =>
+  encodeURIComponent(value).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
 
 export const aiGeneratedDocumentController = {
   download: async (req: Request, res: Response) => {
