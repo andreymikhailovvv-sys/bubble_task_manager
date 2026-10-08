@@ -5,7 +5,7 @@ type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes';
-export type TaskAssistantResult = { answer: string; model: string; actionReports?: string[]; billing?: AiBilling };
+export type TaskAssistantResult = { answer: string; model: string; taskDataChanged: boolean; actionReports?: string[]; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
