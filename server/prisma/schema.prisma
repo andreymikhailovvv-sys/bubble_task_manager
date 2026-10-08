@@ -122,6 +122,7 @@ model User {
   collaborativeTaskMembers CollaborativeTaskMember[]
   taskComments TaskComment[] @relation("TaskCommentAuthor")
   taskCommentReadStates TaskCommentReadState[]
+  generatedDocuments AiGeneratedDocument[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -239,6 +240,7 @@ model Task {
   collaboration       CollaborativeTask? @relation(fields: [collaborationId], references: [id], onDelete: SetNull)
   comments            TaskComment[]
   commentReadStates   TaskCommentReadState[]
+  generatedDocuments  AiGeneratedDocument[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -328,6 +330,8 @@ model TaskAiMessage {
   creditsSpentMilli Int?
   messageKind String      @default("AI")
   recipientUserId String?
+  generatedDocumentId String? @unique
+  generatedDocument AiGeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: SetNull)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -368,6 +372,24 @@ model GeneralAiMessage {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model AiGeneratedDocument {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId        String?
+  task          Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  fileName      String
+  mimeType      String   @default("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+  size          Int
+  contentBase64 String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  taskAiMessage TaskAiMessage?
+
+  @@index([userId, createdAt])
+  @@index([taskId, createdAt])
 }
 
 model SystemNotification {
