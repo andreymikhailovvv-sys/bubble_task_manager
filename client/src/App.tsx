@@ -6309,7 +6309,7 @@ ${allContext}`,
       /> : null}
 
       {focusedTask && focusedDraft && !(isFocusModeOpen && isFocusedNotesEditorOpen) ? (
-        <div className={`focused-task-modal-backdrop fixed inset-0 ${isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
+        <div className={`focused-task-modal-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[180]' : isFocusModeOpen ? 'z-[150]' : 'z-40'} flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm`}>
           <div className="focused-task-modal-layout flex w-full max-w-[1380px] items-stretch justify-center gap-3">
 
         {timelineCreateMenu ? (

@@ -1533,7 +1533,7 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   .system-notification-task-button {
-    width: 12.5rem;
+    width: auto;
     max-width: 70%;
     min-width: 0;
     white-space: nowrap;
