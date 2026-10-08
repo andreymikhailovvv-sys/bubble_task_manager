@@ -4233,6 +4233,13 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   }
 }
 
+/* Reserve room for the AI launcher beside the task modal on narrower desktops. */
+@media (min-width: 1024px) and (max-width: 1535px) {
+  .focused-task-modal-backdrop {
+    padding-right: max(5.5rem, env(safe-area-inset-right));
+  }
+}
+
 .focused-task-title-input::placeholder {
   color: rgba(100, 116, 139, 0.58);
 }
