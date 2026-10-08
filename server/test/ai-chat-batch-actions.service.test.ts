@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AI_CHAT_OPENAI_TOOLS, executePlannerBatchActions, MAX_BATCH_TASK_ACTIONS, MAX_PROVIDER_CALLS, MAX_TOOL_CALLS } from '../src/services/ai-chat-tools.service.js';
+import { AI_CHAT_OPENAI_TOOLS, executePlannerBatchActions, formatPlannerActionReport, MAX_BATCH_TASK_ACTIONS, MAX_PROVIDER_CALLS, MAX_TOOL_CALLS } from '../src/services/ai-chat-tools.service.js';
 import type { PlannerActionInput } from '../src/services/planner-tools.service.js';
 
 const batchAction = (itemId: string, dueDate = '2026-10-05T10:00:00Z') => ({ operation: 'reschedule' as const, itemId, dueDate, importance: null, urgency: null, notifyBeforeMinutes: null, sphereId: null });
@@ -43,4 +43,12 @@ test('batch rejects forbidden operations and duplicate mutations', async () => {
   const result = await executePlannerBatchActions({ value: { actions: [duplicate, duplicate, { ...duplicate, operation: 'delete' }] }, execute: async () => { calls += 1; return { ok: true, report: 'ok' }; } });
   assert.equal(calls, 1); assert.equal(result.successCount, 1); assert.equal(result.failureCount, 2);
   assert.deepEqual(result.failures?.map((failure) => failure.code), ['DUPLICATE_ACTION', 'INVALID_BATCH_OPERATION']);
+});
+
+test('creation reports expose real object references only', () => {
+  assert.equal(formatPlannerActionReport({ operation: 'create_task', itemId: 'T-1', report: 'Создана задача.' }), 'Создана задача. [[task_ref=T-1]]');
+  assert.equal(formatPlannerActionReport({ operation: 'create_event', itemId: 'E-2', report: 'Создано событие.' }), 'Создано событие. [[task_ref=E-2]]');
+  assert.equal(formatPlannerActionReport({ operation: 'create_subtask', itemId: 'S-3', report: 'Добавлена подзадача.' }), 'Добавлена подзадача. [[task_ref=S-3]]');
+  assert.equal(formatPlannerActionReport({ operation: 'reschedule', itemId: 'T-1', report: 'Перенесена задача.' }), 'Перенесена задача.');
+  assert.equal(formatPlannerActionReport({ operation: 'create_task', report: 'Создана задача.' }), 'Создана задача.');
 });
