@@ -17,6 +17,16 @@ test('desktop task AI shows buttons and opens targets in four views', async () =
   assert.ok(source.includes('setIsAiExpanded(false); openTaskReferenceFromAi(task);'));
 });
 
+test('desktop task references open above expanded general chat and notification buttons fit their labels', async () => {
+  const [source, styles] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  assert.ok(source.includes("isAiChatOpen ? 'z-[180]' : isFocusModeOpen ? 'z-[150]' : 'z-40'"));
+  assert.match(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*auto;/s);
+  assert.doesNotMatch(styles, /\.system-notification-task-button\s*\{[^}]*width:\s*12\.5rem;/s);
+});
+
 test('quick desktop and mini general chat default to Luna, other web chats keep Mini', async () => {
   const [app, mini] = await Promise.all([
     readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
