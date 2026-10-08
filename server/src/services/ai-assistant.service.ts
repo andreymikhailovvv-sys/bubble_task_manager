@@ -772,6 +772,14 @@ function extractAnswerFromMalformedGeneralPayload(rawAnswer: string): string | n
     .slice(0, 6000);
 }
 
+const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\\s,.!?;:])(?:сейчас\\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\\s,.!?;:]|$)/iu;
+
+export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number): string {
+  const normalized = answer.trim();
+  if (actionsCount > 0 || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
+  return 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
+}
+
 export function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   const parsed = extractJsonObjectFromText(rawAnswer);
   if (parsed === null) {
@@ -1691,9 +1699,10 @@ export const aiAssistantService = {
       'Если тема сложная — только ключевые шаги и конкретные действия.',
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Ты можешь менять только текущую задачу и её подзадачи через actions.',
-      'ВАЖНО: без явного подтверждения пользователя не выполняй никакие actions. По умолчанию actions должен быть пустым массивом [].',
-      'Сначала предложи пользователю конкретное действие и попроси короткое подтверждение (например: "Подтверждаю, создавай подзадачу ..."). Только после такого подтверждения можно вернуть action.',
-      'Если подтверждения нет или оно неоднозначно — верни только answer с предложением, а actions оставь [].',
+      'Прямой приказ пользователя изменить данные задачи уже является явным подтверждением. Команды вроде «сделай», «добавь», «создай», «измени», «обнови/обновляй», «перенеси», «переименуй», «скопируй», «удали» нужно выполнять в этом же ответе без дополнительного вопроса-подтверждения.',
+      'Отдельное подтверждение нужно только когда ты сам предложил изменение, которого пользователь ещё явно не просил выполнить. Короткие ответы «да», «делай», «обновляй», «выполняй», «подтверждаю» после твоего предложения считаются подтверждением.',
+      'Если пользователь явно просит изменение и данных достаточно, верни соответствующий action сразу. Не пиши «сделаю», «обновляю», «выполняю», «добавлю» или «сделал», если в этом же ответе actions пустой.',
+      'Если action сформировать невозможно, честно скажи в answer, что изменение не выполнено, и кратко укажи, чего не хватает. Не создавай видимость выполнения.',
       'Если в answer говоришь о текущей задаче или её подзадаче, сразу после названия добавляй служебную метку [[task_ref=ID]] из контекста. Пример: «Созвон с клиентом [[task_ref=task-id]]».',
       'Не показывай технические идентификаторы как обычный текст: они разрешены только внутри метки [[task_ref=...]] и внутри массива actions.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
@@ -2138,11 +2147,12 @@ export const aiAssistantService = {
           actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
         }
 
+        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length);
         const answer = parsed.actions.length > 0 && appliedActionsCount === 0
           ? `Не удалось применить изменения по запросу. Проверьте формулировку и попробуйте ещё раз.
 
-${parsed.answer}`
-          : parsed.answer;
+${actionAwareAnswer}`
+          : actionAwareAnswer;
 
         console.info('[AI] Task assistant request completed', {
           requestId,
@@ -2175,7 +2185,7 @@ ${parsed.answer}`
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
