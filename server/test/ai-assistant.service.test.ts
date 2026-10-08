@@ -30,7 +30,7 @@ test('task assistant не обещает изменение без action', () =
 
 test('task chat считает прямую команду пользователя подтверждением action', async () => {
   const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
-  const method = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('async askAiChat('));
+  const method = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('generateOverdueTaskNudge:'));
 
   assert.match(method, /Прямой приказ пользователя изменить данные задачи уже является явным подтверждением/);
   assert.match(method, /«да», «делай», «обновляй», «выполняй», «подтверждаю»/);
