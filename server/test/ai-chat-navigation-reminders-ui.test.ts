@@ -4,9 +4,10 @@ import test from 'node:test';
 
 test('mini app task and subtask focus open above the general AI chat', async () => {
   const source = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
-  assert.ok(source.includes("isAiChatOpen ? 'z-[180]' : 'z-[90]'"));
-  assert.ok(source.includes("isAiChatOpen ? 'z-[180]' : 'z-[100]'"));
+  assert.ok(source.includes("isAiChatOpen ? 'z-[120]' : 'z-[90]'"));
+  assert.ok(source.includes("isAiChatOpen ? 'z-[120]' : 'z-[100]'"));
   assert.ok(source.includes('onOpenTask={openAiTaskReference}'));
+  assert.ok(source.includes("isAiChatOpen ? 'z-[130]' : 'z-[110]'"));
 });
 
 test('desktop task AI shows buttons and opens targets in four views', async () => {
