@@ -17,6 +17,7 @@ import { attachChatMessageId } from './lib/chatMessages';
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
+import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
@@ -135,7 +136,8 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
           ...(message.authorName ? { authorName: message.authorName } : {}),
           ...(message.authorColor ? { authorColor: message.authorColor } : {}),
           ...(message.creditsSpentMilli === undefined ? {} : { creditsSpentMilli: message.creditsSpentMilli }),
-          ...(message.webSearchUsed ? { webSearchUsed: true, webSources: message.webSources, webCitations: message.webCitations } : {})
+          ...(message.webSearchUsed ? { webSearchUsed: true, webSources: message.webSources, webCitations: message.webCitations } : {}),
+          ...(message.generatedDocument ? { generatedDocument: message.generatedDocument } : {})
         }))
     }))
   }));
@@ -2184,7 +2186,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress });
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations };
+      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData();
@@ -2586,7 +2588,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli }]
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined }]
       }));
       refreshAiCredits();
       if (result.taskDataChanged) await loadData();
@@ -3770,7 +3772,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div key={`mini-ai-full-${index}`} className={`miniapp-ai-chat-message miniapp-ai-chat-message-task max-w-[88%] rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user ml-auto rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant mr-auto rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
-                    {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
+                    {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                  {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
@@ -3912,6 +3915,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
+                  {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                 </div>
               ))}
