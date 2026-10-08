@@ -2548,11 +2548,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })) });
+      const actionSummary = (result.actionReports?.length ?? 0) > 0
+        ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
+        : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: normalizeMiniAiMessageContent(result.answer), creditsSpentMilli: result.billing?.creditsSpentMilli }]
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli }]
       }));
       refreshAiCredits();
+      if (result.taskDataChanged) await loadData();
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
