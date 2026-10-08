@@ -851,6 +851,10 @@ body[data-theme='light'] .backdrop-blur-sm {
     bottom: 32px;
   }
 
+  .ai-chat-launcher.ai-chat-launcher-task-open {
+    right: max(0.75rem, env(safe-area-inset-right));
+  }
+
   .ai-chat-launcher-button {
     background: linear-gradient(135deg, #d946ef, #7c3aed, #06b6d4, #d946ef);
     background-size: 260% 260%;
@@ -5781,15 +5785,15 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
     align-items: flex-start;
     box-sizing: border-box;
     padding-top: max(0.5rem, env(safe-area-inset-top));
-    padding-right: max(0.5rem, env(safe-area-inset-right));
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
-    padding-left: max(0.5rem, env(safe-area-inset-left));
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
   }
 
   .miniapp-web-task-backdrop .miniapp-focus-task-panel {
     height: 100%;
     max-height: 100%;
-    border-radius: 2rem;
+    border-radius: 2rem 2rem 0 0;
   }
 
   .miniapp-web-task-backdrop .miniapp-focus-task-scroll-layout {
