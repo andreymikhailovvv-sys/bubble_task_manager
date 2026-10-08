@@ -52,6 +52,8 @@ test('скачивание документа авторизовано и сов
   ]);
 
   assert.match(routes, /\/ai-documents\/:id\/download', requireAuth/);
+  assert.match(routes, /\/ai-documents\/:id\/download-link', requireAuth/);
+  assert.match(routes, /\/ai-documents\/download', asyncHandler\(aiGeneratedDocumentController\.downloadWithToken\)/);
   assert.match(service, /\{ userId \}/);
   assert.match(service, /collaboration: \{ members: \{ some: \{ userId, isHidden: false \} \} \}/);
 });
@@ -68,7 +70,9 @@ test('web и Mini App сохраняют metadata документа и пока
   assert.match(types, /export type GeneratedDocument/);
   assert.match(types, /generatedDocument\?: GeneratedDocument/);
   assert.match(api, /getAiGeneratedDocumentDownloadUrl/);
+  assert.match(api, /createAiGeneratedDocumentDownloadLink/);
   assert.match(component, /download=\{document\.fileName\}/);
+  assert.match(component, /onDownload/);
   assert.match(component, /Скачать/);
 
   for (const source of [web, mini]) {
@@ -77,4 +81,21 @@ test('web и Mini App сохраняют metadata документа и пока
   }
 
   assert.match(mini, /message\.generatedDocument \? \{ generatedDocument: message\.generatedDocument \} : \{\}/);
+  assert.match(mini, /createAiGeneratedDocumentDownloadLink\(generatedDocument\.id\)/);
+  assert.match(mini, /webApp\.downloadFile/);
+  assert.match(mini, /onDownload=\{downloadAiGeneratedDocument\}/);
+});
+
+
+test('подписанная ссылка Word-файла короткоживущая и привязана к пользователю и документу', async () => {
+  const tokenService = await readFile(new URL('../src/services/ai-generated-document-download.service.ts', import.meta.url), 'utf8');
+  const controller = await readFile(new URL('../src/controllers/ai-generated-document.controller.ts', import.meta.url), 'utf8');
+
+  assert.match(tokenService, /AI_DOCUMENT_DOWNLOAD_TTL_SECONDS = 5 \* 60/);
+  assert.match(tokenService, /documentId: string/);
+  assert.match(tokenService, /userId: string/);
+  assert.match(tokenService, /AI_DOCUMENT_DOWNLOAD_PURPOSE/);
+  assert.match(controller, /signAiDocumentDownloadToken\(\{ documentId: document\.id, userId: req\.user!\.id \}\)/);
+  assert.match(controller, /verifyAiDocumentDownloadToken\(token\)/);
+  assert.match(controller, /wordDocumentService\.getForDownload\(payload\.userId, payload\.documentId\)/);
 });
