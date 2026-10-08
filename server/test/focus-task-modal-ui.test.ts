@@ -26,4 +26,6 @@ test('desktop general AI launcher moves to the right of the task focus when open
   assert.ok(app.includes("focusedTask ? 'ai-chat-launcher-task-open' : ''"));
   assert.ok(css.includes('.ai-chat-launcher.ai-chat-launcher-task-open {'));
   assert.ok(css.includes('right: max(0.75rem, env(safe-area-inset-right));'));
+  assert.ok(css.includes('@media (min-width: 1024px) and (max-width: 1535px) {'));
+  assert.ok(css.includes('padding-right: max(5.5rem, env(safe-area-inset-right));'));
 });
