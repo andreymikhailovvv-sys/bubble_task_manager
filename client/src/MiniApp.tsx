@@ -10,6 +10,7 @@ import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, GeneratedDocument, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
+import { getCreatorInitial } from './lib/creatorInitial';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
 import { WebCitations } from './components/WebCitations';
@@ -3577,7 +3578,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                               <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                               <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
-                              {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
+                              {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
                             </button>
                             {openedTask.isCollaborative ? (
                               <button type="button" onClick={() => void openTaskComments(subtask)} className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-violet-400/40 text-violet-500" aria-label="Открыть комментарии" title="Комментарии">

@@ -7537,7 +7537,7 @@ ${allContext}`,
       {isTimelineOptimizeModalOpen ? (<div className="modal-backdrop fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-sm"><div className="dialog-surface w-full max-w-lg rounded-2xl border p-4"><h3 className="text-lg font-semibold text-primary">Оптимизация таймлайна ИИ</h3><p className="mt-1 text-sm text-muted">Добавьте пожелания к перераспределению задач <span className="inline-flex items-center gap-1 text-rose-300">(1 <Coins size={12} />)</span>.</p><textarea className="form-field mt-3 min-h-28 w-full rounded-lg border p-2 text-sm" value={timelineOptimizeNote} onChange={(e)=>setTimelineOptimizeNote(e.target.value)} /><div className="mt-3 flex justify-end gap-2"><button className="surface-muted rounded px-3 py-2 text-sm" onClick={()=>setIsTimelineOptimizeModalOpen(false)}>Отмена</button><button className="rounded bg-rose-600 px-3 py-2 text-sm text-white" onClick={()=>void handleOptimizeTimeline()} disabled={timelineOptimizeLoading}>Оптимизировать</button></div></div></div>) : null}
 
       <div
-        className="ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px]"
+        className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px] ${focusedTask ? 'ai-chat-launcher-task-open' : ''}`}
         onMouseEnter={() => { scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
