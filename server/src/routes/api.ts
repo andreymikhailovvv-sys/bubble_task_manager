@@ -1135,6 +1135,8 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
   res.json({ projects });
 }));
 
+apiRouter.get('/ai-documents/download', asyncHandler(aiGeneratedDocumentController.downloadWithToken));
+apiRouter.post('/ai-documents/:id/download-link', requireAuth, asyncHandler(aiGeneratedDocumentController.createDownloadLink));
 apiRouter.get('/ai-documents/:id/download', requireAuth, asyncHandler(aiGeneratedDocumentController.download));
 apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
