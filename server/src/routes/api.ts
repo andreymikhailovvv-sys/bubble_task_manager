@@ -9,6 +9,7 @@ import { habitController } from '../controllers/habit.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
+import { aiGeneratedDocumentController } from '../controllers/ai-generated-document.controller.js';
 import { telegramController } from '../controllers/telegram.controller.js';
 import { telegramRelayController } from '../controllers/telegram-relay.controller.js';
 import { telegramService } from '../services/telegram.service.js';
@@ -1134,6 +1135,7 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
   res.json({ projects });
 }));
 
+apiRouter.get('/ai-documents/:id/download', requireAuth, asyncHandler(aiGeneratedDocumentController.download));
 apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);

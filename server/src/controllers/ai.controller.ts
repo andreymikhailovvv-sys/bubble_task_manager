@@ -269,7 +269,8 @@ export const aiController = {
         userId: req.user!.id,
         taskId: req.params.id,
         content: result.answer,
-        creditsSpentMilli: result.billing.creditsSpentMilli
+        creditsSpentMilli: result.billing.creditsSpentMilli,
+        generatedDocumentId: result.generatedDocument?.id ?? null
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {

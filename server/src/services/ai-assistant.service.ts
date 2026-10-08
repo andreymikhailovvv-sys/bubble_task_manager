@@ -14,6 +14,7 @@ import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHis
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
+import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -31,6 +32,7 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   creditsSpentMilli?: number;
+  generatedDocument?: GeneratedDocumentMeta;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -723,6 +725,13 @@ function extractJsonObjectFromText(raw: string): unknown | null {
   return null;
 }
 
+export function extractWordDocumentSpecFromAssistantPayload(rawAnswer: string): unknown | null {
+  const parsed = extractJsonObjectFromText(rawAnswer);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const document = (parsed as Record<string, unknown>).document;
+  return document && typeof document === 'object' && !Array.isArray(document) ? document : null;
+}
+
 type GeneralAssistantAction =
   | { type: 'reschedule_task'; taskId: string; dueDate: string }
   | { type: 'reschedule_subtask'; subtaskId: string; dueDate: string }
@@ -1149,6 +1158,7 @@ export const aiAssistantService = {
             'НЕ используй web_search для обычного разговора; написания, редактирования или перевода текста; мозгового штурма; объяснения общеизвестных понятий; обычных логических рассуждений; планирования и декомпозиции; работы с данными Планировыча и поиска задач пользователя; проверки «на всякий случай»; только ради ссылок; или если можешь уверенно ответить без актуальных внешних данных. Для актуального состояния задач Планировыча используй task tools, а не web_search.',
             'Перед web_search сформулируй один максимально информативный поисковый запрос, способный закрыть вопрос за один поиск. За один пользовательский запрос доступен максимум один веб-поиск: не обходи ограничение. Если web_search уже использован, продолжай на основе полученных данных и не инициируй новый поиск. Не генерируй промежуточные фразы «Сейчас я поищу в интернете» или «Выполняю поиск»: состояние инструментов показывает интерфейс.',
             'После web_search основывай актуальные утверждения на найденных данных, не выдумывай источники и не представляй как установленный факт то, чего результаты не подтверждают. Не вызывай дополнительный web_search, если лимит исчерпан.',
+            'Если пользователь просит прислать, подготовить, оформить или скачать документ Word/документ файлом, используй create_word_document. Передай инструменту уже готовую структуру документа и после успешного вызова кратко сообщи, что файл готов. Не ограничивайся текстом ответа и не обещай создать файл позже.',
             'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. Отвечай на русском языке.'
           ].join(' ')
         },
@@ -1507,7 +1517,16 @@ export const aiAssistantService = {
     const messages = await prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { role: true, content: true, creditsSpentMilli: true, userId: true, messageKind: true, recipientUserId: true, user: { select: { name: true, username: true } } }
+      select: {
+        role: true,
+        content: true,
+        creditsSpentMilli: true,
+        userId: true,
+        messageKind: true,
+        recipientUserId: true,
+        generatedDocument: { select: { id: true, fileName: true, mimeType: true, size: true } },
+        user: { select: { name: true, username: true } }
+      }
     });
     const recipientIds = Array.from(new Set(messages.map((message) => message.recipientUserId).filter((value): value is string => Boolean(value))));
     const recipients = recipientIds.length > 0
@@ -1527,6 +1546,9 @@ export const aiAssistantService = {
       } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
+        : {}),
+      ...(message.role === 'assistant' && message.generatedDocument
+        ? { generatedDocument: message.generatedDocument }
         : {})
     }));
   },
@@ -1564,7 +1586,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1579,7 +1601,8 @@ export const aiAssistantService = {
         userId: input.userId,
         role: 'assistant',
         content,
-        creditsSpentMilli: input.creditsSpentMilli
+        creditsSpentMilli: input.creditsSpentMilli,
+        generatedDocumentId: input.generatedDocumentId ?? null
       }
     });
   },
@@ -1705,7 +1728,8 @@ export const aiAssistantService = {
       'Если action сформировать невозможно, честно скажи в answer, что изменение не выполнено, и кратко укажи, чего не хватает. Не создавай видимость выполнения.',
       'Если в answer говоришь о текущей задаче или её подзадаче, сразу после названия добавляй служебную метку [[task_ref=ID]] из контекста. Пример: «Созвон с клиентом [[task_ref=task-id]]».',
       'Не показывай технические идентификаторы как обычный текст: они разрешены только внутри метки [[task_ref=...]] и внутри массива actions.',
-      'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
+      'Верни строго JSON без markdown: {"answer":"...","actions":[...],"document":null}. Если пользователь просит Word-документ/документ файлом, вместо null передай document={"fileName":"имя.docx","title":"заголовок или пустая строка","blocks":[...]}.',
+      'Для document.blocks поддерживаются: {"type":"heading","text":"...","level":1|2|3}, {"type":"paragraph","text":"..."}, {"type":"quote","text":"..."}, {"type":"bullets","items":["..."]}, {"type":"numbered","items":["..."]}, {"type":"table","rows":[["ячейка", "..."]]}. Если пользователь просит прислать/создать/оформить Word-документ, обязательно сформируй document в этом же ответе, а не обещай сделать позже.',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
@@ -1956,6 +1980,20 @@ export const aiAssistantService = {
         });
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
+        const documentSpec = extractWordDocumentSpecFromAssistantPayload(rawAnswer);
+        const generatedDocument = documentSpec
+          ? await wordDocumentService.create({ userId: input.userId, taskId: input.taskId, spec: documentSpec })
+          : null;
+        if (generatedDocument) {
+          console.info('[AI] Task Word document created', {
+            requestId,
+            taskId: input.taskId,
+            userId: input.userId,
+            documentId: generatedDocument.id,
+            fileName: generatedDocument.fileName,
+            size: generatedDocument.size
+          });
+        }
         if (isSmartPostponeRequest) {
           const rawJsonMatch = parsed.answer.match(/\{[\s\S]*\}/);
           let parsedDueDate: string | null = null;
@@ -2147,7 +2185,7 @@ export const aiAssistantService = {
           actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
         }
 
-        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length);
+        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0));
         const answer = parsed.actions.length > 0 && appliedActionsCount === 0
           ? `Не удалось применить изменения по запросу. Проверьте формулировку и попробуйте ещё раз.
 
@@ -2185,7 +2223,7 @@ ${actionAwareAnswer}`
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, generatedDocument, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));

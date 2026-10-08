@@ -5,6 +5,7 @@ import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicRespo
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
 import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-responses-stream.service.js';
+import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -57,6 +58,28 @@ export const AI_CHAT_OPENAI_TOOLS = [
         operation: { type: 'string', enum: PLANNER_BATCH_OPERATIONS }, itemId: { type: 'string' }, dueDate: nullable('string'), importance: nullable('number'), urgency: nullable('number'), notifyBeforeMinutes: nullable('number'), sphereId: nullable('string')
       } } }
     } }
+  },
+  {
+    type: 'function', name: 'create_word_document', strict: true,
+    description: 'Создать и прикрепить к ответу Word-документ (.docx). Используй, когда пользователь просит прислать, подготовить, оформить или скачать документ Word/документ файлом. Передай готовую структуру документа; сервер сам соберёт DOCX. За один пользовательский запрос создавай не более одного документа.',
+    parameters: {
+      type: 'object', additionalProperties: false, required: ['fileName', 'title', 'blocks'], properties: {
+        fileName: { type: 'string' },
+        title: nullable('string'),
+        blocks: {
+          type: 'array', minItems: 1, maxItems: 120,
+          items: {
+            type: 'object', additionalProperties: false, required: ['type', 'text', 'level', 'items', 'rows'], properties: {
+              type: { type: 'string', enum: ['heading', 'paragraph', 'bullets', 'numbered', 'table', 'quote'] },
+              text: nullable('string'),
+              level: nullable('number'),
+              items: { type: ['array', 'null'], items: { type: 'string' } },
+              rows: { type: ['array', 'null'], items: { type: 'array', items: { type: 'string' } } }
+            }
+          }
+        }
+      }
+    }
   }
 ] as const;
 
@@ -152,6 +175,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
+  let generatedDocument: GeneratedDocumentMeta | null = null;
   let batchToolCalls = 0; let batchActionsRequested = 0; let batchActionsSucceeded = 0; let batchActionsFailed = 0;
   
   let providerCallCount = 0;
@@ -244,7 +268,16 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       executeTool: async (name, value, round) => {
         toolOperations.push(name);
         
-        const progress = ({ search_tasks: 'searching_tasks', list_tasks: 'listing_tasks', get_task: 'reading_task', list_sectors: 'checking_sectors', task_action: 'applying_changes', task_actions: 'applying_changes' } as const)[name as 'search_tasks'];
+        const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
+          search_tasks: 'searching_tasks',
+          list_tasks: 'listing_tasks',
+          get_task: 'reading_task',
+          list_sectors: 'checking_sectors',
+          task_action: 'applying_changes',
+          task_actions: 'applying_changes',
+          create_word_document: 'forming_answer'
+        };
+        const progress = progressByTool[name];
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
@@ -292,7 +325,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
           return result;
         }
-        return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент задач.' };
+        if (name === 'create_word_document') {
+          if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'В этом ответе Word-документ уже создан.' };
+          generatedDocument = await wordDocumentService.create({ userId: input.userId, spec: value });
+          console.info('[AI tools] Word document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
+          return { ok: true, document: generatedDocument };
+        }
+        return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };
       }
     });
     emitProgress('forming_answer');
@@ -317,7 +356,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
