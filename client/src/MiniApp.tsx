@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Moon, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Sun, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -67,7 +68,6 @@ type DisplayMode = 'list' | 'timeline';
 type TimelineView = 'day' | 'week' | 'month';
 type ListSortMode = 'importance' | 'urgency';
 type SubtaskFilterMode = 'none' | 'urgency' | 'importance';
-type MiniThemeMode = 'dark' | 'light';
 const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> = [
   { mode: 'urgency', label: 'По срочности' },
   { mode: 'importance', label: 'По важности' },
@@ -618,10 +618,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
-  const [miniThemeMode, setMiniThemeMode] = useState<MiniThemeMode>(() => {
+  const [miniThemeMode, setMiniThemeMode] = useState<ThemePreference>(() => {
     const stored = localStorage.getItem('btm:miniapp-theme-mode');
-    return stored === 'dark' || stored === 'light' ? stored : 'light';
+    return stored === 'dark' || stored === 'light' || stored === 'auto' ? stored : 'light';
   });
+  const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
@@ -710,6 +711,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [aiCredits, setAiCredits] = useState(100);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
+  const effectiveMiniTheme = useMemo(
+    () => resolveThemeMode(miniThemeMode, userTimeZone, new Date()),
+    [miniThemeMode, userTimeZone, autoThemeTick]
+  );
   const [isCreditPurchaseOpen, setIsCreditPurchaseOpen] = useState(false);
   const [creditPopoverView, setCreditPopoverView] = useState<'purchase' | 'statistics'>('purchase');
   const [creditUsageStatistics, setCreditUsageStatistics] = useState<CreditUsageStatistics | null>(null);
@@ -991,15 +997,33 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   }, [runtime]);
 
   useEffect(() => {
-    document.body.dataset.theme = miniThemeMode;
-    document.documentElement.dataset.theme = miniThemeMode;
     localStorage.setItem('btm:miniapp-theme-mode', miniThemeMode);
+  }, [miniThemeMode]);
 
+  useEffect(() => {
+    if (miniThemeMode !== 'auto') return;
+    const update = () => setAutoThemeTick((tick) => tick + 1);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') update();
+    };
+    const interval = window.setInterval(update, 30_000);
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [miniThemeMode]);
+
+  useEffect(() => {
+    document.body.dataset.theme = effectiveMiniTheme;
+    document.documentElement.dataset.theme = effectiveMiniTheme;
     return () => {
       delete document.body.dataset.theme;
       delete document.documentElement.dataset.theme;
     };
-  }, [miniThemeMode]);
+  }, [effectiveMiniTheme]);
 
   useEffect(() => {
     const prevBodyOverflow = document.body.style.overflow;
@@ -1419,7 +1443,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     return placements;
   }, [timelineToday.quarterTops, timelineToday.timelineEntries]);
 
-  const isLightTheme = miniThemeMode === 'light';
+  const isLightTheme = effectiveMiniTheme === 'light';
   const getMiniWindowMotionClass = (windowName: string) => closingMiniWindow === windowName ? 'miniapp-window-closing' : 'miniapp-window-opening';
   const closeMiniWindowWithMotion = (windowName: string, close: () => void) => {
     setClosingMiniWindow(windowName);
@@ -2858,24 +2882,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs text-slate-400">Тема мини-приложения</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setMiniThemeMode('light')}
-                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${isLightTheme ? 'border-sky-400 bg-sky-500/20 text-sky-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
-                      >
-                        <Sun size={13} />
-                        Светлая
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMiniThemeMode('dark')}
-                        className={`inline-flex items-center justify-center gap-1 rounded-md border px-2 py-2 text-xs ${!isLightTheme ? 'border-violet-400 bg-violet-500/20 text-violet-200' : 'border-slate-600 bg-slate-800 text-slate-300'}`}
-                      >
-                        <Moon size={13} />
-                        Тёмная
-                      </button>
+                    <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg border border-slate-600 bg-slate-800 p-1 text-xs" role="group" aria-label="Тема мини-приложения">
+                      {(['light', 'dark', 'auto'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          aria-pressed={miniThemeMode === mode}
+                          onClick={() => setMiniThemeMode(mode)}
+                          className={`theme-preference-switch-option min-w-0 rounded-md px-1.5 py-2 transition ${miniThemeMode === mode ? 'theme-preference-switch-option-active' : 'hover:bg-slate-700'}`}
+                        >
+                          {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
+                        </button>
+                      ))}
                     </div>
+                    <p className="text-[11px] leading-snug text-slate-400">Авто: тёмная с 20:00 до 05:00 ({userTimeZone}).</p>
                   </div>
                   {isWebRuntime ? (
                     <div className="mt-3 border-t border-slate-700 pt-3">

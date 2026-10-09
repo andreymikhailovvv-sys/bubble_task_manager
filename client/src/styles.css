@@ -7899,19 +7899,19 @@ body[data-theme='dark'] .theme-preference-switch-option-active {
   box-shadow: 0 3px 9px rgba(8, 145, 178, 0.22);
 }
 
-/* Compact formatted-note previews, without changing the textarea editing height. */
+/* Formatted previews match the corresponding plain-text textarea heights. */
 .miniapp-focus-panel .task-description-preview.miniapp-task-description-preview {
-  min-height: 5.25rem !important;
-  height: 5.25rem;
-  max-height: 5.25rem;
+  min-height: 8rem !important;
+  height: 8rem;
+  max-height: 8rem;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 .miniapp-focus-panel .task-description-preview.miniapp-subtask-description-preview {
-  min-height: 4.75rem !important;
-  height: 4.75rem;
-  max-height: 4.75rem;
+  min-height: 7rem !important;
+  height: 7rem;
+  max-height: 7rem;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
