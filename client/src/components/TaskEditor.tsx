@@ -741,7 +741,7 @@ export function TaskEditor({
       onClick={() => void closeEditor()}
     >
       <aside
-        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? "h-[min(560px,calc(100vh-24px))]" : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
+        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1255,7 +1255,7 @@ export function TaskEditor({
                   )}
                 </div>
               ) : null}
-              {isEditing ? (
+              {isEditing && !isSubtask ? (
                 <div className="mt-auto flex gap-2 pt-4">
                   <button
                     type="button"
@@ -1273,7 +1273,7 @@ export function TaskEditor({
                     Удалить
                   </button>
                 </div>
-              ) : (
+              ) : !isEditing ? (
                 <button
                   type="button"
                   className={`primary-button rounded-xl px-3 py-2 text-sm font-semibold ${isEventEditor ? "mt-auto" : "mt-4"}`}
@@ -1281,7 +1281,7 @@ export function TaskEditor({
                 >
                   {isEventEditor ? "Сохранить событие" : "Сформировать задачу"}
                 </button>
-              )}
+              ) : null}
               {!isEventEditor && isEditing && !isSubtask ? (
                 <div className="mt-4 min-h-0 flex-1">
                   <div className="flex items-center justify-between">
@@ -1316,6 +1316,26 @@ export function TaskEditor({
               ) : null}
             </div>
           )}
+          {isEditing && isSubtask ? (
+            <div className="task-edit-subtask-footer mt-2 flex shrink-0 gap-2 border-t border-violet-100 pt-3">
+              <button
+                type="button"
+                className="success-button inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold"
+                onClick={() => onComplete?.()}
+              >
+                <CheckCircle2 size={16} />
+                Выполнить
+              </button>
+              <button
+                type="button"
+                className="danger-button inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold"
+                onClick={() => onDelete?.()}
+              >
+                <Trash2 size={15} />
+                Удалить
+              </button>
+            </div>
+          ) : null}
         </main>
       </aside>
     </div>

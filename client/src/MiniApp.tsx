@@ -3677,7 +3677,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       /> : null}
       {(openedSubtask || isCreatingNewSubtask) && openedSubtaskDraft ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 ${isAiChatOpen ? 'z-[120]' : 'z-[100]'} flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('subtask')}`} onClick={() => isCreatingNewSubtask ? closeMiniWindowWithMotion('subtask', cancelCreateSubtask) : void saveAndCloseTaskEditor(subtaskEditorId, 'subtask')}>
-          <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92vh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
+          <div className="miniapp-slide-panel miniapp-focus-panel max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] border p-4 shadow-2xl sm:max-w-xl sm:rounded-[2rem]" onClick={(event) => event.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">{isCreatingNewSubtask ? 'Создание подзадачи' : 'Редактирование подзадачи'}</p>
@@ -3756,7 +3756,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {creatingSubtaskForId === openedTask.id ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {creatingSubtaskForId === openedTask.id ? 'Создаём…' : 'Создать подзадачу'}
               </button>
             ) : openedSubtask ? (
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="miniapp-subtask-actions sticky bottom-0 z-10 -mx-4 mt-4 grid grid-cols-2 gap-2 px-4 pt-3">
                 <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
                   <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
                 </button>
