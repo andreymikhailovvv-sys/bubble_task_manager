@@ -7848,3 +7848,22 @@ body[data-theme='light'] .ai-markdown-table tbody tr:nth-child(even),
 .miniapp-shell.miniapp-light .ai-markdown-table tbody tr:nth-child(even) {
   background: rgba(226, 232, 240, 0.45);
 }
+
+/* Keep destructive/completion actions visible in the subtask editor when its title wraps. */
+.task-edit-subtask-footer {
+  min-height: 3.5rem;
+}
+body[data-theme='dark'] .task-edit-subtask-footer {
+  border-top-color: rgba(139, 92, 246, 0.3);
+}
+
+/* In the Mini App the sheet can scroll, while its bottom actions remain in view. */
+.miniapp-subtask-actions {
+  background: #fff;
+  border-top: 1px solid rgba(167, 139, 250, 0.24);
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-subtask-actions {
+  background: #172033;
+  border-top-color: rgba(139, 92, 246, 0.32);
+}
