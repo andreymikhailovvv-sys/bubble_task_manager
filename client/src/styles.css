@@ -7797,3 +7797,54 @@ body[data-theme='dark'] .ai-generated-document-icon,
   background: rgba(30, 41, 59, 0.92) !important;
   color: #ddd6fe !important;
 }
+
+/* Markdown tables in assistant messages: shared across web and Telegram Mini App. */
+.ai-markdown-table-scroll {
+  border-color: rgba(100, 116, 139, 0.48);
+  background: rgba(15, 23, 42, 0.46);
+  color: #f1f5f9;
+  overscroll-behavior-x: contain;
+}
+.ai-markdown-table {
+  min-width: max-content;
+  line-height: 1.5;
+}
+.ai-markdown-table th,
+.ai-markdown-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.19);
+  white-space: pre-wrap;
+  vertical-align: top;
+}
+.ai-markdown-table th {
+  background: rgba(99, 102, 241, 0.22);
+  color: #e0e7ff;
+  font-weight: 700;
+}
+.ai-markdown-table tbody tr:nth-child(even) {
+  background: rgba(148, 163, 184, 0.08);
+}
+.ai-markdown-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+body[data-theme='light'] .ai-markdown-table-scroll,
+.miniapp-shell.miniapp-light .ai-markdown-table-scroll {
+  border-color: rgba(148, 163, 184, 0.46);
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+}
+body[data-theme='light'] .ai-markdown-table th,
+.miniapp-shell.miniapp-light .ai-markdown-table th {
+  background: #e0e7ff;
+  color: #312e81;
+}
+body[data-theme='light'] .ai-markdown-table th,
+body[data-theme='light'] .ai-markdown-table td,
+.miniapp-shell.miniapp-light .ai-markdown-table th,
+.miniapp-shell.miniapp-light .ai-markdown-table td {
+  border-bottom-color: rgba(148, 163, 184, 0.3);
+}
+body[data-theme='light'] .ai-markdown-table tbody tr:nth-child(even),
+.miniapp-shell.miniapp-light .ai-markdown-table tbody tr:nth-child(even) {
+  background: rgba(226, 232, 240, 0.45);
+}
