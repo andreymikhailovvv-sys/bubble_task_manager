@@ -3,6 +3,7 @@ import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, Che
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -774,8 +775,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const taskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const subtaskTitleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const pendingSubtaskTitleFocusIdRef = useRef<string | null>(null);
-  const [isTaskTitleSingleLine, setIsTaskTitleSingleLine] = useState(false);
-  const [isSubtaskTitleSingleLine, setIsSubtaskTitleSingleLine] = useState(false);
+  const [taskTitleRows, setTaskTitleRows] = useState(1);
+  const [subtaskTitleRows, setSubtaskTitleRows] = useState(1);
   const [commentPanelTaskId, setCommentPanelTaskId] = useState<string | null>(null);
   const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
   const [taskCommentsLoading, setTaskCommentsLoading] = useState(false);
@@ -2040,7 +2041,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
     };
     return [...(subtasksByParent[openedTask.id] ?? [])]
-      .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE')
+      .filter((task) => !hideClosedOpenedTaskSubtasks || task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0)
       .filter((task) => !openedTaskSubtaskAuthorFilterUserId || task.creatorUserId === openedTaskSubtaskAuthorFilterUserId)
       .sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
@@ -2091,21 +2092,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   useLayoutEffect(() => {
-    const updateTitleRows = (textarea: HTMLTextAreaElement | null, setIsSingleLine: (value: boolean) => void) => {
-      if (!textarea) return;
-      const previousRows = textarea.rows;
-      textarea.rows = 1;
-      const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 36;
-      setIsSingleLine(textarea.scrollHeight <= lineHeight + 4);
-      textarea.rows = previousRows;
+    const updateTitleRows = () => {
+      if (taskTitleInputRef.current) setTaskTitleRows(measureTitleTextareaRows(taskTitleInputRef.current));
+      if (subtaskTitleInputRef.current) setSubtaskTitleRows(measureTitleTextareaRows(subtaskTitleInputRef.current));
     };
-
-    updateTitleRows(taskTitleInputRef.current, setIsTaskTitleSingleLine);
-    updateTitleRows(subtaskTitleInputRef.current, setIsSubtaskTitleSingleLine);
-  }, [openedTaskDraft?.title, openedSubtaskDraft?.title]);
+    updateTitleRows();
+    window.addEventListener('resize', updateTitleRows);
+    return () => window.removeEventListener('resize', updateTitleRows);
+  }, [openedTask?.id, openedSubtask?.id, isCreatingNewSubtask, openedTaskDraft?.title, openedSubtaskDraft?.title]);
 
   useEffect(() => {
-    if (pendingSubtaskTitleFocusIdRef.current !== subtaskEditorId) return;
+    if (pendingSubtaskTitleFocusIdRef.current !== subtaskEditorId) {
+      // Do not steal focus when opening an existing subtask.
+      subtaskTitleInputRef.current?.blur();
+      if (subtaskTitleInputRef.current) {
+        subtaskTitleInputRef.current.scrollTop = 0;
+        subtaskTitleInputRef.current.scrollLeft = 0;
+      }
+      return;
+    }
     pendingSubtaskTitleFocusIdRef.current = null;
     subtaskTitleInputRef.current?.focus();
   }, [isCreatingNewSubtask, subtaskEditorId]);
@@ -3447,8 +3452,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
                   onChange={(event) => onChangeDraft(openedTask.id, { title: event.target.value })}
-                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${isTaskTitleSingleLine ? 'min-h-[2.15rem]' : 'min-h-[4.5rem]'}`}
-                  rows={isTaskTitleSingleLine ? 1 : 2}
+                  className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-3xl font-bold leading-tight outline-none ${taskTitleRows === 1 ? 'min-h-[2.15rem]' : taskTitleRows === 2 ? 'min-h-[4.5rem]' : 'min-h-[6.75rem]'}`}
+                  rows={taskTitleRows}
                   placeholder="Без названия"
                 />
                 {openedTask.taskType === 'EVENT' ? (
@@ -3460,7 +3465,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     autoComplete="street-address"
                   />
                 ) : null}
-                <div className={`${isTaskTitleSingleLine ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
+                <div className={`${taskTitleRows === 1 ? '-mt-[0.15rem]' : 'mt-2'} flex items-center gap-2 text-sm font-semibold ${isOverdue({ ...openedTask, dueDate: fromInputDateTime(openedTaskDraft.dueDate) }) ? 'text-rose-500' : 'text-violet-500'}`}>
                   <DateTimePickerWithApply
                     value={fromInputDateTime(openedTaskDraft.dueDate)}
                     onChange={(nextValue) => onChangeDraft(openedTask.id, { dueDate: toInputDateTime(nextValue) })}
@@ -3544,6 +3549,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       >
                         {hideClosedOpenedTaskSubtasks ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
+                      {openedTask.isCollaborative && (openedTask.unreadCommentCount ?? 0) > 0 ? (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full border border-violet-400/50 px-2 py-1 text-[10px] font-semibold text-violet-400"
+                          title="Отметить все комментарии подзадач прочитанными"
+                          aria-label="Отметить все комментарии подзадач прочитанными"
+                          onClick={async () => {
+                            try {
+                              await api.markAllTaskCommentsRead(openedTask.id);
+                              await loadData();
+                              setError(null);
+                            } catch (error) {
+                              setError(error instanceof Error ? error.message : 'Не удалось обновить комментарии');
+                            }
+                          }}
+                        >
+                          <Check size={12} /> {openedTask.unreadCommentCount}
+                        </button>
+                      ) : null}
                     </h3>
                     <div className="relative">
                       <button
@@ -3670,8 +3694,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ref={subtaskTitleInputRef}
               value={openedSubtaskDraft.title}
               onChange={(event) => changeSubtaskDraft({ title: event.target.value })}
-              className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${isSubtaskTitleSingleLine ? 'min-h-[1.9rem]' : 'min-h-[3.8rem]'}`}
-              rows={isSubtaskTitleSingleLine ? 1 : 2}
+              className={`miniapp-focus-title-input invisible-scrollbar w-full resize-none border-0 bg-transparent p-0 text-2xl font-bold leading-tight outline-none ${subtaskTitleRows === 1 ? 'min-h-[1.9rem]' : subtaskTitleRows === 2 ? 'min-h-[3.8rem]' : 'min-h-[5.7rem]'}`}
+              rows={subtaskTitleRows}
               placeholder="Название подзадачи"
             />
             <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-violet-500">

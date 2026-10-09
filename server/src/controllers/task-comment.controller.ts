@@ -16,5 +16,8 @@ export const taskCommentController = {
   },
   markRead: async (req: Request, res: Response) => {
     res.json(await taskCommentService.markRead(req.params.id, req.user!.id, req.body?.lastCommentId));
+  },
+  markAllRead: async (req: Request, res: Response) => {
+    res.json(await taskCommentService.markAllRead(req.params.id, req.user!.id));
   }
 };

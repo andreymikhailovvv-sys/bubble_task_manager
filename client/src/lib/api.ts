@@ -235,6 +235,7 @@ export const api = {
   createTaskComment: (id: string, payload: { content: string; parentCommentId?: string | null }) =>
     request<TaskComment>(`/api/tasks/${id}/comments`, { method: 'POST', body: JSON.stringify(payload) }),
   markTaskCommentsRead: (id: string, lastCommentId?: string | null) => request<{ ok: true; lastReadAt: string }>(`/api/tasks/${id}/comments/read`, { method: 'POST', body: JSON.stringify({ lastCommentId: lastCommentId ?? null }) }),
+  markAllTaskCommentsRead: (id: string) => request<{ ok: true; markedSubtasks: number }>(`/api/tasks/${id}/comments/read-all`, { method: 'POST' }),
   createTaskCalendarIcsLink: (id: string, payload: { startAt: string; durationMinutes: 30 | 60 | 90 | 120; reminderMinutes: 10 | 30 | 60 | null }) =>
     request<{ url: string }>(`/api/tasks/${id}/calendar/ics-link`, { method: 'POST', body: JSON.stringify(payload) }),
   recordEfficiencyEvent: (payload: { delta: number; bucket: 'task' | 'habit' | 'ai' | 'focus' }) =>

@@ -1055,6 +1055,7 @@ apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.get('/tasks/:id/comments', requireAuth, taskCommentController.list);
 apiRouter.post('/tasks/:id/comments', requireAuth, taskCommentController.create);
 apiRouter.post('/tasks/:id/comments/read', requireAuth, taskCommentController.markRead);
+apiRouter.post('/tasks/:id/comments/read-all', requireAuth, taskCommentController.markAllRead);
 apiRouter.post('/tasks/:id/share', requireAuth, asyncHandler(taskController.createShareLink));
 apiRouter.patch('/tasks/:id/collaboration', requireAuth, asyncHandler(taskController.updateCollaboration));
 apiRouter.delete('/tasks/:id/collaboration/members/:userId', requireAuth, asyncHandler(taskController.removeCollaborator));
