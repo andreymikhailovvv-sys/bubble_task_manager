@@ -15,6 +15,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Ta
 import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -109,13 +110,10 @@ const SUBTASK_FILTER_OPTIONS: Array<{ mode: SubtaskFilterMode; label: string }> 
   { mode: 'none', label: 'Без фильтра' }
 ];
 const getAiReadCursorStorageKey = (userId: string) => `btm:${userId}:ai-read-cursor-by-task`;
-const getBackgroundStorageKey = (userId: string) => `btm:${userId}:background-image`;
-const getBackgroundOverlayStorageKey = (userId: string) => `btm:${userId}:background-overlay-opacity`;
 const getThemeStorageKey = (userId: string) => `btm:${userId}:theme-mode`;
 const getRankingModeStorageKey = (userId: string) => `btm:${userId}:ranking-mode`;
 const getOnboardingOfferStorageKey = (userId: string) => `btm:${userId}:onboarding-offer-seen`;
 const getLatestNewsReadStorageKey = (userId: string) => `btm:${userId}:latest-news-read`;
-const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.65;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
 const DEFAULT_MORNING_AI_CHECKUP_TIME = '10:00';
@@ -162,8 +160,6 @@ const TIMEZONE_OPTIONS = [
   'Asia/Almaty',
   'Asia/Tokyo'
 ] as const;
-const MIN_BACKGROUND_OVERLAY_OPACITY = 0.2;
-const MAX_BACKGROUND_OVERLAY_OPACITY = 0.9;
 const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
@@ -301,7 +297,6 @@ const DISPLAY_MODE_OPTIONS = [
   { value: 'timeline', label: 'Таймлайн', icon: CalendarDays, iconClassName: 'text-amber-300' }
 ] as const;
 type DisplayMode = (typeof DISPLAY_MODE_OPTIONS)[number]['value'];
-type ThemeMode = 'dark' | 'light';
 type GeneralAiUndoOperation = {
   taskId: string;
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
@@ -1009,9 +1004,8 @@ export default function App() {
   const [isSubtaskFilterOpen, setIsSubtaskFilterOpen] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
-  const [backgroundOverlayOpacity, setBackgroundOverlayOpacity] = useState(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
-  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+  const [themeMode, setThemeMode] = useState<ThemePreference>('light');
+  const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
@@ -1266,8 +1260,6 @@ export default function App() {
     setLastGeneralAiUndoOperations([]);
     loadedAiHistoryTaskIdsRef.current = new Set();
     setSubtaskOrderMap({});
-    setBackgroundImage(null);
-    setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
     setThemeMode('light');
     setAuthError(null);
   };
@@ -1337,8 +1329,6 @@ export default function App() {
     if (!currentUser) {
       setAiDialogByTask({});
       setAiReadCursorByTask({});
-      setBackgroundImage(null);
-      setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
       setThemeMode('light');
       loadedAiHistoryTaskIdsRef.current = new Set();
       return;
@@ -1390,10 +1380,11 @@ export default function App() {
     };
     void loadGeneralAiHistory();
 
-    setBackgroundImage(localStorage.getItem(getBackgroundStorageKey(currentUser.id)));
-
+    // Drop obsolete uploaded backgrounds; the workspace now uses a fixed surface.
+    localStorage.removeItem(`btm:${currentUser.id}:background-image`);
+    localStorage.removeItem(`btm:${currentUser.id}:background-overlay-opacity`);
     const storedThemeMode = localStorage.getItem(getThemeStorageKey(currentUser.id));
-    setThemeMode(storedThemeMode === 'dark' ? 'dark' : 'light');
+    setThemeMode(storedThemeMode === 'dark' || storedThemeMode === 'auto' ? storedThemeMode : 'light');
 
     const storedRankingMode = localStorage.getItem(getRankingModeStorageKey(currentUser.id));
     if (storedRankingMode === 'urgency' || storedRankingMode === 'importance' || storedRankingMode === 'coefficient') {
@@ -1402,49 +1393,36 @@ export default function App() {
       setRankingMode('urgency');
     }
 
-    const rawOverlayOpacity = localStorage.getItem(getBackgroundOverlayStorageKey(currentUser.id));
-    const parsedOverlayOpacity = rawOverlayOpacity ? Number(rawOverlayOpacity) : Number.NaN;
-    if (Number.isFinite(parsedOverlayOpacity)) {
-      setBackgroundOverlayOpacity(
-        Math.min(MAX_BACKGROUND_OVERLAY_OPACITY, Math.max(MIN_BACKGROUND_OVERLAY_OPACITY, parsedOverlayOpacity))
-      );
-      return;
-    }
-    setBackgroundOverlayOpacity(DEFAULT_BACKGROUND_OVERLAY_OPACITY);
     return () => {
       isCancelled = true;
     };
   }, [currentUser?.id]);
 
+  const effectiveThemeMode = useMemo(
+    () => resolveThemeMode(themeMode, userTimeZone, new Date()),
+    [themeMode, userTimeZone, autoThemeTick]
+  );
+
   useEffect(() => {
-    document.body.dataset.theme = themeMode;
-    document.documentElement.dataset.theme = themeMode;
+    if (themeMode !== 'auto') return;
+    // Check periodically so the mode switches at 20:00 and 05:00 without a refresh.
+    const id = window.setInterval(() => setAutoThemeTick((tick) => tick + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [themeMode]);
+
+  useEffect(() => {
+    document.body.dataset.theme = effectiveThemeMode;
+    document.documentElement.dataset.theme = effectiveThemeMode;
     return () => {
       delete document.body.dataset.theme;
       delete document.documentElement.dataset.theme;
     };
-  }, [themeMode]);
+  }, [effectiveThemeMode]);
 
   useEffect(() => {
     if (!currentUser) return;
     localStorage.setItem(getThemeStorageKey(currentUser.id), themeMode);
   }, [themeMode, currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    const key = getBackgroundStorageKey(currentUser.id);
-    if (backgroundImage) {
-      localStorage.setItem(key, backgroundImage);
-      return;
-    }
-    localStorage.removeItem(key);
-  }, [backgroundImage, currentUser?.id]);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    localStorage.setItem(getBackgroundOverlayStorageKey(currentUser.id), String(backgroundOverlayOpacity));
-  }, [backgroundOverlayOpacity, currentUser?.id]);
-
 
   useEffect(() => {
     if (!currentUser) return;
@@ -3591,19 +3569,6 @@ ${allContext}`,
     });
   };
 
-  const handleBackgroundUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setBackgroundImage(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  };
-
   const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
     const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus });
     try {
@@ -3693,7 +3658,7 @@ ${allContext}`,
 
   if (authLoading) {
     return (
-      <main className="app-shell flex h-screen items-center justify-center p-4" data-theme={themeMode}>
+      <main className="app-shell flex h-screen items-center justify-center p-4" data-theme={effectiveThemeMode}>
         <p className="text-sm text-slate-300">Проверяем авторизацию…</p>
       </main>
     );
@@ -3899,12 +3864,12 @@ ${allContext}`,
         style={{
           borderColor: isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
           backgroundColor: isEventChip
-            ? (themeMode === 'light' ? 'rgba(254,243,199,0.95)' : 'rgba(146,64,14,0.38)')
+            ? (effectiveThemeMode === 'light' ? 'rgba(254,243,199,0.95)' : 'rgba(146,64,14,0.38)')
             : isSubtaskChip
-              ? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
+              ? (effectiveThemeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
             : hasOverdueState
-              ? (themeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
-              : hexToRgba(sphereColor, themeMode === 'light' ? 0.16 : 0.34) ?? (themeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
+              ? (effectiveThemeMode === 'light' ? 'rgba(255,228,230,0.92)' : 'rgba(136,19,55,0.45)')
+              : hexToRgba(sphereColor, effectiveThemeMode === 'light' ? 0.16 : 0.34) ?? (effectiveThemeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
           boxShadow: disableEffects
             ? undefined
             : (!isEventChip && hasOverdueState)
@@ -4034,7 +3999,7 @@ ${allContext}`,
       <div
         key={`timeline-habit-${habit.id}-${reminderTime}-${dateKey}-${options?.showTime ? 'time' : 'plain'}`}
         className="timeline-habit-chip flex w-full items-center gap-2 rounded-md border px-2 py-1 text-left text-xs transition"
-        style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%`, borderColor: hexToRgba(habit.color, themeMode === 'light' ? 0.5 : 0.72) ?? habit.color } as CSSProperties}
+        style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%`, borderColor: hexToRgba(habit.color, effectiveThemeMode === 'light' ? 0.5 : 0.72) ?? habit.color } as CSSProperties}
       >
         <span className="miniapp-habit-circle inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-sm" style={{ '--habit-color': habit.color, '--habit-progress': `${progress}%` } as CSSProperties}>
           <span className="miniapp-habit-circle-core inline-flex h-5 w-5 items-center justify-center rounded-full">{habit.icon}</span>
@@ -4338,14 +4303,7 @@ ${allContext}`,
   return (
     <main
       className="app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6"
-      data-theme={themeMode}
-      style={{
-        backgroundImage: themeMode === 'dark' && backgroundImage
-          ? `linear-gradient(rgba(2,6,23,${backgroundOverlayOpacity}), rgba(2,6,23,${backgroundOverlayOpacity})), url(${backgroundImage})`
-          : undefined,
-        backgroundSize: themeMode === 'dark' && backgroundImage ? 'cover' : undefined,
-        backgroundPosition: themeMode === 'dark' && backgroundImage ? 'center' : undefined
-      }}
+      data-theme={effectiveThemeMode}
     >
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
@@ -4503,19 +4461,20 @@ ${allContext}`,
             <div data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
               <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
-                <div className="grid grid-cols-2 gap-1 rounded-lg surface-muted p-1 text-xs">
-                  {(['dark', 'light'] as const).map((mode) => (
+                <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
+                  {(['light', 'dark', 'auto'] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
-                      className={`light-dropdown-item rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'bg-cyan-600 text-white shadow light-dropdown-item-active' : 'text-muted hover:brightness-110'}`}
+                      aria-pressed={themeMode === mode}
+                      className={`theme-preference-switch-option rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'theme-preference-switch-option-active' : 'text-muted hover:brightness-110'}`}
                       onClick={() => setThemeMode(mode)}
                     >
-                      {mode === 'dark' ? 'Тёмная' : 'Светлая'}
+                      {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
                     </button>
                   ))}
                 </div>
-                {themeMode === 'light' ? <p className="mt-2 text-[11px] leading-snug text-subtle">В светлой теме используется чистый системный фон, поэтому выбор фонового изображения отключён.</p> : null}
+                <p className="mt-2 text-[11px] leading-snug text-subtle">Авто: тёмная с 20:00 до 05:00 по выбранному часовому поясу.</p>
               </div>
               <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
               <CustomSelect
@@ -5128,7 +5087,7 @@ ${allContext}`,
             </div>
             <BubbleField
               className="h-full"
-              themeMode={themeMode}
+              themeMode={effectiveThemeMode}
             tasks={visibleTasks}
             spheres={visibleSpheres}
             rankingMode="coefficient"
@@ -5253,7 +5212,7 @@ ${allContext}`,
                       {rankingMode === 'coefficient' ? (
                         <span
                           className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, themeMode) }}
+                          style={{ backgroundColor: getCoefficientBadgeColor(taskCoefficient, effectiveThemeMode) }}
                           title="Коэффициент важности задачи"
                         >
                           <Gauge size={12} />
@@ -5271,7 +5230,7 @@ ${allContext}`,
                         className="list-task-sector-icon inline-flex h-5 w-5 items-center justify-center rounded-full border"
                         style={{
                           borderColor: sphereColor,
-                          backgroundColor: hexToRgba(sphereColor, themeMode === 'light' ? 0.36 : 0.26) ?? 'rgba(100,116,139,0.25)',
+                          backgroundColor: hexToRgba(sphereColor, effectiveThemeMode === 'light' ? 0.36 : 0.26) ?? 'rgba(100,116,139,0.25)',
                           color: sphereColor
                         }}
                         title={taskSphere?.name ?? 'Без сектора'}
@@ -6097,45 +6056,6 @@ ${allContext}`,
                 Показать ещё ({completedTasksForPanel.length - completedTasksVisible.length})
               </button>
             ) : null}
-          </section>
-          <section className="workspace-widget-card rounded-[1.35rem] border p-4">
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <h3 className="text-base font-bold tracking-[-0.01em]">Фон рабочего пространства</h3>
-              {themeMode === 'light' ? <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-200">Недоступно</span> : null}
-            </div>
-            {themeMode === 'light' ? (
-              <p className="light-workspace-bg-note rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs leading-snug text-slate-300">
-                В светлой теме фон фиксированный: без изображений и затемнения, чтобы все карточки, списки и таймлайн оставались равномерными и читаемыми.
-              </p>
-            ) : (
-              <>
-                <label className="mb-2 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200 transition hover:bg-slate-700/80">
-                  <span className="block font-medium">Загрузить изображение</span>
-                  <span className="mt-1 block text-[11px] text-slate-400">Рекомендуемый размер: от 1920×1080 (лучше 2560×1440).</span>
-                  <input type="file" accept="image/*" className="mt-2 block w-full text-[11px]" onChange={handleBackgroundUpload} />
-                </label>
-                <label className="mb-3 block rounded-lg border border-slate-600/70 bg-slate-800/80 px-3 py-2 text-xs text-slate-200">
-                  <span className="block font-medium">Приглушение фона: {Math.round(backgroundOverlayOpacity * 100)}%</span>
-                  <input
-                    type="range"
-                    min={MIN_BACKGROUND_OVERLAY_OPACITY}
-                    max={MAX_BACKGROUND_OVERLAY_OPACITY}
-                    step={0.05}
-                    value={backgroundOverlayOpacity}
-                    className="mt-2 w-full"
-                    onChange={(event) => setBackgroundOverlayOpacity(Number(event.target.value))}
-                  />
-                  <span className="mt-1 block text-[11px] text-slate-400">Меньше — фон ярче, больше — фон темнее.</span>
-                </label>
-                <button
-                  className="w-full rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50"
-                  disabled={!backgroundImage}
-                  onClick={() => setBackgroundImage(null)}
-                >
-                  Сбросить фон
-                </button>
-              </>
-            )}
           </section>
           <section className="workspace-widget-card rounded-[1.35rem] border p-4">
             <h3 className="mb-3 text-base font-bold tracking-[-0.01em]">Управление секторами</h3>
