@@ -3480,7 +3480,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <TaskDescriptionInput
                     value={openedTaskDraft.description}
                     onChange={(description) => onChangeDraft(openedTask.id, { description })}
-                    className="miniapp-focus-description-input invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                    className="miniapp-focus-description-input miniapp-task-description-preview invisible-scrollbar min-h-32 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                     placeholder="Введите описание"
                   />
                 </div>
@@ -3706,7 +3706,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <TaskDescriptionInput
                 value={openedSubtaskDraft.description}
                 onChange={(description) => changeSubtaskDraft({ description })}
-                className="miniapp-focus-description-input invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
+                className="miniapp-focus-description-input miniapp-subtask-description-preview invisible-scrollbar min-h-28 w-full resize-none border-0 bg-transparent text-sm leading-6 outline-none placeholder:text-slate-400"
                 placeholder="Описание подзадачи"
               />
             </div>

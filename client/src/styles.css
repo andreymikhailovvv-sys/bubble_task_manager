@@ -7692,21 +7692,32 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
 
 /* Fixed upcoming-subtask cards also need a fixed inner text box. */
 .upcoming-subtask-copy {
-  display: flex;
+  display: grid;
+  grid-template-rows: 1.25rem minmax(0, 2rem) 1rem;
+  align-content: center;
+  row-gap: 0.25rem;
   height: 5.5rem;
   max-height: 5.5rem;
   min-height: 0;
-  flex-direction: column;
-  justify-content: center;
+  overflow: hidden;
+  contain: paint;
+}
+.upcoming-subtask-copy > * {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 0;
+  margin-top: 0 !important;
   overflow: hidden;
 }
-
 .upcoming-subtask-title,
 .upcoming-subtask-deadline {
-  flex: 0 0 auto;
+  display: block;
   min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
-
 .upcoming-subtask-description {
   display: -webkit-box;
   min-height: 0;
@@ -7718,7 +7729,6 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-
 .upcoming-subtask-description > *,
 .upcoming-subtask-description a {
   display: inline;
@@ -7866,4 +7876,43 @@ body[data-theme='dark'] .task-edit-subtask-footer {
 .miniapp-shell:not(.miniapp-light) .miniapp-subtask-actions {
   background: #172033;
   border-top-color: rgba(139, 92, 246, 0.32);
+}
+
+/* One flat, neutral canvas for dark-mode web, without user image overlays. */
+body[data-theme='dark'] .app-shell {
+  background: #101827;
+  background-image: none;
+  background-size: auto;
+}
+
+/* The three-state theme preference is a single segmented control. */
+.theme-preference-switch-option {
+  min-width: 0;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.theme-preference-switch-option-active,
+body[data-theme='light'] .theme-preference-switch-option-active,
+body[data-theme='dark'] .theme-preference-switch-option-active {
+  background: #0891b2;
+  color: #fff !important;
+  box-shadow: 0 3px 9px rgba(8, 145, 178, 0.22);
+}
+
+/* Compact formatted-note previews, without changing the textarea editing height. */
+.miniapp-focus-panel .task-description-preview.miniapp-task-description-preview {
+  min-height: 5.25rem !important;
+  height: 5.25rem;
+  max-height: 5.25rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.miniapp-focus-panel .task-description-preview.miniapp-subtask-description-preview {
+  min-height: 4.75rem !important;
+  height: 4.75rem;
+  max-height: 4.75rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
