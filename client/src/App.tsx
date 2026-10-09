@@ -14,6 +14,7 @@ import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -187,13 +188,13 @@ const FOCUS_TIME_BONUS_INTERVAL_SECONDS = 5 * 60;
 const FOCUS_TASK_SWITCH_AI_DELAY_MS = 4_000;
 const EFFICIENCY_BONUSES = {
   doneTask: 4,
-  doneSubtask: 1.5,
+  doneSubtask: 1.2,
   doneHabit: 3,
   createdHabit: 3.35,
   completedHabit: 20.1,
   createdTask: 1
 } as const;
-const FOCUS_TIME_BONUS_DELTA = EFFICIENCY_BONUSES.doneSubtask / 2;
+const FOCUS_TIME_BONUS_DELTA = 0.75; // The independent time-based bonus is unchanged.
 
 const EFFICIENCY_INACTIVITY_GRACE_HOURS = 3;
 const EFFICIENCY_NIGHT_START_HOUR = 0;
@@ -931,7 +932,7 @@ export default function App() {
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
-  const [isFocusedTitleSingleLine, setIsFocusedTitleSingleLine] = useState(true);
+  const [focusedTitleRows, setFocusedTitleRows] = useState(1);
   const [isFocusedSphereDropdownOpen, setIsFocusedSphereDropdownOpen] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
@@ -1795,18 +1796,10 @@ export default function App() {
     if (!focusedTask) return;
     const textarea = focusedTaskTitleInputRef.current;
     if (!textarea) return;
-    const previousRows = textarea.rows;
-    textarea.rows = 1;
-    const computedStyle = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computedStyle.lineHeight);
-    const verticalPadding =
-      Number.parseFloat(computedStyle.paddingTop) +
-      Number.parseFloat(computedStyle.paddingBottom);
-    const singleLineHeight =
-      (Number.isFinite(lineHeight) ? lineHeight : 36) + verticalPadding;
-    const nextIsSingleLine = textarea.scrollHeight <= singleLineHeight + 4;
-    textarea.rows = previousRows;
-    setIsFocusedTitleSingleLine(nextIsSingleLine);
+    const updateTitleRows = () => setFocusedTitleRows(measureTitleTextareaRows(textarea));
+    updateTitleRows();
+    window.addEventListener('resize', updateTitleRows);
+    return () => window.removeEventListener('resize', updateTitleRows);
   }, [focusedTask?.id, focusedDraft?.title, focusedTitleDraft, isEditingFocusedTitle]);
 
   const filteredGeneralAiMessages = useMemo(() => {
@@ -1826,7 +1819,7 @@ export default function App() {
       setIsFocusedSettingsOpen(false);
       setIsEditingFocusedTitle(false);
       setFocusedTitleDraft('');
-      setIsFocusedTitleSingleLine(true);
+      setFocusedTitleRows(1);
       setIsFocusedSphereDropdownOpen(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
@@ -1848,7 +1841,7 @@ export default function App() {
     setIsFocusedSettingsOpen(false);
     setIsEditingFocusedTitle(false);
     setFocusedTitleDraft(focusedTask.title ?? '');
-    setIsFocusedTitleSingleLine(true);
+    setFocusedTitleRows(1);
     setIsFocusedSphereDropdownOpen(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
@@ -6644,7 +6637,7 @@ ${allContext}`,
               <div className="focus-main-card flex min-h-0 flex-none flex-col overflow-visible rounded-[2rem] border-0 p-0 shadow-none">
                 <div
                   className={`min-h-0 flex-1 overflow-y-auto px-1 ${
-                    isFocusedTitleSingleLine ? 'focused-task-single-line-title' : ''
+                    (focusedTitleRows === 1) ? 'focused-task-single-line-title' : ''
                   }`}
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
@@ -6655,7 +6648,7 @@ ${allContext}`,
                         ref={focusedTaskTitleInputRef}
                         className="focused-task-title-input invisible-scrollbar min-w-0 w-full resize-none border-0 bg-transparent p-0 text-left text-3xl font-bold leading-tight text-slate-950 shadow-none outline-none"
                         value={isEditingFocusedTitle ? focusedTitleDraft : focusedDraft.title || 'Без названия'}
-                        rows={isFocusedTitleSingleLine ? 1 : 2}
+                        rows={focusedTitleRows}
                         onFocus={() => {
                           setFocusedTitleDraft(focusedDraft.title ?? '');
                           setIsEditingFocusedTitle(true);
@@ -6927,6 +6920,24 @@ ${allContext}`,
                     >
                       {hideClosedFocusedSubtasks ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
+                    {focusedTask.isCollaborative && (focusedTask.unreadCommentCount ?? 0) > 0 ? (
+                      <button
+                        type="button"
+                        className="rounded-full border border-violet-400/50 px-2 py-1 text-[10px] font-semibold text-violet-500 hover:brightness-110"
+                        title="Отметить все комментарии подзадач прочитанными"
+                        aria-label="Отметить все комментарии подзадач прочитанными"
+                        onClick={async () => {
+                          try {
+                            await api.markAllTaskCommentsRead(focusedTask.id);
+                            await load();
+                          } catch (error) {
+                            window.alert(error instanceof Error ? error.message : 'Не удалось обновить комментарии');
+                          }
+                        }}
+                      >
+                        Отметить прочитанными ({focusedTask.unreadCommentCount})
+                      </button>
+                    ) : null}
                   </h4>
                   <div className="flex items-center gap-2">
                     {(subtaskMap[focusedTask.id] ?? []).length === 0 ? (
@@ -7033,14 +7044,14 @@ ${allContext}`,
                 ) : null}
                 <Reorder.Group
                   axis="y"
-                  values={hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)}
+                  values={hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)}
                   onReorder={(nextOrder) => {
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
-                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)).map((subtask) => (
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)).map((subtask) => (
                     <Reorder.Item
                       key={subtask.id}
                       value={subtask}
@@ -7074,7 +7085,7 @@ ${allContext}`,
                       />
                     </Reorder.Item>
                   ))}
-                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE') : getFocusedSubtaskItems(focusedTask.id)).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
+                  {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)).length === 0 ? <li className="text-xs text-subtle">Пока нет подзадач</li> : null}
                 </Reorder.Group>
               </div>
             </div>

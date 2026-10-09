@@ -199,6 +199,38 @@ export const taskCommentService = {
     };
   },
 
+  /** Explicitly acknowledge all existing comments under a collaborative root task for one member. */
+  markAllRead: async (rootTaskId: string, userId: string) => {
+    const root = await prisma.task.findFirstOrThrow({
+      where: {
+        id: rootTaskId,
+        parentTaskId: null,
+        collaboration: { members: { some: { userId, isHidden: false } } }
+      },
+      select: { id: true, collaborationId: true }
+    });
+    const subtasks = await prisma.task.findMany({
+      where: { parentTaskId: root.id, collaborationId: root.collaborationId },
+      select: { id: true }
+    });
+    if (!subtasks.length) return { ok: true as const, markedSubtasks: 0 };
+    const latestComments = await prisma.taskComment.groupBy({
+      by: ['taskId'],
+      where: { taskId: { in: subtasks.map((task) => task.id) } },
+      _max: { createdAt: true }
+    });
+    await Promise.all(latestComments.map((entry) => {
+      const lastReadAt = entry._max.createdAt;
+      if (!lastReadAt) return Promise.resolve();
+      return prisma.taskCommentReadState.upsert({
+        where: { taskId_userId: { taskId: entry.taskId, userId } },
+        create: { taskId: entry.taskId, userId, lastReadAt },
+        update: { lastReadAt }
+      });
+    }));
+    return { ok: true as const, markedSubtasks: latestComments.length };
+  },
+
   markRead: async (taskId: string, userId: string, rawLastCommentId?: unknown) => {
     await getAccessibleCollaborativeSubtask(taskId, userId);
     const lastCommentId = typeof rawLastCommentId === 'string' && rawLastCommentId.trim() ? rawLastCommentId.trim() : null;

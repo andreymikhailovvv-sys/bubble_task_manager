@@ -115,3 +115,34 @@ test('web UI показывает контекстное меню, ответы 
   const calendar = row.indexOf('<InlineDateTimePickerIcon');
   assert.ok(due >= 0 && comments > due && creator > comments && calendar > creator);
 });
+
+test('collaborative root comments can be marked read only by an active member', async () => {
+  const [service, routes, controller, clientApi, miniApp, app] = await Promise.all([
+    readFile(new URL('../src/services/task-comment.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/task-comment.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8')
+  ]);
+  const readAll = service.slice(service.indexOf('markAllRead: async'), service.indexOf('markRead: async'));
+  assert.match(readAll, /parentTaskId: null/);
+  assert.match(readAll, /members: \{ some: \{ userId, isHidden: false \} \}/);
+  assert.match(readAll, /collaborationId: root\.collaborationId/);
+  assert.match(readAll, /taskComment\.groupBy/);
+  assert.match(readAll, /taskCommentReadState\.upsert/);
+  assert.match(routes, /comments\/read-all', requireAuth, taskCommentController\.markAllRead/);
+  assert.match(controller, /taskCommentService\.markAllRead/);
+  assert.match(clientApi, /markAllTaskCommentsRead/);
+  assert.match(miniApp, /markAllTaskCommentsRead\(openedTask\.id\)/);
+  assert.match(app, /markAllTaskCommentsRead\(focusedTask\.id\)/);
+});
+
+test('completed subtasks with unread comments remain visible to clear the badge', async () => {
+  const [miniApp, app] = await Promise.all([
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(miniApp, /task\.status !== 'DONE' \|\| \(task\.unreadCommentCount \?\? 0\) > 0/);
+  assert.match(app, /task\.status !== 'DONE' \|\| \(task\.unreadCommentCount \?\? 0\) > 0/);
+});

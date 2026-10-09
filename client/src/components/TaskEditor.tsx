@@ -28,6 +28,7 @@ import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
 import { api } from "../lib/api";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
+import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
 import { CalendarExportDialog } from "./CalendarExportDialog";
@@ -332,7 +333,7 @@ export function TaskEditor({
   const [draftSubtaskTitle, setDraftSubtaskTitle] = useState("");
   const [isAddingDraftSubtask, setIsAddingDraftSubtask] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
-  const [isTitleSingleLine, setIsTitleSingleLine] = useState(true);
+  const [titleRows, setTitleRows] = useState(1);
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
   const [subtaskAttachments, setSubtaskAttachments] = useState<TaskAttachment[]>([]);
   const [isUploadingSubtaskAttachment, setIsUploadingSubtaskAttachment] = useState(false);
@@ -426,13 +427,15 @@ export function TaskEditor({
     window.requestAnimationFrame(() => {
       const titleInput = titleInputRef.current;
       if (!titleInput) return;
-      titleInput.focus();
       if (task?.parentTaskId) {
-        const caret = titleInput.value.length;
-        titleInput.setSelectionRange(caret, caret);
-      } else {
-        titleInput.select();
+        // Read existing subtasks from the beginning; focus only on user tap.
+        titleInput.blur();
+        titleInput.scrollTop = 0;
+        titleInput.scrollLeft = 0;
+        return;
       }
+      titleInput.focus();
+      titleInput.select();
     });
     autosaveSignatureRef.current = task
       ? JSON.stringify({
@@ -516,18 +519,10 @@ export function TaskEditor({
   useLayoutEffect(() => {
     const textarea = titleInputRef.current;
     if (!textarea) return;
-    const previousRows = textarea.rows;
-    textarea.rows = 1;
-    const computedStyle = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computedStyle.lineHeight);
-    const verticalPadding =
-      Number.parseFloat(computedStyle.paddingTop) +
-      Number.parseFloat(computedStyle.paddingBottom);
-    const singleLineHeight =
-      (Number.isFinite(lineHeight) ? lineHeight : 36) + verticalPadding;
-    const nextIsSingleLine = textarea.scrollHeight <= singleLineHeight + 4;
-    textarea.rows = previousRows;
-    setIsTitleSingleLine(nextIsSingleLine);
+    const updateTitleRows = () => setTitleRows(measureTitleTextareaRows(textarea));
+    updateTitleRows();
+    window.addEventListener('resize', updateTitleRows);
+    return () => window.removeEventListener('resize', updateTitleRows);
   }, [form.title, isSubtask, isEventEditor]);
 
   const resolveAttachmentMimeType = (file: File): string => {
@@ -871,7 +866,7 @@ export function TaskEditor({
           ) : (
             <div
               className={`invisible-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto pr-1 ${
-                isTitleSingleLine ? "focused-task-single-line-title" : ""
+                titleRows === 1 ? "focused-task-single-line-title" : ""
               }`}
             >
               <div className="mt-2 flex items-start justify-between gap-3">
@@ -883,7 +878,7 @@ export function TaskEditor({
                       ? "Введите название события"
                       : "Введите название"
                   }
-                  rows={isSubtask ? 2 : isTitleSingleLine ? 1 : 2}
+                  rows={titleRows}
                   value={form.title ?? ""}
                   onChange={(e) => {
                     setTitleError(null);
