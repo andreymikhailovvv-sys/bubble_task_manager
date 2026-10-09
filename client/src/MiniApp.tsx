@@ -2366,14 +2366,50 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   };
 
+  const downloadAttachment = async (taskId: string, attachment: TaskAttachment) => {
+    try {
+      // Signed links do not require browser session cookies in Telegram's webview.
+      const download = await api.createTaskAttachmentDownloadLink(taskId, attachment.id);
+      const webApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined;
+      const openDownloadLink = () => {
+        if (webApp?.openLink) {
+          webApp.openLink(download.url);
+          return;
+        }
+        const link = document.createElement('a');
+        link.href = download.url;
+        link.download = download.fileName || attachment.name;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      };
+
+      if (webApp?.downloadFile) {
+        try {
+          webApp.downloadFile(
+            { url: download.url, file_name: download.fileName || attachment.name },
+            (accepted) => {
+              if (!accepted) {
+                try { openDownloadLink(); }
+                catch { setError('Не удалось открыть файл. Повторите скачивание.'); }
+              }
+            }
+          );
+        } catch {
+          openDownloadLink();
+        }
+      } else {
+        openDownloadLink();
+      }
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось скачать файл');
+    }
+  };
+
   const downloadTaskAttachment = (attachment: TaskAttachment) => {
-    if (!openedTask) return;
-    const link = document.createElement('a');
-    link.href = api.getTaskAttachmentDownloadUrl(openedTask.id, attachment.id);
-    link.download = attachment.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (openedTask) void downloadAttachment(openedTask.id, attachment);
   };
 
   const uploadSubtaskAttachmentFiles = async (files: File[]) => {
@@ -2431,22 +2467,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }
   };
 
-  const downloadSubtaskAttachment = async (attachment: TaskAttachment) => {
-    if (!openedSubtask) return;
-    try {
-      const download = await api.createTaskAttachmentDownloadLink(openedSubtask.id, attachment.id);
-      const webApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined;
-      if (webApp?.downloadFile) {
-        webApp.downloadFile({ url: download.url, file_name: download.fileName });
-      } else if (webApp?.openLink) {
-        webApp.openLink(download.url);
-      } else {
-        window.open(download.url, '_blank', 'noopener,noreferrer');
-      }
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось скачать файл');
-    }
+  const downloadSubtaskAttachment = (attachment: TaskAttachment) => {
+    if (openedSubtask) void downloadAttachment(openedSubtask.id, attachment);
   };
 
   const openTaskComments = async (subtask: Task) => {

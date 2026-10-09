@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Copy } from 'lucide-react';
+import { parseAiMarkdownTables, type AiMarkdownTableData } from '../lib/aiMarkdownTables';
 
 const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 
@@ -25,7 +26,51 @@ function AiCodeBlock({ code, language }: { code: string; language?: string }) {
   );
 }
 
-/** Разбивает ответ ИИ на текст и fenced-блоки Markdown, не меняя текстовый рендерер чата. */
+function renderTableCell(value: string): string {
+  // Task references are UI directives, never expose their internal IDs as table text.
+  return value
+    .replace(/\[\[task_ref:[^|\]]+\|([^\]]+)\]\]/g, '$1')
+    .replace(/\[\[task_ref=[^\]]+\]\]/g, '')
+    .trim();
+}
+
+function AiMarkdownTable({ table }: { table: AiMarkdownTableData }) {
+  return (
+    <div className="ai-markdown-table-scroll my-2 max-w-full overflow-x-auto rounded-xl border" role="region" aria-label="Таблица в ответе ИИ" tabIndex={0}>
+      <table className="ai-markdown-table w-full border-collapse text-left text-xs">
+        <thead>
+          <tr>
+            {table.headers.map((header, index) => (
+              <th key={index} scope="col" style={{ textAlign: table.alignments[index] }}>{renderTableCell(header)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td key={cellIndex} style={{ textAlign: table.alignments[cellIndex] }}>{renderTableCell(cell)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function renderTextAndTables(text: string, keyPrefix: string, renderText: (text: string, key: string) => ReactNode): ReactNode {
+  const segments = parseAiMarkdownTables(text);
+  if (segments.length === 1 && segments[0].type === 'text') return renderText(text, keyPrefix);
+  return segments.map((segment, index) => (
+    segment.type === 'table'
+      ? <AiMarkdownTable key={keyPrefix + '-table-' + index} table={segment.table} />
+      : <div key={keyPrefix + '-text-' + index}>{renderText(segment.text, keyPrefix + '-text-' + index)}</div>
+  ));
+}
+
+/** Render code fences separately so pipes inside source code are never mistaken for tables. */
+
 export function renderAiContentBlocks(content: string, renderText: (text: string, key: string) => ReactNode): ReactNode {
   const blocks: ReactNode[] = [];
   let lastIndex = 0;
@@ -35,14 +80,14 @@ export function renderAiContentBlocks(content: string, renderText: (text: string
   while ((match = CODE_BLOCK_PATTERN.exec(content)) !== null) {
     const [full, language, code] = match;
     const before = content.slice(lastIndex, match.index);
-    if (before) blocks.push(renderText(before, `text-${lastIndex}`));
+    if (before) blocks.push(renderTextAndTables(before, 'text-' + lastIndex, renderText));
     blocks.push(<AiCodeBlock key={`code-${match.index}`} code={code} language={language} />);
     lastIndex = match.index + full.length;
   }
 
   const tail = content.slice(lastIndex);
-  if (tail) blocks.push(renderText(tail, 'text-tail'));
+  if (tail) blocks.push(renderTextAndTables(tail, 'text-tail', renderText));
   CODE_BLOCK_PATTERN.lastIndex = 0;
 
-  return blocks.length > 0 ? blocks : renderText(content, 'text-only');
+  return blocks.length > 0 ? blocks : renderTextAndTables(content, 'text-only', renderText);
 }
