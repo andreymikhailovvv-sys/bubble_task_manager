@@ -15,7 +15,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Ta
 import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
-import { resolveThemeMode, type ThemePreference } from './lib/autoTheme';
+import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
@@ -1004,7 +1004,8 @@ export default function App() {
   const [isSubtaskFilterOpen, setIsSubtaskFilterOpen] = useState(false);
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
   const [completedVisibleCount, setCompletedVisibleCount] = useState(40);
-  const [themeMode, setThemeMode] = useState<ThemePreference>('light');
+  const [themeMode, setThemeMode] = useState<ThemePreference>('auto');
+  const [themeStorageUserId, setThemeStorageUserId] = useState<string | null>(null);
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [authLogin, setAuthLogin] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -1260,7 +1261,8 @@ export default function App() {
     setLastGeneralAiUndoOperations([]);
     loadedAiHistoryTaskIdsRef.current = new Set();
     setSubtaskOrderMap({});
-    setThemeMode('light');
+    setThemeMode('auto');
+    setThemeStorageUserId(null);
     setAuthError(null);
   };
 
@@ -1329,7 +1331,8 @@ export default function App() {
     if (!currentUser) {
       setAiDialogByTask({});
       setAiReadCursorByTask({});
-      setThemeMode('light');
+      setThemeMode('auto');
+      setThemeStorageUserId(null);
       loadedAiHistoryTaskIdsRef.current = new Set();
       return;
     }
@@ -1383,8 +1386,8 @@ export default function App() {
     // Drop obsolete uploaded backgrounds; the workspace now uses a fixed surface.
     localStorage.removeItem(`btm:${currentUser.id}:background-image`);
     localStorage.removeItem(`btm:${currentUser.id}:background-overlay-opacity`);
-    const storedThemeMode = localStorage.getItem(getThemeStorageKey(currentUser.id));
-    setThemeMode(storedThemeMode === 'dark' || storedThemeMode === 'auto' ? storedThemeMode : 'light');
+    setThemeMode(loadThemePreference(localStorage, getThemeStorageKey(currentUser.id)));
+    setThemeStorageUserId(currentUser.id);
 
     const storedRankingMode = localStorage.getItem(getRankingModeStorageKey(currentUser.id));
     if (storedRankingMode === 'urgency' || storedRankingMode === 'importance' || storedRankingMode === 'coefficient') {
@@ -1420,9 +1423,9 @@ export default function App() {
   }, [effectiveThemeMode]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || themeStorageUserId !== currentUser.id) return;
     localStorage.setItem(getThemeStorageKey(currentUser.id), themeMode);
-  }, [themeMode, currentUser?.id]);
+  }, [themeMode, currentUser?.id, themeStorageUserId]);
 
   useEffect(() => {
     if (!currentUser) return;

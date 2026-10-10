@@ -5,6 +5,9 @@ import test from 'node:test';
 test('web theme preference is a 3-state control and effective color is used for rendering', async () => {
   const source = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
   assert.match(source, /\['light', 'dark', 'auto'\] as const/);
+  assert.match(source, /useState<ThemePreference>\('auto'\)/);
+  assert.match(source, /loadThemePreference\(localStorage, getThemeStorageKey\(currentUser\.id\)\)/);
+  assert.match(source, /themeStorageUserId !== currentUser\.id/);
   assert.match(source, /resolveThemeMode\(themeMode, userTimeZone, new Date\(\)\)/);
   assert.match(source, /setInterval\(\(\) => setAutoThemeTick/);
   assert.match(source, /data-theme=\{effectiveThemeMode\}/);
@@ -16,6 +19,7 @@ test('web theme preference is a 3-state control and effective color is used for 
 test('Mini App has three theme modes, persisted choice and a user-time-zone clock', async () => {
   const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
   assert.match(mini, /\['light', 'dark', 'auto'\] as const/);
+  assert.match(mini, /loadThemePreference\(localStorage, 'btm:miniapp-theme-mode'\)/);
   assert.match(mini, /currentUser\?\.timeZone\?\.trim\(\)/);
   assert.match(mini, /resolveThemeMode\(miniThemeMode, userTimeZone, new Date\(\)\)/);
   assert.match(mini, /effectiveMiniTheme === 'light'/);
@@ -43,4 +47,14 @@ test('upcoming subtasks clip title, description and deadline within the row', as
   const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
   assert.match(css, /\.upcoming-subtask-copy \{[\s\S]*?display: grid;[\s\S]*?grid-template-rows:[^\n]+[\s\S]*?overflow: hidden;[\s\S]*?contain: paint;/);
   assert.match(css, /\.upcoming-subtask-description \{[\s\S]*?max-height: 2rem;[\s\S]*?-webkit-line-clamp: 2;/);
+});
+
+test('Mini App AI project and chat cards have explicit dark palette without affecting light mode', async () => {
+  const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-menu-card \{/);
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-menu-card-active-project \{/);
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-menu-card-active-chat \{/);
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-menu-title \{/);
+  assert.match(css, /\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-ai-chat-menu-action-danger \{/);
+  assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-ai-chat-menu-card-active-project/);
 });
