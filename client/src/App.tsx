@@ -1611,7 +1611,7 @@ export default function App() {
               const alreadyHasMessage = previousDialog.some((message) => message.role === 'assistant' && message.content === answer);
               return alreadyHasMessage
                 ? previousDialog
-                : [...previousDialog, { id: crypto.randomUUID(), role: 'assistant', content: answer }];
+                : [...previousDialog, { id: crypto.randomUUID(), role: 'assistant', content: answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0 }];
             })()
           }));
         } catch {
@@ -3120,7 +3120,8 @@ ${allContext}`,
       title: (payload.title ?? '').trim(),
       importance: payload.importance ?? 3,
       urgency: payload.urgency ?? 3,
-      status: payload.status ?? 'TODO'
+      status: payload.status ?? 'TODO',
+      aiNotificationsEnabled: editorState?.task?.id ? payload.aiNotificationsEnabled : (payload.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled)
     };
     const isEventPayload = (payload.taskType ?? editorState?.task?.taskType) === 'EVENT';
     const score = calcScore(normalized.importance, normalized.urgency);
@@ -3141,7 +3142,8 @@ ${allContext}`,
           status: 'TODO',
           notifyBeforeMinutes: 0,
           sphereId: null,
-          parentTaskId: createdTask.id
+          parentTaskId: createdTask.id,
+          aiNotificationsEnabled: isAiNotificationsDefaultEnabled
         })));
       }
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask, 'task');
@@ -3179,7 +3181,8 @@ ${allContext}`,
       dueDate: generated.task.dueDate ?? null,
       notifyBeforeMinutes: generated.task.notifyBeforeMinutes,
       status: 'TODO',
-      priorityScore: calcScore(importance, urgency)
+      priorityScore: calcScore(importance, urgency),
+      aiNotificationsEnabled: isAiNotificationsDefaultEnabled
     });
 
     if (payload.attachments.length > 0) {
@@ -3197,7 +3200,8 @@ ${allContext}`,
         status: 'TODO',
         notifyBeforeMinutes: 0,
         sphereId: null,
-        parentTaskId: createdTask.id
+        parentTaskId: createdTask.id,
+        aiNotificationsEnabled: isAiNotificationsDefaultEnabled
       })));
     }
 
@@ -3508,7 +3512,8 @@ ${allContext}`,
       priorityScore: 2,
       status: 'TODO',
       sphereId: null,
-      parentTaskId: parentTask.id
+      parentTaskId: parentTask.id,
+      aiNotificationsEnabled: payload.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled
     });
     setSubtaskOrderMap((prev) => {
       const current = prev[parentTask.id] ?? (subtaskMap[parentTask.id] ?? []).map((task) => task.id);
@@ -4543,7 +4548,7 @@ ${allContext}`,
                   <span>Уведомления от ИИ</span>
                   <span
                     className="cursor-help rounded-full border border-slate-600 px-1.5 text-[10px] text-slate-300"
-                    title="ИИ-уведомления — это автоматические подсказки, когда задача просрочена: что сделать прямо сейчас, чтобы сдвинуться с места. Они помогают не терять фокус и быстрее возвращаться к важным задачам. Каждое такое уведомление списывает 1 кредит 💳."
+                    title="Настройка определяет, включён ли чекбокс ИИ-уведомлений при создании новых задач. Уже созданные задачи не меняются. Кредиты за подсказку ИИ списываются по фактическим токенам."
                   >
                     ?
                   </span>
@@ -4862,8 +4867,8 @@ ${allContext}`,
 
 
       {isSubscriptionModalOpen ? (
-        <div className="modal-backdrop fixed inset-0 z-[130] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
-          <div className="subscription-modal dialog-surface max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl sm:overflow-hidden" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-backdrop fixed inset-0 z-[130] flex items-start justify-center overflow-y-auto p-4 pt-[min(6vh,4rem)] backdrop-blur-sm" onClick={() => setIsSubscriptionModalOpen(false)}>
+          <div className="subscription-modal dialog-surface max-h-[88dvh] w-full max-w-5xl overflow-y-auto rounded-3xl border p-0 shadow-2xl sm:overflow-hidden" onClick={(event) => event.stopPropagation()}>
             <div className="subscription-hero relative p-4 sm:p-4">
               <button className="absolute right-4 top-4 rounded-full p-2 text-muted transition hover:bg-white/10" onClick={() => setIsSubscriptionModalOpen(false)} aria-label="Закрыть окно подписки"><X size={18} /></button>
               <div className="subscription-eyebrow inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium"><Sparkles size={14} /> Больше возможностей ИИ</div>
@@ -4875,11 +4880,11 @@ ${allContext}`,
               </div>
             </div>
             {creditModalView === 'statistics' ? (
-              <div className="max-h-[68vh] overflow-y-auto p-4 sm:p-5">
+              <div key="credits-statistics" className="credit-switch-content max-h-[68vh] overflow-y-auto p-4 sm:p-5">
                 <CreditUsageStats statistics={creditUsageStatistics} loading={creditUsageStatisticsLoading} error={creditUsageStatisticsError} />
               </div>
             ) : (
-              <>
+              <div key="credits-purchase" className="credit-switch-content">
             <div className="grid gap-3 p-4 sm:grid-cols-3">
               {SUBSCRIPTION_PLANS.map((plan) => {
                 const link = subscriptionLinks[plan.key]?.trim();
@@ -4940,7 +4945,7 @@ ${allContext}`,
                 Публичной оферты
               </a>.
             </p>
-              </>
+              </div>
             )}
 
           </div>

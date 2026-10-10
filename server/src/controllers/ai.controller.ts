@@ -371,7 +371,8 @@ export const aiController = {
         await telegramService.notifyOverdueTaskAiMessage({
           userId: req.user!.id,
           taskId: req.params.id,
-          aiMessage: result.answer
+          aiMessage: result.answer,
+          creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0
         });
       }
 

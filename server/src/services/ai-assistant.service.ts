@@ -229,6 +229,7 @@ type AskTaskAssistantInput = {
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
   billingMode?: 'legacy' | 'dynamic';
+  billingFeature?: 'task_chat' | 'overdue_nudge';
   onProgress?: (status: TaskAiProgressStatus) => void;
 };
 
@@ -488,25 +489,6 @@ async function chargeFixedAiCredits(userId: string, cost: number, tracking?: AiC
       feature: tracking.feature,
       model: tracking.model,
       creditsSpentMilli: creditsToMilli(cost)
-    });
-  }
-}
-
-async function chargeSingleAiNotificationCredit(userId: string, tracking?: AiCreditChargeTracking) {
-  const period = currentAiCreditsPeriod();
-  await reserveAiCreditsMilli(userId, creditsToMilli(1));
-  const efficiencyState = await prisma.user.findUnique({ where: { id: userId }, select: { aiEfficiencyCreditsPeriod: true } });
-  const updated = await prisma.user.update({ where: { id: userId }, data: aiCreditEfficiencyData(1, period, efficiencyState?.aiEfficiencyCreditsPeriod), select: { efficiencyScore: true } });
-  await clampUserEfficiencyScore(userId, updated.efficiencyScore);
-  if (tracking) {
-    await recordAiCreditCharge({
-      userId,
-      actionId: tracking.actionId,
-      requestId: tracking.requestId ?? `${tracking.actionId}:charge`,
-      providerCallIndex: tracking.providerCallIndex,
-      feature: tracking.feature,
-      model: tracking.model,
-      creditsSpentMilli: creditsToMilli(1)
     });
   }
 }
@@ -2076,7 +2058,7 @@ export const aiAssistantService = {
             throw new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
           }
           const responseJson = await openAiResponse.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; output?: unknown; [key: string]: unknown };
-          await recordOpenAiUsageShadow({ userId: input.userId, taskId: input.taskId, actionId: requestId, requestId: `${requestId}:response:${providerCallIndex}`, providerCallIndex, feature: 'task_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: dynamicBilling ? 'DYNAMIC' : 'SHADOW' });
+          await recordOpenAiUsageShadow({ userId: input.userId, taskId: input.taskId, actionId: requestId, requestId: `${requestId}:response:${providerCallIndex}`, providerCallIndex, feature: input.billingFeature ?? 'task_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: dynamicBilling ? 'DYNAMIC' : 'SHADOW' });
           if (dynamicReservation) {
             const usageCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {});
             if (usageCost.estimatedCreditsMilli === null) { await refundWalletReservation(dynamicReservation); pendingDynamicReservation = null; throw new Error(`Unknown OpenAI pricing for model "${model}"`); }
@@ -2384,7 +2366,7 @@ ${actionAwareAnswer}`
           actionReports
         });
 
-        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation, { actionId: requestId, feature: 'task_chat', model });
+        if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation, { actionId: requestId, feature: input.billingFeature ?? 'task_chat', model });
         let creditsSpentMilli = creditReservation?.totalMilli ?? 0;
         if (dynamicBilling && dynamicCalls.length > 0) {
           creditsSpentMilli = 0;
@@ -2396,7 +2378,7 @@ ${actionAwareAnswer}`
               actionId: requestId,
               requestId: `${requestId}:charge:${call.providerCallIndex}`,
               providerCallIndex: call.providerCallIndex,
-              feature: 'task_chat',
+              feature: input.billingFeature ?? 'task_chat',
               model,
               creditsSpentMilli: settlement.chargedMilli
             });
@@ -2987,7 +2969,7 @@ ${actionAwareAnswer}`
           sent: true as const,
           answer: existingNudge.content,
           replayed: true as const,
-          billing: { mode: isDynamicTextBillingEnabled(input.userId) ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli: 0 }
+          billing: { mode: 'dynamic' as const, creditsSpentMilli: 0 }
         };
       }
 
@@ -2995,15 +2977,15 @@ ${actionAwareAnswer}`
     }
 
     try {
-      const dynamicBilling = isDynamicTextBillingEnabled(input.userId);
-      if (!dynamicBilling) await chargeSingleAiNotificationCredit(input.userId, { actionId: `${input.taskId}:${now.toISOString()}`, feature: 'overdue_nudge', model: 'fixed-credit' });
+      // This automated AI notification must use token-based wallet billing regardless
+      // of the optional dynamic-billing rollout for interactive chats.
       const result = await aiAssistantService.askTaskAssistant({
         userId: input.userId,
         taskId: input.taskId,
         history: [],
         mode: 'fast',
-        skipCreditsCharge: !dynamicBilling,
-        billingMode: dynamicBilling ? 'dynamic' : 'legacy',
+        billingMode: 'dynamic',
+        billingFeature: 'overdue_nudge',
         question: [
           'Задача только что стала просроченной.',
           'Проанализируй контекст и предложи пользователю максимально конкретный следующий шаг, который можно сделать прямо сейчас.',
