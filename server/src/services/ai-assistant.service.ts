@@ -15,6 +15,7 @@ import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CH
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
+import { excelWorkbookService } from './excel-workbook.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -141,6 +142,25 @@ const taskActionSchemas = [
   }
 ];
 
+const excelWorkbookSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    fileName: { type: 'string' },
+    title: { type: 'string' },
+    sheets: { type: 'array', items: {
+      type: 'object', additionalProperties: false,
+      properties: {
+        name: { type: 'string' },
+        columns: { type: 'array', items: { type: 'string' } },
+        rows: { type: 'array', items: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } } }
+      },
+      required: ['name', 'columns', 'rows']
+    } }
+  },
+  required: ['fileName', 'title', 'sheets']
+};
+
 const wordDocumentBlockSchemas = [
   {
     type: 'object',
@@ -195,9 +215,10 @@ export const TASK_ASSISTANT_RESPONSE_FORMAT = {
             required: ['fileName', 'title', 'blocks']
           }
         ]
-      }
+      },
+      spreadsheet: { anyOf: [{ type: 'null' }, excelWorkbookSchema] }
     },
-    required: ['answer', 'actions', 'document']
+    required: ['answer', 'actions', 'document', 'spreadsheet']
   }
 };
 
@@ -848,6 +869,13 @@ function extractJsonObjectFromText(raw: string): unknown | null {
   return null;
 }
 
+export function extractExcelWorkbookSpecFromAssistantPayload(rawAnswer: string): unknown | null {
+  const parsed = extractJsonObjectFromText(rawAnswer);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const spreadsheet = (parsed as Record<string, unknown>).spreadsheet;
+  return spreadsheet && typeof spreadsheet === 'object' && !Array.isArray(spreadsheet) ? spreadsheet : null;
+}
+
 export function extractWordDocumentSpecFromAssistantPayload(rawAnswer: string): unknown | null {
   const parsed = extractJsonObjectFromText(rawAnswer);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
@@ -1319,7 +1347,7 @@ export const aiAssistantService = {
             'НЕ используй web_search для обычного разговора; написания, редактирования или перевода текста; мозгового штурма; объяснения общеизвестных понятий; обычных логических рассуждений; планирования и декомпозиции; работы с данными Планировыча и поиска задач пользователя; проверки «на всякий случай»; только ради ссылок; или если можешь уверенно ответить без актуальных внешних данных. Для актуального состояния задач Планировыча используй task tools, а не web_search.',
             'Перед web_search сформулируй один максимально информативный поисковый запрос, способный закрыть вопрос за один поиск. За один пользовательский запрос доступен максимум один веб-поиск: не обходи ограничение. Если web_search уже использован, продолжай на основе полученных данных и не инициируй новый поиск. Не генерируй промежуточные фразы «Сейчас я поищу в интернете» или «Выполняю поиск»: состояние инструментов показывает интерфейс.',
             'После web_search основывай актуальные утверждения на найденных данных, не выдумывай источники и не представляй как установленный факт то, чего результаты не подтверждают. Не вызывай дополнительный web_search, если лимит исчерпан.',
-            'Если пользователь просит прислать, подготовить, оформить или скачать документ Word/документ файлом, используй create_word_document. Передай инструменту уже готовую структуру документа и после успешного вызова кратко сообщи, что файл готов. Не ограничивайся текстом ответа и не обещай создать файл позже.',
+            'Если пользователь просит прислать, подготовить, оформить или скачать документ Word, используй create_word_document. Для Excel, XLSX, электронной таблицы или табличного отчёта файлом используй create_excel_workbook. Передай инструменту данные и структуру, сервер соберёт файл. После успешного вызова кратко сообщи, что файл готов; не обещай создать файл позже. Не создавай два документа за один запрос.',
             'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. После успешного создания задачи, события или подзадачи добавь к названию маркер [[task_ref=ID]] с ID из результата task_action. Не придумывай ID. Отвечай на русском языке.'
           ].join(' ')
         },
@@ -1891,8 +1919,9 @@ export const aiAssistantService = {
       'Если action сформировать невозможно, честно скажи в answer, что изменение не выполнено, и кратко укажи, чего не хватает. Не создавай видимость выполнения.',
       'Если в answer говоришь о текущей задаче или её подзадаче, сразу после названия добавляй служебную метку [[task_ref=ID]] из контекста. Пример: «Созвон с клиентом [[task_ref=task-id]]».',
       'Не показывай технические идентификаторы как обычный текст: они разрешены только внутри метки [[task_ref=...]] и внутри массива actions.',
-      'Верни строго JSON без markdown: {"answer":"...","actions":[...],"document":null}. Если пользователь просит Word-документ/документ файлом, вместо null передай document={"fileName":"имя.docx","title":"заголовок или пустая строка","blocks":[...]}.',
-      'Для document.blocks поддерживаются: {"type":"heading","text":"...","level":1|2|3}, {"type":"paragraph","text":"..."}, {"type":"quote","text":"..."}, {"type":"bullets","items":["..."]}, {"type":"numbered","items":["..."]}, {"type":"table","rows":[["ячейка", "..."]]}. Если пользователь просит прислать/создать/оформить Word-документ, обязательно сформируй document в этом же ответе, а не обещай сделать позже.',
+      'Верни строго JSON без markdown: {"answer":"...","actions":[...],"document":null,"spreadsheet":null}. При запросе Word заполни document, при запросе Excel/XLSX заполни spreadsheet. Одновременно создавай не более одного файла.',
+      'Для Word document.blocks поддерживаются: {"type":"heading","text":"...","level":1|2|3}, {"type":"paragraph","text":"..."}, {"type":"quote","text":"..."}, {"type":"bullets","items":["..."]}, {"type":"numbered","items":["..."]}, {"type":"table","rows":[["ячейка", "..."]]}.',
+      'Для Excel заполни spreadsheet={"fileName":"таблица.xlsx","title":"название","sheets":[{"name":"Лист 1","columns":["Название","Количество"],"rows":[["Пример",3]]}]}. Значения ячеек: текст, число, true/false или null. Числа передавай числами. Не обещай файл: передай данные для генерации серверу.',
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
@@ -2143,12 +2172,15 @@ export const aiAssistantService = {
         });
 
         const parsed = parseGeneralAssistantPayload(rawAnswer);
-        const documentSpec = extractWordDocumentSpecFromAssistantPayload(rawAnswer);
-        const generatedDocument = documentSpec
-          ? await wordDocumentService.create({ userId: input.userId, taskId: input.taskId, spec: documentSpec })
-          : null;
+        const excelSpec = extractExcelWorkbookSpecFromAssistantPayload(rawAnswer);
+        const documentSpec = excelSpec ? null : extractWordDocumentSpecFromAssistantPayload(rawAnswer);
+        const generatedDocument = excelSpec
+          ? await excelWorkbookService.create({ userId: input.userId, taskId: input.taskId, spec: excelSpec })
+          : documentSpec
+            ? await wordDocumentService.create({ userId: input.userId, taskId: input.taskId, spec: documentSpec })
+            : null;
         if (generatedDocument) {
-          console.info('[AI] Task Word document created', {
+          console.info('[AI] Task document created', {
             requestId,
             taskId: input.taskId,
             userId: input.userId,

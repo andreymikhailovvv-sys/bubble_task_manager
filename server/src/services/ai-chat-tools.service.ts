@@ -6,6 +6,7 @@ import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
 import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-responses-stream.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
+import { excelWorkbookService } from './excel-workbook.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -78,6 +79,24 @@ export const AI_CHAT_OPENAI_TOOLS = [
             }
           }
         }
+      }
+    }
+  },
+  {
+    type: 'function', name: 'create_excel_workbook', strict: true,
+    description: 'Создать и прикрепить к ответу настоящий Excel-файл (.xlsx). Используй при запросе электронной таблицы, Excel, XLSX или отчёта файлом. Модель передаёт только содержимое и структуру листов, сервер собирает XLSX. Не более одного файла за запрос.',
+    parameters: {
+      type: 'object', additionalProperties: false, required: ['fileName', 'title', 'sheets'],
+      properties: {
+        fileName: { type: 'string' }, title: nullable('string'),
+        sheets: { type: 'array', minItems: 1, maxItems: 8, items: {
+          type: 'object', additionalProperties: false, required: ['name', 'columns', 'rows'],
+          properties: {
+            name: { type: 'string' },
+            columns: { type: 'array', minItems: 1, maxItems: 20, items: { type: 'string' } },
+            rows: { type: 'array', maxItems: 1000, items: { type: 'array', items: { type: ['string', 'number', 'boolean', 'null'] } } }
+          }
+        } }
       }
     }
   }
@@ -282,7 +301,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           list_sectors: 'checking_sectors',
           task_action: 'applying_changes',
           task_actions: 'applying_changes',
-          create_word_document: 'forming_answer'
+          create_word_document: 'forming_answer',
+          create_excel_workbook: 'forming_answer'
         };
         const progress = progressByTool[name];
         if (progress) emitProgress(progress);
@@ -332,10 +352,12 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
           return result;
         }
-        if (name === 'create_word_document') {
-          if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'В этом ответе Word-документ уже создан.' };
-          generatedDocument = await wordDocumentService.create({ userId: input.userId, spec: value });
-          console.info('[AI tools] Word document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
+        if (name === 'create_word_document' || name === 'create_excel_workbook') {
+          if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'Файл для этого ответа уже создан.' };
+          generatedDocument = name === 'create_excel_workbook'
+            ? await excelWorkbookService.create({ userId: input.userId, spec: value })
+            : await wordDocumentService.create({ userId: input.userId, spec: value });
+          console.info('[AI tools] document created', { requestId, userId: input.userId, documentId: generatedDocument.id, fileName: generatedDocument.fileName, size: generatedDocument.size });
           return { ok: true, document: generatedDocument };
         }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };

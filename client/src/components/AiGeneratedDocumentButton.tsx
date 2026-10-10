@@ -1,4 +1,4 @@
-import { Download, FileText } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import type { GeneratedDocument } from '../lib/types';
 import { api } from '../lib/api';
 
@@ -10,7 +10,7 @@ type AiGeneratedDocumentButtonProps = {
 const ButtonContent = ({ document }: { document: GeneratedDocument }) => (
   <>
     <span className="ai-generated-document-icon flex h-7 w-7 shrink-0 items-center justify-center rounded-lg">
-      <FileText size={15} />
+      {document.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ? <FileSpreadsheet size={15} /> : <FileText size={15} />}
     </span>
     <span className="min-w-0 flex-1 truncate">{document.fileName}</span>
     <Download size={14} className="shrink-0" />
