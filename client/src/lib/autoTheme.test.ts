@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveThemeMode } from './autoTheme';
+import { loadThemePreference, resolveThemeMode } from './autoTheme';
 
 test('auto theme changes at 20:00 and 05:00 in selected user time zone', () => {
   const z = 'Europe/Moscow'; // UTC+3
@@ -21,4 +21,31 @@ test('manual selection remains manual and invalid zones are safe', () => {
   assert.equal(resolveThemeMode('light', 'Europe/Moscow', time), 'light');
   assert.equal(resolveThemeMode('dark', 'Europe/Moscow', time), 'dark');
   assert.equal(resolveThemeMode('auto', 'Not/A_Real_Zone', time), 'light');
+});
+
+test('auto is the default and legacy implicit light is migrated exactly once', () => {
+  const values = new Map<string, string>([['theme', 'light']]);
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); }
+  };
+  assert.equal(loadThemePreference(storage, 'theme'), 'auto');
+  assert.equal(values.get('theme:auto-default-v1'), '1');
+  storage.setItem('theme', 'light'); // An explicit user choice after migration.
+  assert.equal(loadThemePreference(storage, 'theme'), 'light');
+});
+
+test('dark and auto preferences remain intact; fresh and malformed settings default to auto', () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); }
+  };
+  assert.equal(loadThemePreference(storage, 'fresh'), 'auto');
+  storage.setItem('dark', 'dark');
+  assert.equal(loadThemePreference(storage, 'dark'), 'dark');
+  storage.setItem('auto', 'auto');
+  assert.equal(loadThemePreference(storage, 'auto'), 'auto');
+  storage.setItem('invalid', 'purple');
+  assert.equal(loadThemePreference(storage, 'invalid'), 'auto');
 });

@@ -6567,6 +6567,66 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-composer-card .miniapp-
   background: linear-gradient(135deg, #06b6d4, #0891b2);
 }
 
+/* Keep the AI project's sidebar readable in dark mode, including active cards. */
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu {
+  border-color: rgba(100, 116, 139, 0.36);
+  background: linear-gradient(170deg, #121b30, #0c1426);
+  color: #f8fafc;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-card {
+  border-color: rgba(100, 116, 139, 0.5);
+  background: linear-gradient(130deg, rgba(35, 46, 68, 0.98), rgba(26, 37, 58, 0.96));
+  color: #f8fafc;
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-card-active-project {
+  border-color: color-mix(in srgb, var(--project-color, #8b5cf6) 54%, #475569);
+  background: linear-gradient(125deg, color-mix(in srgb, var(--project-color, #8b5cf6) 27%, #1e293b), #1b263e 94%);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.24), inset 0 0 0 1px color-mix(in srgb, var(--project-color, #8b5cf6) 18%, transparent);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-card-active-chat {
+  border-color: rgba(34, 211, 238, 0.58);
+  background: linear-gradient(125deg, rgba(8, 145, 178, 0.29), rgba(30, 41, 59, 0.98));
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22), inset 0 0 0 1px rgba(34, 211, 238, 0.1);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-title {
+  color: #f8fafc;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-subtitle {
+  color: #a8b8ce;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-action,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-close {
+  border-color: rgba(148, 163, 184, 0.36);
+  background: rgba(51, 65, 85, 0.82);
+  color: #e2e8f0;
+  box-shadow: 0 5px 14px rgba(2, 6, 23, 0.14);
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-action-danger {
+  border-color: rgba(251, 113, 133, 0.48);
+  background: rgba(159, 18, 57, 0.17);
+  color: #fda4af;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-action:disabled,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-action-danger:disabled {
+  color: #8492a9;
+  opacity: 0.5;
+}
+
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-action:not(:disabled):hover,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-menu-close:hover {
+  border-color: rgba(167, 139, 250, 0.58);
+  background: rgba(71, 85, 105, 0.9);
+}
+
 body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-backdrop,
 .miniapp-shell.miniapp-light .miniapp-ai-chat-backdrop {
   background: rgba(241, 245, 249, 0.9) !important;

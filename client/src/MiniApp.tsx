@@ -4,7 +4,7 @@ import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsage
 import { NotesEditor } from './components/NotesEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
-import { resolveThemeMode, type ThemePreference } from './lib/autoTheme';
+import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
@@ -619,8 +619,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
   const [miniThemeMode, setMiniThemeMode] = useState<ThemePreference>(() => {
-    const stored = localStorage.getItem('btm:miniapp-theme-mode');
-    return stored === 'dark' || stored === 'light' || stored === 'auto' ? stored : 'light';
+    return loadThemePreference(localStorage, 'btm:miniapp-theme-mode');
   });
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
