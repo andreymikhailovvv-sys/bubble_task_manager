@@ -244,7 +244,7 @@ const dosDateTime = (date = new Date()) => {
 
 type ZipEntry = { name: string; data: Buffer };
 
-const buildStoredZip = (entries: ZipEntry[]) => {
+export const buildStoredZip = (entries: ZipEntry[]) => {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
