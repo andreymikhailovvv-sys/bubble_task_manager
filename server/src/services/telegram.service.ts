@@ -696,7 +696,7 @@ const getSubtaskDetailsByIndex = async (parentTaskId: string, userId: string, su
   };
 };
 
-const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string) => {
+const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMessage: string, creditsSpentMilli?: number) => {
   const task = await prisma.task.findFirst({
     where: { id: taskId, userId },
     select: {
@@ -722,6 +722,9 @@ const sendOverdueTaskNotification = async (taskId: string, userId: string, aiMes
 
   if (aiMessage.trim()) {
     lines.push('', escapeHtml(aiMessage));
+  }
+  if (typeof creditsSpentMilli === 'number' && creditsSpentMilli > 0) {
+    lines.push('', `💳 Потрачено: ${escapeHtml(formatCreditsSpent(creditsSpentMilli))}`);
   }
 
   await sendMessage(task.user.telegramChatId, lines.join('\n'), keyboardMain(task.id));
@@ -1994,10 +1997,10 @@ export const telegramService = {
       });
     }
   },
-  async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string }) {
+  async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string; creditsSpentMilli?: number }) {
     if (!BOT_TOKEN) return;
     if (!input.aiMessage.trim()) return;
-    await sendOverdueTaskNotification(input.taskId, input.userId, input.aiMessage);
+    await sendOverdueTaskNotification(input.taskId, input.userId, input.aiMessage, input.creditsSpentMilli);
   },
   async notifyDailyAiCheckup(input: { userId: string; text: string }) {
     if (!BOT_TOKEN) return;

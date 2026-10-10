@@ -62,3 +62,17 @@ test('админская рассылка поддерживает аудито�
   assert.match(api, /adminSendBroadcast/);
   assert.match(api, /adminSetSubscriptionPlan/);
 });
+
+test('credit tabs switch without translating the modal and Mini App search has no dark focus ring', async () => {
+  const [web, mini, css] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  assert.match(web, /credit-switch-content/);
+  assert.match(web, /items-start justify-center overflow-y-auto/);
+  assert.match(mini, /credit-switch-content/);
+  assert.match(css, /\.credit-switch-content \{[\s\S]*?animation: credit-switch-reveal/);
+  assert.match(css, /\.credit-view-toggle-button\.is-active \{[\s\S]*?transform: none;/);
+  assert.match(css, /miniapp-shell \.miniapp-search-input:focus-visible \{[\s\S]*?box-shadow: none !important/);
+});

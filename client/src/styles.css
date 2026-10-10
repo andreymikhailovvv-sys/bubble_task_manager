@@ -7554,7 +7554,7 @@ body[data-theme='dark'] .focused-task-ai-drop-overlay {
 }
 .credit-view-toggle-button.is-active {
   color: #ffffff !important;
-  transform: translateY(-1px);
+  transform: none;
   box-shadow: 0 7px 16px rgba(15, 23, 42, .16), inset 0 1px 0 rgba(255,255,255,.2);
 }
 .credit-view-toggle-button.is-active.is-purchase {
@@ -7915,4 +7915,28 @@ body[data-theme='dark'] .theme-preference-switch-option-active {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Avoid re-centering/flicker when switching credit statistics and purchase content. */
+.credit-switch-content {
+  animation: credit-switch-reveal 140ms ease-out both;
+}
+@keyframes credit-switch-reveal {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .credit-switch-content { animation: none; }
+}
+
+/* Mini App dark theme: search input shows only its caret, not the global focus halo. */
+body[data-theme='dark'] .miniapp-shell .miniapp-search-input,
+body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus,
+body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus-visible {
+  outline: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
 }

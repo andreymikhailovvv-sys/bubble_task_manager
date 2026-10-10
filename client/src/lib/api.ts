@@ -286,7 +286,7 @@ export const api = {
       body: JSON.stringify({ ...(payload ?? {}), userTimeZone: resolveUserTimeZone() })
     }),
   generateOverdueTaskNudge: (taskId: string) =>
-    request<{ sent: boolean; answer?: string; model?: string }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
+    request<{ sent: boolean; answer?: string; model?: string; replayed?: boolean; billing?: AiBilling }>(`/api/tasks/${taskId}/ai-overdue-nudge`, {
       method: 'POST',
       body: JSON.stringify({ userTimeZone: resolveUserTimeZone() })
     }),

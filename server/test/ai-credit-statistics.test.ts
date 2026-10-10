@@ -13,7 +13,7 @@ test('подтверждённые списания пишутся отдель�
 
   assert.match(metering, /billingMode: 'CHARGE'/);
   assert.match(dynamicBilling, /settleDynamicResponsesCall[\s\S]*recordAiCreditCharge/);
-  assert.match(assistant, /feature: 'task_chat'/);
+  assert.match(assistant, /feature: input\.billingFeature \?\? 'task_chat'/);
   assert.match(assistant, /feature: 'generate_task'/);
   assert.match(assistant, /feature: 'generate_subtasks'/);
   assert.match(assistant, /feature: 'optimize_timeline'/);
@@ -57,4 +57,12 @@ test('Excel-отчёт содержит каждое списание и кор�
   assert.match(xml, />1\.25</);
   assert.match(xml, />2\.75</);
   assert.match(xml, />4</);
+});
+
+test('веб-поиск остаётся в общих суммах и моделях, но не дублируется в ИИ-инструментах', async () => {
+  const source = await readFile(new URL('../src/services/ai-credit-statistics.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /modelTotals\.set\(event\.model/);
+  assert.match(source, /if \(event\.feature !== 'web_search'\) featureTotals\.set/);
+  assert.match(source, /monthCreditsMilli \+= amount/);
+  assert.match(source, /'openai-web-search': 'Веб-поиск'/);
 });

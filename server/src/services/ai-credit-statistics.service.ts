@@ -181,7 +181,8 @@ export async function getCreditUsageStatistics(userId: string): Promise<CreditUs
     monthCreditsMilli += amount;
     dailyTotals.set(dateKey, (dailyTotals.get(dateKey) ?? 0) + amount);
     modelTotals.set(event.model, (modelTotals.get(event.model) ?? 0) + amount);
-    featureTotals.set(event.feature, (featureTotals.get(event.feature) ?? 0) + amount);
+    // Web search is already counted by model; avoid duplicating it in tools.
+    if (event.feature !== 'web_search') featureTotals.set(event.feature, (featureTotals.get(event.feature) ?? 0) + amount);
   }
 
   const daily = Array.from({ length: 30 }, (_, index) => {
