@@ -240,6 +240,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
     let loop: Awaited<ReturnType<typeof runAiChatToolLoop>>;
+    // The attachment is assigned inside a callback passed to runAiChatToolLoop.
+    // Read it through a closure so TypeScript does not narrow the outer variable
+    // to null after the await, incorrectly inferring `never` in the catch branch.
+    const hasGeneratedPng = () => generatedDocument?.mimeType === 'image/png';
     try {
       loop = await runAiChatToolLoop({
       initialInput: input.messages,
@@ -383,7 +387,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     } catch (error) {
       // The image has already been generated, saved and charged. Never discard
       // a completed paid attachment just because the follow-up text fails.
-      if (generatedDocument?.mimeType !== 'image/png') throw error;
+      if (!hasGeneratedPng()) throw error;
       loop = { answer: 'Изображение готово. PNG-файл прикреплён к сообщению.', providerCalls: providerCallCount, toolCalls: toolOperations.length };
     }
     emitProgress('forming_answer');
