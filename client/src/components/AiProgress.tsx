@@ -8,7 +8,7 @@ const PROGRESS_TEXT: Record<AiChatProgressStatus | TaskAiProgressStatus, string>
   searching_files: 'Ищу нужный файл', reading_file: 'Изучаю содержимое файла', reading_attachment: 'Изучаю вложение',
   searching_web: 'Ищу в интернете', analyzing_web_results: 'Изучаю найденные источники',
   analyzing_retrieved_context: 'Анализирую найденные данные', forming_answer: 'Формирую ответ', applying_changes: 'Вношу изменения',
-  generating_image: 'Создаю изображение'
+  generating_image: 'Создаю изображение', editing_image: 'Редактирую изображение'
 };
 
 export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiProgressStatus }) {
@@ -18,7 +18,7 @@ export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiPr
         <span key={status} className="miniapp-ai-progress-text">{PROGRESS_TEXT[status]}</span>
         <span className="miniapp-ai-progress-dots" aria-hidden="true" />
       </div>
-      {status === 'generating_image' ? (
+      {(status === 'generating_image' || status === 'editing_image') ? (
         <div className="ai-image-generating-card" role="img" aria-label="Изображение создаётся">
           <div className="ai-image-generating-art" aria-hidden="true">
             <span className="ai-image-generating-orb ai-image-generating-orb-one" />
