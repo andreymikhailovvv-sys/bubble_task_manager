@@ -4,8 +4,8 @@ export type ForcedPersonalLookup = 'search_notes' | 'search_workspace';
 export function selectRequiredPersonalLookup(question: string): ForcedPersonalLookup | null {
   const text = question.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
   if (!text || text.length > 8000) return null;
-  if (/^(?:объясни|расскажи\\s+(?:как|почему)|как\\s+работает|что\\s+такое|можно\\s+ли|умеешь\\s+ли|почему|подскажи\\s+как)/.test(text)) return null;
-  if (/(?:не\\s+ищи|не\\s+надо\\s+искать|не\\s+показывай)/.test(text)) return null;
+  if (/^(?:объясни|расскажи\s+(?:как|почему)|как\s+работает|что\s+такое|можно\s+ли|умеешь\s+ли|почему|подскажи\s+как)/.test(text)) return null;
+  if (/(?:не\s+ищи|не\s+надо\s+искать|не\s+показывай)/.test(text)) return null;
 
   // Avoid JS \b and \w for Cyrillic: by default those identify ASCII word characters.
   const mentionsNotes = /заметк|заметок|запис[ьи]|записей|запися|блокнот/.test(text);
