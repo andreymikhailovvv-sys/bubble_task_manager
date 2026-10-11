@@ -236,7 +236,7 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                 <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
                 <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
               </div>
-              <nav className="standalone-group-filter flex flex-wrap items-center gap-2" aria-label="Группы заметок">
+              <nav className="standalone-group-filter flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
                   aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
