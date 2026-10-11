@@ -42,12 +42,15 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
   }, [userId]);
 
   useEffect(() => {
-    if (!userId) {
-      setNotes([]);
-      setBoardOpen(false);
-      setEditing(null);
-      return;
-    }
+    // Clear cached notes immediately when an account changes, even if the
+    // next account's API request is still in flight.
+    setNotes([]);
+    setBoardOpen(false);
+    setEditing(null);
+    draftRef.current = null;
+    dirtyRef.current = false;
+    pendingRef.current = Promise.resolve();
+    if (!userId) return;
     void reload();
     return () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
