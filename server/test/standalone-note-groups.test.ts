@@ -85,3 +85,38 @@ test('board has group filter chips, plus last, group assignment and edit control
   assert.match(css, /body\[data-theme='dark'\] \.standalone-group-chip-colored/);
   assert.match(css, /\.standalone-group-swatch-selected/);
 });
+
+test('group assignment is included in server responses and reflected immediately', async () => {
+  const [controller, board] = await Promise.all([
+    readFile(new URL('../src/controllers/standalone-note.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8')
+  ]);
+  // GET, POST and PATCH must all return groupId. Without it, the frontend
+  // replaces a correctly saved note with a response lacking its group.
+  const projections = controller.match(/select: \{ id: true, title: true, content: true, groupId: true, createdAt: true, updatedAt: true \}/g) ?? [];
+  assert.equal(projections.length, 3, 'List, create and update must select groupId');
+  assert.match(controller, /updateMany\(\{\s*where: \{ id: req\.params\.id, userId: req\.user!\.id \}, data/);
+  assert.match(board, /api\.updateStandaloneNote\(noteId, \{ groupId \}\)/);
+  assert.match(board, /saved\.groupId !== groupId/);
+  assert.match(board, /groupId: original\.groupId/);
+  assert.match(board, /Не удалось присвоить группу/);
+});
+
+test('notes window orders header, groups, and card actions correctly', async () => {
+  const board = await readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8');
+  const boardStart = board.indexOf('className="standalone-notes-board-header');
+  const boardEnd = board.indexOf('{error ? <p role="alert"', boardStart);
+  const header = board.slice(boardStart, boardEnd);
+  assert.ok(boardStart > 0 && boardEnd > boardStart);
+  assert.ok(header.indexOf('Личные записи') < header.indexOf('standalone-group-filter'),
+    'Heading should be above group chips');
+  assert.ok(header.indexOf('Мои заметки') < header.indexOf('standalone-group-filter'));
+  assert.ok(header.indexOf('standalone-group-manage') < header.indexOf("selectedGroup === 'all'"),
+    'Group manager should be leftmost control');
+  assert.ok(header.indexOf('standalone-group-add') > header.indexOf('groups.map(group'),
+    'Add group must be last after all group tags');
+  assert.doesNotMatch(board, /Редактировать заметку «/);
+  assert.doesNotMatch(board, /FilePenLine/);
+  assert.match(board, /onClick=\{\(\) => openEditor\(note\)\}/,
+    'Click on the card itself must continue opening the editor');
+});
