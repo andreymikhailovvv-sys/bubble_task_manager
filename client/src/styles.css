@@ -2126,7 +2126,7 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 
 
 /* Standalone note groups: accessible text colors on blended accents in both themes. */
-.standalone-group-filter { min-width: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.standalone-group-filter { min-width: 0; scrollbar-width: thin; overscroll-behavior-x: contain; padding-top: 4px; padding-inline: 2px; }
 .standalone-group-chip { flex-shrink: 0; }
 .standalone-group-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
@@ -2144,7 +2144,7 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 }
 .standalone-group-chip:hover, .standalone-group-chip-active {
   border-color: var(--note-group-color, var(--accent));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--note-group-color, var(--accent)) 40%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--note-group-color, var(--accent)) 40%, transparent);
 }
 .standalone-group-chip-active { background: color-mix(in srgb, var(--note-group-color, var(--accent)) 20%, var(--panel-bg)); }
 .standalone-group-color-dot,
