@@ -1983,7 +1983,7 @@ export default function App() {
       scrollToBottom(expandedAiDialogContainerRef.current);
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId]);
+  }, [focusedTask?.id, focusedDraft, focusedAiDialog.length, isAiExpanded, aiLoadingTaskId, focusedTask ? aiProgressByTask[focusedTask.id] : undefined]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -2048,7 +2048,7 @@ export default function App() {
       }
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [focusAiMessages, focusAiLoading, isFocusModeOpen, isFocusAiExpanded]);
+  }, [focusAiMessages, focusAiLoading, focusAiProgress, isFocusModeOpen, isFocusAiExpanded]);
 
   useEffect(() => {
     if (focusTaskSwitchAiTimeoutRef.current) {
@@ -2636,7 +2636,7 @@ ${allContext}`,
   useEffect(() => {
     const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
     return () => window.cancelAnimationFrame(frameId);
-  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading]);
+  }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress]);
 
   const updateActiveAiChatMessages = (updater: (messages: AiChatMessage[]) => AiChatMessage[]) => {
     setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
@@ -7592,6 +7592,7 @@ ${allContext}`,
           modelOptions={AI_CHAT_MODEL_SELECT_OPTIONS}
           pendingFiles={aiChatPendingFiles}
           loading={aiChatLoading}
+          imageGenerating={aiChatLoading && aiChatProgress === 'generating_image'}
           messageCount={activeAiChat?.messages.length ?? 0}
           onClose={() => setIsAiChatOpen(false)}
           onCreateProject={openAiChatProjectDialog}

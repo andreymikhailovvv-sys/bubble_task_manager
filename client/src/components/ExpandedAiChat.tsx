@@ -16,6 +16,7 @@ type Props = {
   modelOptions: Array<{ value: string; label: string }>;
   pendingFiles: File[];
   loading: boolean;
+  imageGenerating: boolean;
   messageCount: number;
   messages: ReactNode;
   status: ReactNode;
@@ -33,7 +34,7 @@ type Props = {
   onSend: (draft: string) => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -71,7 +72,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
       return;
     }
     if (nearBottomRef.current) container.scrollTop = container.scrollHeight;
-  }, [activeChat?.id, messageCount, loading]);
+  }, [activeChat?.id, messageCount, loading, imageGenerating]);
 
   useEffect(() => () => {
     if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);

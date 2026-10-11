@@ -2161,7 +2161,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
     generalAiChatScrollTopRef.current = container.scrollHeight;
-  }, [activeAiChat?.messages.length, aiChatLoading, isAiChatOpen]);
+  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen]);
 
   useEffect(() => {
     if (!isAiChatOpen) return;

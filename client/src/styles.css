@@ -8000,3 +8000,162 @@ body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus-visible {
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
+
+/* GPT Image stage 2: composited synthesis effect and private inline previews. */
+.ai-progress-group { min-width: 0; }
+.ai-image-generating-card {
+  width: min(100%, 21rem);
+  margin-top: .6rem;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, #8b5cf6 38%, var(--panel-border));
+  background: var(--card-bg, #1e293b);
+}
+.ai-image-generating-art {
+  position: relative;
+  isolation: isolate;
+  aspect-ratio: 1;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #172554, #4c1d95 51%, #164e63);
+}
+.ai-image-generating-art::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -40%;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,.15) 42%, rgba(196,181,253,.4) 50%, transparent 70%);
+  transform: translateX(-75%);
+  animation: ai-image-generation-sweep 3.6s ease-in-out infinite;
+  will-change: transform;
+}
+.ai-image-generating-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .55;
+  background-image: radial-gradient(rgba(255,255,255,.35) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+.ai-image-generating-orb {
+  position: absolute;
+  width: 56%;
+  aspect-ratio: 1;
+  border-radius: 35%;
+  opacity: .52;
+  animation: ai-image-generation-float 6s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.ai-image-generating-orb-one {
+  top: 8%; left: 4%;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  transform: rotate(22deg);
+}
+.ai-image-generating-orb-two {
+  right: 0; bottom: 0;
+  background: linear-gradient(135deg, #22d3ee, #a78bfa);
+  animation-delay: -2.2s;
+}
+.ai-image-generating-icon {
+  position: relative;
+  z-index: 1;
+  color: rgba(255,255,255,.85);
+}
+@keyframes ai-image-generation-sweep {
+  from { transform: translateX(-75%); }
+  to { transform: translateX(75%); }
+}
+@keyframes ai-image-generation-float {
+  from { transform: translate3d(-8%, 5%, 0) rotate(-12deg); }
+  to { transform: translate3d(12%, -8%, 0) rotate(13deg); }
+}
+.ai-generated-image-card {
+  width: min(100%, 24rem);
+  min-width: 0;
+  margin-top: .75rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, #8b5cf6 32%, var(--panel-border));
+  border-radius: 1.05rem;
+  background: var(--card-bg, #1e293b);
+  color: var(--text-primary);
+}
+.ai-generated-image-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: color-mix(in srgb, #8b5cf6 9%, var(--card-bg, #1e293b));
+}
+.ai-generated-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.ai-generated-image-loading {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(120deg, transparent 15%, rgba(167,139,250,.18) 50%, transparent 85%);
+  background-size: 200% 100%;
+  animation: ai-generated-image-loading 1.8s ease-in-out infinite;
+}
+@keyframes ai-generated-image-loading {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.ai-generated-image-fallback {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: .75rem;
+  text-align: center;
+}
+.ai-generated-image-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  padding: .55rem .7rem;
+  min-width: 0;
+}
+.ai-generated-image-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .7rem;
+  color: var(--text-muted);
+}
+.ai-generated-image-download {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  border-radius: .7rem;
+  border: 1px solid color-mix(in srgb, #8b5cf6 35%, var(--panel-border));
+  background: color-mix(in srgb, #8b5cf6 15%, var(--card-bg, #1e293b));
+  padding: .45rem .7rem;
+  font-size: .75rem;
+  font-weight: 650;
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+.ai-generated-image-download:hover {
+  background: color-mix(in srgb, #8b5cf6 25%, var(--card-bg, #1e293b));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-image-generating-art::before,
+  .ai-image-generating-orb,
+  .ai-generated-image-loading { animation: none; will-change: auto; }
+}
