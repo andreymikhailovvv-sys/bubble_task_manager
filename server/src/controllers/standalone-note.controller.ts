@@ -7,7 +7,7 @@ const NOTE_LIST_LIMIT = 500;
 
 type NotePayload = { title?: string; content?: string };
 
-function validatePayload(body: unknown, allowPartial: boolean): NotePayload {
+export function validateStandaloneNotePayload(body: unknown, allowPartial: boolean): NotePayload {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new NoteInputError('Некорректные данные заметки.');
   const record = body as Record<string, unknown>;
   if (Object.keys(record).some(key => !['title', 'content'].includes(key))) {
@@ -46,7 +46,7 @@ export const standaloneNoteController = {
   },
 
   create: async (req: Request, res: Response) => {
-    const data = validatePayload(req.body ?? {}, false);
+    const data = validateStandaloneNotePayload(req.body ?? {}, false);
     const note = await prisma.standaloneNote.create({
       data: { userId: req.user!.id, title: data.title ?? '', content: data.content ?? '' },
       select: { id: true, title: true, content: true, createdAt: true, updatedAt: true }
@@ -55,7 +55,7 @@ export const standaloneNoteController = {
   },
 
   update: async (req: Request, res: Response) => {
-    const data = validatePayload(req.body, true);
+    const data = validateStandaloneNotePayload(req.body, true);
     const result = await prisma.standaloneNote.updateMany({
       where: { id: req.params.id, userId: req.user!.id }, data
     });
