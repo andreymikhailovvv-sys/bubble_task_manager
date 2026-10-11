@@ -30,6 +30,23 @@ export const noteSearchText = (html: string) => decodeHtml(html
   .replace(/<\s*(br|\/p|\/div|\/li|\/h[1-6]|\/ul|\/ol)\b[^>]*>/gi, ' ')
   .replace(/<[^>]*>/g, ' ')).replace(/\s+/g,' ').trim();
 
+// Small Russian inflection fallback: выставка / выставке, задача / задаче,
+// маршрутный / маршрутного. Exact substring matching is always preferred.
+const russianStem = (word: string) => word.length < 5 ? word
+  : word.replace(/(?:иями|ями|ами|ого|ему|ими|ыми|ый|ий|ой|ая|яя|ое|ее|ые|ие|ых|их|ом|ем|ам|ям|ах|ях|ов|ев|ей|у|ю|е|и|ы|а|я)$/u, '');
+
+function matchIndex(haystack: string, term: string): number {
+  const direct = haystack.indexOf(term);
+  if (direct >= 0) return direct;
+  if (term.length < 5 || !/[а-я]/u.test(term)) return -1;
+  const queryStem = russianStem(term);
+  if (queryStem.length < 4) return -1;
+  for (const word of haystack.matchAll(/[а-яёa-z0-9]+/gu)) {
+    if (russianStem(word[0]) === queryStem) return word.index ?? -1;
+  }
+  return -1;
+}
+
 type SearchRow = { id: string; kind: WorkspaceSearchKind; title: string; description: string; context?: string };
 export function scoreWorkspaceRow(row: SearchRow, query: string): WorkspaceSearchHit | null {
   const terms = simplify(query).split(' ').filter(Boolean).slice(0, 10);
@@ -37,12 +54,12 @@ export function scoreWorkspaceRow(row: SearchRow, query: string): WorkspaceSearc
   const title = simplify(row.title);
   const body = simplify(row.description);
   const context = simplify(row.context ?? '');
-  if (!terms.every(term => title.includes(term) || body.includes(term) || context.includes(term))) return null;
+  if (!terms.every(term => matchIndex(title, term) >= 0 || matchIndex(body, term) >= 0 || matchIndex(context, term) >= 0)) return null;
   const fullQuery = terms.join(' ');
   const score = (title === fullQuery ? 200 : title.includes(fullQuery) ? 110 : 0)
     + (body.includes(fullQuery) ? 45 : 0)
-    + terms.reduce((n, term) => n + (title.includes(term) ? 35 : body.includes(term) ? 12 : 5), 0);
-  const firstFound = terms.map(term => body.indexOf(term)).filter(idx => idx >= 0).sort((a,b)=>a-b)[0];
+    + terms.reduce((n, term) => n + (matchIndex(title, term) >= 0 ? 35 : matchIndex(body, term) >= 0 ? 12 : 5), 0);
+  const firstFound = terms.map(term => matchIndex(body, term)).filter(idx => idx >= 0).sort((a,b)=>a-b)[0];
   const start = firstFound === undefined ? 0 : Math.max(0, firstFound - 55);
   return {
     id: row.id, kind: row.kind, title: row.title || 'Без названия', context: row.context,
