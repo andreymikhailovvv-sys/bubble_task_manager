@@ -10,4 +10,5 @@ export type TaskAiProgressStatus =
   | 'forming_answer'
   | 'applying_changes'
   | 'generating_image'
-  | 'editing_image';
+  | 'editing_image'
+  | 'editing_document';
