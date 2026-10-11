@@ -48,6 +48,7 @@ export async function editUserImageIfRequested(input: EditInput) {
       generatedDocument: edited.document,
       imageCreditsSpentMilli: edited.creditsSpentMilli,
       webSearchUsed: false, webSources: [], webCitations: [],
+      diagnostics: undefined,
       billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const,
         creditsSpentMilli: edited.creditsSpentMilli },
       workflowDiagnostics: {
