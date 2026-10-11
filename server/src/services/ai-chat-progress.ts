@@ -1,6 +1,9 @@
 export type AiChatProgressStatus =
   | 'analyzing_request'
   | 'using_chat_history'
+  | 'searching_workspace'
+  | 'searching_notes'
+  | 'reading_note'
   | 'searching_tasks'
   | 'listing_tasks'
   | 'reading_task'
