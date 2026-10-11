@@ -2122,12 +2122,14 @@ export const aiAssistantService = {
               if (generatedImage) {
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_ALREADY_CREATED' }) });
               } else {
-                input.onProgress?.('forming_answer');
+                input.onProgress?.('generating_image');
                 try {
                   generatedImage = await generateAiImage({ userId: input.userId, taskId: input.taskId, actionId: requestId, apiKey, args });
                   providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, image: { id: generatedImage.document.id, fileName: generatedImage.document.fileName } }) });
                 } catch (error) {
                   providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' }) });
+                } finally {
+                  input.onProgress?.('forming_answer');
                 }
               }
               continue;
