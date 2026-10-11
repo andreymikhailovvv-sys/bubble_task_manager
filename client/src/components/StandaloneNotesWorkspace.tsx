@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FilePenLine, Maximize2, Plus, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
+import { Maximize2, Plus, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
@@ -175,12 +175,22 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
   };
   const assignGroup = async (noteId: string, groupId: string | null) => {
     setGroupPicker(null);
+    const original = notes.find(note => note.id === noteId);
+    if (!original || original.groupId === groupId) return;
+    // Show the chosen color right away, and restore the old group on failure.
+    // The server must return groupId as part of the updated note.
+    setNotes(current => current.map(note => note.id === noteId ? { ...note, groupId } : note));
     try {
       const saved = await api.updateStandaloneNote(noteId, { groupId });
+      if (saved.groupId !== groupId) {
+        throw new Error('Сервер не подтвердил изменение группы. Обновите страницу и повторите попытку.');
+      }
       setNotes(current => sortNotes(current.map(note => note.id === saved.id ? saved : note)));
       setError(null);
     } catch (cause) {
-      setError(getErrorMessage(cause));
+      setNotes(current => current.map(note => note.id === noteId && note.groupId === groupId
+        ? { ...note, groupId: original.groupId } : note));
+      setError('Не удалось присвоить группу: ' + getErrorMessage(cause));
     }
   };
   const showGroupPicker = (noteId: string, target: HTMLElement) => {
@@ -231,12 +241,20 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
           if (event.target === event.currentTarget && !editing) setBoardOpen(false);
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
-            <div className="standalone-notes-board-header flex flex-col gap-3 border-b p-4 sm:px-6">
-              <div className="flex items-center justify-end gap-2">
-                <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
-                <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
+            <div className="standalone-notes-board-header flex flex-col gap-4 border-b p-4 sm:px-6">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
+                  <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
+                  <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
+                </div>
               </div>
               <nav className="standalone-group-filter flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
+                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
+                  aria-label="Редактировать группы" onClick={() => setGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
                   aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
@@ -249,15 +267,9 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                     <span className="max-w-36 truncate">{group.name}</span>
                   </button>
                 ))}
-                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
-                  aria-label="Редактировать группы" onClick={() => setGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
                 <button type="button" className="standalone-group-chip standalone-group-add" title="Добавить группу"
                   aria-label="Добавить группу" onClick={() => setGroupManager('new')} disabled={groups.length >= 40}><Plus size={17} /> Группа</button>
               </nav>
-              <div className="min-w-0">
-                <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
-                <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
-              </div>
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
@@ -285,7 +297,6 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                       <div className="standalone-note-card-footer flex items-center justify-between gap-2 border-t px-4 py-2">
                         <time className="truncate text-[11px] text-muted" dateTime={note.updatedAt}>{new Date(note.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</time>
                         <div className="flex items-center gap-1">
-                          <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={() => openEditor(note)} aria-label={'Редактировать заметку «' + titleOf(note) + '»'}><FilePenLine size={16} /></button>
                           <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={(event) => showGroupPicker(note.id, event.currentTarget)}
                             aria-label={'Выбрать группу заметки «' + titleOf(note) + '»'} title="Выбрать группу"><Tags size={16} /></button>
                           <button type="button" className="standalone-notes-delete rounded-lg p-1.5" onClick={() => void deleteNote(note)} aria-label={'Удалить заметку «' + titleOf(note) + '»'}><Trash2 size={16} /></button>
