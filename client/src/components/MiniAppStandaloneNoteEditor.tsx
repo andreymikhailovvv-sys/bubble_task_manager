@@ -14,9 +14,9 @@ export function MiniAppStandaloneNoteEditor({ note, onClose }: Props) {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flush = useCallback(async () => {
+  const flush = useCallback(async (): Promise<void> => {
     if (timer.current !== null) { clearTimeout(timer.current); timer.current = null; }
-    await queue.current;
+    await queue.current.catch(() => {});
     if (!dirty.current) return;
     const snapshot = latest.current;
     dirty.current = false;
