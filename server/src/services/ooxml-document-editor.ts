@@ -1,9 +1,10 @@
 import { posix } from 'node:path';
 import { readOoxmlArchive, writeOoxmlArchive, type OoxmlEntry } from './ooxml-archive.js';
+import { deleteRowsWithText } from './xlsx-row-deletion.service.js';
 
 export type OfficeFormat = 'docx' | 'xlsx';
 export type OfficeEdit = {
-  kind: 'replace_text' | 'append_paragraph' | 'delete_paragraph' | 'set_cell';
+  kind: 'replace_text' | 'append_paragraph' | 'delete_paragraph' | 'set_cell' | 'delete_rows_matching';
   target: string;
   value: string;
   sheet: string;
@@ -148,9 +149,13 @@ function editCell(xml:string, edit:OfficeEdit){
 function editExcel(files:OoxmlEntry[],edits:OfficeEdit[]){
   const sheets=sheetPaths(files);
   for(const edit of edits){
-    if(edit.kind!=='set_cell')throw new TypeError('Для Excel поддержаны безопасные изменения отдельных ячеек.');
+    if(edit.kind!=='set_cell' && edit.kind!=='delete_rows_matching') throw new TypeError('Для Excel поддержаны безопасные правки ячеек и удаление строк по значению.');
     const path=sheets.get(edit.sheet);
     if(!path)throw new TypeError('Не найден лист Excel: '+edit.sheet);
+    if(edit.kind==='delete_rows_matching') {
+      deleteRowsWithText(files,path,edit.target,edit.value);
+      continue;
+    }
     if(edit.value.length>4000)throw new TypeError('Слишком длинное значение ячейки.');
     const xml=editCell(get(files,path).data.toString('utf8'),edit);
     update(files,path,xml);
@@ -190,7 +195,7 @@ export function getOfficeDocumentPreview(buffer:Buffer, format:OfficeFormat){
 export function applyOfficeEdits(buffer:Buffer, format:OfficeFormat, edits:OfficeEdit[]):Buffer{
   if(!Array.isArray(edits)||!edits.length||edits.length>MAX_EDITS)throw new TypeError('Требуется от 1 до 20 конкретных изменений.');
   const files=readOoxmlArchive(buffer);
-  const valid=edits.every(x=>x && typeof x==='object' && ['replace_text','append_paragraph','delete_paragraph','set_cell'].includes(x.kind) &&
+  const valid=edits.every(x=>x && typeof x==='object' && ['replace_text','append_paragraph','delete_paragraph','set_cell','delete_rows_matching'].includes(x.kind) &&
     typeof x.target==='string' && typeof x.value==='string' && typeof x.sheet==='string' &&
     ['text','number','formula','boolean','blank'].includes(x.valueType));
   if(!valid)throw new TypeError('Недопустимые операции редактирования.');
