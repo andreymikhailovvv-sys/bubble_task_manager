@@ -3,8 +3,8 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, Generat
 export type ApiError = Error & { status?: number; code?: string };
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
-export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image';
-export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image';
+export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
+export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAssistantResult = { answer: string; model: string; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
