@@ -13,17 +13,17 @@ export function validateStandaloneNotePayload(body: unknown, allowPartial: boole
   if (Object.keys(record).some(key => !['title', 'content'].includes(key))) {
     throw new NoteInputError('Неизвестное поле заметки.');
   }
-  if (allowPartial && !Object.hasOwn(record, 'title') && !Object.hasOwn(record, 'content')) {
+  if (allowPartial && !Object.prototype.hasOwnProperty.call(record, 'title') && !Object.prototype.hasOwnProperty.call(record, 'content')) {
     throw new NoteInputError('Нет данных для изменения.');
   }
   const data: NotePayload = {};
-  if (Object.hasOwn(record, 'title')) {
+  if (Object.prototype.hasOwnProperty.call(record, 'title')) {
     if (typeof record.title !== 'string' || record.title.length > MAX_NOTE_TITLE_LENGTH) {
       throw new NoteInputError('Название заметки должно быть не длиннее 160 символов.');
     }
     data.title = record.title.trim();
   }
-  if (Object.hasOwn(record, 'content')) {
+  if (Object.prototype.hasOwnProperty.call(record, 'content')) {
     if (typeof record.content !== 'string' || record.content.length > MAX_NOTE_HTML_LENGTH) {
       throw new NoteInputError('Содержимое заметки слишком длинное.');
     }
