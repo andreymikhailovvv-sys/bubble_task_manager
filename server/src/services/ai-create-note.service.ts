@@ -1,5 +1,18 @@
 import { prisma } from '../db/prisma.js';
 
+/** Route explicit commands through the real note tool, including Telegram voice transcripts. */
+export function requiresNoteCreation(question: string): boolean {
+  const q = question.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
+  if (!q || q.length > 12000) return false;
+  if (/^(?:как|почему|объясни|расскажи|можно ли|умеешь ли|подскажи как)/.test(q)) return false;
+  if (/не\\s+(?:создавай|записывай|сохраняй|добавляй)/.test(q)) return false;
+  const intent = /(?:создай|создать|добавь|добавить|сделай|оформи)\\s+(?:(?:мне|пожалуйста)\\s+)?(?:новую\\s+)?заметк/.test(q)
+    || /(?:запиши|записать|сохрани|сохранить)\\s+(?:(?:это|текст|информацию|мне)\\s+)?(?:в\\s+заметки|как\\s+заметку|заметку)/.test(q);
+  if (!intent) return false;
+  // With no content to save the assistant should ask for details, not write a blank note.
+  return q.length >= 32 || /(?:это|следующее|вот что|вот это|из предыдущего)/.test(q);
+}
+
 export type CreatePersonalNoteArgs = {
   title: string;
   content: string;
