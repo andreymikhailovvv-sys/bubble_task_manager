@@ -6,6 +6,7 @@ import { taskController } from '../controllers/task.controller.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
+import { standaloneNoteController, sendNoteInputError } from '../controllers/standalone-note.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
@@ -1064,6 +1065,19 @@ apiRouter.get('/task-shares/:token', requireAuth, asyncHandler(taskController.sh
 apiRouter.post('/task-shares/:token/accept', requireAuth, asyncHandler(taskController.acceptShare));
 apiRouter.post('/tasks/:id/calendar/ics-link', requireAuth, asyncHandler(calendarExportController.createLink));
 apiRouter.get('/calendar/ics/export', asyncHandler(calendarExportController.exportIcs));
+// Notes are private to the signed-in user, independent of tasks and sectors.
+// No AI tools receive these records in stage one.
+apiRouter.get('/notes', requireAuth, asyncHandler(standaloneNoteController.list));
+apiRouter.post('/notes', requireAuth, asyncHandler(async (req, res) => {
+  try { await standaloneNoteController.create(req, res); }
+  catch (error) { if (!sendNoteInputError(error, res)) throw error; }
+}));
+apiRouter.patch('/notes/:id', requireAuth, asyncHandler(async (req, res) => {
+  try { await standaloneNoteController.update(req, res); }
+  catch (error) { if (!sendNoteInputError(error, res)) throw error; }
+}));
+apiRouter.delete('/notes/:id', requireAuth, asyncHandler(standaloneNoteController.remove));
+
 apiRouter.get('/habits', requireAuth, asyncHandler(habitController.list));
 apiRouter.post('/habits', requireAuth, asyncHandler(habitController.create));
 apiRouter.patch('/habits/:id', requireAuth, asyncHandler(habitController.update));
