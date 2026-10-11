@@ -13,7 +13,7 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 const unesc = (s: string) => s.replace(/&#x([\da-f]+);/gi,(_,v)=>String.fromCodePoint(parseInt(v,16)))
   .replace(/&#(\d+);/g,(_,v)=>String.fromCodePoint(Number(v)))
-  .replace(/&(amp|lt|gt|quot|apos);/g,(_,v)=>({amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"}[v] ?? ''));
+  .replace(/&(amp|lt|gt|quot|apos);/g,(_,v)=>(({amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"} as Record<string,string>)[String(v)] ?? ''));
 const attrs = (xml: string): Record<string,string> => {
   const out: Record<string,string> = {};
   for(const m of xml.matchAll(/([\w:.-]+)\s*=\s*"([^"]*)"/g))out[m[1]]=unesc(m[2]);
