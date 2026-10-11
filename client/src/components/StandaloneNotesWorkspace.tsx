@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FilePenLine, Maximize2, Plus, StickyNote, Trash2, X } from 'lucide-react';
-import { api, type StandaloneNote } from '../lib/api';
+import { FilePenLine, Maximize2, Plus, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
+import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
+import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
 type Props = { userId: string };
 const sortNotes = (items: StandaloneNote[]) =>
@@ -14,6 +15,10 @@ const getErrorMessage = (error: unknown) => error instanceof Error ? error.messa
 
 export function StandaloneNotesWorkspace({ userId }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
+  const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const [groupManager, setGroupManager] = useState<'new' | 'manage' | null>(null);
+  const [groupPicker, setGroupPicker] = useState<{ noteId: string; top: number; left: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
@@ -31,8 +36,9 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     if (!userId) return;
     setLoading(true);
     try {
-      const result = await api.getStandaloneNotes();
+      const [result, allGroups] = await Promise.all([api.getStandaloneNotes(), api.getStandaloneNoteGroups()]);
       setNotes(sortNotes(result));
+      setGroups(allGroups);
       setError(null);
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -45,6 +51,10 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     // Clear cached notes immediately when an account changes, even if the
     // next account's API request is still in flight.
     setNotes([]);
+    setGroups([]);
+    setSelectedGroup('all');
+    setGroupManager(null);
+    setGroupPicker(null);
     setBoardOpen(false);
     setEditing(null);
     draftRef.current = null;
@@ -121,7 +131,7 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     if (creating) return;
     setCreating(true);
     try {
-      const note = await api.createStandaloneNote();
+      const note = await api.createStandaloneNote({ groupId: selectedGroup !== 'all' && selectedGroup !== 'ungrouped' ? selectedGroup : null });
       setNotes((current) => sortNotes([note, ...current]));
       setBoardOpen(true);
       openEditor(note);
@@ -141,6 +151,45 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     } catch (cause) {
       setError(getErrorMessage(cause));
     }
+  };
+
+  const filteredNotes = selectedGroup === 'all' ? notes
+    : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
+    : notes.filter(note => note.groupId === selectedGroup);
+  const groupFor = (note: StandaloneNote) => groups.find(group => group.id === note.groupId);
+
+  const createGroup = async (data: { name: string; color: string }) => {
+    const created = await api.createStandaloneNoteGroup(data);
+    setGroups(current => [...current, created]);
+  };
+  const updateGroup = async (id: string, data: { name: string; color: string }) => {
+    const updated = await api.updateStandaloneNoteGroup(id, data);
+    setGroups(current => current.map(group => group.id === id ? updated : group));
+  };
+  const deleteGroup = async (group: StandaloneNoteGroup) => {
+    await api.deleteStandaloneNoteGroup(group.id);
+    setGroups(current => current.filter(item => item.id !== group.id));
+    setNotes(current => current.map(note => note.groupId === group.id ? { ...note, groupId: null } : note));
+    if (selectedGroup === group.id) setSelectedGroup('all');
+    setGroupPicker(null);
+  };
+  const assignGroup = async (noteId: string, groupId: string | null) => {
+    setGroupPicker(null);
+    try {
+      const saved = await api.updateStandaloneNote(noteId, { groupId });
+      setNotes(current => sortNotes(current.map(note => note.id === saved.id ? saved : note)));
+      setError(null);
+    } catch (cause) {
+      setError(getErrorMessage(cause));
+    }
+  };
+  const showGroupPicker = (noteId: string, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const width = Math.min(250, window.innerWidth - 24);
+    setGroupPicker({
+      noteId, left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)),
+      top: rect.bottom + 225 > window.innerHeight ? Math.max(12, rect.top - 225) : rect.bottom + 7
+    });
   };
 
   return (
@@ -182,29 +231,53 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
           if (event.target === event.currentTarget && !editing) setBoardOpen(false);
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
-            <div className="standalone-notes-board-header flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:px-6">
+            <div className="standalone-notes-board-header flex flex-col gap-3 border-b p-4 sm:px-6">
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
+                <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
+              </div>
+              <nav className="standalone-group-filter flex flex-wrap items-center gap-2" aria-label="Группы заметок">
+                <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
+                  aria-pressed={selectedGroup === 'all'} onClick={() => setSelectedGroup('all')}>Все <span className="opacity-70">{notes.length}</span></button>
+                <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'ungrouped' ? 'standalone-group-chip-active' : '')}
+                  aria-pressed={selectedGroup === 'ungrouped'} onClick={() => setSelectedGroup('ungrouped')}>Без группы</button>
+                {groups.map(group => (
+                  <button type="button" key={group.id} style={noteGroupStyle(group.color)}
+                    className={'standalone-group-chip standalone-group-chip-colored ' + (selectedGroup === group.id ? 'standalone-group-chip-active' : '')}
+                    aria-pressed={selectedGroup === group.id} onClick={() => setSelectedGroup(group.id)}>
+                    <span className="standalone-group-color-dot h-2.5 w-2.5 shrink-0 rounded-full" />
+                    <span className="max-w-36 truncate">{group.name}</span>
+                  </button>
+                ))}
+                <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
+                  aria-label="Редактировать группы" onClick={() => setGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
+                <button type="button" className="standalone-group-chip standalone-group-add" title="Добавить группу"
+                  aria-label="Добавить группу" onClick={() => setGroupManager('new')} disabled={groups.length >= 40}><Plus size={17} /> Группа</button>
+              </nav>
               <div className="min-w-0">
                 <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
-                <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({notes.length})</span></h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
-                <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => setBoardOpen(false)} aria-label="Закрыть список заметок"><X size={18} /></button>
+                <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
               </div>
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-              {notes.length === 0 ? (
+              {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />
-                  Пока нет заметок. Создайте первую запись.
+                  {notes.length ? 'В этой группе пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
                 </div>
               ) : (
                 <div className="standalone-notes-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {notes.map((note) => (
+                  {filteredNotes.map((note) => (
                     <article key={note.id} className="standalone-note-card group flex min-h-48 flex-col overflow-hidden rounded-2xl border">
                       <button type="button" className="min-w-0 flex-1 px-4 pb-2 pt-4 text-left" onClick={() => openEditor(note)} aria-label={'Открыть заметку «' + titleOf(note) + '»'}>
                         <h3 className="break-words text-base font-bold text-primary">{titleOf(note)}</h3>
+                        {groupFor(note) ? (
+                          <span className="standalone-group-note-label mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                            style={noteGroupStyle(groupFor(note)!.color)}>
+                            <span className="standalone-group-color-dot h-2 w-2 rounded-full shrink-0"/><span className="truncate">{groupFor(note)!.name}</span>
+                          </span>
+                        ) : null}
                         <div className="standalone-note-preview mt-2 max-h-48 overflow-hidden text-sm leading-relaxed text-muted"
                           dangerouslySetInnerHTML={{ __html: noteValueToEditorHtml(note.content) }} />
                         {!note.content.trim() ? <p className="mt-2 text-sm text-subtle">Пустая заметка</p> : null}
@@ -213,6 +286,8 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                         <time className="truncate text-[11px] text-muted" dateTime={note.updatedAt}>{new Date(note.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</time>
                         <div className="flex items-center gap-1">
                           <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={() => openEditor(note)} aria-label={'Редактировать заметку «' + titleOf(note) + '»'}><FilePenLine size={16} /></button>
+                          <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" onClick={(event) => showGroupPicker(note.id, event.currentTarget)}
+                            aria-label={'Выбрать группу заметки «' + titleOf(note) + '»'} title="Выбрать группу"><Tags size={16} /></button>
                           <button type="button" className="standalone-notes-delete rounded-lg p-1.5" onClick={() => void deleteNote(note)} aria-label={'Удалить заметку «' + titleOf(note) + '»'}><Trash2 size={16} /></button>
                         </div>
                       </div>
@@ -223,6 +298,26 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
             </div>
           </section>
         </div>, document.body) : null}
+      {groupPicker ? createPortal(
+        <div className="fixed inset-0 z-[270]" onMouseDown={() => setGroupPicker(null)}>
+          <div role="dialog" aria-label="Выбрать группу заметки" className="standalone-group-picker fixed w-[min(250px,calc(100vw-24px))] max-h-[min(280px,65vh)] overflow-y-auto rounded-xl border p-2 shadow-2xl"
+            style={{ top: groupPicker.top, left: groupPicker.left }} onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => { if (event.key === 'Escape') setGroupPicker(null); }}>
+            <p className="mb-2 px-2 text-xs font-semibold text-muted">Переместить в группу</p>
+            <button type="button" className="standalone-group-picker-option w-full rounded-lg px-2.5 py-2 text-left text-sm" onClick={() => void assignGroup(groupPicker.noteId, null)}>Без группы</button>
+            {groups.map(group => (
+              <button type="button" key={group.id} className="standalone-group-picker-option flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm"
+                onClick={() => void assignGroup(groupPicker.noteId, group.id)} style={noteGroupStyle(group.color)}>
+                <span className="standalone-group-color-dot h-3 w-3 shrink-0 rounded-full"/><span className="truncate">{group.name}</span>
+              </button>
+            ))}
+            {groups.length === 0 ? <p className="p-2 text-xs text-muted">Сначала создайте группу.</p> : null}
+          </div>
+        </div>, document.body) : null}
+      {groupManager ? (
+        <StandaloneNoteGroupManager key={groupManager} groups={groups} startNew={groupManager === 'new'}
+          onClose={() => setGroupManager(null)} onCreate={createGroup} onUpdate={updateGroup} onDelete={deleteGroup} />
+      ) : null}
       {editing ? (
         <NotesEditor
           key={editing.id}
