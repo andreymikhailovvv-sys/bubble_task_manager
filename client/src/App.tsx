@@ -6098,7 +6098,7 @@ ${allContext}`,
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
-          <StandaloneNotesWorkspace userId={currentUser?.id ?? ''} />
+          <StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} />
         </aside>
       </div>
       {subtaskCommentContextMenu ? (
