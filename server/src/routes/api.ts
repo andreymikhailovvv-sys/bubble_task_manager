@@ -26,6 +26,7 @@ import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistr
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
 import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
+import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
@@ -41,6 +42,36 @@ const ADMIN_BROADCAST_TARGETS = ['user', 'all', 'paid', 'free'] as const;
 const ADMIN_BROADCAST_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const ADMIN_BROADCAST_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const sanitizeLogin = normalizeAccountLogin;
+
+// In-memory limits apply per server process. Avoid treating the IP as a unique
+// person: many users can share one reverse-proxy address.
+const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
+const accountLoginLimiter = new FixedWindowRateLimiter(15, AUTH_RATE_WINDOW_MS);
+const ipLoginLimiter = new FixedWindowRateLimiter(300, AUTH_RATE_WINDOW_MS);
+const registrationLimiter = new FixedWindowRateLimiter(60, 60 * 60 * 1000);
+const adminRequestLimiter = new FixedWindowRateLimiter(240, AUTH_RATE_WINDOW_MS);
+const adminPasswordFailureLimiter = new FixedWindowRateLimiter(8, AUTH_RATE_WINDOW_MS);
+
+const rateLimitIpKey = (req: { ip?: string; socket?: { remoteAddress?: string } }) =>
+  `ip:${req.ip || req.socket?.remoteAddress || 'unknown'}`;
+
+// Account keys never contain the literal username; the hash also bounds key size.
+const accountRateLimitKey = (login: string) =>
+  `login:${crypto.createHash('sha256').update(login).digest('hex')}`;
+
+const rejectOnRateLimit = (res: any, decision: RateLimitDecision): boolean => {
+  if (decision.allowed) return false;
+  res.set('Retry-After', String(decision.retryAfterSeconds));
+  res.status(429).json({ error: 'Слишком много попыток. Повторите позже' });
+  return true;
+};
+
+const allowPasswordLoginAttempt = (req: any, res: any, login: string): boolean => {
+  const ipResult = ipLoginLimiter.consume(rateLimitIpKey(req));
+  if (rejectOnRateLimit(res, ipResult)) return false;
+  const accountResult = accountLoginLimiter.consume(accountRateLimitKey(login));
+  return !rejectOnRateLimit(res, accountResult);
+};
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const normalizeTimeZone = (candidate: string): string | null => {
@@ -313,6 +344,7 @@ apiRouter.post('/client-errors', async (req, res) => {
 });
 
 apiRouter.post('/auth/register', async (req, res) => {
+  if (rejectOnRateLimit(res, registrationLimiter.consume(rateLimitIpKey(req)))) return;
   const loginRaw = String(req.body?.login ?? '');
   const passwordRaw = String(req.body?.password ?? '');
   const nameRaw = String(req.body?.name ?? '').trim();
@@ -352,6 +384,7 @@ apiRouter.post('/auth/register', async (req, res) => {
 apiRouter.post('/auth/login', async (req, res) => {
   const login = sanitizeLogin(String(req.body?.login ?? ''));
   const password = String(req.body?.password ?? '');
+  if (!allowPasswordLoginAttempt(req, res, login)) return;
   if (!login || !password) {
     console.warn(`[Auth] login validation failed reason=missing_credentials login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(400).json({ error: 'Укажите логин и пароль' });
@@ -365,6 +398,7 @@ apiRouter.post('/auth/login', async (req, res) => {
     return;
   }
 
+  accountLoginLimiter.reset(accountRateLimitKey(login));
   setAuthCookies(res, user);
   console.info(`[Auth] login success userId=${user.id} login=${login} ${authRequestContext(req)}`);
   res.json({ user: toAuthUser(user) });
@@ -479,17 +513,28 @@ apiRouter.delete('/user/account', requireAuth, async (req, res) => {
 });
 
 const requireAdminPassword = (req: any, res: any): boolean => {
+  const ip = rateLimitIpKey(req);
+  if (rejectOnRateLimit(res, adminRequestLimiter.consume(ip))) return false;
+  if (rejectOnRateLimit(res, adminPasswordFailureLimiter.inspect(ip))) return false;
+
   const configuredPassword = process.env[ADMIN_PANEL_PASSWORD_ENV]?.trim();
   if (!configuredPassword) {
     res.status(503).json({ error: `Переменная окружения ${ADMIN_PANEL_PASSWORD_ENV} не задана` });
     return false;
   }
-  const providedPassword = String(req.body?.password ?? '');
+  const providedPassword = typeof req.body?.password === 'string' ? req.body.password : '';
   if (!providedPassword) {
+    adminPasswordFailureLimiter.record(ip);
     res.status(400).json({ error: 'Введите пароль администратора' });
     return false;
   }
-  if (providedPassword !== configuredPassword) {
+
+  // Compare fixed-length digests so a malformed password cannot introduce
+  // a length-dependent comparison, while retaining the existing admin API.
+  const actual = crypto.createHash('sha256').update(providedPassword).digest();
+  const expected = crypto.createHash('sha256').update(configuredPassword).digest();
+  if (!crypto.timingSafeEqual(actual, expected)) {
+    adminPasswordFailureLimiter.record(ip);
     res.status(401).json({ error: 'Неверный пароль администратора' });
     return false;
   }
@@ -981,6 +1026,7 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
   const initDataRaw = typeof req.body?.initData === 'string' ? req.body.initData.trim() : '';
   const login = sanitizeLogin(String(req.body?.login ?? ''));
   const password = String(req.body?.password ?? '');
+  if (!allowPasswordLoginAttempt(req, res, login)) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!botToken || !initDataRaw) {
     res.status(400).json({ error: 'Откройте форму входа кнопкой в Telegram-боте' });
@@ -1007,6 +1053,7 @@ apiRouter.post('/auth/telegram-web-login', async (req, res) => {
     return;
   }
 
+  accountLoginLimiter.reset(accountRateLimitKey(login));
   await telegramService.completeWebLogin(telegramChatId, user);
   setAuthCookies(res, user);
   console.info(`[TelegramWebLogin] success chatId=${telegramChatId} userId=${user.id}`);
