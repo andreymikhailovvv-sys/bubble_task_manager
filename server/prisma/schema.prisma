@@ -123,6 +123,7 @@ model User {
   taskComments TaskComment[] @relation("TaskCommentAuthor")
   taskCommentReadStates TaskCommentReadState[]
   generatedDocuments AiGeneratedDocument[]
+  standaloneNotes StandaloneNote[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -537,4 +538,17 @@ model CreditPurchase {
   @@unique([userId, clientRequestId])
   @@index([userId, createdAt])
   @@index([status])
+}
+
+// Personal notes independent of tasks and sectors; prepared for future AI search.
+model StandaloneNote {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String   @default("")
+  content   String   @default("") @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
 }
