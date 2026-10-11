@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Coins, FileSpreadsheet, FileText, ImagePlus, MessageCircle, Newspaper, SendHorizontal, Sparkles, WandSparkles, X } from 'lucide-react';
+import { BookOpen, Coins, FileSpreadsheet, FileText, ImagePlus, MessageCircle, Mic, Newspaper, Search, SendHorizontal, Sparkles, StickyNote, Tags, WandSparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-11-ai-images-and-office-edits';
+export const LATEST_NEWS_ID = '2026-10-12-personal-notes-and-ai';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -59,7 +59,34 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
-            <article className="updates-lesson updates-news-latest rounded-2xl border p-4">
+            <article className="updates-lesson updates-news-latest updates-news-notes rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="updates-news-date updates-news-date--violet text-[11px] font-semibold uppercase tracking-[0.14em]">12 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Личные заметки: всё важное в одном месте</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><StickyNote size={18} /></span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">В Планировыче появился отдельный раздел заметок. Храните идеи, списки, полезную информацию и записи независимо от задач, а когда понадобится, находите их через поиск или ИИ.</p>
+              <div className="mt-3 space-y-2">
+                <div className="updates-news-notes-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><StickyNote size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Удобные карточки и знакомый редактор</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Три последние заметки видны в правой панели сайта. В полном окне заметки показаны карточками с заголовками, списками и форматированием. Создавайте записи, открывайте их, редактируйте и удаляйте.</p>
+                </div>
+                <div className="updates-news-notes-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Tags size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Группы, цвета и быстрый поиск</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Распределяйте заметки по цветным группам, переключайтесь между ними и ищите записи по названию или содержимому, даже если не помните точный заголовок.</p>
+                </div>
+                <div className="updates-news-notes-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Mic size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Заметки вместе с ИИ и Telegram</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Попросите ИИ создать заметку или найти информацию в уже сохранённых записях. В Telegram можно продиктовать просьбу голосом, а в Mini App создать заметку через кнопку «+». Все записи доступны в одном аккаунте.</p>
+                </div>
+              </div>
+              <span className="updates-news-tag updates-news-tag--violet mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold">
+                <Search size={13} className="shrink-0" /> Записали. Сохранили. Нашли.
+              </span>
+            </article>
+            <article className="updates-lesson rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="updates-news-date updates-news-date--fuchsia text-[11px] font-semibold uppercase tracking-[0.14em]">11 октября 2026</p>
