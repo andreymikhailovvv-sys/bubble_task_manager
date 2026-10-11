@@ -17,6 +17,8 @@ export function isDocumentEditRequest(question:string) {
   if(!q || q.length>5000)return false;
   if(/\b(?:создай|сгенерируй|подготовь)\s+(?:новый\s+)?(?:word|excel|документ|таблиц)/i.test(q))return false;
   if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q) && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
+  if (/(?:картинк|изображен|фотограф|рисунк|пиксел|фон изображения)/i.test(q) &&
+      !/(?:word|excel|docx|xlsx|таблиц|документ|файл)/i.test(q)) return false;
   return /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|столбц|строк|ячейк|пункт\s+\d|абзац|сортир)/i.test(q);
 }
 const sourceFormat=(name:string,mime:string):OfficeFormat|null=>
@@ -61,6 +63,13 @@ function extractText(response: {output_text?:unknown;output?:unknown}):string {
 export async function editUserDocumentIfRequested(input:Input) {
   if(!isDocumentEditRequest(input.question))return null;
   const attachments=input.attachments ?? [];
+  // Never silently edit an older document when the current attachment
+  // is an unsupported PDF/DOC/XLS or a mismatched claimed Office type.
+  const officeLike=attachments.filter(a=>/\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(a.name) ||
+    /(?:application\/pdf|application\/msword|spreadsheet|wordprocessing)/i.test(a.mimeType));
+  if(officeLike.length && officeLike.some(a=>!sourceFormat(a.name,a.mimeType))) {
+    throw new TypeError('Редактирование этого вложения не поддерживается. Используйте DOCX или XLSX.');
+  }
   const candidates=attachments.filter(a=>sourceFormat(a.name,a.mimeType));
   if(candidates.length>1)throw new TypeError('Прикреплено несколько Word/Excel файлов. Оставьте один для редактирования.');
   let format:OfficeFormat|null=null;
