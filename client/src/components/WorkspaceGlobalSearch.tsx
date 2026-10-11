@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { FileText, ListChecks, LoaderCircle, Search, StickyNote, X } from 'lucide-react';
 import { api, type StandaloneNote } from '../lib/api';
 import type { Task } from '../lib/types';
-import { searchWorkspace, type WorkspaceSearchHit, type WorkspaceSearchKind } from '../lib/workspaceSearch';
+import { searchWorkspace, noteSearchText, type WorkspaceSearchHit, type WorkspaceSearchKind } from '../lib/workspaceSearch';
 
 type Props = {
   userId: string;
@@ -90,7 +90,10 @@ export function WorkspaceGlobalSearch({
     return () => document.removeEventListener('pointerdown', outside);
   }, [open]);
 
-  const results = useMemo(() => searchWorkspace(tasks, subtasks, notes, value), [tasks, subtasks, notes, value]);
+  // HTML can be large; strip formatting once when notes are fetched, not on
+  // every keystroke. Search scoring stays lightweight even with many notes.
+  const indexedNotes = useMemo(() => notes.map(note => ({ ...note, content: noteSearchText(note.content) })), [notes]);
+  const results = useMemo(() => searchWorkspace(tasks, subtasks, indexedNotes, value), [tasks, subtasks, indexedNotes, value]);
   const entries = useMemo(() => sections.flatMap(({kind}) => results[kind]), [results]);
   useEffect(() => setFocusedIndex(0), [value]);
   const selectResult = (item: WorkspaceSearchHit) => {
@@ -155,7 +158,7 @@ export function WorkspaceGlobalSearch({
               const Icon = kind === 'task' ? ListChecks : kind === 'subtask' ? FileText : StickyNote;
               return (
                 <div key={kind} className="workspace-global-search-section mb-2">
-                  <p className="workspace-global-search-section-title flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]">
+                  <p className={'workspace-global-search-section-title workspace-global-search-section-title--' + kind + ' flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]'}>
                     <Icon size={14} aria-hidden="true"/>{label}
                   </p>
                   {group.map(item => {
