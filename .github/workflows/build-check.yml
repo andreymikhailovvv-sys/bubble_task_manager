@@ -26,3 +26,5 @@ jobs:
         run: npm run build
       - name: Verify image generation and document regressions
         run: node --import tsx --test server/test/ai-image-generation.test.ts server/test/ai-image-visual-preview.test.ts server/test/ai-word-documents.test.ts server/test/docker-build-dependencies.test.ts
+      - name: Build the deployment Docker image
+        run: docker build --progress=plain -t bubble-task-manager:ci .
