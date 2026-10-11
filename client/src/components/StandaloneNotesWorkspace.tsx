@@ -161,6 +161,13 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     }
   };
 
+  // HTML-to-text conversion may be costly for long formatted notes.
+  // Build the index once per notes change, not on every search keystroke.
+  const noteSearchIndex = useMemo(() => new Map(notes.map(note => [
+    note.id, (note.title + ' ' + noteHtmlToPlainText(note.content))
+      .normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е')
+  ])), [notes]);
+
   const filteredNotes = useMemo(() => {
     const groupNotes = selectedGroup === 'all' ? notes
       : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
@@ -169,11 +176,10 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     if (!query) return groupNotes;
     const terms = query.split(/\s+/);
     return groupNotes.filter(note => {
-      const searchable = (note.title + ' ' + noteHtmlToPlainText(note.content))
-        .normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+      const searchable = noteSearchIndex.get(note.id) ?? '';
       return terms.every(term => searchable.includes(term));
     });
-  }, [notes, selectedGroup, searchQuery]);
+  }, [notes, selectedGroup, searchQuery, noteSearchIndex]);
   const groupFor = (note: StandaloneNote) => groups.find(group => group.id === note.groupId);
 
   const createGroup = async (data: { name: string; color: string }) => {
