@@ -16,6 +16,7 @@ export function isDocumentEditRequest(question:string) {
   const q=question.trim().toLowerCase();
   if(!q || q.length>5000)return false;
   if(/\b(?:создай|сгенерируй|подготовь)\s+(?:новый\s+)?(?:word|excel|документ|таблиц)/i.test(q))return false;
+  if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q) && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
   return /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|столбц|строк|ячейк|пункт\s+\d|абзац|сортир)/i.test(q);
 }
 const sourceFormat=(name:string,mime:string):OfficeFormat|null=>
