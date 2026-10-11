@@ -25,9 +25,10 @@ const color = (declarations: string) => {
   return rgb(hex);
 };
 
-test('new AI image / Word / Excel story is first and updates unread-news revision', async () => {
+test('previous AI image / Word / Excel story remains available after newest notes announcement', async () => {
   const menu = await readFile(menuPath, 'utf8');
-  assert.match(menu, /LATEST_NEWS_ID = '2026-10-11-ai-images-and-office-edits'/);
+  assert.match(menu, /LATEST_NEWS_ID = '2026-10-12-personal-notes-and-ai'/);
+  assert.ok(menu.indexOf('12 октября 2026') < menu.indexOf('11 октября 2026'));
   assert.ok(menu.indexOf('11 октября 2026') < menu.indexOf('8 октября 2026'));
   for (const phrase of ['Создание и редактирование изображений', 'Правки в Word и Excel',
     'PNG, JPG или WebP', 'DOCX или XLSX', 'Документы без ручного копирования']) {
