@@ -2125,6 +2125,71 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 
 
 
+
+/* Top universal search. Portal is outside the header to avoid clipping on small screens. */
+.workspace-global-search-field {
+  border-color: var(--field-border);
+  background: var(--field-bg);
+  color: var(--text-primary);
+  min-height: 40px;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.workspace-global-search-field:focus-within {
+  border-color: var(--accent);
+}
+.workspace-global-search-field input {
+  box-shadow: none !important;
+  outline: none !important;
+}
+.workspace-global-search-field input::-webkit-search-cancel-button { display: none; }
+.workspace-global-search-clear:hover {
+  color: var(--text-primary);
+  background: var(--muted-bg);
+}
+.workspace-global-search-panel {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  color: var(--text-primary);
+  box-shadow: 0 24px 64px rgba(0,0,0,.2), 0 8px 18px rgba(0,0,0,.08);
+  backdrop-filter: blur(18px);
+}
+.workspace-global-search-panel-header,
+.workspace-global-search-footer { border-color: var(--panel-border); }
+.workspace-global-search-section-title { color: var(--text-muted); }
+.workspace-global-search-section-title svg { color: var(--accent); }
+.workspace-global-search-section-title--subtask svg { color: #8b5cf6; }
+.workspace-global-search-section-title--note svg { color: #0d9488; }
+body[data-theme='dark'] .workspace-global-search-section-title--subtask svg { color: #c4b5fd; }
+body[data-theme='dark'] .workspace-global-search-section-title--note svg { color: #5eead4; }
+.workspace-global-search-hit { border: 1px solid transparent; transition: background-color .13s ease, border-color .13s ease; }
+.workspace-global-search-hit:hover,
+.workspace-global-search-hit-active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 23%, transparent);
+}
+.workspace-global-search-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.workspace-global-search-error {
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel-bg));
+  color: var(--danger);
+}
+body[data-theme='light'] .workspace-global-search-panel {
+  background: rgba(255,255,255,.98);
+  border-color: #cbd5e1;
+  box-shadow: 0 20px 58px rgba(30,41,59,.16), 0 6px 18px rgba(30,41,59,.06);
+}
+body[data-theme='dark'] .workspace-global-search-panel {
+  background: rgba(15,23,42,.98);
+  border-color: rgba(148,163,184,.3);
+}
+
 /* Standalone note groups: accessible text colors on blended accents in both themes. */
 .standalone-group-filter { min-width: 0; scrollbar-width: thin; overscroll-behavior-x: contain; padding-top: 4px; padding-inline: 2px; }
 .standalone-group-chip { flex-shrink: 0; }
