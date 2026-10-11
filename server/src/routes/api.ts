@@ -7,6 +7,7 @@ import { taskParticipantMessageController } from '../controllers/task-participan
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
 import { standaloneNoteController, sendNoteInputError } from '../controllers/standalone-note.controller.js';
+import { standaloneNoteGroupController, sendGroupConflict } from '../controllers/standalone-note-group.controller.js';
 import { taskAttachmentController } from '../controllers/task-attachment.controller.js';
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
@@ -1067,6 +1068,17 @@ apiRouter.post('/tasks/:id/calendar/ics-link', requireAuth, asyncHandler(calenda
 apiRouter.get('/calendar/ics/export', asyncHandler(calendarExportController.exportIcs));
 // Notes are private to the signed-in user, independent of tasks and sectors.
 // No AI tools receive these records in stage one.
+apiRouter.get('/note-groups', requireAuth, asyncHandler(standaloneNoteGroupController.list));
+apiRouter.post('/note-groups', requireAuth, asyncHandler(async (req, res) => {
+  try { await standaloneNoteGroupController.create(req, res); }
+  catch (error) { if (!sendNoteInputError(error, res) && !sendGroupConflict(error, res)) throw error; }
+}));
+apiRouter.patch('/note-groups/:id', requireAuth, asyncHandler(async (req, res) => {
+  try { await standaloneNoteGroupController.update(req, res); }
+  catch (error) { if (!sendNoteInputError(error, res) && !sendGroupConflict(error, res)) throw error; }
+}));
+apiRouter.delete('/note-groups/:id', requireAuth, asyncHandler(standaloneNoteGroupController.remove));
+
 apiRouter.get('/notes', requireAuth, asyncHandler(standaloneNoteController.list));
 apiRouter.post('/notes', requireAuth, asyncHandler(async (req, res) => {
   try { await standaloneNoteController.create(req, res); }
