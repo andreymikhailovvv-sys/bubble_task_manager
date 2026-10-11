@@ -62,6 +62,16 @@ function extractText(response: Record<string,unknown>):string {
 
 export async function editUserDocumentIfRequested(input:Input) {
   if(!isDocumentEditRequest(input.question))return null;
+  if(input.taskId){
+    const allowed=await prisma.task.findFirst({
+      where:{id:input.taskId,OR:[
+        {userId:input.userId},
+        {collaboration:{members:{some:{userId:input.userId,isHidden:false}}}}
+      ]},
+      select:{id:true}
+    });
+    if(!allowed)throw new TypeError('Задача недоступна для редактирования документа.');
+  }
   const attachments=input.attachments ?? [];
   // Never silently edit an older document when the current attachment
   // is an unsupported PDF/DOC/XLS or a mismatched claimed Office type.
