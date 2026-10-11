@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+import { buildWordDocumentBuffer } from '../src/services/word-document.service.js';
+import { buildExcelWorkbookBuffer } from '../src/services/excel-workbook.service.js';
+import { readOoxmlArchive } from '../src/services/ooxml-archive.js';
+import { applyOfficeEdits, getOfficeDocumentPreview, type OfficeEdit } from '../src/services/ooxml-document-editor.js';
+import { isDocumentEditRequest } from '../src/services/ai-user-document-edit.service.js';
+
+const edit = (kind:OfficeEdit['kind'],target:string,value:string,sheet='',valueType:OfficeEdit['valueType']='text'):OfficeEdit=>
+  ({kind,target,value,sheet,valueType});
+
+test('DOCX targeted paragraph changes preserve other OOXML parts and original source',()=>{
+  const source=buildWordDocumentBuffer({fileName:'contract.docx',blocks:[
+    {type:'paragraph',text:'Срок исполнения 20 дней'},
+    {type:'paragraph',text:'Остальные условия неизменны'}
+  ]}).buffer;
+  const sourceCopy=Buffer.from(source);
+  const edited=applyOfficeEdits(source,'docx',[
+    edit('replace_text','20 дней','30 дней'),
+    edit('append_paragraph','','Дополнительное соглашение')
+  ]);
+  const preview=getOfficeDocumentPreview(edited,'docx').text;
+  assert.match(preview,/Срок исполнения 30 дней/);
+  assert.match(preview,/Остальные условия неизменны/);
+  assert.match(preview,/Дополнительное соглашение/);
+  assert.ok(source.equals(sourceCopy));
+  const originalParts=readOoxmlArchive(source),modifiedParts=readOoxmlArchive(edited);
+  assert.deepEqual(originalParts.map(x=>x.name),modifiedParts.map(x=>x.name));
+  for(const part of originalParts.filter(x=>x.name!=='word/document.xml')){
+    assert.ok(part.data.equals(modifiedParts.find(x=>x.name===part.name)!.data),part.name);
+  }
+});
+
+test('DOCX refuses ambiguous or missing references without modifying source',()=>{
+  const buffer=buildWordDocumentBuffer({fileName:'note.docx',blocks:[
+    {type:'paragraph',text:'Два'}, {type:'paragraph',text:'Два'}
+  ]}).buffer;
+  assert.throws(()=>applyOfficeEdits(buffer,'docx',[edit('replace_text','Два','Один')]),/ровно в одном/);
+  assert.throws(()=>applyOfficeEdits(buffer,'docx',[edit('replace_text','Нету','Один')]));
+  assert.throws(()=>applyOfficeEdits(buffer,'docx',[edit('set_cell','A1','2','Лист 1')]));
+});
+
+test('XLSX edits values and formulas while preserving untouched sheets and formatting',()=>{
+  const original=buildExcelWorkbookBuffer({fileName:'budget.xlsx',sheets:[
+    {name:'Расходы',columns:['Наименование','Стоимость'],rows:[['Реклама',1200],['Печать',400]]},
+    {name:'Справочник',columns:['Название'],rows:[['Тест']]}
+  ]}).buffer;
+  const updated=applyOfficeEdits(original,'xlsx',[
+    edit('set_cell','C1','С НДС','Расходы','text'),
+    edit('set_cell','C2','=B2*1.2','Расходы','formula'),
+    edit('set_cell','B3','500','Расходы','number')
+  ]);
+  const preview=getOfficeDocumentPreview(updated,'xlsx').text;
+  assert.match(preview,/Лист: Расходы/);
+  assert.match(preview,/C1=С НДС/);
+  assert.match(preview,/C2==B2\*1\.2/);
+  assert.match(preview,/B3=500/);
+  const parts=readOoxmlArchive(updated);
+  const originalParts=readOoxmlArchive(original);
+  const originalSecondary=originalParts.find(p=>p.name==='xl/worksheets/sheet2.xml')!;
+  assert.ok(originalSecondary.data.equals(parts.find(p=>p.name===originalSecondary.name)!.data));
+  assert.throws(()=>applyOfficeEdits(original,'xlsx',[edit('delete_paragraph','foo','bar')]));
+});
+
+test('malformed OOXML is rejected, no archive path injection',()=>{
+  assert.throws(()=>getOfficeDocumentPreview(Buffer.from('not zip'),'docx'));
+  assert.throws(()=>applyOfficeEdits(Buffer.alloc(400),'xlsx',[edit('set_cell','A1','3','Sheet1','number')]));
+});
+
+test('document edit intent excludes unrelated task commands',()=>{
+  assert.equal(isDocumentEditRequest('Исправь опечатку в третьем абзаце Word'),true);
+  assert.equal(isDocumentEditRequest('Добавь столбец в Excel'),true);
+  assert.equal(isDocumentEditRequest('Переименуй задачу'),false);
+  assert.equal(isDocumentEditRequest('Создай новый Word документ'),false);
+});
+
+test('document edit route reuses signed generated-document downloads and billing', async()=>{
+  const [controller,handler,preview]=await Promise.all([
+    readFile(new URL('../src/controllers/ai.controller.ts',import.meta.url),'utf8'),
+    readFile(new URL('../src/services/ai-user-document-edit.service.ts',import.meta.url),'utf8'),
+    readFile(new URL('../../client/src/components/AiProgress.tsx',import.meta.url),'utf8')
+  ]);
+  assert.match(controller,/directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
+  assert.match(controller,/directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
+  assert.match(handler,/settleDynamicResponsesCall/);
+  assert.match(handler,/refundDynamicResponsesCall/);
+  assert.match(handler,/userId:input.userId/);
+  assert.match(preview,/Редактирую документ/);
+});
