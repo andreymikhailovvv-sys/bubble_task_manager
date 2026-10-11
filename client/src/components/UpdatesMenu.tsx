@@ -35,7 +35,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
     <div className="updates-menu-backdrop fixed inset-0 z-[180]" onMouseDown={onClose}>
       <aside className="updates-menu-panel fixed inset-y-0 left-0 flex w-[min(480px,94vw)] flex-col border-r p-5 shadow-2xl" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="updates-menu-title">
         <div className="flex items-start justify-between gap-3">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] updates-news-date updates-news-date--violet">Планировыч AI</p><h2 id="updates-menu-title" className="mt-1 text-xl font-bold text-primary">Обновления и изменения</h2></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] updates-menu-brand">Планировыч AI</p><h2 id="updates-menu-title" className="mt-1 text-xl font-bold text-primary">Обновления и изменения</h2></div>
           <button type="button" className="updates-menu-close rounded-full p-2 text-muted" onClick={onClose} aria-label="Закрыть меню"><X size={19} /></button>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl p-1 updates-menu-tabs">
@@ -122,7 +122,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
             <article className="updates-lesson rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-400">6 октября 2026</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] updates-news-date updates-news-date--violet">6 октября 2026</p>
                   <h3 className="mt-1 text-base font-semibold text-primary">Совместные задачи стали удобнее для общения</h3>
                 </div>
                 <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><MessageCircle size={17} /></span>
