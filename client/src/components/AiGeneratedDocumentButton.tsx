@@ -1,6 +1,7 @@
 import { Download, FileImage, FileSpreadsheet, FileText } from 'lucide-react';
 import type { GeneratedDocument } from '../lib/types';
 import { api } from '../lib/api';
+import { AiGeneratedImageCard } from './AiGeneratedImageCard';
 
 type AiGeneratedDocumentButtonProps = {
   document?: GeneratedDocument | null;
@@ -19,6 +20,7 @@ const ButtonContent = ({ document }: { document: GeneratedDocument }) => (
 
 export function AiGeneratedDocumentButton({ document, onDownload }: AiGeneratedDocumentButtonProps) {
   if (!document) return null;
+  if (document.mimeType.startsWith('image/')) return <AiGeneratedImageCard document={document} onDownload={onDownload} />;
   const className = "ai-generated-document-button mt-2 inline-flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold shadow-sm transition";
 
   if (onDownload) {
