@@ -2191,22 +2191,37 @@ body[data-theme='dark'] .standalone-group-chip-active {
 .standalone-notes-board-header,
 .standalone-note-card-footer { border-color: var(--panel-border); }
 .standalone-notes-search {
-  width: min(100%, 255px);
   min-height: 39px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   background: var(--field-bg);
-  border-color: var(--field-border);
+  border: 1px solid var(--field-border);
   color: var(--text-primary);
-  transition: border-color .15s ease, box-shadow .15s ease;
 }
+/* Keep the caret, not the browser/Tailwind blue focus halo. */
 .standalone-notes-search:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--focus-ring);
+  border-color: var(--field-border);
+  outline: none;
+  box-shadow: none;
 }
-.standalone-notes-search input { color: var(--text-primary); }
+.standalone-notes-search input,
+.standalone-notes-search input:focus,
+.standalone-notes-search input:focus-visible {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 0 !important;
+  border-radius: 0;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  color: var(--text-primary);
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
 .standalone-notes-search input::placeholder { color: var(--field-placeholder); }
-@media (max-width: 600px) {
-  .standalone-notes-search { width: 100%; flex-basis: 100%; order: 1; }
-}
 
 .standalone-notes-icon-button {
   background: var(--muted-bg);
