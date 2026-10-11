@@ -16,6 +16,7 @@ import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
+import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -232,7 +233,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1347,6 +1348,7 @@ export const aiAssistantService = {
             'НЕ используй web_search для обычного разговора; написания, редактирования или перевода текста; мозгового штурма; объяснения общеизвестных понятий; обычных логических рассуждений; планирования и декомпозиции; работы с данными Планировыча и поиска задач пользователя; проверки «на всякий случай»; только ради ссылок; или если можешь уверенно ответить без актуальных внешних данных. Для актуального состояния задач Планировыча используй task tools, а не web_search.',
             'Перед web_search сформулируй один максимально информативный поисковый запрос, способный закрыть вопрос за один поиск. За один пользовательский запрос доступен максимум один веб-поиск: не обходи ограничение. Если web_search уже использован, продолжай на основе полученных данных и не инициируй новый поиск. Не генерируй промежуточные фразы «Сейчас я поищу в интернете» или «Выполняю поиск»: состояние инструментов показывает интерфейс.',
             'После web_search основывай актуальные утверждения на найденных данных, не выдумывай источники и не представляй как установленный факт то, чего результаты не подтверждают. Не вызывай дополнительный web_search, если лимит исчерпан.',
+            'Если пользователь явно просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай инструменту подробный визуальный промпт; сервер вернёт готовое PNG-вложение. Не используй этот инструмент для текстовых вопросов. Не объявляй о готовом файле до подтверждения инструмента.',
             'Если пользователь просит прислать, подготовить, оформить или скачать документ Word, используй create_word_document. Для Excel, XLSX, электронной таблицы или табличного отчёта файлом используй create_excel_workbook. Передай инструменту данные и структуру, сервер соберёт файл. После успешного вызова кратко сообщи, что файл готов; не обещай создать файл позже. Не создавай два документа за один запрос.',
             'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. После успешного создания задачи, события или подзадачи добавь к названию маркер [[task_ref=ID]] с ID из результата task_action. Не придумывай ID. Отвечай на русском языке.'
           ].join(' ')
@@ -1368,7 +1370,7 @@ export const aiAssistantService = {
       ...result,
       billing: {
         mode: 'legacy' as const,
-        creditsSpentMilli: creditsToMilli(resolveModelCredits(model))
+        creditsSpentMilli: creditsToMilli(resolveModelCredits(model)) + result.imageCreditsSpentMilli
       }
     };
   },
@@ -1925,6 +1927,7 @@ export const aiAssistantService = {
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
+      'Если пользователь просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай подробный визуальный промпт; готовый PNG сервер добавит во вложения. Не говори об успешной генерации, пока инструмент не подтвердил её.',
       'Текст пользователю пиши только в answer.',
       'Ты видишь только краткий preview активных подзадач и metadata сохранённых файлов. Если нужна подзадача вне preview, полный список, description или старая/выполненная подзадача — используй task_context_lookup. Не придумывай отсутствующие подзадачи.',
       'Если пользователь просит все подзадачи, полный список, классифицировать, сгруппировать, отсортировать или сравнить все подзадачи, расставить приоритеты среди всех либо найти закономерности по всему списку, нельзя отвечать только по preview. Сначала вызови task_context_lookup с operation=list_subtasks. Если result.hasMore=true, запрашивай следующую страницу с offset=result.nextOffset и продолжай до hasMore=false в пределах tool budget. Для точечного поиска нескольких подходящих подзадач используй search_subtasks.',
@@ -2038,6 +2041,7 @@ export const aiAssistantService = {
       : await chargeAiCredits(input.userId, modelCandidates[0], { deferCommit: true });
 
     let providerCallIndex = 0;
+    let generatedImage: AiImageGenerationResult | null = null;
     for (const model of modelCandidates) {
       const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
@@ -2113,6 +2117,26 @@ export const aiAssistantService = {
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
               continue;
             }
+            if (call.name === 'generate_image') {
+              toolCallsExecuted += 1;
+              if (generatedImage) {
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_ALREADY_CREATED' }) });
+              } else {
+                input.onProgress?.('forming_answer');
+                try {
+                  generatedImage = await generateAiImage({ userId: input.userId, taskId: input.taskId, actionId: requestId, apiKey, args });
+                  providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, image: { id: generatedImage.document.id, fileName: generatedImage.document.fileName } }) });
+                } catch (error) {
+                  providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' }) });
+                }
+              }
+              continue;
+            }
+            if (call.name !== 'task_context_lookup') {
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'UNKNOWN_TOOL' }) });
+              toolCallsExecuted += 1;
+              continue;
+            }
             if (args.operation === 'get_attachment' && args.attachmentId && fetchedAttachmentIds.has(args.attachmentId)) {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, alreadyLoaded: true }) });
               console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: true, resultCount: null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: null });
@@ -2174,11 +2198,11 @@ export const aiAssistantService = {
         const parsed = parseGeneralAssistantPayload(rawAnswer);
         const excelSpec = extractExcelWorkbookSpecFromAssistantPayload(rawAnswer);
         const documentSpec = excelSpec ? null : extractWordDocumentSpecFromAssistantPayload(rawAnswer);
-        const generatedDocument = excelSpec
+        const generatedDocument = generatedImage?.document ?? (excelSpec
           ? await excelWorkbookService.create({ userId: input.userId, taskId: input.taskId, spec: excelSpec })
           : documentSpec
             ? await wordDocumentService.create({ userId: input.userId, taskId: input.taskId, spec: documentSpec })
-            : null;
+            : null);
         if (generatedDocument) {
           console.info('[AI] Task document created', {
             requestId,
@@ -2399,9 +2423,9 @@ ${actionAwareAnswer}`
         });
 
         if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation, { actionId: requestId, feature: input.billingFeature ?? 'task_chat', model });
-        let creditsSpentMilli = creditReservation?.totalMilli ?? 0;
+        let creditsSpentMilli = (creditReservation?.totalMilli ?? 0) + (generatedImage?.creditsSpentMilli ?? 0);
         if (dynamicBilling && dynamicCalls.length > 0) {
-          creditsSpentMilli = 0;
+          creditsSpentMilli = generatedImage?.creditsSpentMilli ?? 0;
           for (const call of dynamicCalls) {
             const settlement = await settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
             creditsSpentMilli += settlement.chargedMilli;
