@@ -9,4 +9,5 @@ export type TaskAiProgressStatus =
   | 'analyzing_retrieved_context'
   | 'forming_answer'
   | 'applying_changes'
-  | 'generating_image';
+  | 'generating_image'
+  | 'editing_image';

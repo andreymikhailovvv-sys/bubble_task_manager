@@ -6,6 +6,8 @@ import { computeNextRecurringDueDate } from '../services/task.service.js';
 import { createAiBillingSystemNotification } from '../services/ai-billing-notification.service.js';
 import { randomUUID } from 'node:crypto';
 import { logAiTraceSummary } from '../services/ai-trace-summary.service.js';
+import { editUserImageIfRequested } from '../services/ai-user-image-edit.service.js';
+import { isDynamicTextBillingEnabled } from '../services/dynamic-responses-billing.service.js';
 
 type ChatAttachment = {
   name: string;
@@ -86,7 +88,15 @@ export const aiController = {
       const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
       const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
-      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, sourceImageId: typeof req.body?.sourceImageId === 'string' && req.body.sourceImageId.length <= 128 ? req.body.sourceImageId : undefined, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      const directImageEdit = await editUserImageIfRequested({
+        userId: req.user!.id, question,
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        sourceImageId: typeof req.body?.sourceImageId === 'string' ? req.body.sourceImageId : undefined,
+        apiKey: process.env.OPENAI_API_KEY ?? '', model: requestedModel ?? 'gpt-5.4-mini',
+        dynamicBilling: isDynamicTextBillingEnabled(req.user!.id),
+        ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
+      });
+      const result = directImageEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, sourceImageId: typeof req.body?.sourceImageId === 'string' && req.body.sourceImageId.length <= 128 ? req.body.sourceImageId : undefined, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -242,7 +252,14 @@ export const aiController = {
       });
 
       const userTimeZone = await resolveUserTimeZone(req);
-      const result = await aiAssistantService.askTaskAssistant({
+      const directImageEdit = await editUserImageIfRequested({
+        userId: req.user!.id, taskId: req.params.id, question,
+        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        apiKey: process.env.OPENAI_API_KEY ?? '', model: model ?? 'gpt-5.4-mini',
+        dynamicBilling: isDynamicTaskChatBillingEnabled(req.user!.id),
+        ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
+      });
+      const result = directImageEdit ?? await aiAssistantService.askTaskAssistant({
         userId: req.user!.id,
         taskId: req.params.id,
         question,

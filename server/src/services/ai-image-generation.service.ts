@@ -3,6 +3,7 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge } from './ai-usage-metering.service.js';
 import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation } from './ai-credit-wallet.service.js';
 import type { GeneratedDocumentMeta } from './word-document.service.js';
+import type { ValidatedImage } from './ai-user-image-input.js';
 
 // The first iteration uses GPT Image 2 at low quality and a fixed pixel count.
 // Reserve up to $0.03 in user credits, then settle against the provider's actual
@@ -69,7 +70,7 @@ export function decodeGeneratedImage(data: unknown): Buffer {
 }
 
 export async function generateAiImage(input: {
-  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string;
+  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string; uploadedSourceImage?: ValidatedImage;
 }): Promise<AiImageGenerationResult> {
   const { prompt, size } = validateImageToolArguments(input.args);
   if (input.taskId) {
@@ -84,13 +85,13 @@ export async function generateAiImage(input: {
 
   // The source must be a generated PNG owned by the requesting user. Never
   // trust image bytes, URLs or owner identity supplied by the chat client.
-  const sourceImage = input.sourceImageId
+  const sourceImage = !input.uploadedSourceImage && input.sourceImageId
     ? await prisma.aiGeneratedDocument.findFirst({
         where: { id: input.sourceImageId, userId: input.userId, mimeType: 'image/png' },
         select: { id: true, size: true, contentBase64: true }
       })
     : null;
-  if (input.sourceImageId && !sourceImage) {
+  if (input.sourceImageId && !input.uploadedSourceImage && !sourceImage) {
     throw new Error('Исходное изображение не найдено или недоступно.');
   }
   if (sourceImage && (sourceImage.size < 100 || sourceImage.size > 8 * 1024 * 1024)) {
@@ -105,10 +106,12 @@ export async function generateAiImage(input: {
     // The Images API accepts base64 data URLs in JSON images/edits input.
     // Keep the same metering, proxy, PNG validation and document pipeline as
     // generations; only the provider endpoint and payload change for edits.
-    const editing = Boolean(sourceImage);
+    const editing = Boolean(sourceImage || input.uploadedSourceImage);
+    const sourceMime = input.uploadedSourceImage?.mimeType ?? 'image/png';
+    const sourceBase64 = input.uploadedSourceImage?.contentBase64 ?? sourceImage?.contentBase64;
     const imagePayload = editing
       ? { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png',
-          images: [{ image_url: `data:image/png;base64,${sourceImage!.contentBase64}` }] }
+          images: [{ image_url: `data:${sourceMime};base64,${sourceBase64}` }] }
       : { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png' };
     const response = await openAiFetch(
       editing ? 'https://api.openai.com/v1/images/edits' : 'https://api.openai.com/v1/images/generations',
