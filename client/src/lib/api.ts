@@ -184,6 +184,14 @@ export type AdminUser = {
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
 export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
+export type StandaloneNote = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
@@ -217,6 +225,13 @@ export const api = {
   deleteAccount: () => request<{ ok: true }>('/api/user/account', { method: 'DELETE' }),
   createTelegramLinkToken: () =>
     request<{ deepLinkUrl: string; expiresInSeconds: number }>('/api/telegram/link-token', { method: 'POST' }),
+  getStandaloneNotes: () => request<StandaloneNote[]>('/api/notes'),
+  createStandaloneNote: (payload: { title?: string; content?: string } = {}) =>
+    request<StandaloneNote>('/api/notes', { method: 'POST', body: JSON.stringify(payload) }),
+  updateStandaloneNote: (id: string, payload: { title?: string; content?: string }) =>
+    request<StandaloneNote>(`/api/notes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteStandaloneNote: (id: string) =>
+    request<{ ok: true }>(`/api/notes/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getSpheres: () => request<Sphere[]>('/api/spheres'),
   createSphere: (payload: Partial<Sphere>) => request<Sphere>('/api/spheres', { method: 'POST', body: JSON.stringify(payload) }),
   updateSphere: (id: string, payload: Partial<Sphere>) => request<Sphere>(`/api/spheres/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
