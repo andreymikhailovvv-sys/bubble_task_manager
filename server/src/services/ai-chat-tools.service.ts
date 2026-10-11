@@ -240,7 +240,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; requiredLookupTool?: 'search_workspace' | 'search_notes'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const resolvedNoteIds = new Set<string>();
@@ -293,9 +293,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         const providerCallIndex = providerCallCount + 1;
         const isForcedFinalRound = providerCallIndex === MAX_PROVIDER_CALLS;
         if (isForcedFinalRound) emitProgress('forming_answer');
-        const includeWebSearch = !isForcedFinalRound && webSearchAvailable && !webSearchUsed;
+        // An explicit personal-data retrieval request must not be answered from
+        // chat history without even checking the database. Require exactly one
+        // read-only lookup on round one; subsequent rounds are automatic.
+        const requiredLookup = providerCallIndex === 1 && input.requiredLookupTool && !isForcedFinalRound
+          ? input.requiredLookupTool : null;
+        const includeWebSearch = !isForcedFinalRound && !requiredLookup && webSearchAvailable && !webSearchUsed;
         const tools = includeWebSearch ? [...AI_CHAT_OPENAI_TOOLS, AI_CHAT_WEB_SEARCH_TOOL] : AI_CHAT_OPENAI_TOOLS;
-        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: 'auto', parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1 } : {}) }) };
+        const toolChoice = requiredLookup
+          ? { type: 'function' as const, name: requiredLookup }
+          : 'auto' as const;
+        const providerPayload = { model: input.model, input: requestInput, ...(isForcedFinalRound ? { tool_choice: 'none' } : { tools, tool_choice: toolChoice, parallel_tool_calls: false, ...(includeWebSearch ? { max_tool_calls: 1 } : {}) }) };
         if (input.dynamicBilling) {
           let call: DynamicResponsesCall;
           try { call = await runDynamicResponsesCall({ userId: input.userId, actionId: requestId, providerCallIndex, feature: 'ai_chat', apiKey: input.apiKey, payload: providerPayload, stream: true, onProviderEvent: observeProviderEvent }); }
