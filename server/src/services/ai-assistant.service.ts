@@ -1309,7 +1309,7 @@ export const aiAssistantService = {
         const edited = await generateAiImage({
           userId: input.userId, actionId: actionRequestId, apiKey,
           sourceImageId: input.sourceImageId,
-          args: { prompt: question, size: '1024x1024' }
+          args: { prompt: question, size: 'auto' }
         });
         const context: AiChatContextDiagnostics = {
           contextMode: 'legacy', memoryRevision: null,
