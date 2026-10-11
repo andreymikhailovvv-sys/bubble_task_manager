@@ -3,6 +3,7 @@ import type { AiChatProgressStatus, TaskAiProgressStatus } from '../lib/api';
 
 const PROGRESS_TEXT: Record<AiChatProgressStatus | TaskAiProgressStatus, string> = {
   analyzing_request: 'Анализирую запрос', using_chat_history: 'Учитываю историю диалога',
+  searching_workspace: 'Ищу в задачах и заметках', searching_notes: 'Ищу заметки', reading_note: 'Читаю заметку',
   searching_tasks: 'Ищу задачи', listing_tasks: 'Собираю список задач', reading_task: 'Изучаю задачу', checking_sectors: 'Проверяю сектора',
   searching_subtasks: 'Ищу нужную подзадачу', analyzing_subtasks: 'Анализирую подзадачи', reading_subtask: 'Изучаю детали подзадачи',
   searching_files: 'Ищу нужный файл', reading_file: 'Изучаю содержимое файла', reading_attachment: 'Изучаю вложение',
