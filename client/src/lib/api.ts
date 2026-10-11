@@ -121,7 +121,7 @@ export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onSta
   while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value, { stream: !done }); const lines = buffer.split('\n'); buffer = lines.pop() ?? ''; lines.forEach(consume); if (done) break; }
   consume(buffer); if (!result) throw new Error('Сервер не вернул результат чата ИИ'); return result;
 }
-async function askAiChatStreaming(payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[] }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
+async function askAiChatStreaming(payload: { question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; sourceImageId?: string; attachments?: ChatAttachmentPayload[] }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
   const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
 }
