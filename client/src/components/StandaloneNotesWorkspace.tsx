@@ -265,25 +265,19 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
           if (event.target === event.currentTarget && !editing) setBoardOpen(false);
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
-            <div className="standalone-notes-board-header flex flex-col gap-4 border-b p-4 sm:px-6">
+            <div className="standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
                   <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
                 </div>
-                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-                  <label className="standalone-notes-search relative flex min-w-0 items-center rounded-xl border">
-                    <Search size={16} className="ml-3 shrink-0 text-muted" aria-hidden="true" />
-                    <input type="search" aria-label="Поиск по названию и содержимому заметок"
-                      placeholder="Поиск по заметкам…" value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm outline-none" />
-                  </label>
+                <div className="flex shrink-0 items-center justify-end gap-2">
                   <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
                   <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
-              <nav className="standalone-group-filter flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
+              <div className="standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <nav className="standalone-group-filter flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto pb-1" aria-label="Группы заметок">
                 <button type="button" className="standalone-group-chip standalone-group-manage" title="Редактировать группы"
                   aria-label="Редактировать группы" onClick={() => setGroupManager('manage')}><Settings2 size={15} /><span className="sr-only">Управление группами</span></button>
                 <button type="button" className={'standalone-group-chip ' + (selectedGroup === 'all' ? 'standalone-group-chip-active' : '')}
@@ -300,7 +294,15 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                 ))}
                 <button type="button" className="standalone-group-chip standalone-group-add" title="Добавить группу"
                   aria-label="Добавить группу" onClick={() => setGroupManager('new')} disabled={groups.length >= 40}><Plus size={17} /> Группа</button>
-              </nav>
+                </nav>
+                <label className="standalone-notes-search relative flex w-full min-w-0 shrink-0 items-center overflow-hidden rounded-xl border sm:w-[255px]">
+                  <Search size={16} className="ml-3 shrink-0 text-muted" aria-hidden="true" />
+                  <input type="search" aria-label="Поиск по названию и содержимому заметок"
+                    placeholder="Поиск по заметкам…" value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm outline-none" />
+                </label>
+              </div>
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
             <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
