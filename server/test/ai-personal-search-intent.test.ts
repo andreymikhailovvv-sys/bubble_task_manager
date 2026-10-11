@@ -44,6 +44,6 @@ test('explicit note lookups require first tool call, not only an optional prompt
   assert.match(chat, /\{ type: 'function' as const, name: requiredLookup \}/);
   assert.match(chat, /tool_choice: toolChoice/);
   // Creation uses create_note; retrieval still uses search_notes/search_workspace.
-  assert.match(assistant, /requiredLookupTool: requiresNoteCreation\\(question\\) \\? 'create_note' : selectRequiredPersonalLookup\\(question\\)/);
-  assert.match(chat, /requiredLookupTool\\?: 'search_workspace' \\| 'search_notes' \\| 'create_note'/);
+  assert.ok(assistant.includes("requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question)"));
+  assert.ok(chat.includes("requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'"));
 });
