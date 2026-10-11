@@ -47,12 +47,12 @@ export function calculateImageCostNanoUsd(usage: AiImageUsage | null | undefined
     + BigInt(imageOutput) * 15_000_000_000n + 999_999n) / 1_000_000n;
 }
 
-export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' } {
+export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' | 'auto' } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TypeError('Некорректные параметры генерации изображения.');
   const source = raw as Record<string, unknown>;
   const prompt = typeof source.prompt === 'string' ? source.prompt.trim() : '';
   if (prompt.length < 3 || prompt.length > 3200) throw new TypeError('Промпт изображения должен содержать от 3 до 3200 символов.');
-  if (source.size !== '1024x1024' && source.size !== '1024x1536' && source.size !== '1536x1024') throw new TypeError('Недопустимый размер изображения.');
+  if (source.size !== '1024x1024' && source.size !== '1024x1536' && source.size !== '1536x1024' && source.size !== 'auto') throw new TypeError('Недопустимый размер изображения.');
   return { prompt, size: source.size };
 }
 
@@ -69,7 +69,7 @@ export function decodeGeneratedImage(data: unknown): Buffer {
 }
 
 export async function generateAiImage(input: {
-  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown;
+  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string;
 }): Promise<AiImageGenerationResult> {
   const { prompt, size } = validateImageToolArguments(input.args);
   if (input.taskId) {
@@ -82,17 +82,41 @@ export async function generateAiImage(input: {
     if (!allowed) throw new Error('Задача недоступна для создания изображения.');
   }
 
+  // The source must be a generated PNG owned by the requesting user. Never
+  // trust image bytes, URLs or owner identity supplied by the chat client.
+  const sourceImage = input.sourceImageId
+    ? await prisma.aiGeneratedDocument.findFirst({
+        where: { id: input.sourceImageId, userId: input.userId, mimeType: 'image/png' },
+        select: { id: true, size: true, contentBase64: true }
+      })
+    : null;
+  if (input.sourceImageId && !sourceImage) {
+    throw new Error('Исходное изображение не найдено или недоступно.');
+  }
+  if (sourceImage && (sourceImage.size < 100 || sourceImage.size > 8 * 1024 * 1024)) {
+    throw new Error('Размер исходного изображения не поддерживается.');
+  }
+
   const reservation = await reserveAiCreditsMilliUpTo(
     input.userId, AI_IMAGE_MIN_RESERVATION_MILLI, AI_IMAGE_MAX_RESERVATION_MILLI
   );
   let settled = false;
   try {
-    const response = await openAiFetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` },
-      body: JSON.stringify({ model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png' })
-    }, { requestId: `${input.actionId}:image`, model: AI_IMAGE_MODEL });
-    if (!response.ok) throw new Error(`OpenAI не смог создать изображение (HTTP ${response.status}).`);
+    // The Images API accepts base64 data URLs in JSON images/edits input.
+    // Keep the same metering, proxy, PNG validation and document pipeline as
+    // generations; only the provider endpoint and payload change for edits.
+    const editing = Boolean(sourceImage);
+    const imagePayload = editing
+      ? { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png',
+          images: [{ image_url: `data:image/png;base64,${sourceImage!.contentBase64}` }] }
+      : { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png' };
+    const response = await openAiFetch(
+      editing ? 'https://api.openai.com/v1/images/edits' : 'https://api.openai.com/v1/images/generations',
+      { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` },
+        body: JSON.stringify(imagePayload) },
+      { requestId: `${input.actionId}:image`, model: AI_IMAGE_MODEL }
+    );
+    if (!response.ok) throw new Error(`OpenAI не смог ${editing ? 'изменить' : 'создать'} изображение (HTTP ${response.status}).`);
     const result = await response.json() as { data?: Array<{ b64_json?: unknown }>; usage?: AiImageUsage };
     const buffer = decodeGeneratedImage(result.data?.[0]?.b64_json);
 
