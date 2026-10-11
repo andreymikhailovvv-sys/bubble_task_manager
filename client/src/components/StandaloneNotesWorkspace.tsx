@@ -69,6 +69,12 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     };
   }, [userId, reload]);
 
+  // Refresh when the board is opened: notes may have been created by AI or
+  // Telegram since the widget first loaded.
+  useEffect(() => {
+    if (boardOpen && !editing) void reload();
+  }, [boardOpen, reload]);
+
   const saveChanges = useCallback(async () => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
