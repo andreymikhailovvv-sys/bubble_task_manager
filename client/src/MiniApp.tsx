@@ -2214,6 +2214,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         projectId: activeAiChatProject?.id,
         chatId: activeAiChat?.id,
         clientSurface,
+        sourceImageId: [...history].reverse().find((message) => message.role === 'assistant' && message.generatedDocument?.mimeType.startsWith('image/'))?.generatedDocument?.id,
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress });
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined };
