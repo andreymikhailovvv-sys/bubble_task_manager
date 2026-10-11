@@ -39,6 +39,7 @@ test('image previews use short-lived signed links while downloads retain existin
   assert.match(card, /createAiGeneratedDocumentDownloadLink\(document\.id\)/);
   assert.match(card, /searchParams\.set\('preview', '1'\)/);
   assert.match(card, /referrerPolicy="no-referrer"/);
+  assert.match(card, /IntersectionObserver/);
   assert.match(card, /onDownload\(document\)/);
   assert.match(card, /Скачать/);
   assert.match(button, /document\.mimeType\.startsWith\('image\/'\)/);
@@ -48,6 +49,8 @@ test('image previews use short-lived signed links while downloads retain existin
   assert.match(styles, /ai-image-generation-sweep/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(wordTests, /download=/);
+  assert.match(web, /imageGenerating=\{aiChatLoading && aiChatProgress === 'generating_image'\}/);
+  assert.match(mini, /aiChatLoading, aiChatProgress, isAiChatOpen/);
   for (const source of [web, mini]) {
     assert.match(source, /AiGeneratedDocumentButton/);
     assert.match(source, /TaskAiProgress/);
