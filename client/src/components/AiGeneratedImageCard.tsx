@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, ImageOff } from 'lucide-react';
 import type { GeneratedDocument } from '../lib/types';
 import { api } from '../lib/api';
@@ -17,20 +17,41 @@ type Props = {
 export function AiGeneratedImageCard({ document, onDownload }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState(false);
+  const previewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let active = true;
+    let requested = false;
     setPreviewUrl(null);
     setPreviewError(false);
-    void api.createAiGeneratedDocumentDownloadLink(document.id)
-      .then(({ url }) => {
-        if (!active) return;
-        const signedUrl = new URL(url, window.location.origin);
-        signedUrl.searchParams.set('preview', '1');
-        setPreviewUrl(signedUrl.toString());
-      })
-      .catch(() => { if (active) setPreviewError(true); });
-    return () => { active = false; };
+    const loadPreview = () => {
+      if (requested) return;
+      requested = true;
+      // Don't mint expiring signed links for older, offscreen images until
+      // they're near the viewport. Otherwise lazy images may expire unseen.
+      void api.createAiGeneratedDocumentDownloadLink(document.id)
+        .then(({ url }) => {
+          if (!active) return;
+          const signedUrl = new URL(url, window.location.origin);
+          signedUrl.searchParams.set('preview', '1');
+          setPreviewUrl(signedUrl.toString());
+        })
+        .catch(() => { if (active) setPreviewError(true); });
+    };
+    const element = previewRef.current;
+    let observer: IntersectionObserver | null = null;
+    if (!element || !('IntersectionObserver' in window)) {
+      loadPreview();
+    } else {
+      observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadPreview();
+          observer?.disconnect();
+        }
+      }, { rootMargin: '350px' });
+      observer.observe(element);
+    }
+    return () => { active = false; observer?.disconnect(); };
   }, [document.id]);
 
   const downloadLabel = (
@@ -41,7 +62,7 @@ export function AiGeneratedImageCard({ document, onDownload }: Props) {
   );
   return (
     <figure className="ai-generated-image-card">
-      <div className="ai-generated-image-preview">
+      <div ref={previewRef} className="ai-generated-image-preview">
         {previewUrl && !previewError ? (
           <img
             src={previewUrl}
