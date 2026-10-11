@@ -21,10 +21,12 @@ export function noteHtmlToSearchText(html: string): string {
       ? parseInt(value.slice(1), 16) : parseInt(value, 10);
     return Number.isFinite(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff)
       ? String.fromCodePoint(n) : match;
-  }).replace(/&(amp|lt|gt|quot|apos|nbsp);/gi, (_, entity: string) =>
-    ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
-      as Record<string,string>)[entity.toLowerCase()] ?? ' ')
-    .replace(/[\t\r ]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
+  }).replace(/&(amp|lt|gt|quot|apos|nbsp);/gi, (_match, entity: string) => {
+    const named: Record<string, string> = {
+      amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' '
+    };
+    return named[entity.toLowerCase()] ?? ' ';
+  }).replace(/[\t\r ]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
 }
 
 const uniqueSearchWords = (values: unknown, max: number) =>
