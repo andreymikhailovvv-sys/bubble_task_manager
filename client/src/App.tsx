@@ -2674,6 +2674,7 @@ ${allContext}`,
         projectId: activeAiChatProject?.id,
         chatId: quick ? QUICK_AI_CHAT_ID : activeAiChat?.id,
         clientSurface: 'web',
+        sourceImageId: [...history].reverse().find((message) => message.role === 'assistant' && message.generatedDocument?.mimeType.startsWith('image/'))?.generatedDocument?.id,
         attachments
       }, { onStatus: setAiChatProgress });
       const actionReports = result.actionReports ?? [];
