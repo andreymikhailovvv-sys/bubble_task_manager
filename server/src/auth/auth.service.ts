@@ -39,21 +39,42 @@ const verifyPassword = (password: string, storedHash: string) => {
   return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(originalHash));
 };
 
-const normalizeIp = (ip: string | undefined) => {
-  if (!ip) return 'unknown-ip';
-  return ip.includes('::ffff:') ? ip.replace('::ffff:', '') : ip;
+// The device cookie is a long-lived *credential*, not a device fingerprint.
+// Legacy unsigned btm_device values (including IP/User-Agent hashes) are untrusted.
+const DEVICE_COOKIE_VERSION = 'v1';
+const MAX_DEVICE_ID_BYTES = 128;
+const DEVICE_COOKIE_PATTERN = /^v1\.([A-Za-z0-9_-]{1,171})\.([a-f0-9]{64})$/;
+
+const deviceCookieSignature = (payload: string) =>
+  crypto.createHmac('sha256', getJwtSecret()).update(`btm:device-cookie:${payload}`).digest('hex');
+
+const signDeviceCookie = (deviceId: string): string | null => {
+  const bytes = Buffer.from(deviceId, 'utf8');
+  // Preserve existing device IDs when possible, without ever trusting them unsigned.
+  if (bytes.length === 0 || bytes.length > MAX_DEVICE_ID_BYTES) return null;
+  const payload = `${DEVICE_COOKIE_VERSION}.${bytes.toString('base64url')}`;
+  return `${payload}.${deviceCookieSignature(payload)}`;
 };
 
-const resolveDeviceId = (req: { cookies?: Record<string, string>; ip?: string; headers: Record<string, unknown> }) => {
-  const existing = req.cookies?.[DEVICE_COOKIE_NAME];
-  if (existing) return existing;
+const verifyDeviceCookie = (value: unknown): string | null => {
+  if (typeof value !== 'string' || value.length > 300) return null;
+  const match = DEVICE_COOKIE_PATTERN.exec(value);
+  if (!match) return null;
 
-  const forwardedFor = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim();
-  const ip = normalizeIp(forwardedFor || req.ip);
-  const userAgent = (req.headers['user-agent'] as string | undefined) ?? 'unknown-ua';
+  const bytes = Buffer.from(match[1], 'base64url');
+  if (bytes.length === 0 || bytes.length > MAX_DEVICE_ID_BYTES || bytes.toString('base64url') !== match[1]) return null;
+  const deviceId = bytes.toString('utf8');
+  if (!Buffer.from(deviceId, 'utf8').equals(bytes)) return null;
 
-  return crypto.createHash('sha256').update(`${ip}|${userAgent}`).digest('hex');
+  const expected = Buffer.from(deviceCookieSignature(`${DEVICE_COOKIE_VERSION}.${match[1]}`), 'hex');
+  if (!crypto.timingSafeEqual(expected, Buffer.from(match[2], 'hex'))) return null;
+  return deviceId;
 };
+
+const createDeviceId = () => crypto.randomBytes(32).toString('hex');
+
+const resolveDeviceId = (req: { cookies?: Record<string, string> }) =>
+  verifyDeviceCookie(req.cookies?.[DEVICE_COOKIE_NAME]);
 
 export const authService = {
   sign(payload: AuthTokenPayload) {
@@ -86,5 +107,8 @@ export const authService = {
   },
   hashPassword,
   verifyPassword,
+  createDeviceId,
+  signDeviceCookie,
+  verifyDeviceCookie,
   resolveDeviceId
 };
