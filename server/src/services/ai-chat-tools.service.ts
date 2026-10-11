@@ -312,7 +312,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           task_actions: 'applying_changes',
           create_word_document: 'forming_answer',
           create_excel_workbook: 'forming_answer',
-          generate_image: 'forming_answer'
+          generate_image: 'generating_image'
         };
         const progress = progressByTool[name];
         if (progress) emitProgress(progress);
@@ -371,6 +371,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: true, image: { id: result.document.id, fileName: result.document.fileName, mimeType: result.document.mimeType } };
           } catch (error) {
             return { ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' };
+          } finally {
+            emitProgress('forming_answer');
           }
         }
         if (name === 'create_word_document' || name === 'create_excel_workbook') {
