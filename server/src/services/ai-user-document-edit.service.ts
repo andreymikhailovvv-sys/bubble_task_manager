@@ -43,7 +43,7 @@ const planSchema={
       type:'object',additionalProperties:false,
       required:['kind','target','value','sheet','valueType'],
       properties:{
-        kind:{type:'string',enum:['replace_text','append_paragraph','delete_paragraph','set_cell']},
+        kind:{type:'string',enum:['replace_text','append_paragraph','delete_paragraph','set_cell','delete_rows_matching']},
         target:{type:'string'}, value:{type:'string'},sheet:{type:'string'},
         valueType:{type:'string',enum:['text','number','formula','boolean','blank']}
       }
@@ -111,7 +111,7 @@ export async function editUserDocumentIfRequested(input:Input) {
   input.onProgress?.('editing_document');
   const instruction=format==='docx'
     ? 'Разрешены только replace_text (заменить точный фрагмент в одном абзаце), append_paragraph (добавить абзац в конец), delete_paragraph (удалить абзац строго по полному тексту). Для replace_text укажи в target точный текст из preview. Сложные стили, таблицы и перемещение элементов не поддерживаются. Для Word поля sheet оставляй пустыми, valueType=text.'
-    : 'Разрешён только set_cell: sheet=точное имя листа, target=адрес A1, value=новое значение, valueType=text|number|formula|boolean|blank. Формулы начинаются со знака =. Не меняй ячейки, которые пользователь не просил менять. Не удаляй или не сортируй строки физически: это может нарушить формулы.';
+    : 'Excel поддерживает set_cell (sheet=точное имя листа, target=адрес A1, value=новое значение, valueType=text|number|formula|boolean|blank) и delete_rows_matching для физического удаления всех строк с указанным брендом или позицией. Для delete_rows_matching: sheet=точное имя листа, target=искомая фраза, например SEBERO, value=буквы столбца (например B) или пустая строка для поиска по всем столбцам, valueType=text. Удаление выполняется по всему файлу, а не только по превью, сдвигает остальные строки и сохраняет заголовок. Не придумывай номера строк и не подменяй удаление очисткой ячеек. Сложные файлы с формулами, структурированными таблицами Excel, объединениями и связями система отклонит. Формулы для set_cell начинаются с =. Не меняй незапрошенные ячейки.';
   const call=await runDynamicResponsesCall({
     userId:input.userId,actionId,providerCallIndex:1,
     feature:input.taskId?'ai_chat_planner':'ai_chat',apiKey:input.apiKey,
