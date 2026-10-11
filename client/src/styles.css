@@ -2157,6 +2157,10 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 .workspace-global-search-footer { border-color: var(--panel-border); }
 .workspace-global-search-section-title { color: var(--text-muted); }
 .workspace-global-search-section-title svg { color: var(--accent); }
+.workspace-global-search-section-title--subtask svg { color: #8b5cf6; }
+.workspace-global-search-section-title--note svg { color: #0d9488; }
+body[data-theme='dark'] .workspace-global-search-section-title--subtask svg { color: #c4b5fd; }
+body[data-theme='dark'] .workspace-global-search-section-title--note svg { color: #5eead4; }
 .workspace-global-search-hit { border: 1px solid transparent; transition: background-color .13s ease, border-color .13s ease; }
 .workspace-global-search-hit:hover,
 .workspace-global-search-hit-active {
