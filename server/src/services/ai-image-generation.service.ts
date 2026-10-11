@@ -47,12 +47,12 @@ export function calculateImageCostNanoUsd(usage: AiImageUsage | null | undefined
     + BigInt(imageOutput) * 15_000_000_000n + 999_999n) / 1_000_000n;
 }
 
-export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' } {
+export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' | 'auto' } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TypeError('Некорректные параметры генерации изображения.');
   const source = raw as Record<string, unknown>;
   const prompt = typeof source.prompt === 'string' ? source.prompt.trim() : '';
   if (prompt.length < 3 || prompt.length > 3200) throw new TypeError('Промпт изображения должен содержать от 3 до 3200 символов.');
-  if (source.size !== '1024x1024' && source.size !== '1024x1536' && source.size !== '1536x1024') throw new TypeError('Недопустимый размер изображения.');
+  if (source.size !== '1024x1024' && source.size !== '1024x1536' && source.size !== '1536x1024' && source.size !== 'auto') throw new TypeError('Недопустимый размер изображения.');
   return { prompt, size: source.size };
 }
 
