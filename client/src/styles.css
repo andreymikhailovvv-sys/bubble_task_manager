@@ -7131,6 +7131,50 @@ body[data-theme='dark'] .updates-menu-panel { background: #0f172a; }
 .updates-menu-tab-active { color: white; background: linear-gradient(135deg, #7c3aed, #4f46e5); box-shadow: 0 6px 18px rgba(124,58,237,.25); }
 .updates-lesson { border-color: var(--panel-border); background: rgba(100,116,139,.08); }
 .updates-lesson-icon { color: #c4b5fd; background: rgba(124,58,237,.18); }
+
+/* News dates, feature cards and pills need independent light/dark contrast.
+   Avoid text-fuchsia-300 and similar dark-only utilities on pale surfaces. */
+.updates-menu-brand { color: #6d28d9; }
+.updates-news-date--fuchsia { color: #a21caf; }
+.updates-news-date--cyan { color: #0e7490; }
+.updates-news-date--violet { color: #6d28d9; }
+.updates-news-tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+  border: 1px solid transparent;
+}
+.updates-news-tag--fuchsia { color: #86198f; background: #fdf4ff; border-color: #f5d0fe; }
+.updates-news-tag--cyan { color: #155e75; background: #ecfeff; border-color: #a5f3fc; }
+.updates-news-tag--violet { color: #5b21b6; background: #f5f3ff; border-color: #ddd6fe; }
+.updates-news-latest {
+  background: linear-gradient(145deg, #fdf4ff 0%, #f5f3ff 48%, #eff6ff 100%);
+  border-color: #e9d5ff;
+}
+.updates-news-feature { border: 1px solid transparent; min-width: 0; }
+.updates-news-feature p { color: var(--text-muted); }
+.updates-news-feature--image { color: #86198f; background: rgba(255,255,255,.82); border-color: #f0abfc; }
+.updates-news-feature--office { color: #155e75; background: rgba(255,255,255,.82); border-color: #a5f3fc; }
+
+body[data-theme='dark'] .updates-menu-brand { color: #c4b5fd; }
+body[data-theme='dark'] .updates-news-date--fuchsia { color: #f0abfc; }
+body[data-theme='dark'] .updates-news-date--cyan { color: #67e8f9; }
+body[data-theme='dark'] .updates-news-date--violet { color: #c4b5fd; }
+body[data-theme='dark'] .updates-news-tag--fuchsia { color: #f5d0fe; background: rgba(217,70,239,.16); border-color: rgba(240,171,252,.3); }
+body[data-theme='dark'] .updates-news-tag--cyan { color: #a5f3fc; background: rgba(6,182,212,.13); border-color: rgba(103,232,249,.29); }
+body[data-theme='dark'] .updates-news-tag--violet { color: #ddd6fe; background: rgba(139,92,246,.17); border-color: rgba(196,181,253,.29); }
+body[data-theme='dark'] .updates-news-latest {
+  background: linear-gradient(145deg, rgba(88,28,135,.24), rgba(49,46,129,.18) 53%, rgba(8,47,73,.2));
+  border-color: rgba(196,181,253,.28);
+}
+body[data-theme='dark'] .updates-news-feature--image {
+  color: #f5d0fe; background: rgba(88,28,135,.19); border-color: rgba(240,171,252,.28);
+}
+body[data-theme='dark'] .updates-news-feature--office {
+  color: #a5f3fc; background: rgba(8,47,73,.26); border-color: rgba(103,232,249,.25);
+}
+
 body[data-theme='light'] .updates-lesson-icon { color: #6d28d9; background: #ede9fe; box-shadow: inset 0 0 0 1px rgba(109,40,217,.14); }
 .updates-lesson-button { color: white; background: linear-gradient(135deg, #7c3aed, #4f46e5); }
 .updates-lesson-button:disabled { color: var(--text-muted); background: rgba(100,116,139,.18); }
@@ -7705,7 +7749,6 @@ body[data-theme='light'] .miniapp-credit-message,
   background: #ecfeff;
   color: #155e75;
 }
-body[data-theme='light'] .updates-lesson .text-cyan-300 { color: #0e7490 !important; }
 
 
 /* Bugfixes: month grid usability, fast bubble filtering and upcoming subtasks consistency. */
