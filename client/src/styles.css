@@ -2126,7 +2126,8 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 
 
 /* Standalone note groups: accessible text colors on blended accents in both themes. */
-.standalone-group-filter { min-width: 0; }
+.standalone-group-filter { min-width: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.standalone-group-chip { flex-shrink: 0; }
 .standalone-group-chip {
   display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
   max-width: 100%; min-height: 33px;
