@@ -1,6 +1,7 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { plannerToolsService, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
+import { aiPersonalNotesService } from './ai-create-note.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -35,6 +36,13 @@ export const AI_CHAT_OPENAI_TOOLS = [
       queries: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } },
       keywords: { type: 'array', maxItems: 10, items: { type: 'string' } },
       limit: { type: 'number', minimum: 1, maximum: 10 }
+    } }
+  },
+  {
+    type: 'function', name: 'create_note', strict: true,
+    description: 'Создать новую самостоятельную личную заметку пользователя, доступную на сайте и в Mini App. Используй только по явной просьбе пользователя «создай заметку», «запиши в заметки», «сохрани как заметку». title — краткое название; content — записываемый текст, без HTML; groupName — точное название существующей группы либо null. Не создавай заметку без содержания и названия. После выполнения не утверждай, что сохранил её, если инструмент не подтвердил успех. За один запрос не создавай дубликаты.',
+    parameters: { type: 'object', additionalProperties: false, required: ['title', 'content', 'groupName'], properties: {
+      title: { type: 'string' }, content: { type: 'string' }, groupName: nullable('string')
     } }
   },
   {
@@ -240,10 +248,11 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; requiredLookupTool?: 'search_workspace' | 'search_notes'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const resolvedNoteIds = new Set<string>();
+  let noteCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let imageCreditsSpentMilli = 0;
@@ -357,6 +366,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           search_workspace: 'searching_workspace',
           search_notes: 'searching_notes',
           read_note: 'reading_note',
+          create_note: 'applying_changes',
           search_tasks: 'searching_tasks',
           list_tasks: 'listing_tasks',
           get_task: 'reading_task',
@@ -371,6 +381,21 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'create_note') {
+          if (noteCreated) return { ok: false, code: 'NOTE_ALREADY_CREATED', message: 'За один запрос уже создана заметка.' };
+          try {
+            const result = await aiPersonalNotesService.create(input.userId, value);
+            if (result.ok) {
+              noteCreated = true;
+              actionReports.push('Создана заметка «' + result.note.title + '».');
+              console.info('[AI tools] note created', { requestId, userId: input.userId, noteId: result.note.id });
+            }
+            return result;
+          } catch (error) {
+            return { ok: false, code: 'CREATE_NOTE_FAILED',
+              message: error instanceof TypeError ? error.message : 'Не удалось создать заметку.' };
+          }
+        }
         if (name === 'search_workspace') {
           try {
             const searchInput = validateNoteSearchInput(value);
