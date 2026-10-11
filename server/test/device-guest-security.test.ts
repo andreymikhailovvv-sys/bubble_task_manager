@@ -40,7 +40,7 @@ test('signed device cookie survives JWT expiry without trusting user-controlled 
     assert.equal(authService.resolveDeviceId({ cookies: { [DEVICE_COOKIE_NAME]: cookie } }), id);
 
     const otherId = authService.createDeviceId();
-    const tampered = cookie!.replace(id === otherId ? 'v1.' : cookie!.split('.')[1], Buffer.from(otherId).toString('base64url'));
+    const tampered = cookie!.replace(cookie!.split('.')[1], Buffer.from(otherId).toString('base64url'));
     assert.equal(authService.verifyDeviceCookie(tampered), null);
     assert.equal(authService.verifyDeviceCookie(cookie!.slice(0, -1) + (cookie!.endsWith('a') ? 'b' : 'a')), null);
   });
