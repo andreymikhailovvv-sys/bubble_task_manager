@@ -6,14 +6,14 @@ import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -123,6 +123,31 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     setEditing({ ...note });
     setError(null);
   };
+
+  // A top-search hit opens the exact note, even if the sidebar has not loaded
+  // it yet. Fetch a fresh copy, as notes can also be edited from Telegram/AI.
+  useEffect(() => {
+    if (!requestedNote?.id || !userId) return;
+    let cancelled = false;
+    void api.getStandaloneNotes().then(result => {
+      if (cancelled) return;
+      const note = result.find(item => item.id === requestedNote.id);
+      if (!note) {
+        setBoardOpen(true);
+        setError('Заметка не найдена или недоступна.');
+        return;
+      }
+      setNotes(sortNotes(result));
+      setBoardOpen(true);
+      draftRef.current = { ...note };
+      dirtyRef.current = false;
+      setEditing({ ...note });
+      setError(null);
+    }).catch(() => {
+      if (!cancelled) setError('Не удалось открыть найденную заметку. Повторите поиск.');
+    });
+    return () => { cancelled = true; };
+  }, [requestedNote?.id, requestedNote?.serial, userId]);
 
   const closeEditor = async () => {
     try {
