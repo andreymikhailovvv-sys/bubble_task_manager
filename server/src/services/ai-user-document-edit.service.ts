@@ -51,7 +51,7 @@ const planSchema={
   }
 };
 
-function extractText(response: {output_text?:unknown;output?:unknown}):string {
+function extractText(response: Record<string,unknown>):string {
   if(typeof response.output_text==='string' && response.output_text.trim())return response.output_text.trim();
   const items=Array.isArray(response.output)?response.output:[];
   return items.flatMap((item)=>{
@@ -104,7 +104,7 @@ export async function editUserDocumentIfRequested(input:Input) {
     : 'Разрешён только set_cell: sheet=точное имя листа, target=адрес A1, value=новое значение, valueType=text|number|formula|boolean|blank. Формулы начинаются со знака =. Не меняй ячейки, которые пользователь не просил менять. Не удаляй или не сортируй строки физически: это может нарушить формулы.';
   const call=await runDynamicResponsesCall({
     userId:input.userId,actionId,providerCallIndex:1,
-    feature:input.taskId?'task_chat':'ai_chat',apiKey:input.apiKey,
+    feature:input.taskId?'ai_chat_planner':'ai_chat',apiKey:input.apiKey,
     payload:{
       model:input.model,
       input:[
