@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Maximize2, Plus, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
+import { Maximize2, Plus, Search, Settings2, StickyNote, Tags, Trash2, X } from 'lucide-react';
 import { api, type StandaloneNote, type StandaloneNoteGroup } from '../lib/api';
 import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
@@ -17,6 +17,7 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [groupManager, setGroupManager] = useState<'new' | 'manage' | null>(null);
   const [groupPicker, setGroupPicker] = useState<{ noteId: string; top: number; left: number } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,6 +54,7 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     setNotes([]);
     setGroups([]);
     setSelectedGroup('all');
+    setSearchQuery('');
     setGroupManager(null);
     setGroupPicker(null);
     setBoardOpen(false);
@@ -153,9 +155,19 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
     }
   };
 
-  const filteredNotes = selectedGroup === 'all' ? notes
-    : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
-    : notes.filter(note => note.groupId === selectedGroup);
+  const filteredNotes = useMemo(() => {
+    const groupNotes = selectedGroup === 'all' ? notes
+      : selectedGroup === 'ungrouped' ? notes.filter(note => !note.groupId)
+      : notes.filter(note => note.groupId === selectedGroup);
+    const query = searchQuery.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
+    if (!query) return groupNotes;
+    const terms = query.split(/\s+/);
+    return groupNotes.filter(note => {
+      const searchable = (note.title + ' ' + noteHtmlToPlainText(note.content))
+        .normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е');
+      return terms.every(term => searchable.includes(term));
+    });
+  }, [notes, selectedGroup, searchQuery]);
   const groupFor = (note: StandaloneNote) => groups.find(group => group.id === note.groupId);
 
   const createGroup = async (data: { name: string; color: string }) => {
@@ -247,7 +259,14 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
                   <p className="standalone-note-accent text-xs font-semibold uppercase tracking-widest">Личные записи</p>
                   <h2 className="mt-1 text-xl font-bold text-primary">Мои заметки <span className="text-sm font-normal text-muted">({filteredNotes.length}{selectedGroup !== 'all' ? ' из ' + notes.length : ''})</span></h2>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                  <label className="standalone-notes-search relative flex min-w-0 items-center rounded-xl border">
+                    <Search size={16} className="ml-3 shrink-0 text-muted" aria-hidden="true" />
+                    <input type="search" aria-label="Поиск по названию и содержимому заметок"
+                      placeholder="Поиск по заметкам…" value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-sm outline-none" />
+                  </label>
                   <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
                   <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
@@ -276,7 +295,7 @@ export function StandaloneNotesWorkspace({ userId }: Props) {
               {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />
-                  {notes.length ? 'В этой группе пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
+                  {searchQuery.trim() ? 'По запросу ничего не найдено. Попробуйте другие слова.' : notes.length ? 'В этой группе пока нет заметок.' : 'Пока нет заметок. Создайте первую запись.'}
                 </div>
               ) : (
                 <div className="standalone-notes-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
