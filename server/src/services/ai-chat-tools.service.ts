@@ -239,7 +239,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   emitProgress('analyzing_request');
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
-    const loop = await runAiChatToolLoop({
+    let loop: Awaited<ReturnType<typeof runAiChatToolLoop>>;
+    try {
+      loop = await runAiChatToolLoop({
       initialInput: input.messages,
       request: async (requestInput) => {
         const providerCallIndex = providerCallCount + 1;
@@ -377,7 +379,13 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };
       }
-    });
+      });
+    } catch (error) {
+      // The image has already been generated, saved and charged. Never discard
+      // a completed paid attachment just because the follow-up text fails.
+      if (generatedDocument?.mimeType !== 'image/png') throw error;
+      loop = { answer: 'Изображение готово. PNG-файл прикреплён к сообщению.', providerCalls: providerCallCount, toolCalls: toolOperations.length };
+    }
     emitProgress('forming_answer');
     console.info('[AI tools] completed', { requestId, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
     let creditsSpentMilli = 0;
