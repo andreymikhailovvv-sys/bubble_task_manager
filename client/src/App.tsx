@@ -17,6 +17,7 @@ import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
+import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
@@ -6097,6 +6098,7 @@ ${allContext}`,
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
+          <StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} />
         </aside>
       </div>
       {subtaskCommentContextMenu ? (

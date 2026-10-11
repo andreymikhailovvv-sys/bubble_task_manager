@@ -2123,6 +2123,98 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
   transform: translateY(-1px);
 }
 
+
+/* Personal notes: independent of tasks; same rich text rendering as NotesEditor. */
+.standalone-note-accent { color: #7c3aed; }
+.standalone-notes-backdrop {
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px);
+}
+.standalone-notes-board {
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+}
+.standalone-notes-board-header,
+.standalone-note-card-footer { border-color: var(--panel-border); }
+.standalone-notes-icon-button {
+  background: var(--muted-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.standalone-notes-icon-button:hover,
+.standalone-note-recent:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.standalone-notes-icon-button:disabled { opacity: .5; cursor: wait; }
+.standalone-note-recent,
+.standalone-note-card,
+.standalone-notes-empty {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+}
+.standalone-note-recent { transition: background-color .16s ease, border-color .16s ease; }
+.standalone-note-card {
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.standalone-note-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--app-card-shadow);
+  transform: translateY(-1px);
+}
+.standalone-notes-create {
+  color: #fff;
+  background: linear-gradient(125deg, #7c3aed, #4f46e5);
+}
+.standalone-notes-create:hover { filter: brightness(1.12); }
+.standalone-notes-create:disabled { opacity: .55; cursor: wait; }
+.standalone-notes-delete { color: var(--danger); }
+.standalone-notes-delete:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.standalone-notes-error {
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel-bg));
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--panel-border));
+}
+.standalone-note-title-input {
+  background: var(--field-bg);
+  border-color: var(--field-border);
+  color: var(--text-primary);
+  outline: none;
+}
+.standalone-note-title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus-ring); }
+.standalone-note-title-input::placeholder { color: var(--field-placeholder); }
+.standalone-note-preview {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.standalone-note-preview h1 {
+  color: var(--text-primary); font-weight: 800; font-size: 1.15rem;
+  line-height: 1.35; margin: .25rem 0 .35rem;
+}
+.standalone-note-preview h2 {
+  color: var(--text-primary); font-weight: 700; font-size: 1rem;
+  line-height: 1.4; margin: .25rem 0 .35rem;
+}
+.standalone-note-preview p,
+.standalone-note-preview div { margin-bottom: .4rem; }
+.standalone-note-preview ul,
+.standalone-note-preview ol { margin: .25rem 0 .5rem; padding-left: 1.25rem; }
+.standalone-note-preview ul { list-style: disc outside; }
+.standalone-note-preview ol { list-style: decimal outside; }
+.standalone-note-preview li { margin: .12rem 0; }
+.standalone-note-preview .note-checklist { list-style: none; padding-left: 0; }
+.standalone-note-preview .note-checklist input { margin-right: .35rem; }
+.standalone-note-preview a { color: var(--accent); text-decoration: underline; }
+
+body[data-theme='dark'] .standalone-note-accent { color: #c4b5fd; }
+body[data-theme='dark'] .standalone-note-card {
+  background: color-mix(in srgb, var(--card-bg) 90%, #1e1b4b);
+}
+
 .notes-editor-backdrop {
   background: color-mix(in srgb, var(--overlay-bg) 86%, transparent);
   backdrop-filter: blur(18px) saturate(1.08);

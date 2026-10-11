@@ -59,6 +59,14 @@ function sanitizeElement(element: Element) {
 
   Array.from(element.children).forEach((child) => {
     if (!ALLOWED_NOTE_TAGS.has(child.tagName)) {
+      // Unknown wrappers must be sanitized before unwrapping. Otherwise a
+      // nested <img onerror> or other unknown element can bypass the sanitizer
+      // and execute inside rich-text previews rendered via innerHTML.
+      if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'TEMPLATE'].includes(child.tagName)) {
+        child.remove();
+        return;
+      }
+      sanitizeElement(child);
       child.replaceWith(...Array.from(child.childNodes));
       return;
     }
