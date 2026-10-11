@@ -250,6 +250,12 @@ const setAuthCookies = (
     deviceId: user.deviceId
   });
   res.cookie(AUTH_COOKIE_NAME, token, authService.cookieOptions());
+  // Upgrade an authenticated legacy guest to a signed device cookie without
+  // changing their user, tasks, JWT, or device ID.
+  const signedDeviceCookie = user.deviceId ? authService.signDeviceCookie(user.deviceId) : null;
+  if (signedDeviceCookie) {
+    res.cookie(DEVICE_COOKIE_NAME, signedDeviceCookie, authService.deviceCookieOptions());
+  }
 };
 
 const validateTelegramMiniAppInitData = (initDataRaw: string) => {
@@ -262,10 +268,15 @@ const validateTelegramMiniAppInitData = (initDataRaw: string) => {
 };
 
 const ensureDeviceUser = async (req: any, res: any) => {
-  const deviceId = authService.resolveDeviceId(req);
+  // Only an HMAC-verified device cookie can restore an anonymous account.
+  // A client-supplied legacy cookie or matching IP/User-Agent must never do so.
+  const verifiedDeviceId = authService.resolveDeviceId(req);
+  let user = verifiedDeviceId
+    ? await prisma.user.findUnique({ where: { deviceId: verifiedDeviceId } })
+    : null;
 
-  let user = await prisma.user.findUnique({ where: { deviceId } });
   if (!user) {
+    const deviceId = authService.createDeviceId();
     user = await prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
         data: {
@@ -278,7 +289,6 @@ const ensureDeviceUser = async (req: any, res: any) => {
     });
   }
 
-  res.cookie(DEVICE_COOKIE_NAME, deviceId, authService.deviceCookieOptions());
   setAuthCookies(res, user);
   return user;
 };
@@ -386,9 +396,6 @@ apiRouter.get('/auth/google/callback', (req, res, next) => {
     };
 
     setAuthCookies(res, user);
-    if (user.deviceId) {
-      res.cookie(DEVICE_COOKIE_NAME, user.deviceId, authService.deviceCookieOptions());
-    }
     res.redirect('/');
   });
 });
@@ -887,6 +894,14 @@ apiRouter.get('/auth/me', async (req, res) => {
     await getAiCreditWallet(req.user.id);
     const freshUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (freshUser) {
+      // The existing JWT remains valid. Refresh only the legacy device cookie,
+      // so guest sessions survive JWT expiry without trusting unsigned cookies.
+      if (freshUser.deviceId && authService.resolveDeviceId(req) !== freshUser.deviceId) {
+        const signedDeviceCookie = authService.signDeviceCookie(freshUser.deviceId);
+        if (signedDeviceCookie) {
+          res.cookie(DEVICE_COOKIE_NAME, signedDeviceCookie, authService.deviceCookieOptions());
+        }
+      }
       console.info(`[Auth] me success userId=${freshUser.id} source=cookie ${authRequestContext(req)}`);
       res.json({ user: toAuthUser(freshUser) });
       return;
