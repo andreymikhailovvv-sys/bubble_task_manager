@@ -50,8 +50,8 @@ test('integration routes user bytes to GPT Image with existing metering', async 
   assert.match(service, /refundAiCreditReservation/);
   assert.match(handler, /sourceImageId: uploaded \? undefined/);
   assert.match(handler, /taskId: input\.taskId/);
-  assert.match(controller, /directImageEdit \?\? await aiAssistantService\.askAiChat/);
-  assert.match(controller, /directImageEdit \?\? await aiAssistantService\.askTaskAssistant/);
+  assert.match(controller, /directImageEdit \?\? (?:directDocumentEdit \?\? )?await aiAssistantService\.askAiChat/);
+  assert.match(controller, /directImageEdit \?\? (?:directDocumentEdit \?\? )?await aiAssistantService\.askTaskAssistant/);
   assert.match(ui, /Редактирую изображение/);
   assert.match(tool, /name === 'generate_image'/);
 });
