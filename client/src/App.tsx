@@ -18,6 +18,7 @@ import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
+import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
@@ -703,6 +704,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
   const [search, setSearch] = useState('');
+  const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [selectedSphereIds, setSelectedSphereIds] = useState<string[]>([]);
   const [isSphereFilterOpen, setIsSphereFilterOpen] = useState(false);
   const [timeFilter, setTimeFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'month' | 'focus'>('all');
@@ -4346,7 +4348,17 @@ ${allContext}`,
           <Smartphone size={18} />
         </button>
 
-        <input className="surface-input light-search-input min-w-52 flex-1 rounded-xl border px-3 py-2 text-sm" placeholder="Поиск по задачам" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <WorkspaceGlobalSearch
+          key={currentUser.id}
+          userId={currentUser.id}
+          value={search}
+          onChange={setSearch}
+          tasks={tasks}
+          subtasks={subtasks}
+          onOpenTask={openTaskWithFocusGuard}
+          onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
+          onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
+        />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
@@ -6098,7 +6110,7 @@ ${allContext}`,
             </ul>
             <p className="mt-2 text-[11px] text-slate-400">Максимум секторов: {MAX_SPHERES}.</p>
           </section>
-          <StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} />
+          <StandaloneNotesWorkspace key={currentUser?.id ?? 'anonymous'} userId={currentUser?.id ?? ''} requestedNote={requestedStandaloneNote} />
         </aside>
       </div>
       {subtaskCommentContextMenu ? (
