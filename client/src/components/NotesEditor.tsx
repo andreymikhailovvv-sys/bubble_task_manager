@@ -1,5 +1,5 @@
 import { Bold, CheckSquare, Heading1, Heading2, Italic, ListChecks, ListOrdered, List as ListIcon, Strikethrough, Underline, X } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { linkifyNoteHtml, noteValueToEditorHtml } from '../lib/notes';
 
@@ -11,6 +11,8 @@ type Props = {
   onChange: (value: string) => void;
   onClose: () => void;
   miniAppSheet?: boolean;
+  heading?: string;
+  titleEditor?: ReactNode;
 };
 
 type FormatButton = {
@@ -137,7 +139,7 @@ function createChecklistItem(line: string) {
   return item;
 }
 
-export function NotesEditor({ value, onChange, onClose, miniAppSheet = false }: Props) {
+export function NotesEditor({ value, onChange, onClose, miniAppSheet = false, heading = 'Заметки', titleEditor }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const savedRangeRef = useRef<Range | null>(null);
   const [hasSelection, setHasSelection] = useState(false);
@@ -396,9 +398,10 @@ export function NotesEditor({ value, onChange, onClose, miniAppSheet = false }: 
           <X size={18} />
         </button>
         <div className="notes-editor-header flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 pr-14">
-          <div>
-            <h4 className="text-base font-semibold text-primary">Заметки</h4>
-            <p className="text-xs text-muted">Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.</p>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-base font-semibold text-primary">{heading}</h4>
+            {titleEditor ? <div className="mt-2">{titleEditor}</div> : null}
+            <p className="mt-1 text-xs text-muted">Выделите текст для форматирования или добавьте список/чекбоксы в текущую позицию курсора.</p>
           </div>
         </div>
         <div className="notes-editor-toolbar flex flex-nowrap justify-between gap-1 border-b px-2 py-3 sm:justify-start sm:gap-2 sm:px-4">
