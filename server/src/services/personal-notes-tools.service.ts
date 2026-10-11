@@ -42,8 +42,13 @@ export function validateNoteSearchInput(input: unknown): PersonalNoteSearchInput
   return { queries, keywords, limit };
 }
 
-const contains = (haystack: string, needle: string) =>
-  haystack.includes(needle) || haystack.split(' ').some(word => plannerStringSimilarity(word, needle) >= 0.63);
+const contains = (haystack: string, needle: string) => {
+  if (haystack.includes(needle)) return true;
+  // Exact matches cover the entire note. Fuzzy matches are intentionally
+  // bounded, so a handful of large pasted documents cannot monopolize CPU.
+  return haystack.slice(0, 4500).split(' ').slice(0, 160)
+    .some(word => plannerStringSimilarity(word, needle) >= 0.63);
+};
 
 export function rankPersonalNotes(records: NoteRecord[], input: PersonalNoteSearchInput): NoteSearchHit[] {
   return records.map(note => {
@@ -85,10 +90,23 @@ export function mergeTaskAndNoteSearchResults(
   notes: { results: NoteSearchHit[]; totalCandidates: number },
   limit: number
 ) {
-  const results = [
+  const all = [
     ...tasks.results.map(task => ({ ...task, kind: task.kind ?? 'task', source: 'tasks' as const })),
     ...notes.results.map(note => ({ ...note, source: 'notes' as const }))
-  ].sort((a,b) => b.score - a.score).slice(0, Math.max(1, Math.min(15,limit)));
+  ].sort((a,b) => b.score - a.score);
+  const max = Math.max(1, Math.min(15, limit));
+  const results = all.slice(0, max);
+  // A vague search should not hide an entire source merely because one source
+  // has more matches. Keep one high-confidence hit from each when room permits.
+  if (max >= 2 && tasks.results.length && notes.results.length) {
+    for (const source of ['tasks','notes'] as const) {
+      if (!results.some(item => item.source === source)) {
+        const best = all.find(item => item.source === source);
+        if (best) results.splice(results.length - 1, 1, best);
+      }
+    }
+    results.sort((a,b) => b.score - a.score);
+  }
   return { results, totalCandidates: tasks.totalCandidates + notes.totalCandidates,
     taskCandidateCount: tasks.totalCandidates, noteCandidateCount: notes.totalCandidates,
     taskCount: results.filter(item=>item.source==='tasks').length,
