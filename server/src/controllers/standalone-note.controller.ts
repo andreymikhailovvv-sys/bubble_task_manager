@@ -63,7 +63,7 @@ export const standaloneNoteController = {
     const data = validateStandaloneNotePayload(req.body ?? {}, false);
     await verifyGroupAccess(req.user!.id, data.groupId);
     const note = await prisma.standaloneNote.create({
-      data: { userId: req.user!.id, title: data.title ?? '', content: data.content ?? '' },
+      data: { userId: req.user!.id, title: data.title ?? '', content: data.content ?? '', groupId: data.groupId ?? null },
       select: { id: true, title: true, content: true, createdAt: true, updatedAt: true }
     });
     res.status(201).json(note);
