@@ -5,15 +5,15 @@ export const MAX_NOTE_TITLE_LENGTH = 160;
 export const MAX_NOTE_HTML_LENGTH = 120_000;
 const NOTE_LIST_LIMIT = 500;
 
-type NotePayload = { title?: string; content?: string };
+type NotePayload = { title?: string; content?: string; groupId?: string | null };
 
 export function validateStandaloneNotePayload(body: unknown, allowPartial: boolean): NotePayload {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new NoteInputError('Некорректные данные заметки.');
   const record = body as Record<string, unknown>;
-  if (Object.keys(record).some(key => !['title', 'content'].includes(key))) {
+  if (Object.keys(record).some(key => !['title', 'content', 'groupId'].includes(key))) {
     throw new NoteInputError('Неизвестное поле заметки.');
   }
-  if (allowPartial && !Object.prototype.hasOwnProperty.call(record, 'title') && !Object.prototype.hasOwnProperty.call(record, 'content')) {
+  if (allowPartial && !Object.prototype.hasOwnProperty.call(record, 'title') && !Object.prototype.hasOwnProperty.call(record, 'content') && !Object.prototype.hasOwnProperty.call(record, 'groupId')) {
     throw new NoteInputError('Нет данных для изменения.');
   }
   const data: NotePayload = {};
@@ -29,7 +29,21 @@ export function validateStandaloneNotePayload(body: unknown, allowPartial: boole
     }
     data.content = record.content;
   }
+  if (Object.prototype.hasOwnProperty.call(record, 'groupId')) {
+    if (record.groupId !== null && (typeof record.groupId !== 'string' || !record.groupId.trim() || record.groupId.length > 128)) {
+      throw new NoteInputError('Некорректный идентификатор группы.');
+    }
+    data.groupId = record.groupId === null ? null : record.groupId as string;
+  }
   return data;
+}
+
+async function verifyGroupAccess(userId: string, groupId: string | null | undefined) {
+  if (!groupId) return;
+  const group = await prisma.standaloneNoteGroup.findFirst({
+    where: { id: groupId, userId }, select: { id: true }
+  });
+  if (!group) throw new NoteInputError('Группа не найдена или недоступна.');
 }
 
 export class NoteInputError extends Error {}
@@ -40,15 +54,16 @@ export const standaloneNoteController = {
       where: { userId: req.user!.id },
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: NOTE_LIST_LIMIT,
-      select: { id: true, title: true, content: true, createdAt: true, updatedAt: true }
+      select: { id: true, title: true, content: true, groupId: true, createdAt: true, updatedAt: true }
     });
     res.json(notes);
   },
 
   create: async (req: Request, res: Response) => {
     const data = validateStandaloneNotePayload(req.body ?? {}, false);
+    await verifyGroupAccess(req.user!.id, data.groupId);
     const note = await prisma.standaloneNote.create({
-      data: { userId: req.user!.id, title: data.title ?? '', content: data.content ?? '' },
+      data: { userId: req.user!.id, title: data.title ?? '', content: data.content ?? '', groupId: data.groupId ?? null },
       select: { id: true, title: true, content: true, createdAt: true, updatedAt: true }
     });
     res.status(201).json(note);
@@ -56,6 +71,7 @@ export const standaloneNoteController = {
 
   update: async (req: Request, res: Response) => {
     const data = validateStandaloneNotePayload(req.body, true);
+    await verifyGroupAccess(req.user!.id, data.groupId);
     const result = await prisma.standaloneNote.updateMany({
       where: { id: req.params.id, userId: req.user!.id }, data
     });

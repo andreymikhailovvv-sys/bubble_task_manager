@@ -2124,6 +2124,59 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 }
 
 
+
+/* Standalone note groups: accessible text colors on blended accents in both themes. */
+.standalone-group-filter { min-width: 0; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.standalone-group-chip { flex-shrink: 0; }
+.standalone-group-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  max-width: 100%; min-height: 33px;
+  padding: .4rem .75rem; border: 1px solid var(--panel-border);
+  border-radius: 999px; background: var(--muted-bg);
+  color: var(--text-primary); font-size: .78rem; font-weight: 600;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.standalone-group-chip-colored,
+.standalone-group-note-label {
+  background: color-mix(in srgb, var(--note-group-color) 13%, var(--panel-bg));
+  border-color: color-mix(in srgb, var(--note-group-color) 35%, var(--panel-border));
+  color: var(--text-primary);
+}
+.standalone-group-chip:hover, .standalone-group-chip-active {
+  border-color: var(--note-group-color, var(--accent));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--note-group-color, var(--accent)) 40%, transparent);
+}
+.standalone-group-chip-active { background: color-mix(in srgb, var(--note-group-color, var(--accent)) 20%, var(--panel-bg)); }
+.standalone-group-color-dot,
+.standalone-group-swatch { background: var(--note-group-color, var(--accent)); }
+.standalone-group-note-label { border: 1px solid; }
+.standalone-group-picker,
+.standalone-group-manager {
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+}
+.standalone-group-picker-option { color: var(--text-primary); }
+.standalone-group-picker-option:hover { background: var(--accent-soft); }
+.standalone-group-manager-backdrop { background: var(--overlay-bg); backdrop-filter: blur(9px); }
+.standalone-group-manager-header,
+.standalone-group-manager-row,
+.standalone-group-form { border-color: var(--panel-border); }
+.standalone-group-manager-row, .standalone-group-form { background: var(--muted-bg); }
+.standalone-group-swatch { border: 3px solid var(--panel-bg); box-shadow: 0 0 0 1px var(--panel-border); }
+.standalone-group-swatch-selected {
+  box-shadow: 0 0 0 2px var(--text-primary), 0 0 0 4px var(--panel-bg);
+  transform: scale(1.05);
+}
+body[data-theme='dark'] .standalone-group-chip-colored,
+body[data-theme='dark'] .standalone-group-note-label {
+  background: color-mix(in srgb, var(--note-group-color) 24%, var(--panel-bg));
+  color: var(--text-primary);
+}
+body[data-theme='dark'] .standalone-group-chip-active {
+  background: color-mix(in srgb, var(--note-group-color, var(--accent)) 32%, var(--panel-bg));
+}
+
 /* Personal notes: independent of tasks; same rich text rendering as NotesEditor. */
 .standalone-note-accent { color: #7c3aed; }
 .standalone-notes-backdrop {

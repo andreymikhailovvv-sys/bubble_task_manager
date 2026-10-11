@@ -184,10 +184,19 @@ export type AdminUser = {
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
 export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
+export type StandaloneNoteGroup = {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StandaloneNote = {
   id: string;
   title: string;
   content: string;
+  groupId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -225,10 +234,17 @@ export const api = {
   deleteAccount: () => request<{ ok: true }>('/api/user/account', { method: 'DELETE' }),
   createTelegramLinkToken: () =>
     request<{ deepLinkUrl: string; expiresInSeconds: number }>('/api/telegram/link-token', { method: 'POST' }),
+  getStandaloneNoteGroups: () => request<StandaloneNoteGroup[]>('/api/note-groups'),
+  createStandaloneNoteGroup: (payload: { name: string; color: string }) =>
+    request<StandaloneNoteGroup>('/api/note-groups', { method: 'POST', body: JSON.stringify(payload) }),
+  updateStandaloneNoteGroup: (id: string, payload: { name: string; color: string }) =>
+    request<StandaloneNoteGroup>(`/api/note-groups/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteStandaloneNoteGroup: (id: string) =>
+    request<{ ok: true }>(`/api/note-groups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getStandaloneNotes: () => request<StandaloneNote[]>('/api/notes'),
-  createStandaloneNote: (payload: { title?: string; content?: string } = {}) =>
+  createStandaloneNote: (payload: { title?: string; content?: string; groupId?: string | null } = {}) =>
     request<StandaloneNote>('/api/notes', { method: 'POST', body: JSON.stringify(payload) }),
-  updateStandaloneNote: (id: string, payload: { title?: string; content?: string }) =>
+  updateStandaloneNote: (id: string, payload: { title?: string; content?: string; groupId?: string | null }) =>
     request<StandaloneNote>(`/api/notes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteStandaloneNote: (id: string) =>
     request<{ ok: true }>(`/api/notes/${encodeURIComponent(id)}`, { method: 'DELETE' }),

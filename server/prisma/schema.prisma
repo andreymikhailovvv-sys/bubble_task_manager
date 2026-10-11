@@ -124,6 +124,7 @@ model User {
   taskCommentReadStates TaskCommentReadState[]
   generatedDocuments AiGeneratedDocument[]
   standaloneNotes StandaloneNote[]
+  standaloneNoteGroups StandaloneNoteGroup[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -547,8 +548,25 @@ model StandaloneNote {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String   @default("")
   content   String   @default("") @db.Text
+  groupId   String?
+  group     StandaloneNoteGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId, updatedAt])
+  @@index([userId, groupId])
+}
+
+model StandaloneNoteGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#8b5cf6")
+  notes     StandaloneNote[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId, createdAt])
 }
