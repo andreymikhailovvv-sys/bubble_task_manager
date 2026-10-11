@@ -105,7 +105,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
 ] as const;
 
 type OpenAiOutputItem = Record<string, unknown>;
-type ToolResponse = { id?: unknown; usage?: OpenAiUsage; output?: OpenAiOutputItem[]; output_text?: string };
+type ToolResponse = { id?: unknown; usage?: OpenAiUsage; output?: OpenAiOutputItem[]; output_text?: string; status?: unknown; incomplete_details?: unknown };
 export type WebSource = { title: string; url: string };
 export type WebCitation = { startIndex: number; endIndex: number; sourceIndex: number };
 type ToolLoopOptions = {
@@ -174,6 +174,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   const input = [...options.initialInput];
   let providerCalls = 0;
   let toolCalls = 0;
+  let emptyResponses = 0;
   while (providerCalls < MAX_PROVIDER_CALLS) {
     const response = await options.request(input);
     providerCalls += 1;
@@ -181,7 +182,23 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
     const calls = output.filter((item) => item.type === 'function_call');
     if (!calls.length) {
       const answer = outputText(response);
-      if (!answer) throw new Error('OpenAI returned empty response');
+      if (!answer) {
+        emptyResponses += 1;
+        console.warn('[AI chat] model returned no text and no tool call', {
+          providerCalls, emptyResponses,
+          status: typeof response.status === 'string' ? response.status : null,
+          outputTypes: output.map((item) => typeof item.type === 'string' ? item.type : 'unknown'),
+          incompleteReason: response.incomplete_details && typeof response.incomplete_details === 'object'
+            ? (response.incomplete_details as { reason?: unknown }).reason ?? null : null
+        });
+        // An occasional completed response contains only reasoning, with no
+        // assistant message. Give the provider exactly one chance to recover.
+        if (emptyResponses === 1 && providerCalls < MAX_PROVIDER_CALLS) {
+          input.push({ role: 'system', content: 'Предыдущий ответ не содержал текста или вызова инструмента. Верни полноценный ответ пользователю либо вызови подходящий инструмент. Не отвечай пустым сообщением.' });
+          continue;
+        }
+        throw new Error('Модель не вернула содержательный ответ. Повторите запрос.');
+      }
       return { answer, providerCalls, toolCalls };
     }
     input.push(...output);
