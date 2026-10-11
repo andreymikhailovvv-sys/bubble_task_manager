@@ -60,6 +60,7 @@ test('group endpoints enforce authentication and filter all changes by user ID',
   assert.match(notes, /verifyGroupAccess\(req\.user!\.id, data\.groupId\)/);
   assert.match(notes, /where: \{ id: groupId, userId \}/);
   assert.match(notes, /groupId: true/);
+  assert.match(notes, /content: data\.content \?\? '', groupId: data\.groupId \?\? null/);
 });
 
 test('board has group filter chips, plus last, group assignment and edit controls', async () => {
