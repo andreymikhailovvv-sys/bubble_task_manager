@@ -92,6 +92,33 @@ test('board searches title and content together, preserving selected group and t
   assert.match(styles, /background: var\(--field-bg\)/);
 });
 
+
+test('notes search sits below the top actions beside the groups without an oversized gap', async () => {
+  const [board, styles] = await Promise.all([
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  const start = board.indexOf('standalone-notes-board-header flex');
+  const end = board.indexOf('{error ? <p role="alert"', start);
+  const header = board.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(header, /standalone-notes-board-header flex flex-col gap-2/);
+  assert.ok(header.indexOf('Мои заметки') < header.indexOf('standalone-group-filter'));
+  assert.ok(header.indexOf('Новая заметка') < header.indexOf('standalone-notes-search'),
+    'Search must be on the row below the new-note and close buttons');
+  assert.ok(header.indexOf('standalone-group-filter') < header.indexOf('standalone-notes-search'),
+    'Group filters must stay on the left, search on the right');
+  assert.match(header, /standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row/);
+  assert.match(header, /standalone-notes-search[^"]*overflow-hidden/);
+  const searchStyle = styles.match(/\.standalone-notes-search:focus-within\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(searchStyle, /border-color:\s*var\(--field-border\)/);
+  assert.match(searchStyle, /box-shadow:\s*none/);
+  assert.doesNotMatch(searchStyle, /var\(--focus-ring\)|var\(--accent\)/);
+  assert.match(styles, /\.standalone-notes-search input:focus-visible/);
+  assert.match(styles, /--tw-ring-shadow:\s*0 0 #0000 !important/);
+  assert.match(styles, /\.standalone-notes-search \{[^}]*overflow:\s*hidden/s);
+});
+
 test('latest news describes notes and both theme variants without low-contrast fixed text', async () => {
   const [news, styles] = await Promise.all([
     readFile(new URL('../../client/src/components/UpdatesMenu.tsx', import.meta.url), 'utf8'),
