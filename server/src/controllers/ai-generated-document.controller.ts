@@ -10,11 +10,14 @@ const publicAppUrl = (req: Request) => {
   return (configured || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
 };
 
-const sendDocument = (res: Response, document: { fileName: string; mimeType: string; contentBase64: string }) => {
+const sendDocument = (res: Response, document: { fileName: string; mimeType: string; contentBase64: string }, inlineImage = false) => {
   const buffer = Buffer.from(document.contentBase64, 'base64');
   res.setHeader('Content-Type', document.mimeType);
   res.setHeader('Content-Length', String(buffer.length));
-  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeContentDispositionFileName(document.fileName)}`);
+  // Only images with verified download tokens may be displayed inline.
+  // Existing Word/Excel download semantics are left unchanged.
+  const disposition = inlineImage && document.mimeType.startsWith('image/') ? 'inline' : 'attachment';
+  res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeContentDispositionFileName(document.fileName)}`);
   res.setHeader('Access-Control-Allow-Origin', 'https://web.telegram.org');
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -64,6 +67,6 @@ export const aiGeneratedDocumentController = {
       res.status(404).json({ error: 'Документ не найден' });
       return;
     }
-    sendDocument(res, document);
+    sendDocument(res, document, req.query.preview === '1' && document.mimeType.startsWith('image/'));
   }
 };
