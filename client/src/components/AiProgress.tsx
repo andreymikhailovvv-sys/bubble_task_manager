@@ -8,7 +8,7 @@ const PROGRESS_TEXT: Record<AiChatProgressStatus | TaskAiProgressStatus, string>
   searching_files: 'Ищу нужный файл', reading_file: 'Изучаю содержимое файла', reading_attachment: 'Изучаю вложение',
   searching_web: 'Ищу в интернете', analyzing_web_results: 'Изучаю найденные источники',
   analyzing_retrieved_context: 'Анализирую найденные данные', forming_answer: 'Формирую ответ', applying_changes: 'Вношу изменения',
-  generating_image: 'Создаю изображение', editing_image: 'Редактирую изображение'
+  generating_image: 'Создаю изображение', editing_image: 'Редактирую изображение', editing_document: 'Редактирую документ'
 };
 
 export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiProgressStatus }) {

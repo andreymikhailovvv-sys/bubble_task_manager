@@ -12,4 +12,5 @@ export type AiChatProgressStatus =
   | 'analyzing_web_results'
   | 'forming_answer'
   | 'generating_image'
-  | 'editing_image';
+  | 'editing_image'
+  | 'editing_document';
