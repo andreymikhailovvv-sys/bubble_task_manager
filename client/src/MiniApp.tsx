@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
+import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
@@ -708,6 +709,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [creatingStandaloneNote, setCreatingStandaloneNote] = useState(false);
+  const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(100);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
@@ -3969,6 +3972,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); openCreateTaskModal(); }} className="miniapp-quick-create-action miniapp-quick-create-task inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Добавить задачу</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Plus size={19} /></span>
           </button>
+          <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} disabled={creatingStandaloneNote}
+            onClick={() => {
+              if (creatingStandaloneNote) return;
+              setIsQuickCreateOpen(false);
+              setCreatingStandaloneNote(true);
+              void api.createStandaloneNote().then((note) => {
+                setNewStandaloneNote(note);
+              }).catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : 'Не удалось создать заметку.');
+              }).finally(() => setCreatingStandaloneNote(false));
+            }}
+            className="miniapp-quick-create-action miniapp-quick-create-note inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
+            <span>{creatingStandaloneNote ? 'Создаём заметку…' : 'Добавить заметку'}</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-full"><StickyNote size={18} /></span>
+          </button>
           <button type="button" tabIndex={isQuickCreateOpen ? 0 : -1} onClick={() => { setIsQuickCreateOpen(false); setClosingMiniWindow(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); setIsAiChatMenuOpen(false); }} className="miniapp-quick-create-action miniapp-quick-create-ai inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold shadow-xl">
             <span>Чат с ИИ</span><span className="flex h-9 w-9 items-center justify-center rounded-full"><Bot size={18} /></span>
           </button>
@@ -3977,6 +3995,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <Plus size={25} strokeWidth={2.4} />
         </button>
       </div>
+
+      {newStandaloneNote ? (
+        <MiniAppStandaloneNoteEditor key={newStandaloneNote.id} note={newStandaloneNote}
+          onClose={() => setNewStandaloneNote(null)} />
+      ) : null}
 
       {isAiChatOpen ? (
         <div className={`miniapp-ai-chat-backdrop miniapp-ai-chat-backdrop-general miniapp-slide-backdrop fixed inset-0 z-[70] bg-slate-950/75 p-0 ${getMiniWindowMotionClass('ai-chat')}`}>
