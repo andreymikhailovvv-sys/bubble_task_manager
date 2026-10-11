@@ -1,0 +1,28 @@
+name: Build check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies from lockfile
+        run: npm ci --include=dev --no-audit --no-fund
+      - name: Compile web client and API server
+        run: npm run build
+      - name: Verify image generation and document regressions
+        run: node --import tsx --test server/test/ai-image-generation.test.ts server/test/ai-image-visual-preview.test.ts server/test/ai-word-documents.test.ts server/test/docker-build-dependencies.test.ts
