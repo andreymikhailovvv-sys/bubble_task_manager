@@ -1,5 +1,6 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { plannerToolsService, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
+import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -18,6 +19,29 @@ export const AI_CHAT_WEB_SEARCH_TOOL = { type: 'web_search', search_context_size
 const nullable = (type: 'string' | 'number') => ({ type: [type, 'null'] });
 
 export const AI_CHAT_OPENAI_TOOLS = [
+  {
+    type: 'function', name: 'search_workspace', strict: true,
+    description: 'Общий поиск сразу по задачам, подзадачам и личным заметкам пользователя. Вызывай первым для неопределённых запросов «я где-то записывал», «найди, что писал про», «мы обсуждали/планировали», когда источник не указан. Результаты помечены source=tasks или source=notes. После поиска прочитай подходящие записи через get_task или read_note.',
+    parameters: { type: 'object', additionalProperties: false, required: ['queries', 'keywords', 'limit'], properties: {
+      queries: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } },
+      keywords: { type: 'array', maxItems: 10, items: { type: 'string' } },
+      limit: { type: 'number', minimum: 1, maximum: 10 }
+    } }
+  },
+  {
+    type: 'function', name: 'search_notes', strict: true,
+    description: 'Найти личные заметки пользователя по названию, тексту и группе. Если источник явно назван заметкой, используй этот инструмент. При неясном источнике используй search_workspace. Возвращает короткие фрагменты, полный текст через read_note.',
+    parameters: { type: 'object', additionalProperties: false, required: ['queries', 'keywords', 'limit'], properties: {
+      queries: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } },
+      keywords: { type: 'array', maxItems: 10, items: { type: 'string' } },
+      limit: { type: 'number', minimum: 1, maximum: 10 }
+    } }
+  },
+  {
+    type: 'function', name: 'read_note', strict: true,
+    description: 'Прочитать подробное содержимое одной личной заметки, найденной search_notes или search_workspace, с проверкой прав текущего пользователя. Только чтение.',
+    parameters: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } }
+  },
   {
     type: 'function', name: 'search_tasks', strict: true,
     description: 'Найти реальные задачи и подзадачи пользователя. Формируй несколько характерных фраз и контекстных ключевых слов из всего диалога.',
@@ -219,6 +243,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
+  const resolvedNoteIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
   let imageCreditsSpentMilli = 0;
@@ -321,6 +346,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         toolOperations.push(name);
         
         const progressByTool: Record<string, import('./ai-chat-progress.js').AiChatProgressStatus> = {
+          search_workspace: 'searching_workspace',
+          search_notes: 'searching_notes',
+          read_note: 'reading_note',
           search_tasks: 'searching_tasks',
           list_tasks: 'listing_tasks',
           get_task: 'reading_task',
@@ -335,6 +363,46 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'search_workspace') {
+          try {
+            const searchInput = validateNoteSearchInput(value);
+            const [tasks, notes] = await Promise.all([
+              plannerToolsService.search(input.userId, {
+                queries: searchInput.queries, keywords: searchInput.keywords, sphereHints: [],
+                itemType: 'any', statusScope: 'all', dueFrom: null, dueTo: null, limit: searchInput.limit
+              }),
+              personalNotesToolsService.search(input.userId, searchInput)
+            ]);
+            tasks.results.forEach((item) => resolvedItemIds.add(item.id));
+            notes.results.forEach((note) => resolvedNoteIds.add(note.id));
+            const result = mergeTaskAndNoteSearchResults(tasks, notes, searchInput.limit);
+            console.info('[AI tools] unified search', { requestId, taskCandidates: tasks.totalCandidates,
+              noteCandidates: notes.totalCandidates, returnedTasks: result.taskCount, returnedNotes: result.noteCount });
+            emitProgress('analyzing_retrieved_context');
+            return result;
+          } catch (error) {
+            return { ok: false, code: 'SEARCH_FAILED', message: error instanceof TypeError ? error.message : 'Не удалось выполнить общий поиск.' };
+          }
+        }
+        if (name === 'search_notes') {
+          try {
+            const result = await personalNotesToolsService.search(input.userId, value);
+            result.results.forEach((note) => resolvedNoteIds.add(note.id));
+            emitProgress('analyzing_retrieved_context');
+            return result;
+          } catch (error) {
+            return { ok: false, code: 'SEARCH_FAILED', message: error instanceof TypeError ? error.message : 'Не удалось найти заметки.' };
+          }
+        }
+        if (name === 'read_note') {
+          const noteId = (value as { id?: unknown }).id;
+          if (typeof noteId !== 'string' || !resolvedNoteIds.has(noteId))
+            return { ok: false, code: 'NOTE_NOT_RESOLVED', message: 'Сначала найдите заметку через search_notes или search_workspace.' };
+          const note = await personalNotesToolsService.read(input.userId, noteId);
+          if (!note) return { ok: false, code: 'NOTE_NOT_FOUND', message: 'Заметка не найдена или недоступна.' };
+          emitProgress('analyzing_retrieved_context');
+          return { ok: true, note };
+        }
         if (name === 'search_tasks') {
           const result = await plannerToolsService.search(input.userId, value as PlannerSearchInput);
           result.results.forEach((item) => resolvedItemIds.add(item.id));
