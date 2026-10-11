@@ -16,6 +16,7 @@ const FEATURE_LABELS: Record<string, string> = {
   overdue_nudge: 'Подсказка по просроченной задаче',
   daily_checkup: 'Утренний ИИ-чекап',
   audio_transcription: 'Расшифровка голосового',
+  image_generation: 'Генерация изображений',
   web_search: 'Веб-поиск'
 };
 
@@ -29,6 +30,7 @@ const MODEL_LABELS: Record<string, string> = {
   'gpt-4o-transcribe': 'GPT-4o Transcribe',
   'gpt-4o-transcribe-diarize': 'GPT-4o Transcribe Diarize',
   'openai-web-search': 'Веб-поиск',
+  'gpt-image-2': 'GPT Image 2',
   'fixed-credit': 'Системная ИИ-функция'
 };
 

@@ -7,6 +7,7 @@ import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservat
 import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-responses-stream.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
+import { AI_IMAGE_TOOL, generateAiImage } from './ai-image-generation.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -82,6 +83,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
       }
     }
   },
+  AI_IMAGE_TOOL,
   {
     type: 'function', name: 'create_excel_workbook', strict: true,
     description: 'Создать и прикрепить к ответу настоящий Excel-файл (.xlsx). Используй при запросе электронной таблицы, Excel, XLSX или отчёта файлом. Модель передаёт только содержимое и структуру листов, сервер собирает XLSX. Не более одного файла за запрос.',
@@ -202,6 +204,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
+  let imageCreditsSpentMilli = 0;
   let batchToolCalls = 0; let batchActionsRequested = 0; let batchActionsSucceeded = 0; let batchActionsFailed = 0;
   
   let providerCallCount = 0;
@@ -236,7 +239,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   emitProgress('analyzing_request');
   console.info('[AI tools] started', { requestId, userId: input.userId, model: input.model });
   try {
-    const loop = await runAiChatToolLoop({
+    let loop: Awaited<ReturnType<typeof runAiChatToolLoop>>;
+    try {
+      loop = await runAiChatToolLoop({
       initialInput: input.messages,
       request: async (requestInput) => {
         const providerCallIndex = providerCallCount + 1;
@@ -302,7 +307,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           task_action: 'applying_changes',
           task_actions: 'applying_changes',
           create_word_document: 'forming_answer',
-          create_excel_workbook: 'forming_answer'
+          create_excel_workbook: 'forming_answer',
+          generate_image: 'forming_answer'
         };
         const progress = progressByTool[name];
         if (progress) emitProgress(progress);
@@ -352,6 +358,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           }
           return result;
         }
+        if (name === 'generate_image') {
+          if (generatedDocument) return { ok: false, code: 'FILE_ALREADY_CREATED', message: 'За один запрос можно создать один файл.' };
+          try {
+            const result = await generateAiImage({ userId: input.userId, actionId: requestId, apiKey: input.apiKey, args: value });
+            generatedDocument = result.document;
+            imageCreditsSpentMilli += result.creditsSpentMilli;
+            return { ok: true, image: { id: result.document.id, fileName: result.document.fileName, mimeType: result.document.mimeType } };
+          } catch (error) {
+            return { ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' };
+          }
+        }
         if (name === 'create_word_document' || name === 'create_excel_workbook') {
           if (generatedDocument) return { ok: false, code: 'DOCUMENT_ALREADY_CREATED', message: 'Файл для этого ответа уже создан.' };
           generatedDocument = name === 'create_excel_workbook'
@@ -362,11 +379,18 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         return { ok: false, code: 'UNKNOWN_TOOL', message: 'Неизвестный инструмент.' };
       }
-    });
+      });
+    } catch (error) {
+      // The image has already been generated, saved and charged. Never discard
+      // a completed paid attachment just because the follow-up text fails.
+      if (generatedDocument?.mimeType !== 'image/png') throw error;
+      loop = { answer: 'Изображение готово. PNG-файл прикреплён к сообщению.', providerCalls: providerCallCount, toolCalls: toolOperations.length };
+    }
     emitProgress('forming_answer');
     console.info('[AI tools] completed', { requestId, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, actionCount: actionReports.length, durationMs: Date.now() - startedAt });
     let creditsSpentMilli = 0;
     for (const call of dynamicCalls) creditsSpentMilli += (await settleDynamicResponsesCall(call)).chargedMilli;
+    creditsSpentMilli += imageCreditsSpentMilli;
     if (webReservation) {
       if (webSearchUsed) {
         creditsSpentMilli += webReservation.totalMilli;
@@ -385,7 +409,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
