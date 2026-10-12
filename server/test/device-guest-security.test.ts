@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { authService, DEVICE_COOKIE_NAME } from '../src/auth/auth.service.js';
+import { isGuestAccount } from '../src/lib/guest-account.js';
+import { readFile } from 'node:fs/promises';
 
 function withTestJwtSecret(check: () => void) {
   const previous = process.env.JWT_SECRET;
@@ -56,4 +58,34 @@ test('legacy guest with valid JWT can be upgraded to a signed device cookie', ()
     assert.equal(authService.cookieOptions().httpOnly, true);
     assert.equal(authService.deviceCookieOptions().sameSite, 'lax');
   });
+});
+
+test('signed device credentials must stop restoring account after guest registration', () => {
+  const guest = { id: 'id-123', deviceId: 'guest-device', username: null, passwordHash: null, email: null, googleSub: null, telegramChatId: null };
+  const registered = { ...guest, username: 'new-login', passwordHash: 'hash', aiTrialGrantedAt: new Date() };
+  assert.equal(isGuestAccount(guest), true);
+  assert.equal(isGuestAccount(registered), false);
+});
+
+test('logout revokes both auth and device cookie for guest-upgraded accounts', async () => {
+  const src = await readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8');
+  const block = src.slice(src.indexOf("apiRouter.post('/auth/logout'"), src.indexOf("apiRouter.patch('/user/profile'"));
+  assert.match(block, /res\.clearCookie\(AUTH_COOKIE_NAME/);
+  assert.match(block, /res\.clearCookie\(DEVICE_COOKIE_NAME/);
+  assert.match(block, /res\.json\(\{ ok: true \}\)/);
+});
+
+test('anonymous device recovery refuses registered user and signs only genuine guests', async () => {
+  const src = await readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8');
+  const recovery = src.slice(src.indexOf('const ensureDeviceUser = async'), src.indexOf("apiRouter.get('/health'"));
+  assert.match(recovery, /if \(user && !isGuestAccount\(user\)\)/);
+  assert.match(recovery, /user = null/);
+  assert.match(recovery, /await prisma\.\$transaction/);
+
+  const setCookie = src.slice(src.indexOf('const setAuthCookies ='), src.indexOf('const validateTelegramMiniAppInitData'));
+  assert.match(setCookie, /isGuestAccount\(user\) && user\.deviceId/);
+  assert.match(setCookie, /res\.clearCookie\(DEVICE_COOKIE_NAME/);
+
+  const authMe = src.slice(src.indexOf("apiRouter.get('/auth/me'"), src.indexOf("apiRouter.post('/telegram/link-token'"));
+  assert.match(authMe, /if \(isGuestAccount\(freshUser\) && freshUser\.deviceId/);
 });
