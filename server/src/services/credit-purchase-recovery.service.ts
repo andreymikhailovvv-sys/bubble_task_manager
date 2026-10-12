@@ -23,7 +23,9 @@ export async function reconcilePendingCreditPurchases(
       createdAt: { gte: oldest },
       OR: [{ providerCheckedAt: null }, { providerCheckedAt: { lte: throttleBefore } }]
     },
-    orderBy: { createdAt: 'asc' },
+    // Rotating by the oldest verification time prevents historical failed
+    // purchases from starving newer paid purchases when take=5.
+    orderBy: [{ providerCheckedAt: 'asc' }, { createdAt: 'asc' }],
     take: 5,
     select: { id: true, yookassaPaymentId: true }
   });
@@ -42,14 +44,20 @@ export async function reconcilePendingCreditPurchases(
     });
     if (!claimed.count) continue;
     scanned += 1;
+    let step: 'provider_fetch' | 'credit_reconciliation' = 'provider_fetch';
     try {
       const payment = await provider.getPayment(purchase.yookassaPaymentId);
+      step = 'credit_reconciliation';
       const result = await reconcile(payment, purchase.id) as { outcome?: string };
       if (result.outcome === 'succeeded') confirmed += 1;
     } catch (error) {
       failed += 1;
       console.warn('[Payments] pending purchase reconciliation retry failed', {
         purchaseId: purchase.id,
+        step,
+        errorName: error instanceof Error ? error.name : 'unknown',
+        errorCode: error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+          && /^P\\d{4}$/.test(error.code) ? error.code : undefined,
         failureKind: error instanceof YooKassaError ? error.failureKind : 'internal',
         networkCode: error instanceof YooKassaError ? error.networkCode : undefined,
         httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
