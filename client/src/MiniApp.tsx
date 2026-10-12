@@ -24,6 +24,7 @@ import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
+import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -193,6 +194,22 @@ type TaskDraft = {
   aiNotificationsEnabled?: boolean;
   subtasks?: CreateSubtaskDraft[];
 };
+
+const taskToMiniDraft = (task: Task): TaskDraft => ({
+  title: task.title,
+  location: task.location ?? '',
+  description: task.description ?? '',
+  dueDate: toInputDateTime(task.dueDate),
+  sphereId: task.sphereId,
+  notifyBeforeMinutes: task.notifyBeforeMinutes,
+  importance: task.importance,
+  isRecurring: task.isRecurring,
+  recurrenceText: task.recurrenceText,
+  recurrenceJson: task.recurrenceJson,
+  recurrenceSummary: task.recurrenceSummary,
+  recurrenceUntil: task.recurrenceUntil,
+  aiNotificationsEnabled: task.aiNotificationsEnabled
+});
 
 type HabitDraft = {
   name: string;
@@ -642,6 +659,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
   const [calendarExportTaskId, setCalendarExportTaskId] = useState<string | null>(null);
   const [draftByTaskId, setDraftByTaskId] = useState<Record<string, TaskDraft>>({});
+  const taskDraftOriginalByIdRef = useRef<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -1470,34 +1488,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       : 'Отличный рейтинг! Продолжай в том же духе.';
 
   const openTaskModal = (task: Task) => {
-    setDraftByTaskId((drafts) => ({
-      ...drafts,
-      [task.id]: {
-        title: task.title,
-        location: task.location ?? '',
-        description: task.description ?? '',
-        dueDate: toInputDateTime(task.dueDate),
-        sphereId: task.sphereId,
-        notifyBeforeMinutes: task.notifyBeforeMinutes,
-        importance: task.importance,
-        isRecurring: task.isRecurring,
-        recurrenceText: task.recurrenceText,
-        recurrenceJson: task.recurrenceJson,
-        recurrenceSummary: task.recurrenceSummary,
-        recurrenceUntil: task.recurrenceUntil,
-        aiNotificationsEnabled: task.aiNotificationsEnabled
-      }
-    }));
+    const initialDraft = taskToMiniDraft(task);
+    taskDraftOriginalByIdRef.current[task.id] = initialDraft;
+    setDraftByTaskId((drafts) => ({ ...drafts, [task.id]: initialDraft }));
     const subtasks = subtasksByParent[task.id] ?? [];
     for (const subtask of subtasks) {
-      setDraftByTaskId((drafts) => ({
-        ...drafts,
-        [subtask.id]: {
-          title: subtask.title,
-          description: subtask.description ?? '',
-          dueDate: toInputDateTime(subtask.dueDate)
-        }
-      }));
+      const subtaskDraft = { title: subtask.title, description: subtask.description ?? '', dueDate: toInputDateTime(subtask.dueDate) };
+      taskDraftOriginalByIdRef.current[subtask.id] = subtaskDraft;
+      setDraftByTaskId((drafts) => ({ ...drafts, [subtask.id]: subtaskDraft }));
     }
     setClosingMiniWindow(null);
     setIsCalendarExportOpen(false);
@@ -1508,6 +1506,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openSubtaskModal = (subtask: Task, options: { focusTitle?: boolean } = {}) => {
+    const existingSubtaskDraft = taskDraftOriginalByIdRef.current[subtask.id];
+    if (!existingSubtaskDraft) {
+      taskDraftOriginalByIdRef.current[subtask.id] = { title: subtask.title, description: subtask.description ?? '', dueDate: toInputDateTime(subtask.dueDate) };
+    }
     setNewSubtaskDraft(null);
     setDraftByTaskId((drafts) => ({
       ...drafts,
@@ -1571,24 +1573,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const saveTask = async (taskId: string) => {
     const draft = draftByTaskId[taskId];
     if (!draft) return false;
+    const savedTask = tasks.find((item) => item.id === taskId);
+    const baseline = taskDraftOriginalByIdRef.current[taskId] ??
+      (savedTask ? taskToMiniDraft(savedTask) : draft);
+    const changed = changedDraftFields(baseline, draft, Object.keys(draft) as Array<keyof TaskDraft>);
+    // No manual edits: AI changes already live on the server. Do not send
+    // old title/deadline/description on pressing the window's X button.
+    if (Object.keys(changed).length === 0) return true;
     setSavingId(taskId);
     setError(null);
     try {
       await api.updateTask(taskId, {
-        title: draft.title.trim() || (tasks.find((item) => item.id === taskId)?.taskType === 'EVENT' ? 'Событие без названия' : 'Задача без названия'),
-        ...(draft.location !== undefined ? { location: draft.location?.trim() || null } : {}),
-        description: draft.description.trim() || null,
-        dueDate: fromInputDateTime(draft.dueDate),
-        ...(draft.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
-        ...(draft.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: draft.notifyBeforeMinutes } : {}),
-        ...(draft.importance !== undefined ? { importance: draft.importance } : {}),
-        ...(draft.isRecurring !== undefined ? { isRecurring: draft.isRecurring } : {}),
-        ...(draft.recurrenceText !== undefined ? { recurrenceText: draft.recurrenceText?.trim() || null } : {}),
-        ...(draft.recurrenceJson !== undefined ? { recurrenceJson: draft.recurrenceJson } : {}),
-        ...(draft.recurrenceSummary !== undefined ? { recurrenceSummary: draft.recurrenceSummary } : {}),
-        ...(draft.recurrenceUntil !== undefined ? { recurrenceUntil: draft.recurrenceUntil } : {}),
-        ...(draft.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {})
+        ...(changed.title !== undefined ? { title: draft.title.trim() || (savedTask?.taskType === 'EVENT' ? 'Событие без названия' : 'Задача без названия') } : {}),
+        ...(changed.location !== undefined ? { location: draft.location?.trim() || null } : {}),
+        ...(changed.description !== undefined ? { description: draft.description.trim() || null } : {}),
+        ...(changed.dueDate !== undefined ? { dueDate: fromInputDateTime(draft.dueDate) } : {}),
+        ...(changed.sphereId !== undefined ? { sphereId: draft.sphereId } : {}),
+        ...(changed.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: draft.notifyBeforeMinutes } : {}),
+        ...(changed.importance !== undefined ? { importance: draft.importance } : {}),
+        ...(changed.isRecurring !== undefined ? { isRecurring: draft.isRecurring } : {}),
+        ...(changed.recurrenceText !== undefined ? { recurrenceText: draft.recurrenceText?.trim() || null } : {}),
+        ...(changed.recurrenceJson !== undefined ? { recurrenceJson: draft.recurrenceJson } : {}),
+        ...(changed.recurrenceSummary !== undefined ? { recurrenceSummary: draft.recurrenceSummary } : {}),
+        ...(changed.recurrenceUntil !== undefined ? { recurrenceUntil: draft.recurrenceUntil } : {}),
+        ...(changed.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {})
       });
+      taskDraftOriginalByIdRef.current[taskId] = { ...baseline, ...changed };
       await loadData();
       return true;
     } catch (e) {
@@ -2054,6 +2064,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       dueDate: toInputDateTime(openedTask.dueDate)
     })
     : null;
+  // Reconcile the open editor after the AI modifies a task and loadData()
+  // receives fresh values. Dirty manual fields keep their local changes.
+  useEffect(() => {
+    if (!openedTask) return;
+    const baseline = taskDraftOriginalByIdRef.current[openedTask.id];
+    if (!baseline) return;
+    const fresh = taskToMiniDraft(openedTask);
+    if (JSON.stringify(baseline) === JSON.stringify(fresh)) return;
+    taskDraftOriginalByIdRef.current[openedTask.id] = fresh;
+    setDraftByTaskId((drafts) => {
+      const local = drafts[openedTask.id];
+      if (!local) return drafts;
+      return { ...drafts, [openedTask.id]: mergeRemoteDraftFields(baseline, local, fresh, Object.keys(fresh) as Array<keyof TaskDraft>) };
+    });
+  }, [openedTask]);
   const openedTaskSubtasks = useMemo(() => {
     if (!openedTask) return [];
     const createdAtTimestamp = (task: Task) => {
