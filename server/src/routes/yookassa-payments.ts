@@ -79,7 +79,10 @@ yookassaPaymentsRouter.post('/credit-packs/:packKey', requireAuth, async (req, r
       providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
       providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
       providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
-      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined,
+      failureKind: error instanceof YooKassaError ? error.failureKind : undefined,
+      networkCode: error instanceof YooKassaError ? error.networkCode : undefined,
+      attempts: error instanceof YooKassaError ? error.attempts : undefined
     });
     return void res.status(502).json({ error: 'Не удалось создать платёж. Попробуйте ещё раз.' });
   }
@@ -102,7 +105,10 @@ yookassaPaymentsRouter.post('/webhook', async (req, res) => {
       providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
       providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
       providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
-      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+      providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined,
+      failureKind: error instanceof YooKassaError ? error.failureKind : undefined,
+      networkCode: error instanceof YooKassaError ? error.networkCode : undefined,
+      attempts: error instanceof YooKassaError ? error.attempts : undefined
     });
     return void res.status(502).json({ error: 'Временная ошибка обработки платежа.' });
   }
@@ -124,7 +130,10 @@ yookassaPaymentsRouter.get('/purchases/:purchaseId', requireAuth, async (req, re
           providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
           providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
           providerParameter: error instanceof YooKassaError ? error.providerParameter : undefined,
-          providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined
+          providerDescription: error instanceof YooKassaError ? error.providerDescription : undefined,
+      failureKind: error instanceof YooKassaError ? error.failureKind : undefined,
+      networkCode: error instanceof YooKassaError ? error.networkCode : undefined,
+      attempts: error instanceof YooKassaError ? error.attempts : undefined
         });
       }
     } else purchase = await prisma.creditPurchase.findUniqueOrThrow({ where: { id: purchase.id } });
