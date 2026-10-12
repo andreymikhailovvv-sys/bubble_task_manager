@@ -5,7 +5,7 @@ import { taskAccessWhere } from '../src/lib/task-access.js';
 
 const readSource = () => readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
 
-test('legacy AI checks active membership before accessing tasks it created', () => {
+test('legacy AI checks active membership before accessing tasks it created', async () => {
   assert.deepEqual(taskAccessWhere('owner').OR?.[0], { userId: 'owner', collaborationId: null });
   const src = await readSource();
   const method = src.slice(src.indexOf('askGeneralAssistant: async'), src.indexOf('undoGeneralAssistantActions: async'));
