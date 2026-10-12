@@ -1014,10 +1014,25 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [personalDataConsentAccepted, setPersonalDataConsentAccepted] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(() => (
-    new URLSearchParams(window.location.search).get('auth') === 'login' ? 'login' : null
-  ));
+  const [authError, setAuthError] = useState<string | null>(() => {
+    const errorCode = new URLSearchParams(window.location.search).get('googleAuthError');
+    if (errorCode === 'email_conflict') return 'Этот адрес почты уже используется другим аккаунтом. Войдите по логину и паролю. Автоматическая привязка Google по почте отключена для безопасности.';
+    if (errorCode === 'email_unverified') return 'Google не подтвердил ваш адрес электронной почты. Выберите подтверждённый аккаунт Google.';
+    if (errorCode === 'invalid_state') return 'Сессия входа через Google истекла или была прервана. Повторите вход.';
+    if (errorCode) return 'Не удалось выполнить вход через Google. Повторите попытку.';
+    return null;
+  });
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('googleAuthError') || params.get('auth') === 'login' ? 'login' : null;
+  });
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('googleAuthError')) return;
+    params.delete('googleAuthError');
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  }, []);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -3613,6 +3628,10 @@ ${allContext}`,
       setAuthError('Необходимо согласиться на обработку персональных данных.');
       return;
     }
+    if (authModalMode === 'register' && authPassword.length < 6) {
+      setAuthError('Пароль должен содержать не менее 6 символов. Допускаются цифры, буквы и специальные символы.');
+      return;
+    }
     try {
       const result = authModalMode === 'login'
         ? await api.login({ login: authLogin, password: authPassword })
@@ -3621,11 +3640,13 @@ ${allContext}`,
       setAuthError(null);
       setAuthModalMode(null);
       setPersonalDataConsentAccepted(false);
-    } catch {
+    } catch (error) {
       setAuthError(
         authModalMode === 'login'
           ? 'Не удалось войти. Проверьте логин и пароль.'
-          : 'Не удалось зарегистрироваться. Возможно, логин уже занят.'
+          : error instanceof Error && error.message && !/^HTTP \d{3}$/.test(error.message)
+            ? error.message
+            : 'Не удалось зарегистрироваться. Попробуйте ещё раз.'
       );
     }
   };
@@ -4979,6 +5000,7 @@ ${allContext}`,
             <div className="space-y-2">
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+              {authModalMode === 'register' ? <p className="text-xs text-secondary">Пароль: не менее 6 символов. Цифры, буквы и спецсимволы допустимы.</p> : null}
               {authModalMode === 'register' ? (
                 <>
                   <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Имя (для регистрации)" value={authName} onChange={(e) => setAuthName(e.target.value)} />
