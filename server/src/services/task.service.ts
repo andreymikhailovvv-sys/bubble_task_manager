@@ -1,5 +1,5 @@
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
-import crypto from 'node:crypto';
+import { createCollaborationInviteToken } from '../lib/collaboration-security.js';
 import { prisma } from '../db/prisma.js';
 import { notifyCollaborativeSubtaskCompleted } from './collaboration-subtask-notification.service.js';
 
@@ -516,7 +516,7 @@ export const taskService = {
     let collaboration = task.collaborationId ? await prisma.collaborativeTask.findUniqueOrThrow({ where: { id: task.collaborationId } }) : null;
     if (!collaboration) {
       collaboration = await prisma.$transaction(async (tx) => {
-        const created = await tx.collaborativeTask.create({ data: { token: crypto.randomBytes(24).toString('base64url'), rootTaskId: task.id } });
+        const created = await tx.collaborativeTask.create({ data: { token: createCollaborationInviteToken(), rootTaskId: task.id } });
         await tx.task.updateMany({ where: { OR: [{ id: task.id }, { parentTaskId: task.id }] }, data: { collaborationId: created.id } });
         await tx.collaborativeTaskMember.create({ data: {
           collaborationId: created.id, userId, sphereId: task.sphereId,
@@ -543,9 +543,20 @@ export const taskService = {
     const collaboration = await prisma.collaborativeTask.findUniqueOrThrow({ where: { token }, include: { tasks: { where: { parentTaskId: null }, select: { id: true } } } });
     if (sphereId) await prisma.sphere.findFirstOrThrow({ where: { id: sphereId, userId } });
     const colors = ['#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#22c55e', '#eab308'];
-    const memberCount = await prisma.collaborativeTaskMember.count({ where: { collaborationId: collaboration.id } });
-    await prisma.collaborativeTaskMember.upsert({ where: { collaborationId_userId: { collaborationId: collaboration.id, userId } }, create: { collaborationId: collaboration.id, userId, sphereId, color: colors[memberCount % colors.length] }, update: { sphereId, isHidden: false } });
-    return { taskId: collaboration.tasks[0].id };
+    return prisma.$transaction(async (tx) => {
+      // Serialize accepting this invite with any owner-initiated token revocation.
+      // The guarded write must run before adding a member, otherwise an old
+      // link read just before rotation could still succeed.
+      const currentInvite = await tx.collaborativeTask.updateMany({
+        where: { id: collaboration.id, token },
+        data: { updatedAt: new Date() }
+      });
+      if (currentInvite.count !== 1) throw new Error('Share link is no longer valid');
+
+      const memberCount = await tx.collaborativeTaskMember.count({ where: { collaborationId: collaboration.id } });
+      await tx.collaborativeTaskMember.upsert({ where: { collaborationId_userId: { collaborationId: collaboration.id, userId } }, create: { collaborationId: collaboration.id, userId, sphereId, color: colors[memberCount % colors.length] }, update: { sphereId, isHidden: false } });
+      return { taskId: collaboration.tasks[0].id };
+    });
   },
   updateCollaboration: async (id: string, userId: string, color: string) => {
     if (!/^#[0-9a-f]{6}$/i.test(color)) throw new TypeError('Invalid color');
@@ -559,8 +570,20 @@ export const taskService = {
       select: { collaborationId: true }
     });
     if (memberUserId === ownerId) throw new TypeError('Task owner cannot be removed');
-    await prisma.collaborativeTaskMember.delete({
-      where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId: memberUserId } }
+    // Removing a person revokes *all* previously copied invite URLs. Existing
+    // members remain members; the owner can fetch a fresh invite as before.
+    // Do both writes atomically to avoid deleting membership but retaining the
+    // old publicly usable invitation after a partial failure.
+    await prisma.$transaction(async (tx) => {
+      // Lock the collaboration row before touching membership, matching the
+      // lock order in acceptShare and avoiding a join-vs-removal deadlock.
+      await tx.collaborativeTask.update({
+        where: { id: task.collaborationId! },
+        data: { token: createCollaborationInviteToken() }
+      });
+      await tx.collaborativeTaskMember.delete({
+        where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId: memberUserId } }
+      });
     });
     return { ok: true as const };
   },
