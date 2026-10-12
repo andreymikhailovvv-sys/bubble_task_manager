@@ -23,7 +23,7 @@ const makeResponse = () => {
 const makeController = (enqueue: (updateId: number, payload: unknown) => Promise<'queued' | 'deduplicated'>, authorized = true) => (
   createTelegramController({
     queue: { enqueue },
-    service: { isEnabled: () => true, isWebhookAuthorized: () => authorized }
+    service: { isEnabled: () => true, isWebhookConfigured: () => true, isWebhookAuthorized: () => authorized }
   })
 );
 
@@ -156,4 +156,28 @@ test('зависший PROCESSING job восстанавливается пос�
   assert.equal(client.jobs[0].status, 'PENDING');
   assert.equal(await queue.claimNext() !== null, true);
   assert.equal(client.jobs[0].attempts, 2);
+});
+
+test('webhook without configured secret refuses update before writing a queue job', async () => {
+  let enqueueCalls = 0;
+  const controller = createTelegramController({
+    queue: { enqueue: async () => { enqueueCalls += 1; return 'queued'; } },
+    service: { isEnabled: () => true, isWebhookConfigured: () => false, isWebhookAuthorized: () => true }
+  });
+  const { result, response } = makeResponse();
+  await controller.webhook({ body: { update_id: 505, message: { text: '/start' } }, headers: {} } as never, response as never);
+  assert.equal(result.status, 503);
+  assert.equal(enqueueCalls, 0);
+});
+
+test('webhook checks secret before validating payload or enqueueing', async () => {
+  let enqueueCalls = 0;
+  const controller = createTelegramController({
+    queue: { enqueue: async () => { enqueueCalls += 1; return 'queued'; } },
+    service: { isEnabled: () => true, isWebhookConfigured: () => true, isWebhookAuthorized: () => false }
+  });
+  const { result, response } = makeResponse();
+  await controller.webhook({ body: { update_id: 999 }, headers: {} } as never, response as never);
+  assert.equal(result.status, 401);
+  assert.equal(enqueueCalls, 0);
 });

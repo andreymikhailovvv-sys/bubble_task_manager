@@ -4,7 +4,7 @@ import { telegramUpdateQueue } from '../services/telegram-update-queue.service.j
 
 type TelegramControllerDependencies = {
   queue: Pick<typeof telegramUpdateQueue, 'enqueue'>;
-  service: Pick<typeof telegramService, 'isEnabled' | 'isWebhookAuthorized'>;
+  service: Pick<typeof telegramService, 'isEnabled' | 'isWebhookConfigured' | 'isWebhookAuthorized'>;
 };
 
 export const createTelegramController = ({
@@ -19,6 +19,12 @@ export const createTelegramController = ({
     if (!service.isEnabled()) {
       console.warn(`[TelegramWebhook] rejected updateId=${updateId}: bot token is not configured`);
       res.status(503).json({ error: 'Telegram bot is not configured' });
+      return;
+    }
+
+    if (!service.isWebhookConfigured()) {
+      console.error('[TelegramWebhook] refused update: TELEGRAM_WEBHOOK_SECRET missing or invalid');
+      res.status(503).json({ error: 'Telegram webhook security is not configured' });
       return;
     }
 

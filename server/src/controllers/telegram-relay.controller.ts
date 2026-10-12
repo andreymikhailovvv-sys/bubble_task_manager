@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { isTelegramWebhookSecretConfigured, isTelegramWebhookSecretValid } from '../lib/telegram-webhook-security.js';
 
 const TELEGRAM_RELAY_TIMEOUT_MS = 12_000;
 const SECRET_HEADER = 'x-telegram-bot-api-secret-token';
@@ -32,14 +33,17 @@ export const createTelegramRelayController = (fetchImplementation: FetchImplemen
     }
 
     const sourceSecret = process.env.TELEGRAM_RELAY_SOURCE_SECRET?.trim();
+    const targetSecret = process.env.TELEGRAM_RELAY_TARGET_SECRET?.trim();
     const targetUrl = getTargetUrl();
-    if (!sourceSecret || !targetUrl) {
+    // The receiving webhook now fails closed. A relay without a target secret
+    // would silently drop updates, so enforce both credentials at startup.
+    if (!isTelegramWebhookSecretConfigured(sourceSecret) || !isTelegramWebhookSecretConfigured(targetSecret) || !targetUrl) {
       console.error('[TelegramRelay] relay is enabled but configuration is incomplete');
       res.status(503).json({ error: 'Telegram relay is not configured' });
       return;
     }
 
-    if (req.get(SECRET_HEADER) !== sourceSecret) {
+    if (!isTelegramWebhookSecretValid(sourceSecret, req.get(SECRET_HEADER))) {
       console.warn('[TelegramRelay] rejected request: invalid source secret');
       res.status(401).json({ error: 'Invalid webhook secret' });
       return;
@@ -52,9 +56,7 @@ export const createTelegramRelayController = (fetchImplementation: FetchImplemen
     const abortController = new AbortController();
     const timeout = setTimeout(() => abortController.abort(), TELEGRAM_RELAY_TIMEOUT_MS);
     try {
-      const targetSecret = process.env.TELEGRAM_RELAY_TARGET_SECRET?.trim();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (targetSecret) headers[SECRET_HEADER] = targetSecret;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', [SECRET_HEADER]: targetSecret };
 
       const targetResponse = await fetchImplementation(targetUrl, {
         method: 'POST',

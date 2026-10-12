@@ -1,5 +1,6 @@
 import { authService } from '../auth/auth.service.js';
 import crypto from 'node:crypto';
+import { isTelegramWebhookSecretConfigured, isTelegramWebhookSecretValid } from '../lib/telegram-webhook-security.js';
 import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
@@ -1801,10 +1802,11 @@ export const telegramService = {
       keyboardReplyMain
     );
   },
+  isWebhookConfigured() {
+    return isTelegramWebhookSecretConfigured(WEBHOOK_SECRET);
+  },
   isWebhookAuthorized(headers: Record<string, unknown>) {
-    if (!WEBHOOK_SECRET) return true;
-    const header = String(headers['x-telegram-bot-api-secret-token'] ?? '');
-    return header === WEBHOOK_SECRET;
+    return isTelegramWebhookSecretValid(WEBHOOK_SECRET, headers['x-telegram-bot-api-secret-token']);
   },
   async processWebhookUpdate(update: TelegramUpdate) {
     try {
