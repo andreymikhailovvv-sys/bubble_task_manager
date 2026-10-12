@@ -40,6 +40,10 @@ export default function TelegramAuthPage() {
           setError('Необходимо согласиться на обработку персональных данных.');
           return;
         }
+        if (password.length < 6) {
+          setError('Пароль должен содержать не менее 6 символов. Цифры, буквы и спецсимволы допустимы.');
+          return;
+        }
         await api.registerTelegramWeb({ initData, login: login.trim(), password, name: name.trim(), consentAccepted });
       } else {
         await api.loginTelegramWeb({ initData, login: login.trim(), password });
@@ -98,7 +102,7 @@ export default function TelegramAuthPage() {
               <span>Пароль</span>
               <span className="telegram-auth-input flex items-center gap-3 rounded-2xl border px-4">
                 <KeyRound size={19} className="shrink-0 text-slate-400" aria-hidden="true" />
-                <input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required minLength={6} value={password} onChange={(event) => setPassword(event.target.value)} className="min-w-0 flex-1 bg-transparent py-3.5 text-base text-white outline-none placeholder:text-slate-500" placeholder="Введите пароль" />
+                <input type={showPassword ? 'text' : 'password'} autoComplete={isRegistration ? 'new-password' : 'current-password'} required minLength={isRegistration ? 6 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} className="min-w-0 flex-1 bg-transparent py-3.5 text-base text-white outline-none placeholder:text-slate-500" placeholder="Введите пароль" />
                 <button type="button" onClick={() => setShowPassword((value) => !value)} className="rounded-lg p-1 text-slate-400 hover:text-white" aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}>
                   {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>

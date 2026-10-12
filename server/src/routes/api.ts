@@ -16,6 +16,7 @@ import { telegramController } from '../controllers/telegram.controller.js';
 import { telegramRelayController } from '../controllers/telegram-relay.controller.js';
 import { telegramService } from '../services/telegram.service.js';
 import { isGoogleAuthEnabled, passport } from '../auth/passport.js';
+import { createGoogleOAuthState, verifyGoogleOAuthState, googleOAuthStateCookieOptions, GOOGLE_OAUTH_STATE_COOKIE_NAME, GoogleEmailConflictError, GoogleEmailNotVerifiedError } from '../lib/google-oauth-security.js';
 import { AUTH_COOKIE_NAME, DEVICE_COOKIE_NAME, authService } from '../auth/auth.service.js';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../db/prisma.js';
@@ -409,7 +410,9 @@ apiRouter.get('/auth/google', (req, res, next) => {
     res.status(503).json({ error: 'Google авторизация временно отключена' });
     return;
   }
-  passport.authenticate('google', { scope: ['openid', 'email', 'profile'], session: false })(req, res, next);
+  const state = createGoogleOAuthState();
+  res.cookie(GOOGLE_OAUTH_STATE_COOKIE_NAME, state, googleOAuthStateCookieOptions());
+  passport.authenticate('google', { scope: ['openid', 'email', 'profile'], session: false, state })(req, res, next);
 });
 
 apiRouter.get('/auth/google/callback', (req, res, next) => {
@@ -418,20 +421,30 @@ apiRouter.get('/auth/google/callback', (req, res, next) => {
     return;
   }
 
-  passport.authenticate('google', { session: false, failureRedirect: '/api/auth/me' })(req, res, async () => {
-    const user = req.user as {
-      id: string;
-      email?: string | null;
-      username?: string | null;
-      name?: string | null;
-      avatarUrl?: string | null;
-      googleSub?: string | null;
-      deviceId?: string | null;
-    };
+  const expectedState = req.cookies?.[GOOGLE_OAUTH_STATE_COOKIE_NAME];
+  const returnedState = req.query?.state;
+  res.clearCookie(GOOGLE_OAUTH_STATE_COOKIE_NAME, { ...googleOAuthStateCookieOptions(), maxAge: undefined });
+  if (!verifyGoogleOAuthState(expectedState, returnedState)) {
+    console.warn('[Auth/Google] denied callback without a matching recent OAuth state');
+    res.redirect('/?googleAuthError=invalid_state');
+    return;
+  }
+
+  passport.authenticate('google', { session: false }, (error: unknown, user: any) => {
+    if (error || !user) {
+      const reason = error instanceof GoogleEmailConflictError
+        ? 'email_conflict'
+        : error instanceof GoogleEmailNotVerifiedError
+          ? 'email_unverified'
+          : 'google_unavailable';
+      console.warn(`[Auth/Google] callback failed reason=${reason}`);
+      res.redirect(`/?googleAuthError=${reason}`);
+      return;
+    }
 
     setAuthCookies(res, user);
     res.redirect('/');
-  });
+  })(req, res, next);
 });
 
 

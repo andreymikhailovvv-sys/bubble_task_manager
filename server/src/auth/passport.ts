@@ -2,15 +2,13 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
+import { GoogleEmailConflictError, GoogleEmailNotVerifiedError, resolveVerifiedGoogleEmail } from '../lib/google-oauth-security.js';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL;
 
 export const isGoogleAuthEnabled = Boolean(googleClientId && googleClientSecret && googleCallbackUrl);
-
-const resolveProfileEmail = (profile: any) =>
-  profile.emails?.find((item: any) => item.verified)?.value ?? profile.emails?.[0]?.value ?? null;
 
 if (isGoogleAuthEnabled) {
   passport.use(
@@ -22,50 +20,71 @@ if (isGoogleAuthEnabled) {
       },
       async (_accessToken: string, _refreshToken: string, profile: any, done: (error: Error | null, user?: any) => void) => {
         try {
-          const email = resolveProfileEmail(profile)?.toLowerCase();
-          if (!email) {
-            done(new Error('Google profile does not include an email'));
+          const googleSub = typeof profile?.id === 'string' ? profile.id.trim() : '';
+          if (!googleSub) {
+            done(new Error('Google profile does not include a stable subject'));
             return;
           }
 
-          const googleSub = profile.id;
-          const displayName = profile.displayName || profile.name?.givenName || email;
+          const email = resolveVerifiedGoogleEmail(profile);
+          const displayName = String(profile.displayName || profile.name?.givenName || email || 'Пользователь Google');
           const avatarUrl = profile.photos?.[0]?.value ?? null;
 
-          const existingUser = await prisma.user.findFirst({
-            where: {
-              OR: [{ googleSub }, { email }]
-            }
-          });
-
+          // Google subject is the identity. Never log into or attach an
+          // unrelated account merely because the two email fields match.
+          const existingUser = await prisma.user.findUnique({ where: { googleSub } });
           if (existingUser) {
+            const emailOwner = email && email !== existingUser.email
+              ? await prisma.user.findUnique({ where: { email }, select: { id: true } })
+              : null;
             const user = await prisma.user.update({
               where: { id: existingUser.id },
               data: {
-                email,
-                googleSub,
                 name: displayName,
-                avatarUrl
+                avatarUrl,
+                // Preserve the existing email when another user owns the new one.
+                ...(email && (!emailOwner || emailOwner.id === existingUser.id) ? { email } : {})
               }
             });
             done(null, user);
             return;
           }
 
-          const user = await prisma.$transaction(async (tx) => {
-            const createdUser = await tx.user.create({
-              data: {
-                email,
-                googleSub,
-                name: displayName,
-                avatarUrl
-              }
-            });
-            await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
-            return createdUser;
-          });
+          if (!email) {
+            done(new GoogleEmailNotVerifiedError());
+            return;
+          }
 
-          done(null, user);
+          const emailOwner = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+          if (emailOwner) {
+            done(new GoogleEmailConflictError());
+            return;
+          }
+
+          try {
+            const user = await prisma.$transaction(async (tx) => {
+              const createdUser = await tx.user.create({
+                data: {
+                  email,
+                  googleSub,
+                  name: displayName,
+                  avatarUrl
+                }
+              });
+              await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
+              return createdUser;
+            });
+            done(null, user);
+          } catch (error) {
+            // Simultaneous first logins must not claim an email owned by
+            // another account or leak a Prisma unique-constraint failure.
+            const matchingUser = await prisma.user.findUnique({ where: { googleSub } });
+            if (matchingUser) {
+              done(null, matchingUser);
+              return;
+            }
+            done(new GoogleEmailConflictError());
+          }
         } catch (error) {
           done(error as Error);
         }
