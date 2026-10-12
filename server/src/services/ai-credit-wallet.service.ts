@@ -20,7 +20,7 @@ export type AiCreditReservation = {
   totalMilli: number;
 };
 
-type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string };
+type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string; subscriptionPlan: string };
 type WalletTransaction = Prisma.TransactionClient;
 type WalletDatabase = Pick<PrismaClient, '$transaction'>;
 
@@ -49,7 +49,7 @@ export function calculateDebitBreakdown(wallet: AiCreditBuckets, amountMilli: nu
 const selectWalletForUpdate = async (tx: WalletTransaction, userId: string): Promise<WalletRow | null> => {
   const rows = await tx.$queryRaw<WalletRow[]>(Prisma.sql`
     SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli",
-           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId"
+           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId", "subscriptionPlan"
     FROM "User"
     WHERE "id" = ${userId}
     FOR UPDATE
@@ -77,7 +77,11 @@ const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period
   // explicitly determines how to handle conversion.
   if (isGuestAccount(row)) return row;
   if (row.aiCreditsPeriod === period) return row;
-  const refreshed = { ...row, aiIncludedCreditsMilli: MONTHLY_INCLUDED_CREDITS_MILLI, aiCreditsPeriod: period };
+  // Free accounts get a one-time trial (bonus bucket), never a recurring
+  // monthly free grant. Keep existing included balances until their own
+  // period rolls over. Paid plan behavior remains unchanged.
+  const includedMilli = row.subscriptionPlan === 'free' ? 0 : MONTHLY_INCLUDED_CREDITS_MILLI;
+  const refreshed = { ...row, aiIncludedCreditsMilli: includedMilli, aiCreditsPeriod: period };
   await updateWallet(tx, row.id, refreshed, period);
   return refreshed;
 };

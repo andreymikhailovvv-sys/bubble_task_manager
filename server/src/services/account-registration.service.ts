@@ -2,11 +2,12 @@ import { Prisma } from '@prisma/client';
 import { authService } from '../auth/auth.service.js';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from './onboarding.service.js';
+import { currentAiCreditsPeriod, creditsToMilli } from './ai-credit-wallet.service.js';
 
 export const normalizeAccountLogin = (value: string) => value.trim().toLowerCase();
 
 export class AccountRegistrationError extends Error {
-  constructor(public readonly code: 'INVALID_LOGIN' | 'INVALID_PASSWORD' | 'LOGIN_TAKEN' | 'CONSENT_REQUIRED') {
+  constructor(public readonly code: 'INVALID_LOGIN' | 'INVALID_PASSWORD' | 'LOGIN_TAKEN' | 'CONSENT_REQUIRED' | 'GUEST_SESSION_INVALID') {
     super(code);
   }
 }
@@ -39,6 +40,8 @@ export const accountRegistrationService = {
     passwordHash?: string;
     name: string;
     telegramChatId?: string;
+    guestUserId?: string;
+    verifiedGuestDeviceId?: string;
     personalDataConsent?: { version: string; ipAddress?: string };
   }) {
     const login = validateAccountLogin(input.login);
@@ -47,14 +50,55 @@ export const accountRegistrationService = {
 
     try {
       return await prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({
-          data: {
-            username: login,
-            passwordHash,
-            name: input.name.trim() || login,
-            ...(input.telegramChatId ? { telegramChatId: input.telegramChatId, telegramLinkedAt: new Date() } : {})
-          }
-        });
+        const now = new Date();
+        let user;
+        if (input.guestUserId && input.verifiedGuestDeviceId) {
+          // Only the server may set these fields, after checking BOTH a signed
+          // guest JWT and a signed device cookie. Conditional UPDATE serializes
+          // simultaneous requests and prevents a second trial grant.
+          const upgraded = await tx.user.updateMany({
+            where: {
+              id: input.guestUserId,
+              deviceId: input.verifiedGuestDeviceId,
+              username: null,
+              passwordHash: null,
+              email: null,
+              googleSub: null,
+              telegramChatId: null,
+              aiTrialGrantedAt: null
+            },
+            data: {
+              username: login,
+              passwordHash,
+              name: input.name.trim() || login,
+              aiTrialGrantedAt: now,
+              aiCreditsPeriod: currentAiCreditsPeriod(now),
+              aiIncludedCreditsMilli: 0,
+              aiBonusCreditsMilli: { increment: creditsToMilli(100) },
+              ...(input.telegramChatId ? { telegramChatId: input.telegramChatId, telegramLinkedAt: now } : {})
+            }
+          });
+          if (upgraded.count !== 1) throw new AccountRegistrationError('GUEST_SESSION_INVALID');
+          const activated = await tx.user.findUniqueOrThrow({ where: { id: input.guestUserId } });
+          user = await tx.user.update({
+            where: { id: activated.id },
+            data: { aiCredits: Math.floor((activated.aiBonusCreditsMilli + activated.aiPurchasedCreditsMilli) / 1000) }
+          });
+        } else {
+          user = await tx.user.create({
+            data: {
+              username: login,
+              passwordHash,
+              name: input.name.trim() || login,
+              aiCredits: 100,
+              aiIncludedCreditsMilli: 0,
+              aiBonusCreditsMilli: creditsToMilli(100),
+              aiCreditsPeriod: currentAiCreditsPeriod(now),
+              aiTrialGrantedAt: now,
+              ...(input.telegramChatId ? { telegramChatId: input.telegramChatId, telegramLinkedAt: now } : {})
+            }
+          });
+        }
         if (input.personalDataConsent) {
           await tx.userConsent.create({
             data: {

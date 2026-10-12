@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
+import { creditsToMilli, currentAiCreditsPeriod } from '../services/ai-credit-wallet.service.js';
 import { GoogleEmailConflictError, GoogleEmailNotVerifiedError, resolveVerifiedGoogleEmail } from '../lib/google-oauth-security.js';
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
@@ -69,7 +70,12 @@ if (isGoogleAuthEnabled) {
                   email,
                   googleSub,
                   name: displayName,
-                  avatarUrl
+                  avatarUrl,
+                  aiCredits: 100,
+                  aiIncludedCreditsMilli: 0,
+                  aiBonusCreditsMilli: creditsToMilli(100),
+                  aiCreditsPeriod: currentAiCreditsPeriod(),
+                  aiTrialGrantedAt: new Date()
                 }
               });
               await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);

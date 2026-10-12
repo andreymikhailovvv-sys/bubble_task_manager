@@ -91,9 +91,10 @@ model User {
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
   subscriptionPlan String @default("free")
-  aiCredits    Int      @default(100)
+  aiCredits    Int      @default(0)
   aiCreditsPeriod String @default("")
-  aiIncludedCreditsMilli Int @default(100000)
+  aiIncludedCreditsMilli Int @default(0)
+  aiTrialGrantedAt DateTime?
   aiBonusCreditsMilli Int @default(0)
   aiPurchasedCreditsMilli Int @default(0)
   aiEfficiencyCreditsSpent Int @default(0)
