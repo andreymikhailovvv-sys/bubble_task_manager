@@ -19,6 +19,7 @@ type State = {
   id: string;
   aiCredits: number;
   aiCreditsPeriod: string;
+  subscriptionPlan?: string;
   aiIncludedCreditsMilli: number;
   aiBonusCreditsMilli: number;
   aiPurchasedCreditsMilli: number;
@@ -170,4 +171,21 @@ test('registered users keep monthly refresh and debit even if deviceId is still 
   const reservation = await reserveAiCreditsMilli('user-1', 2000, db as any);
   assert.equal(reservation.totalMilli, 2000);
   assert.equal(db.state?.aiIncludedCreditsMilli, 98_000);
+});
+
+test('free users cannot receive the 100 trial again on next monthly refresh', async () => {
+  const db = wallet({
+    subscriptionPlan: 'free', aiCreditsPeriod: '2020-01',
+    aiCredits: 3, aiIncludedCreditsMilli: 3_000, aiBonusCreditsMilli: 0, aiPurchasedCreditsMilli: 0
+  });
+  const result = await getAiCreditWallet('user-1', db as any);
+  assert.equal(result.aiIncludedCreditsMilli, 0);
+  assert.equal(result.aiCredits, 0);
+  assert.equal(db.state?.aiCreditsPeriod, currentAiCreditsPeriod());
+});
+
+test('paid plan keeps previously configured included credits on next month', async () => {
+  const db = wallet({ subscriptionPlan: 'pro', aiCreditsPeriod: '2020-01', aiIncludedCreditsMilli: 0, aiCredits: 0 });
+  const result = await getAiCreditWallet('user-1', db as any);
+  assert.equal(result.aiIncludedCreditsMilli, 100_000);
 });
