@@ -1496,6 +1496,7 @@ export const aiAssistantService = {
     const tasks = await prisma.task.findMany({
       where: {
         userId: input.userId,
+        AND: [taskAccessWhere(input.userId)],
         parentTaskId: null,
         status: { not: 'DONE' },
         dueDate: { gte: todayStart, lte: todayEnd }
@@ -1515,6 +1516,7 @@ export const aiAssistantService = {
     const overdueTasks = await prisma.task.findMany({
       where: {
         userId: input.userId,
+        AND: [taskAccessWhere(input.userId)],
         parentTaskId: null,
         status: { not: 'DONE' },
         dueDate: { lt: todayStart }
@@ -2558,6 +2560,7 @@ ${actionAwareAnswer}`
     const tasks = await prisma.task.findMany({
       where: {
         userId: input.userId,
+        AND: [taskAccessWhere(input.userId)],
         parentTaskId: null,
         status: {
           not: 'DONE'
@@ -2686,6 +2689,7 @@ ${actionAwareAnswer}`
         const candidates = await prisma.task.findMany({
           where: {
             userId: input.userId,
+            AND: [taskAccessWhere(input.userId)],
             parentTaskId: null,
             status: { not: 'DONE' },
             ...(action.taskIds && action.taskIds.length > 0 ? { id: { in: action.taskIds } } : {}),
@@ -2711,8 +2715,8 @@ ${actionAwareAnswer}`
               status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
             }
           });
-          await prisma.task.update({
-            where: { id: task.id },
+          await prisma.task.updateMany({
+            where: { id: task.id, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
             data: { dueDate: nextDue }
           });
         }
@@ -2722,6 +2726,16 @@ ${actionAwareAnswer}`
       }
 
       if (action.type === 'create_task') {
+        if (action.sphereId) {
+          const allowedSphere = await prisma.sphere.findFirst({
+            where: { id: action.sphereId, userId: input.userId },
+            select: { id: true }
+          });
+          if (!allowedSphere) {
+            actionReports.push('Создание задачи пропущено: сектор недоступен этому пользователю.');
+            continue;
+          }
+        }
         const rawImportance = action.importance;
         const rawUrgency = action.urgency;
         const importance = typeof rawImportance === 'number' && Number.isFinite(rawImportance)
@@ -2779,7 +2793,7 @@ ${actionAwareAnswer}`
 
       if (action.type === 'create_subtask') {
         const parentTask = await prisma.task.findFirst({
-          where: { id: action.parentTaskId, userId: input.userId, parentTaskId: null },
+          where: { id: action.parentTaskId, userId: input.userId, parentTaskId: null, AND: [taskAccessWhere(input.userId)] },
           select: { id: true, title: true }
         });
         if (!parentTask) {
@@ -2807,7 +2821,7 @@ ${actionAwareAnswer}`
         continue;
       }
       if (action.type === 'delete_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
         if (!subtask) {
           actionReports.push('Удаление подзадачи пропущено: подзадача не найдена.');
           continue;
@@ -2818,7 +2832,7 @@ ${actionAwareAnswer}`
         continue;
       }
       if (action.type === 'rename_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
         if (!subtask) {
           actionReports.push('Переименование подзадачи пропущено: подзадача не найдена.');
           continue;
@@ -2829,7 +2843,7 @@ ${actionAwareAnswer}`
         continue;
       }
       if (action.type === 'update_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
         if (!subtask) {
           actionReports.push('Изменение подзадачи пропущено: подзадача не найдена.');
           continue;
@@ -2847,7 +2861,7 @@ ${actionAwareAnswer}`
         continue;
       }
       if (action.type === 'reschedule_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
         if (!subtask) {
           actionReports.push('Перенос подзадачи пропущен: подзадача не найдена.');
           continue;
@@ -2863,7 +2877,7 @@ ${actionAwareAnswer}`
         continue;
       }
       if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null } }, select: { id: true, title: true } });
+        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
         if (!subtask) {
           actionReports.push('Изменение статуса подзадачи пропущено: подзадача не найдена.');
           continue;
@@ -2882,7 +2896,7 @@ ${actionAwareAnswer}`
       }
 
       const task = await prisma.task.findFirst({
-        where: { id: action.taskId, userId: input.userId },
+        where: { id: action.taskId, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
         select: { id: true, title: true, dueDate: true, status: true, importance: true, urgency: true }
       });
       if (!task) {
@@ -3010,7 +3024,7 @@ ${actionAwareAnswer}`
     const operations = Array.isArray(input.operations) ? input.operations : [];
     for (const operation of operations) {
       const task = await prisma.task.findFirst({
-        where: { id: operation.taskId, userId: input.userId },
+        where: { id: operation.taskId, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
         select: { id: true }
       });
       if (!task) continue;
@@ -3032,6 +3046,7 @@ ${actionAwareAnswer}`
       where: {
         id: input.taskId,
         userId: input.userId,
+        AND: [taskAccessWhere(input.userId)],
         aiNotificationsEnabled: true,
         status: { not: 'DONE' },
         dueDate: { not: null, lt: now },
@@ -3047,6 +3062,7 @@ ${actionAwareAnswer}`
         where: {
           id: input.taskId,
           userId: input.userId,
+          AND: [taskAccessWhere(input.userId)],
           aiNotificationsEnabled: true,
           status: { not: 'DONE' },
           dueDate: { not: null, lt: now },
@@ -3119,7 +3135,7 @@ ${actionAwareAnswer}`
       };
     } catch (error) {
       await prisma.task.updateMany({
-        where: { id: input.taskId, userId: input.userId, overdueAiNotifiedAt: now },
+        where: { id: input.taskId, userId: input.userId, overdueAiNotifiedAt: now, AND: [taskAccessWhere(input.userId)] },
         data: { overdueAiNotifiedAt: null }
       });
       throw error;
@@ -3131,7 +3147,7 @@ ${actionAwareAnswer}`
     const periodStart = new Date(input.periodStartIso);
     const periodEnd = new Date(input.periodEndIso);
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime()) || periodStart > periodEnd) throw new Error('Невалидный период оптимизации');
-    const tasks = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
+    const tasks = await prisma.task.findMany({ where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, dueDate: { gte: periodStart, lt: periodEnd } }, include: { sphere: { select: { name: true } }, parentTask: { select: { id: true, title: true } } }, orderBy: { dueDate: 'asc' } });
     const payloadLines = tasks.map((t, index) => [
       `${index + 1}. taskId=${t.id}`,
       `тип=${t.parentTaskId ? 'подзадача' : 'задача'}`,
@@ -3177,11 +3193,11 @@ ${actionAwareAnswer}`
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
     const allWeekTasks = await prisma.task.findMany({
-      where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { gte: now, lt: weekEnd } },
+      where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, dueDate: { gte: now, lt: weekEnd } },
       include: { sphere: { select: { name: true } }, parentTask: { select: { title: true } } },
       orderBy: { dueDate: 'asc' }
     });
-    const overdue = await prisma.task.findMany({ where: { userId: input.userId, status: { not: 'DONE' }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
+    const overdue = await prisma.task.findMany({ where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
     if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[], billing: { mode: 'legacy' as const, creditsSpentMilli: 0 } };
     const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
     const overdueIds = overdue.map((t) => t.id);
@@ -3194,17 +3210,17 @@ ${lines}`}] }) });
     const parsed = parseTimelineOptimizationPlan(extractOutputText(responseJson));
     const map = new Map(overdue.map((t)=>[t.id,t]));
     const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
-    await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.update({ where:{id:u.taskId}, data:{dueDate:u.dueDate} }); }});
+    await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.updateMany({ where:{id:u.taskId, userId:input.userId, AND:[taskAccessWhere(input.userId)]}, data:{dueDate:u.dueDate} }); }});
     return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId), billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(2) } };
   },
 
   applyTimelineOptimization: async (input: { userId: string; plan: Array<{ taskId: string; dueDate: string | null }> }) => {
     await prisma.$transaction(async (tx) => {
       for (const item of input.plan) {
-        const task = await tx.task.findFirst({ where: { id: item.taskId, userId: input.userId } });
+        const task = await tx.task.findFirst({ where: { id: item.taskId, userId: input.userId, AND: [taskAccessWhere(input.userId)] } });
         if (!task) continue;
         const taskDue = item.dueDate ? new Date(item.dueDate) : null;
-        await tx.task.update({ where: { id: task.id }, data: { dueDate: taskDue && !Number.isNaN(taskDue.getTime()) ? taskDue : null } });
+        await tx.task.updateMany({ where: { id: task.id, userId: input.userId, AND: [taskAccessWhere(input.userId)] }, data: { dueDate: taskDue && !Number.isNaN(taskDue.getTime()) ? taskDue : null } });
       }
     });
     return { ok: true as const };
