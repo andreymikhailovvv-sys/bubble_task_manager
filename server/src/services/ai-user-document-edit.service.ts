@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../db/prisma.js';
-import { runDynamicResponsesCall, refundDynamicResponsesCall, settleDynamicResponsesCall } from './dynamic-responses-billing.service.js';
+import { runDynamicResponsesCall, refundDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { getOfficeDocumentPreview, applyOfficeEdits, type OfficeEdit, type OfficeFormat } from './ooxml-document-editor.js';
 import { WORD_DOCUMENT_MIME } from './word-document.service.js';
 import { EXCEL_MIME } from './excel-workbook.service.js';
@@ -60,6 +60,41 @@ function extractText(response: Record<string,unknown>):string {
   }).join('').trim();
 }
 
+
+export class OfficeEditPlanResponseError extends Error {
+  constructor(message: string, public readonly reason: 'incomplete' | 'invalid_json' | 'empty') {
+    super(message);
+    this.name = 'OfficeEditPlanResponseError';
+  }
+}
+
+/** Never let raw JSON.parse SyntaxError escape a structured edit request. */
+export function parseOfficeEditPlanResponse(response: Record<string, unknown>): { summary?: unknown; edits?: unknown } {
+  const incompleteReason = response.incomplete_details && typeof response.incomplete_details === 'object'
+    ? (response.incomplete_details as { reason?: unknown }).reason : null;
+  if (response.status === 'incomplete' || incompleteReason === 'max_output_tokens') {
+    throw new OfficeEditPlanResponseError(
+      'ИИ не успел сформировать полный план редактирования файла: достигнут лимит ответа.', 'incomplete'
+    );
+  }
+  const text = extractText(response);
+  if (!text) throw new OfficeEditPlanResponseError(
+    'ИИ не вернул инструкции по редактированию файла.', 'empty'
+  );
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new OfficeEditPlanResponseError(
+      'ИИ вернул неполные или некорректные инструкции редактирования файла.', 'invalid_json'
+    );
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new OfficeEditPlanResponseError('ИИ вернул некорректную структуру правок.', 'invalid_json');
+  }
+  return parsed as { summary?: unknown; edits?: unknown };
+}
+
 export async function editUserDocumentIfRequested(input:Input) {
   if(!isDocumentEditRequest(input.question))return null;
   if(input.taskId){
@@ -112,24 +147,49 @@ export async function editUserDocumentIfRequested(input:Input) {
   const instruction=format==='docx'
     ? 'Разрешены только replace_text (заменить точный фрагмент в одном абзаце), append_paragraph (добавить абзац в конец), delete_paragraph (удалить абзац строго по полному тексту). Для replace_text укажи в target точный текст из preview. Сложные стили, таблицы и перемещение элементов не поддерживаются. Для Word поля sheet оставляй пустыми, valueType=text.'
     : 'Excel поддерживает set_cell (sheet=точное имя листа, target=адрес A1, value=новое значение, valueType=text|number|formula|boolean|blank) и delete_rows_matching для физического удаления всех строк с указанным брендом или позицией. Для delete_rows_matching: sheet=точное имя листа, target=искомая фраза, например SEBERO, value=буквы столбца (например B) или пустая строка для поиска по всем столбцам, valueType=text. Удаление выполняется по всему файлу, а не только по превью, сдвигает остальные строки и сохраняет заголовок. Не придумывай номера строк и не подменяй удаление очисткой ячеек. Сложные файлы с формулами, структурированными таблицами Excel, объединениями и связями система отклонит. Формулы для set_cell начинаются с =. Не меняй незапрошенные ячейки.';
-  const call=await runDynamicResponsesCall({
-    userId:input.userId,actionId,providerCallIndex:1,
-    feature:input.taskId?'ai_chat_planner':'ai_chat',apiKey:input.apiKey,
-    payload:{
-      model:input.model,
-      input:[
-        {role:'system',content:'Ты редактор существующего офисного файла. Возвращай строго JSON правок по схеме. Не создавай файл с нуля. Не меняй не запрошенное. Если операция не поддерживается или контекст недостаточен, edits=[] и в summary объясни причину. '+instruction},
-        {role:'user',content:'Запрос: '+input.question.slice(0,5000)+'\nФайл: '+sourceName+'\nТочные данные исходного файла:\n'+preview.text}
-      ],
-      text:{format:{type:'json_schema',name:'office_edits',strict:true,schema:planSchema}},
-      tool_choice:'none'
-    },stream:false
-  });
-  let settled=false;
-  try{
-    const text=extractText(call.responseJson);
-    if(!text)throw new TypeError('ИИ не вернул инструкции по редактированию.');
-    const data=JSON.parse(text) as {summary?:unknown;edits?:unknown};
+  let call: DynamicResponsesCall | null = null;
+  const pendingCalls: DynamicResponsesCall[] = [];
+  let settled = false;
+  try {
+    let data: { summary?: unknown; edits?: unknown } | null = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const responseCall = await runDynamicResponsesCall({
+        userId: input.userId, actionId, providerCallIndex: attempt,
+        feature: input.taskId ? 'ai_chat_planner' : 'ai_chat', apiKey: input.apiKey,
+        // Only structured Office planning needs a higher output limit.
+        maxOutputTokensCap: 8192,
+        payload: {
+          model: input.model,
+          input: [
+            { role: 'system', content: 'Ты редактор существующего офисного файла. Возвращай строго JSON правок по схеме. Не создавай файл с нуля. Не меняй незапрошенное. Если операция не поддерживается или контекст недостаточен, edits=[] и в summary объясни причину. Пиши краткие инструкции: не копируй исходный файл в JSON. ' + instruction + (attempt === 2 ? ' ПРЕДЫДУЩИЙ ответ не удалось разобрать. Верни только компактный законченный JSON, соответствующий схеме. Если полное изменение не помещается, верни edits=[] с честным объяснением, без частичных правок.' : '') },
+            { role: 'user', content: 'Запрос: ' + input.question.slice(0, 5000) + '\\nФайл: ' + sourceName + '\\nТочные данные исходного файла:\\n' + preview.text }
+          ],
+          text: { format: { type: 'json_schema', name: 'office_edits', strict: true, schema: planSchema } },
+          tool_choice: 'none'
+        },
+        stream: false
+      });
+      pendingCalls.push(responseCall);
+      try {
+        data = parseOfficeEditPlanResponse(responseCall.responseJson);
+        call = responseCall;
+        break;
+      } catch (error) {
+        if (!(error instanceof OfficeEditPlanResponseError) || attempt === 2) throw error;
+        console.warn('[AI office edit] invalid plan, retrying once', {
+          userId: input.userId, actionId, attempt,
+          reason: error.reason,
+          responseStatus: responseCall.responseJson.status ?? null,
+          outputTokens: responseCall.responseJson.usage?.output_tokens ?? null
+        });
+        // The first incomplete attempt is not user-billable.
+        await refundDynamicResponsesCall(responseCall);
+        pendingCalls.pop();
+      }
+    }
+    if (!data || !call) {
+      throw new OfficeEditPlanResponseError('ИИ не смог подготовить безопасные правки файла.', 'invalid_json');
+    }
     const edits=data.edits as OfficeEdit[];
     if(!Array.isArray(edits) || edits.length===0){
       throw new TypeError(typeof data.summary==='string'&&data.summary.length<400
@@ -146,6 +206,7 @@ export async function editUserDocumentIfRequested(input:Input) {
     });
     const charge=await settleDynamicResponsesCall(call);
     settled=true;
+    pendingCalls.pop();
     return{
       answer:'Файл изменён. '+(typeof data.summary==='string'?data.summary.slice(0,700):'')+' Новая версия прикреплена к сообщению.',
       model:input.model,generatedDocument:document,taskDataChanged:false,
@@ -160,8 +221,18 @@ export async function editUserDocumentIfRequested(input:Input) {
         webSearchCreditsMilliBilled:0,providerWebSearchCostMilli:0,webSearchCalls:0,
         webSearchCreditsMilli:0,webSourceCount:0}
     };
-  }catch(error){
-    if(!settled)await refundDynamicResponsesCall(call).catch(()=>undefined);
+  } catch (error) {
+    if (!settled) {
+      await Promise.all(pendingCalls.map((pending) => refundDynamicResponsesCall(pending).catch(() => undefined)));
+    }
+    if (error instanceof OfficeEditPlanResponseError) {
+      console.warn('[AI office edit] plan could not be parsed after retry', {
+        userId: input.userId, actionId, reason: error.reason
+      });
+      throw new TypeError(error.message + ' Исходный файл сохранён без изменений. Попробуйте запросить меньше правок за один раз.');
+    }
     throw error;
-  }finally{input.onProgress?.('forming_answer');}
+  } finally {
+    input.onProgress?.('forming_answer');
+  }
 }
