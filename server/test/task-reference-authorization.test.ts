@@ -11,7 +11,7 @@ test('creating a task checks sphere ownership before any insertion', async () =>
   assert.ok(creation.includes("await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });"));
   assert.ok(creation.indexOf('prisma.sphere.findFirstOrThrow') < creation.indexOf('prisma.task.create'));
   // Collaborative parents remain accessible by membership, not just userId.
-  assert.match(creation, /collaboration: \{ members: \{ some: \{ userId \} \} \}/);
+  assert.match(creation, /AND: \[taskAccessWhere\(userId\)\]/);
   assert.match(creation, /collaboration: parent\?\.collaborationId/);
 });
 
