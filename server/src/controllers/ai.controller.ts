@@ -120,6 +120,13 @@ export const aiController = {
       if (streaming) { writeStreamEvent({ type: 'result', result: publicResult }); res.end(); } else res.json(publicResult);
     } catch (error) {
       traceError = error;
+      // Keep enough context to diagnose errors without logging prompts, file
+      // contents, document text, or full model responses.
+      console.error('[AI] general chat request failed', {
+        requestId,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        stackFrames: error instanceof Error ? error.stack?.split(String.fromCharCode(10)).slice(1, 4).map(line => line.trim().slice(0, 200)) ?? [] : []
+      });
       if (streaming) { writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end(); }
       else sendAiError(res, error);
     } finally {

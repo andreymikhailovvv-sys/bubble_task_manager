@@ -110,8 +110,16 @@ export type DynamicResponsesCall = {
   webSearchCreditsMilli: number;
 };
 
-export async function runDynamicResponsesCall(input: { userId: string; actionId: string; providerCallIndex: number; feature: DynamicTextFeature; apiKey: string; payload: Record<string, unknown>; stream?: boolean; onProviderEvent?: (event: { type?: unknown }) => void }): Promise<DynamicResponsesCall> {
-  const limits = DYNAMIC_TEXT_OUTPUT_LIMITS[input.feature];
+export async function runDynamicResponsesCall(input: { userId: string; actionId: string; providerCallIndex: number; feature: DynamicTextFeature; apiKey: string; payload: Record<string, unknown>; stream?: boolean; maxOutputTokensCap?: number; onProviderEvent?: (event: { type?: unknown }) => void }): Promise<DynamicResponsesCall> {
+  const defaults = DYNAMIC_TEXT_OUTPUT_LIMITS[input.feature];
+  // A bounded per-request override is used only for structured office edits.
+  // Do not raise the output budget for all conversations.
+  const limits = {
+    min: defaults.min,
+    max: input.maxOutputTokensCap === undefined
+      ? defaults.max
+      : Math.max(defaults.min, Math.min(8192, Math.floor(input.maxOutputTokensCap)))
+  };
   const cleanPayload = createCleanOpenAiResponsesPayload(input.payload);
   const model = String(cleanPayload.model ?? '');
   const tokenRequestId = `${input.actionId}:tokens:${input.providerCallIndex}`;
