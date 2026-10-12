@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
@@ -264,10 +264,7 @@ const authRequestContext = (req: any) => {
 };
 
 const setAuthCookies = (
-  res: {
-    cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void;
-    clearCookie: (name: string, options: ReturnType<typeof authService.cookieOptions>) => void;
-  },
+  res: Pick<Response, 'cookie' | 'clearCookie'>,
   user: {
     id: string;
     email?: string | null;
