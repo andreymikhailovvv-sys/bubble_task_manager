@@ -9,12 +9,12 @@ const securityMismatch = (purchaseId: string | undefined, paymentId: string, rea
   console.warn('[Payments] YooKassa verification mismatch', { purchaseId, providerPaymentId: paymentId, reason });
 };
 
-export async function reconcileCreditPurchaseFromYooKassa(payment: YooKassaPayment, expectedPurchaseId?: string): Promise<ReconcileResult> {
+export async function reconcileCreditPurchaseFromYooKassa(payment: YooKassaPayment, expectedPurchaseId?: string, db: typeof prisma = prisma): Promise<ReconcileResult> {
   const metadataPurchaseId = payment.metadata?.purchase_id;
   let purchase = expectedPurchaseId
-    ? await prisma.creditPurchase.findUnique({ where: { id: expectedPurchaseId } })
-    : await prisma.creditPurchase.findUnique({ where: { yookassaPaymentId: payment.id } });
-  if (!purchase && metadataPurchaseId) purchase = await prisma.creditPurchase.findUnique({ where: { id: metadataPurchaseId } });
+    ? await db.creditPurchase.findUnique({ where: { id: expectedPurchaseId } })
+    : await db.creditPurchase.findUnique({ where: { yookassaPaymentId: payment.id } });
+  if (!purchase && metadataPurchaseId) purchase = await db.creditPurchase.findUnique({ where: { id: metadataPurchaseId } });
   if (!purchase) {
     securityMismatch(metadataPurchaseId, payment.id, 'purchase_not_found');
     return { outcome: 'ignored', purchase: null };
@@ -35,8 +35,8 @@ export async function reconcileCreditPurchaseFromYooKassa(payment: YooKassaPayme
   }
 
   if (payment.status === 'canceled') {
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${purchase!.id}))`);
+    const updated = await db.$transaction(async (tx) => {
+      await tx.$queryRaw<{ locked: number }[]>(Prisma.sql`SELECT 1::integer AS locked FROM pg_advisory_xact_lock(hashtext(${purchase!.id}))`);
       const current = await tx.creditPurchase.findUnique({ where: { id: purchase!.id } });
       if (!current || current.creditedAt) return current;
       return tx.creditPurchase.update({ where: { id: current.id }, data: { yookassaPaymentId: payment.id, status: 'canceled', providerStatus: 'canceled', providerCheckedAt: new Date(), canceledAt: current.canceledAt ?? new Date() } });
@@ -45,12 +45,12 @@ export async function reconcileCreditPurchaseFromYooKassa(payment: YooKassaPayme
   }
 
   if (payment.status !== 'succeeded' || payment.paid !== true) {
-    const updated = await prisma.creditPurchase.update({ where: { id: purchase.id }, data: { yookassaPaymentId: payment.id, providerStatus: payment.status, providerCheckedAt: new Date(), status: payment.status === 'pending' ? 'pending' : purchase.status } });
+    const updated = await db.creditPurchase.update({ where: { id: purchase.id }, data: { yookassaPaymentId: payment.id, providerStatus: payment.status, providerCheckedAt: new Date(), status: payment.status === 'pending' ? 'pending' : purchase.status } });
     return { outcome: 'pending', purchase: updated };
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${purchase!.id}))`);
+  const updated = await db.$transaction(async (tx) => {
+    await tx.$queryRaw<{ locked: number }[]>(Prisma.sql`SELECT 1::integer AS locked FROM pg_advisory_xact_lock(hashtext(${purchase!.id}))`);
     const current = await tx.creditPurchase.findUnique({ where: { id: purchase!.id } });
     if (!current) throw new Error('Credit purchase disappeared');
     if (current.creditedAt) return current;
