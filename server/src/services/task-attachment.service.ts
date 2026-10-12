@@ -1,4 +1,5 @@
 import { prisma } from '../db/prisma.js';
+import { taskAccessWhere } from '../lib/task-access.js';
 
 type CreateTaskAttachmentInput = {
   name: string;
@@ -26,10 +27,7 @@ const sanitizeName = (name: string) => name.trim().slice(0, 180);
 const ensureTaskAccess = (taskId: string, userId: string) => prisma.task.findFirstOrThrow({
   where: {
     id: taskId,
-    OR: [
-      { userId },
-      { collaboration: { members: { some: { userId, isHidden: false } } } }
-    ]
+    AND: [taskAccessWhere(userId)]
   },
   select: { id: true }
 });
