@@ -5,7 +5,7 @@ import { buildWordDocumentBuffer } from '../src/services/word-document.service.j
 import { buildExcelWorkbookBuffer } from '../src/services/excel-workbook.service.js';
 import { readOoxmlArchive } from '../src/services/ooxml-archive.js';
 import { applyOfficeEdits, getOfficeDocumentPreview, type OfficeEdit } from '../src/services/ooxml-document-editor.js';
-import { isDocumentEditRequest } from '../src/services/ai-user-document-edit.service.js';
+import { isDocumentEditRequest, interpretEmptyOfficeEditPlan } from '../src/services/ai-user-document-edit.service.js';
 
 const edit = (kind:OfficeEdit['kind'],target:string,value:string,sheet='',valueType:OfficeEdit['valueType']='text'):OfficeEdit=>
   ({kind,target,value,sheet,valueType});
@@ -137,4 +137,23 @@ test('document edit router does not intercept natural language text answers', as
   assert.match(editor, /if \(!isDocumentEditRequest\(input\.question, currentOfficeFileAttached\)\) return null/);
   assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
   assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
+});
+
+
+test('Office JSON planner no-op becomes ordinary answer, not duplicated HTTP error', () => {
+  const summary = 'Файл не изменён: Файл не изменён. Не поддерживается перенос объединённых ячеек.';
+  const result = interpretEmptyOfficeEditPlan(summary);
+  assert.equal(result.fallbackToText, false);
+  assert.match(result.answer, /Файл остался без изменений/);
+  assert.doesNotMatch(result.answer, /Файл не изменён: Файл не изменён/);
+  assert.match(result.answer, /объединённых ячеек/);
+});
+
+test('Office planner accidentally receiving a plain-text request falls back to regular chat', () => {
+  const summary = 'Файл не изменён. Вы запросили структуру презентации только текстом, без правок документа. В этом режиме доступны только JSON-инструкции.';
+  const result = interpretEmptyOfficeEditPlan(summary);
+  assert.equal(result.fallbackToText, true);
+  const general = interpretEmptyOfficeEditPlan('');
+  assert.equal(general.fallbackToText, false);
+  assert.match(general.answer, /Не удалось безопасно/);
 });
