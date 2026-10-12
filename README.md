@@ -155,7 +155,7 @@ Render по-прежнему использует Node runtime (`env: node` в `
 
 ## Подключение Telegram webhook
 1. Создайте бота у @BotFather и получите токен.
-2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (username бота без `@`) и (рекомендуется) `TELEGRAM_WEBHOOK_SECRET`.
+2. В `server/.env` добавьте `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` (username бота без `@`) и **обязательный** `TELEGRAM_WEBHOOK_SECRET`. Используйте уникальный случайный секрет длиной от 32 до 256 символов из латинских букв, цифр, `_` и `-`. Если секрет отсутствует или некорректен, webhook отвечает `503`, а не принимает неподписанные запросы.
 3. После деплоя установите webhook:
 ```bash
 curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
@@ -183,6 +183,6 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 
 ### Relay webhook нового бота через Render
 
-Отдельный endpoint `POST /api/telegram-relay` пересылает update в основной сервис и не вызывает обработчики Telegram-бота. По умолчанию endpoint выключен и отвечает `404`. Для Render задайте `TELEGRAM_RELAY_ENABLED=true`, HTTPS-адрес `TELEGRAM_RELAY_TARGET_URL` и `TELEGRAM_RELAY_SOURCE_SECRET`; при необходимости проверки на целевом webhook также задайте `TELEGRAM_RELAY_TARGET_SECRET`, совпадающий с `TELEGRAM_WEBHOOK_SECRET` на Timeweb. Webhook нового бота регистрируется вручную с `secret_token`, равным `TELEGRAM_RELAY_SOURCE_SECRET`.
+Отдельный endpoint `POST /api/telegram-relay` пересылает update в основной сервис и не вызывает обработчики Telegram-бота. По умолчанию endpoint выключен и отвечает `404`. Для Render задайте `TELEGRAM_RELAY_ENABLED=true`, HTTPS-адрес `TELEGRAM_RELAY_TARGET_URL` и `TELEGRAM_RELAY_SOURCE_SECRET`; **обязательно** задайте `TELEGRAM_RELAY_TARGET_SECRET`, совпадающий с `TELEGRAM_WEBHOOK_SECRET` на Timeweb. Webhook нового бота регистрируется вручную с `secret_token`, равным `TELEGRAM_RELAY_SOURCE_SECRET`.
 
 На Timeweb `TELEGRAM_RELAY_ENABLED` не задавайте (либо задайте `false`). Relay ждёт ответ целевого сервиса до 12 секунд: целевой `2xx` превращается в `200`, а ошибка соединения, timeout или неуспешный ответ превращается в `5xx`, чтобы Telegram мог повторить доставку.

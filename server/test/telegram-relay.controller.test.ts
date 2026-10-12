@@ -114,3 +114,25 @@ test('returns 5xx when target request times out', async () => {
     globalThis.setTimeout = originalSetTimeout;
   }
 });
+
+test('refuses enabled relay without target secret instead of forwarding unsigned updates', async () => {
+  configureRelay();
+  delete process.env.TELEGRAM_RELAY_TARGET_SECRET;
+  let forwarded = false;
+  const fetchMock = async () => { forwarded = true; throw new Error('must not forward'); };
+  const { result, response } = makeResponse();
+  await createTelegramRelayController(fetchMock as typeof fetch).webhook(makeRequest('source-secret') as never, response as never);
+  assert.equal(result.status, 503);
+  assert.equal(forwarded, false);
+});
+
+test('refuses malformed relay source and target secrets', async () => {
+  configureRelay();
+  process.env.TELEGRAM_RELAY_SOURCE_SECRET = 'contains space';
+  let forwarded = false;
+  const fetchMock = async () => { forwarded = true; throw new Error('must not forward'); };
+  const { result, response } = makeResponse();
+  await createTelegramRelayController(fetchMock as typeof fetch).webhook(makeRequest('contains space') as never, response as never);
+  assert.equal(result.status, 503);
+  assert.equal(forwarded, false);
+});
