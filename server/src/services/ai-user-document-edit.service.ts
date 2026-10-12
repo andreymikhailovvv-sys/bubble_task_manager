@@ -216,9 +216,37 @@ export async function editUserDocumentIfRequested(input:Input) {
       throw new OfficeEditPlanResponseError('ИИ не смог подготовить безопасные правки файла.', 'invalid_json');
     }
     const edits=data.edits as OfficeEdit[];
-    if(!Array.isArray(edits) || edits.length===0){
-      throw new TypeError(typeof data.summary==='string'&&data.summary.length<400
-        ? 'Файл не изменён: '+data.summary : 'ИИ не сформировал безопасных изменений для этого файла.');
+    if (!Array.isArray(edits) || edits.length === 0) {
+      // "No edits" is a valid response from the Office planner, not a failed
+      // API request. Refund the planning round and avoid duplicate error text.
+      await refundDynamicResponsesCall(call);
+      pendingCalls.pop();
+      settled = true;
+      const explanation = typeof data.summary === 'string' && data.summary.trim()
+        ? data.summary.replace(/^(?:файл не измен[её]н[.!:\s]*)+/i, '').trim().slice(0, 700)
+        : 'Не удалось безопасно выполнить запрошенные изменения.';
+      if (/(?:только\s+текстом|только\s+текст|без\s+правок\s+документа|без\s+изменени[яй]\s+файла|текстов(?:ый|ая)\s+ответ)/i.test(explanation)) {
+        console.info('[AI office edit] non-edit text request reached planner, falling back to general chat', {
+          userId: input.userId, actionId, format
+        });
+        return null;
+      }
+      return {
+        answer: 'Файл остался без изменений. ' + explanation,
+        model: input.model, generatedDocument: undefined, taskDataChanged: false,
+        actionReports: [] as string[], undoOperations: [] as unknown[],
+        webSearchUsed: false, webSources: [], webCitations: [], imageCreditsSpentMilli: 0,
+        billing: { mode: 'dynamic' as const, creditsSpentMilli: 0 },
+        diagnostics: undefined,
+        workflowDiagnostics: { providerStreaming: false, webSearchProgressObserved: false, providerCalls: 1,
+          toolCalls: 1, toolOperations: ['edit_document_no_changes'],
+          inputTokensTotal: 0, outputTokensTotal: 0, webSearchUsed: false,
+          webSearchCallsActual: 0, webSearchCallsBilled: 0, webSearchLimit: 1,
+          webSearchLimitExceeded: false, webSearchDuplicateItems: 0,
+          webSearchSearchItemsRaw: 0, webSearchCreditsMilliBilled: 0,
+          providerWebSearchCostMilli: 0, webSearchCalls: 0,
+          webSearchCreditsMilli: 0, webSourceCount: 0 }
+      };
     }
     const newBuffer=applyOfficeEdits(sourceBuffer,format,edits);
     const fileName=(sourceName.replace(/\.(docx|xlsx)$/i,'').replace(/[\\/:*?"<>|]/g,'_').slice(0,140)||'edited')
