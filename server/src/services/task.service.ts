@@ -1,6 +1,7 @@
 import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { createCollaborationInviteToken } from '../lib/collaboration-security.js';
 import { prisma } from '../db/prisma.js';
+import { taskAccessWhere } from '../lib/task-access.js';
 import { notifyCollaborativeSubtaskCompleted } from './collaboration-subtask-notification.service.js';
 
 interface TaskInput {
@@ -144,7 +145,7 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
 export const taskService = {
   list: async (userId: string) => {
     const items = await prisma.task.findMany({
-      where: { OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      where: taskAccessWhere(userId),
       include: { user: { select: { name: true, username: true, email: true } }, collaboration: { include: { members: { include: { user: { select: { name: true, username: true, email: true } } } } } } },
       orderBy: { createdAt: 'desc' }
     });
@@ -240,7 +241,7 @@ export const taskService = {
         : null;
 
     const parent = input.parentTaskId ? await prisma.task.findFirst({
-      where: { id: input.parentTaskId, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] },
+      where: { id: input.parentTaskId, AND: [taskAccessWhere(userId)] },
       select: { collaborationId: true }
     }) : null;
     if (input.parentTaskId && !parent) throw new Error('Parent task not found');
@@ -279,7 +280,7 @@ export const taskService = {
   },
   update: async (id: string, userId: string, input: TaskInput) => {
     const currentTask = await prisma.task.findFirstOrThrow({
-      where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }
+      where: { id, AND: [taskAccessWhere(userId)] }
     });
     if (currentTask.collaborationId && input.collaborationScope === 'all' && currentTask.userId !== userId) throw new Error('Only collaboration owner can update everyone');
 
@@ -498,7 +499,7 @@ export const taskService = {
     return finalTask;
   },
   remove: async (id: string, userId: string, scope: 'me' | 'all' = 'me') => {
-    const existing = await prisma.task.findFirst({ where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }, select: { id: true, userId: true, parentTaskId: true, status: true, dueDate: true } });
+    const existing = await prisma.task.findFirst({ where: { id, AND: [taskAccessWhere(userId)] }, select: { id: true, userId: true, parentTaskId: true, status: true, dueDate: true } });
     if (!existing) {
       throw new Error('Task not found');
     }
@@ -512,7 +513,7 @@ export const taskService = {
     console.info('[Task] remove', { userId, taskId: id, parentTaskId: existing?.parentTaskId ?? null, status: existing?.status ?? null, dueDate: existing?.dueDate?.toISOString() ?? null });
   },
   createShareLink: async (id: string, userId: string) => {
-    const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] } });
+    const task = await prisma.task.findFirstOrThrow({ where: { id, parentTaskId: null, AND: [taskAccessWhere(userId)] } });
     let collaboration = task.collaborationId ? await prisma.collaborativeTask.findUniqueOrThrow({ where: { id: task.collaborationId } }) : null;
     if (!collaboration) {
       collaboration = await prisma.$transaction(async (tx) => {

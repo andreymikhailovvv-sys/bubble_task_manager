@@ -16,6 +16,7 @@ import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHis
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
+import { taskAccessWhere } from '../lib/task-access.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
@@ -1751,7 +1752,7 @@ export const aiAssistantService = {
 
   listTaskDialog: async (input: { userId: string; taskId: string }): Promise<ChatMessage[]> => {
     const dialogTask = await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
       select: { id: true, collaboration: { select: { members: { select: { userId: true, color: true } } } } }
     });
 
@@ -1795,7 +1796,7 @@ export const aiAssistantService = {
   },
 
   listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
-    await prisma.task.findFirstOrThrow({ where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] }, select: { id: true } });
+    await prisma.task.findFirstOrThrow({ where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] }, select: { id: true } });
     return prisma.taskAiMessage.findMany({
       where: { taskId: input.taskId, messageKind: 'AI' },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -1810,7 +1811,7 @@ export const aiAssistantService = {
     }
 
     await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
       select: { id: true }
     });
 
@@ -1832,7 +1833,7 @@ export const aiAssistantService = {
     if (!content) return;
 
     await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
       select: { id: true }
     });
 
@@ -1894,7 +1895,7 @@ export const aiAssistantService = {
     }
 
     const task = await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
       include: {
         sphere: {
           select: {
@@ -3217,7 +3218,7 @@ ${lines}`}] }) });
     }
 
     const task = await prisma.task.findFirstOrThrow({
-      where: { id: input.taskId, OR: [{ userId: input.userId }, { collaboration: { members: { some: { userId: input.userId } } } }] },
+      where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
       include: {
         subtasks: {
           select: {

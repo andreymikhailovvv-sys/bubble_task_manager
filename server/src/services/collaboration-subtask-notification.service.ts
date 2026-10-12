@@ -49,9 +49,9 @@ export async function notifyCollaborativeSubtaskCompleted(input: {
           userId: subtask.userId
         }
       },
-      select: { id: true }
+      select: { id: true, isHidden: true }
     });
-    if (!recipientMembership) return;
+    if (!recipientMembership || recipientMembership.isHidden) return;
 
     const actorName = actor?.name || actor?.username || actor?.email || 'Участник';
     const content = formatCollaborativeSubtaskCompletedNotification({
