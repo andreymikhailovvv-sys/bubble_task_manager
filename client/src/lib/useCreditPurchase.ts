@@ -21,12 +21,17 @@ export function useCreditPurchase(options: { surface: 'web' | 'miniapp'; onSucce
     } else if (purchase.status === 'canceled') {
       setPendingPurchaseId(null);
       setMessage('Платёж отменён или не завершён.');
-    } else setMessage('Платёж обрабатывается');
+    } else setMessage('Ожидаем подтверждения YooKassa. Если деньги списались, не оплачивайте повторно: сервис продолжит проверку автоматически.');
   }, []);
 
   const check = useCallback(async (purchaseId: string) => {
-    const result = await api.getCreditPurchaseStatus(purchaseId);
-    await applyStatus(result.purchase);
+    try {
+      const result = await api.getCreditPurchaseStatus(purchaseId);
+      await applyStatus(result.purchase);
+    } catch (error) {
+      setMessage('Не удаётся проверить статус платежа. Если деньги списались, не оплачивайте повторно. Проверка на сервере продолжится автоматически.');
+      throw error;
+    }
   }, [applyStatus]);
 
   useEffect(() => {
@@ -35,6 +40,7 @@ export function useCreditPurchase(options: { surface: 'web' | 'miniapp'; onSucce
     const timer = window.setInterval(() => {
       if (Date.now() - pollingStartedAt.current > 90_000) {
         window.clearInterval(timer);
+        setMessage('Подтверждение платежа задерживается. Если деньги списались, не повторяйте оплату. Сервис продолжит проверять покупку автоматически.');
         return;
       }
       void check(pendingPurchaseId).catch(() => undefined);

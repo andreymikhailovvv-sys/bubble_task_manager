@@ -9,6 +9,7 @@ import { authSession } from './middleware/auth.js';
 import { passport } from './auth/passport.js';
 import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
+import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { aiAssistantService } from './services/ai-assistant.service.js';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 
@@ -76,6 +77,26 @@ app.get('*', (_, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 
+
+// Payment confirmation may arrive while the customer has closed the page.
+// Background recovery is deliberately independent of user requests and webhooks.
+let paymentRecoveryRunning = false;
+const runPaymentRecovery = async () => {
+  if (paymentRecoveryRunning) return;
+  paymentRecoveryRunning = true;
+  try {
+    const result = await reconcilePendingCreditPurchases();
+    if (result.scanned) console.info('[Payments] pending purchase recovery cycle', result);
+  } catch (error) {
+    console.error('[Payments] pending purchase recovery cycle failed', {
+      name: error instanceof Error ? error.name : 'UnknownError'
+    });
+  } finally {
+    paymentRecoveryRunning = false;
+  }
+};
+setTimeout(() => { void runPaymentRecovery(); }, 15_000).unref();
+setInterval(() => { void runPaymentRecovery(); }, 60_000).unref();
 
 const telegramPollIntervalMs = Number(process.env.TELEGRAM_POLL_INTERVAL_MS ?? 60_000);
 setInterval(() => {
