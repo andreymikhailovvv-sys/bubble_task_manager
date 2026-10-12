@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { isGuestAccount, type GuestIdentity } from '../lib/guest-account.js';
 
 export const AI_CREDIT_MILLI_PER_CREDIT = 1000;
 export const MONTHLY_INCLUDED_CREDITS_MILLI = 100_000;
@@ -19,7 +20,7 @@ export type AiCreditReservation = {
   totalMilli: number;
 };
 
-type WalletRow = AiCreditBuckets & { id: string; aiCreditsPeriod: string };
+type WalletRow = AiCreditBuckets & GuestIdentity & { id: string; aiCreditsPeriod: string };
 type WalletTransaction = Prisma.TransactionClient;
 type WalletDatabase = Pick<PrismaClient, '$transaction'>;
 
@@ -47,7 +48,8 @@ export function calculateDebitBreakdown(wallet: AiCreditBuckets, amountMilli: nu
 
 const selectWalletForUpdate = async (tx: WalletTransaction, userId: string): Promise<WalletRow | null> => {
   const rows = await tx.$queryRaw<WalletRow[]>(Prisma.sql`
-    SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli"
+    SELECT "id", "aiCreditsPeriod", "aiIncludedCreditsMilli", "aiBonusCreditsMilli", "aiPurchasedCreditsMilli",
+           "deviceId", "username", "passwordHash", "googleSub", "email", "telegramChatId"
     FROM "User"
     WHERE "id" = ${userId}
     FOR UPDATE
@@ -70,6 +72,10 @@ const updateWallet = async (tx: WalletTransaction, userId: string, wallet: AiCre
 };
 
 const refreshLockedWallet = async (tx: WalletTransaction, row: WalletRow, period: string): Promise<WalletRow> => {
+  // Device-only guests must never receive the monthly included allowance.
+  // Do not erase legacy/purchased records: mask them until registration logic
+  // explicitly determines how to handle conversion.
+  if (isGuestAccount(row)) return row;
   if (row.aiCreditsPeriod === period) return row;
   const refreshed = { ...row, aiIncludedCreditsMilli: MONTHLY_INCLUDED_CREDITS_MILLI, aiCreditsPeriod: period };
   await updateWallet(tx, row.id, refreshed, period);
@@ -81,6 +87,13 @@ export async function getAiCreditWallet(userId: string, db: WalletDatabase = pri
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
     const wallet = await refreshLockedWallet(tx, row, currentAiCreditsPeriod());
+    if (isGuestAccount(wallet)) {
+      return {
+        ...wallet,
+        aiIncludedCreditsMilli: 0, aiBonusCreditsMilli: 0, aiPurchasedCreditsMilli: 0,
+        aiCreditsMilli: 0, aiCredits: 0
+      };
+    }
     return { ...wallet, aiCreditsMilli: getTotalAiCreditsMilli(wallet), aiCredits: Math.floor(getTotalAiCreditsMilli(wallet) / 1000) };
   });
 }
@@ -91,6 +104,7 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
   return db.$transaction(async (tx) => {
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
+    if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const period = currentAiCreditsPeriod();
     const wallet = await refreshLockedWallet(tx, row, period);
     const debit = calculateDebitBreakdown(wallet, amountMilli);
@@ -113,6 +127,7 @@ export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: nu
   return db.$transaction(async (tx) => {
     const row = await selectWalletForUpdate(tx, userId);
     if (!row) throw new Error('User not found');
+    if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
     const period = currentAiCreditsPeriod();
     const wallet = await refreshLockedWallet(tx, row, period);
     const balance = getTotalAiCreditsMilli(wallet);

@@ -22,6 +22,12 @@ type State = {
   aiIncludedCreditsMilli: number;
   aiBonusCreditsMilli: number;
   aiPurchasedCreditsMilli: number;
+  deviceId?: string | null;
+  username?: string | null;
+  passwordHash?: string | null;
+  googleSub?: string | null;
+  email?: string | null;
+  telegramChatId?: string | null;
 };
 
 class FakeWalletDatabase {
@@ -131,4 +137,37 @@ test('range reservation атомарно отклоняет недостаточ
   const db = wallet({ aiCredits: 3, aiIncludedCreditsMilli: 3_999 });
   await assert.rejects(reserveAiCreditsMilliUpTo('user-1', 4_000, 8_000, db as any), /Недостаточно AI кредитов/);
   assert.equal(db.state?.aiIncludedCreditsMilli, 3_999);
+});
+
+test('guest wallet reports zero, never refreshes monthly included credits, and refuses all reservations', async () => {
+  const db = wallet({
+    deviceId: 'device-guest',
+    username: null,
+    passwordHash: null,
+    googleSub: null,
+    email: null,
+    telegramChatId: null,
+    aiCreditsPeriod: '2020-01',
+    aiCredits: 115,
+    aiIncludedCreditsMilli: 100_000,
+    aiBonusCreditsMilli: 5_000,
+    aiPurchasedCreditsMilli: 10_000
+  });
+  const before = { ...db.state };
+  const view = await getAiCreditWallet('user-1', db as any);
+  assert.equal(view.aiCredits, 0);
+  assert.equal(view.aiCreditsMilli, 0);
+  assert.deepEqual([view.aiIncludedCreditsMilli, view.aiBonusCreditsMilli, view.aiPurchasedCreditsMilli], [0, 0, 0]);
+  await assert.rejects(reserveAiCreditsMilli('user-1', 1000, db as any), /Недостаточно AI кредитов/);
+  await assert.rejects(reserveAiCreditsMilliUpTo('user-1', 1000, 2000, db as any), /Недостаточно AI кредитов/);
+  assert.deepEqual(db.state, before, 'legacy balances must be preserved without spending or monthly refill');
+});
+
+test('registered users keep monthly refresh and debit even if deviceId is still set', async () => {
+  const db = wallet({ deviceId: 'old-device', username: 'registered', passwordHash: 'hash', aiCreditsPeriod: '2020-01' });
+  const balance = await getAiCreditWallet('user-1', db as any);
+  assert.equal(balance.aiIncludedCreditsMilli, 100_000);
+  const reservation = await reserveAiCreditsMilli('user-1', 2000, db as any);
+  assert.equal(reservation.totalMilli, 2000);
+  assert.equal(db.state?.aiIncludedCreditsMilli, 98_000);
 });

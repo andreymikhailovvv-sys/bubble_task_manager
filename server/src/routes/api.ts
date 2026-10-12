@@ -25,7 +25,8 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { calendarExportController } from '../controllers/calendar-export.controller.js';
 import { AccountRegistrationError, PERSONAL_DATA_CONSENT_VERSION, accountRegistrationService, normalizeAccountLogin, validatePersonalDataConsent } from '../services/account-registration.service.js';
 import { deductEfficiencyPenalty, EFFICIENCY_BUCKET_ORDER, type EfficiencyBucketKey, type EfficiencyBucketScores } from '../services/efficiency-rating.service.js';
-import { creditsToMilli, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
+import { creditsToMilli, currentAiCreditsPeriod, getAiCreditWallet, grantBonusCreditsMilli, grantBonusCreditsMilliInTransaction } from '../services/ai-credit-wallet.service.js';
+import { isGuestAccount } from '../lib/guest-account.js';
 import { validateTelegramWebAppInitData } from '../lib/telegram-webapp-auth.js';
 import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-rate-limiter.js';
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
@@ -130,8 +131,9 @@ const toAuthUser = (user: {
   efficiencyLastActivityAt?: Date | string | null;
   completedLessonIds?: string[];
   passwordHash?: string | null;
+  telegramChatId?: string | null;
 }) => {
-  const aiCreditsMilli = (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
+  const aiCreditsMilli = isGuestAccount(user) ? 0 : (user.aiIncludedCreditsMilli ?? creditsToMilli(user.aiCredits ?? 100))
     + (user.aiBonusCreditsMilli ?? 0)
     + (user.aiPurchasedCreditsMilli ?? 0);
   return ({
@@ -142,6 +144,7 @@ const toAuthUser = (user: {
   avatarUrl: user.avatarUrl,
   googleSub: user.googleSub,
   deviceId: user.deviceId,
+  isGuest: isGuestAccount(user),
   aiCredits: Math.floor(aiCreditsMilli / 1000),
   aiCreditsMilli,
   aiCreditsPeriod: user.aiCreditsPeriod ?? '',
@@ -313,7 +316,12 @@ const ensureDeviceUser = async (req: any, res: any) => {
       const createdUser = await tx.user.create({
         data: {
           deviceId,
-          name: 'Локальный пользователь'
+          name: 'Локальный пользователь',
+          aiCredits: 0,
+          aiIncludedCreditsMilli: 0,
+          aiBonusCreditsMilli: 0,
+          aiPurchasedCreditsMilli: 0,
+          aiCreditsPeriod: currentAiCreditsPeriod()
         }
       });
       await onboardingService.ensureDefaultsForNewUser(createdUser.id, createdUser.createdAt, tx);
