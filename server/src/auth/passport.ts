@@ -1,4 +1,5 @@
 import passport from 'passport';
+import { Prisma } from '@prisma/client';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { prisma } from '../db/prisma.js';
 import { onboardingService } from '../services/onboarding.service.js';
@@ -76,8 +77,11 @@ if (isGoogleAuthEnabled) {
             });
             done(null, user);
           } catch (error) {
-            // Simultaneous first logins must not claim an email owned by
-            // another account or leak a Prisma unique-constraint failure.
+            // Handle only unique-constraint races as account conflicts.
+            // Unrelated database failures must not be hidden as email collisions.
+            if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+              throw error;
+            }
             const matchingUser = await prisma.user.findUnique({ where: { googleSub } });
             if (matchingUser) {
               done(null, matchingUser);
