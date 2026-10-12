@@ -575,12 +575,14 @@ export const taskService = {
     // Do both writes atomically to avoid deleting membership but retaining the
     // old publicly usable invitation after a partial failure.
     await prisma.$transaction(async (tx) => {
-      await tx.collaborativeTaskMember.delete({
-        where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId: memberUserId } }
-      });
+      // Lock the collaboration row before touching membership, matching the
+      // lock order in acceptShare and avoiding a join-vs-removal deadlock.
       await tx.collaborativeTask.update({
         where: { id: task.collaborationId! },
         data: { token: createCollaborationInviteToken() }
+      });
+      await tx.collaborativeTaskMember.delete({
+        where: { collaborationId_userId: { collaborationId: task.collaborationId!, userId: memberUserId } }
       });
     });
     return { ok: true as const };

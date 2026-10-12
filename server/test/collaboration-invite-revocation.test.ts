@@ -25,7 +25,7 @@ test('excluding a member atomically revokes the old invite token', async () => {
   assert.match(block, /await tx\.collaborativeTaskMember\.delete\(/);
   assert.match(block, /await tx\.collaborativeTask\.update\(/);
   assert.match(block, /data: \{ token: createCollaborationInviteToken\(\) \}/);
-  assert.ok(block.indexOf('await tx.collaborativeTaskMember.delete(') < block.indexOf('await tx.collaborativeTask.update('));
+  assert.ok(block.indexOf('await tx.collaborativeTask.update(') < block.indexOf('await tx.collaborativeTaskMember.delete('));
   assert.ok(block.indexOf('return { ok: true as const };') > block.indexOf('await prisma.$transaction('));
 });
 
