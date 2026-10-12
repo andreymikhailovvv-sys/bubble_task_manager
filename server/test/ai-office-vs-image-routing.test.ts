@@ -24,8 +24,8 @@ test('DOCX never enters the image editor, even with a misleading image MIME', ()
   assert.equal(selectUploadedImageForEdit([upload], true), null);
   assert.equal(sourceFormat(upload.name,upload.mimeType),'docx');
   assert.match(getOfficeDocumentPreview(word,'docx').text,/Исправь старую формулировку/);
-  assert.equal(isDocumentEditRequest('Измени её',true),true);
-  assert.equal(isGeneratedImageEditRequest('Измени её'),true);
+  assert.equal(isDocumentEditRequest('Измени её, пожалуйста',true),true);
+  assert.equal(isGeneratedImageEditRequest('Измени её, пожалуйста'),true);
 });
 
 test('XLSX is routed to Office editing despite an incorrect image MIME', () => {
@@ -38,7 +38,7 @@ test('XLSX is routed to Office editing despite an incorrect image MIME', () => {
 test('DOCX attachment blocks accidental edits of an older generated PNG',async()=>{
   const result = await editUserImageIfRequested({
     userId:'owner', taskId:'task', sourceImageId:'older-image',
-    question:'Измени её', attachments:[file('Договор.docx',WORD_DOCUMENT_MIME,word)],
+    question:'Измени её, пожалуйста', attachments:[file('Договор.docx',WORD_DOCUMENT_MIME,word)],
     apiKey:'not-needed', model:'gpt-5.4-mini', dynamicBilling:false
   });
   assert.equal(result,null);
