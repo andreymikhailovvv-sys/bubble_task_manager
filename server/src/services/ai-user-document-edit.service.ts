@@ -119,6 +119,15 @@ export function parseOfficeEditPlanResponse(response: Record<string, unknown>): 
   return parsed as { summary?: unknown; edits?: unknown };
 }
 
+/** A plan with zero edits is not a failed AI request or a reason to mutate a file. */
+export function interpretEmptyOfficeEditPlan(summary: unknown): { fallbackToText: boolean; answer: string } {
+  const explanation = typeof summary === 'string' && summary.trim()
+    ? summary.replace(/^(?:файл не измен[её]н[.!:\s]*)+/i, '').trim().slice(0, 700)
+    : 'Не удалось безопасно выполнить запрошенные изменения.';
+  const fallbackToText = /(?:только\s+текстом|только\s+текст|без\s+правок\s+документа|без\s+изменени[яй]\s+файла|текстов(?:ый|ая)\s+ответ)/i.test(explanation);
+  return { fallbackToText, answer: 'Файл остался без изменений. ' + explanation };
+}
+
 export async function editUserDocumentIfRequested(input:Input) {
   const currentOfficeFileAttached = (input.attachments ?? []).some(file => Boolean(sourceFormat(file.name, file.mimeType)));
   if (!isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
@@ -222,17 +231,15 @@ export async function editUserDocumentIfRequested(input:Input) {
       await refundDynamicResponsesCall(call);
       pendingCalls.pop();
       settled = true;
-      const explanation = typeof data.summary === 'string' && data.summary.trim()
-        ? data.summary.replace(/^(?:файл не измен[её]н[.!:\s]*)+/i, '').trim().slice(0, 700)
-        : 'Не удалось безопасно выполнить запрошенные изменения.';
-      if (/(?:только\s+текстом|только\s+текст|без\s+правок\s+документа|без\s+изменени[яй]\s+файла|текстов(?:ый|ая)\s+ответ)/i.test(explanation)) {
+      const noChanges = interpretEmptyOfficeEditPlan(data.summary);
+      if (noChanges.fallbackToText) {
         console.info('[AI office edit] non-edit text request reached planner, falling back to general chat', {
           userId: input.userId, actionId, format
         });
         return null;
       }
       return {
-        answer: 'Файл остался без изменений. ' + explanation,
+        answer: noChanges.answer,
         model: input.model, generatedDocument: undefined, taskDataChanged: false,
         actionReports: [] as string[], undoOperations: [] as unknown[],
         webSearchUsed: false, webSources: [], webCitations: [], imageCreditsSpentMilli: 0,
