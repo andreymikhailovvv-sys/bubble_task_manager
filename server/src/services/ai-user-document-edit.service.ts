@@ -12,15 +12,39 @@ type Input = {
   onProgress?: (status:'editing_document'|'forming_answer')=>void;
 };
 
-export function isDocumentEditRequest(question:string) {
-  const q=question.trim().toLowerCase();
-  if(!q || q.length>5000)return false;
-  if(/\b(?:создай|сгенерируй|подготовь)\s+(?:новый\s+)?(?:word|excel|документ|таблиц)/i.test(q))return false;
-  if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q) && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
-  if (/(?:картинк|изображен|фотограф|рисунк|пиксел|фон изображения)/i.test(q) &&
-      !/(?:word|excel|docx|xlsx|таблиц|документ|файл)/i.test(q)) return false;
-  return /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|столбц|строк|ячейк|пункт\s+\d|абзац|сортир)/i.test(q);
+/**
+ * Route only requests to MODIFY an Office file to the JSON edit planner.
+ * A document merely present in chat history is not permission to treat ordinary
+ * text generation/analysis as a file mutation.
+ */
+export function isDocumentEditRequest(question: string, hasCurrentOfficeAttachment = false): boolean {
+  const q = question.normalize('NFKC').trim().toLowerCase().replace(/ё/g, 'е');
+  if (!q || q.length > 5000) return false;
+
+  // Text-only answers, outlines, summaries and analyses are ordinary chat,
+  // even when the conversation includes an existing Word/Excel document.
+  if (/(?:только|просто|обычным)\s+(?:в\s+виде\s+)?(?:текстом|текст(?:овый|овый\s+ответ)?)(?![а-яa-z])/i.test(q)
+    || /(?:в\s+(?:виде|формате)\s+(?:обычного\s+)?текста|текстовым\s+ответом|без\s+(?:создания|изменени[яй]|редактировани[яй]|правок)\s+(?:файла|документа|таблицы)|не\s+(?:трогай|меняй|изменяй|редактируй)\s+(?:сам\s+)?(?:файл|документ|таблицу))/i.test(q)) return false;
+
+  // Creating a new file is handled by document creation tools, not by edits.
+  if (/(?:созда|сгенериру|подготов|сдела|оформ)(?:.{0,30})(?:нов(?:ый|ую|ое)\s+)?(?:word|excel|docx|xlsx|документ|таблиц)(?:.{0,12})(?:с\s+нуля)?/i.test(q)
+    && !/(?:исходн|имеющ|существующ|текущ|вложенн|прикрепленн)\w*\s+(?:файл|документ|таблиц)/i.test(q)) return false;
+
+  if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q)
+    && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
+  if (/(?:добав|созда|запиши)\w*.{0,30}(?:заметк|напоминани)/i.test(q)
+    && !/(?:файл|документ|word|excel|docx|xlsx)/i.test(q)) return false;
+  if (/(?:картинк|изображен|фотограф|рисунк|пиксел|фон изображения)/i.test(q)
+    && !/(?:word|excel|docx|xlsx|таблиц|документ|файл)/i.test(q)) return false;
+
+  const mutation = /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|сортир|скорректир)/i.test(q);
+  if (!mutation) return false;
+
+  const officeTarget = /(?:word|excel|docx|xlsx|документ|таблиц|файл|абзац|ячейк|столбц|строк|лист[аеуы]?\s*(?:excel|таблиц|№|\d))/i.test(q);
+  const explicitEditObject = /(?:в\s+(?:этом|исходном|текущем|прикрепленном|загруженном)\s+(?:файле|документе|таблице)|(?:сам|этот|исходный|прикрепленный|загруженный)\s+(?:файл|документ)|(?:из\s+файла|в\s+файле|в\s+документе|в\s+таблице))/i.test(q);
+  return officeTarget || explicitEditObject || hasCurrentOfficeAttachment;
 }
+
 const sourceFormat=(name:string,mime:string):OfficeFormat|null=>
   /\.docx$/i.test(name) && [WORD_DOCUMENT_MIME,'application/octet-stream',''].includes(mime)?'docx':
   /\.xlsx$/i.test(name) && [EXCEL_MIME,'application/octet-stream',''].includes(mime)?'xlsx':null;
@@ -95,8 +119,18 @@ export function parseOfficeEditPlanResponse(response: Record<string, unknown>): 
   return parsed as { summary?: unknown; edits?: unknown };
 }
 
+/** A plan with zero edits is not a failed AI request or a reason to mutate a file. */
+export function interpretEmptyOfficeEditPlan(summary: unknown): { fallbackToText: boolean; answer: string } {
+  const explanation = typeof summary === 'string' && summary.trim()
+    ? summary.replace(/^(?:файл не измен[её]н[.!:\s]*)+/i, '').trim().slice(0, 700)
+    : 'Не удалось безопасно выполнить запрошенные изменения.';
+  const fallbackToText = /(?:только\s+текстом|только\s+текст|без\s+правок\s+документа|без\s+изменени[яй]\s+файла|текстов(?:ый|ая)\s+ответ)/i.test(explanation);
+  return { fallbackToText, answer: 'Файл остался без изменений. ' + explanation };
+}
+
 export async function editUserDocumentIfRequested(input:Input) {
-  if(!isDocumentEditRequest(input.question))return null;
+  const currentOfficeFileAttached = (input.attachments ?? []).some(file => Boolean(sourceFormat(file.name, file.mimeType)));
+  if (!isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
   if(input.taskId){
     const allowed=await prisma.task.findFirst({
       where:{id:input.taskId,OR:[
@@ -191,9 +225,35 @@ export async function editUserDocumentIfRequested(input:Input) {
       throw new OfficeEditPlanResponseError('ИИ не смог подготовить безопасные правки файла.', 'invalid_json');
     }
     const edits=data.edits as OfficeEdit[];
-    if(!Array.isArray(edits) || edits.length===0){
-      throw new TypeError(typeof data.summary==='string'&&data.summary.length<400
-        ? 'Файл не изменён: '+data.summary : 'ИИ не сформировал безопасных изменений для этого файла.');
+    if (!Array.isArray(edits) || edits.length === 0) {
+      // "No edits" is a valid response from the Office planner, not a failed
+      // API request. Refund the planning round and avoid duplicate error text.
+      await refundDynamicResponsesCall(call);
+      pendingCalls.pop();
+      settled = true;
+      const noChanges = interpretEmptyOfficeEditPlan(data.summary);
+      if (noChanges.fallbackToText) {
+        console.info('[AI office edit] non-edit text request reached planner, falling back to general chat', {
+          userId: input.userId, actionId, format
+        });
+        return null;
+      }
+      return {
+        answer: noChanges.answer,
+        model: input.model, generatedDocument: undefined, taskDataChanged: false,
+        actionReports: [] as string[], undoOperations: [] as unknown[],
+        webSearchUsed: false, webSources: [], webCitations: [], imageCreditsSpentMilli: 0,
+        billing: { mode: 'dynamic' as const, creditsSpentMilli: 0 },
+        diagnostics: undefined,
+        workflowDiagnostics: { providerStreaming: false, webSearchProgressObserved: false, providerCalls: 1,
+          toolCalls: 1, toolOperations: ['edit_document_no_changes'],
+          inputTokensTotal: 0, outputTokensTotal: 0, webSearchUsed: false,
+          webSearchCallsActual: 0, webSearchCallsBilled: 0, webSearchLimit: 1,
+          webSearchLimitExceeded: false, webSearchDuplicateItems: 0,
+          webSearchSearchItemsRaw: 0, webSearchCreditsMilliBilled: 0,
+          providerWebSearchCostMilli: 0, webSearchCalls: 0,
+          webSearchCreditsMilli: 0, webSourceCount: 0 }
+      };
     }
     const newBuffer=applyOfficeEdits(sourceBuffer,format,edits);
     const fileName=(sourceName.replace(/\.(docx|xlsx)$/i,'').replace(/[\\/:*?"<>|]/g,'_').slice(0,140)||'edited')
