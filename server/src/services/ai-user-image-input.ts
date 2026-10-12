@@ -8,6 +8,9 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const IMAGE_RE = /\.(png|jpe?g|webp)$/i;
 
 function isImageCandidate(value: UploadedImage): boolean {
+  // File extension wins over a mistaken image/* MIME declared by a client.
+  // A Word/Excel document must never reach the Images edit API.
+  if (/\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(value.name ?? '')) return false;
   return value.mimeType?.toLowerCase().startsWith('image/') || IMAGE_RE.test(value.name ?? '');
 }
 
