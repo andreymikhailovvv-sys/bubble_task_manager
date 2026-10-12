@@ -35,8 +35,33 @@ import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
+import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
 
 const MAX_SPHERES = 8;
+
+const FOCUSED_TASK_EDIT_KEYS = [
+  'title', 'description', 'sphereId', 'dueDate', 'notifyBeforeMinutes',
+  'isRecurring', 'recurrenceText', 'recurrenceJson', 'recurrenceSummary',
+  'recurrenceUntil', 'importance', 'urgency', 'status', 'aiNotificationsEnabled'
+] as const satisfies readonly (keyof Task)[];
+
+const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotificationsEnabled: boolean) => ({
+  title: task.title ?? '',
+  description: task.description ?? '',
+  sphereId: task.sphereId ?? null,
+  dueDate: task.dueDate ?? null,
+  notifyBeforeMinutes: task.notifyBeforeMinutes ?? null,
+  isRecurring: task.isRecurring ?? false,
+  recurrenceText: task.recurrenceText ?? null,
+  recurrenceJson: task.recurrenceJson ?? null,
+  recurrenceSummary: task.recurrenceSummary ?? null,
+  recurrenceUntil: task.recurrenceUntil ?? null,
+  importance: task.importance ?? 3,
+  urgency: task.urgency ?? 3,
+  status: task.status ?? 'TODO',
+  aiNotificationsEnabled: task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled
+});
+
 
 
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
@@ -1851,24 +1876,24 @@ export default function App() {
     } else {
       setFocusedNotifyPreset('30');
     }
-    focusedAutosaveSignatureRef.current = JSON.stringify({
-      title: focusedTask.title ?? '',
-      description: focusedTask.description ?? '',
-      sphereId: focusedTask.sphereId ?? null,
-      dueDate: focusedTask.dueDate ?? null,
-      notifyBeforeMinutes: focusedTask.notifyBeforeMinutes ?? null,
-      isRecurring: focusedTask.isRecurring ?? false,
-      recurrenceText: focusedTask.recurrenceText ?? null,
-      recurrenceJson: focusedTask.recurrenceJson ?? null,
-      recurrenceSummary: focusedTask.recurrenceSummary ?? null,
-      recurrenceUntil: focusedTask.recurrenceUntil ?? null,
-      importance: focusedTask.importance ?? 3,
-      urgency: focusedTask.urgency ?? 3,
-      status: focusedTask.status ?? 'TODO'
-      ,
-      aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled
-    });
+    focusedAutosaveSignatureRef.current = JSON.stringify(focusedTaskEditableSnapshot(focusedTask, isAiNotificationsDefaultEnabled));
   }, [focusedTask?.id, isAiNotificationsDefaultEnabled]);
+
+  // A task chat AI action updates the server, then load() refreshes focusedTask.
+  // Reconcile the editor without overwriting unsaved manual field edits.
+  useEffect(() => {
+    if (!focusedTask || !focusedDraft || focusedDraft.id !== focusedTask.id || !focusedAutosaveSignatureRef.current) return;
+    const baseline = JSON.parse(focusedAutosaveSignatureRef.current) as ReturnType<typeof focusedTaskEditableSnapshot>;
+    const remote = focusedTaskEditableSnapshot(focusedTask, isAiNotificationsDefaultEnabled);
+    if (JSON.stringify(baseline) === JSON.stringify(remote)) return;
+    setFocusedDraft((draft) => {
+      if (!draft || draft.id !== focusedTask.id) return draft;
+      const local = focusedTaskEditableSnapshot(draft, isAiNotificationsDefaultEnabled);
+      return { ...draft, ...mergeRemoteDraftFields(baseline, local, remote, FOCUSED_TASK_EDIT_KEYS) };
+    });
+    focusedAutosaveSignatureRef.current = JSON.stringify(remote);
+    if (!isEditingFocusedTitle) setFocusedTitleDraft(focusedTask.title ?? '');
+  }, [focusedTask]);
 
   useEffect(() => {
     if (!focusedTask || !focusedDraft) return;
@@ -1878,30 +1903,24 @@ export default function App() {
       urgency: focusedDraft.urgency ?? 3,
       status: focusedDraft.status ?? 'TODO'
     };
-    const payloadSignature = JSON.stringify({
-      title: normalized.title ?? '',
-      description: normalized.description ?? '',
-      sphereId: normalized.sphereId ?? null,
-      dueDate: normalized.dueDate ?? null,
-      notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
-      isRecurring: normalized.isRecurring ?? false,
-      recurrenceText: normalized.recurrenceText ?? null,
-      recurrenceJson: normalized.recurrenceJson ?? null,
-      recurrenceSummary: normalized.recurrenceSummary ?? null,
-      recurrenceUntil: normalized.recurrenceUntil ?? null,
-      aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled,
-      importance: normalized.importance,
-      urgency: normalized.urgency,
-      status: normalized.status
-    });
-    if (focusedAutosaveSignatureRef.current === payloadSignature) return;
+    const snapshot = focusedTaskEditableSnapshot(normalized, isAiNotificationsDefaultEnabled);
+    const baseline = focusedAutosaveSignatureRef.current
+      ? JSON.parse(focusedAutosaveSignatureRef.current) as typeof snapshot
+      : snapshot;
+    const patch = changedDraftFields(baseline, snapshot, FOCUSED_TASK_EDIT_KEYS);
+    if (Object.keys(patch).length === 0) return;
     if (focusedAutosaveTimeoutRef.current) {
       clearTimeout(focusedAutosaveTimeoutRef.current);
     }
     focusedAutosaveTimeoutRef.current = setTimeout(() => {
       const score = calcScore(normalized.importance, normalized.urgency);
-      void api.updateTask(focusedTask.id, { ...normalized, priorityScore: score }).then(() => {
-        focusedAutosaveSignatureRef.current = payloadSignature;
+      const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
+      void api.updateTask(focusedTask.id, { ...patch, ...(priorityChanged ? { priorityScore: score } : {}) }).then(() => {
+        const latestBaseline = focusedAutosaveSignatureRef.current
+          ? JSON.parse(focusedAutosaveSignatureRef.current) as typeof snapshot : snapshot;
+        focusedAutosaveSignatureRef.current = JSON.stringify({ ...latestBaseline, ...patch });
+      }).catch((error) => {
+        console.error('[Task] focused autosave failed', error);
       });
     }, 700);
     return () => {
@@ -1912,30 +1931,24 @@ export default function App() {
   }, [focusedTask?.id, focusedDraft, isAiNotificationsDefaultEnabled]);
 
   const flushFocusedTaskSave = async () => {
-    if (!focusedTask || !focusedDraft) {
-      return false;
-    }
+    if (!focusedTask || !focusedDraft) return false;
     if (focusedAutosaveTimeoutRef.current) {
       clearTimeout(focusedAutosaveTimeoutRef.current);
       focusedAutosaveTimeoutRef.current = null;
     }
-    const normalized = {
-      ...focusedDraft,
-      importance: focusedDraft.importance ?? 3,
-      urgency: focusedDraft.urgency ?? 3,
-      status: focusedDraft.status ?? 'TODO'
-    };
-    const score = calcScore(normalized.importance, normalized.urgency);
-    await api.updateTask(focusedTask.id, { ...normalized, priorityScore: score });
-    focusedAutosaveSignatureRef.current = JSON.stringify({
-      title: normalized.title ?? '', description: normalized.description ?? '', sphereId: normalized.sphereId ?? null,
-      dueDate: normalized.dueDate ?? null, notifyBeforeMinutes: normalized.notifyBeforeMinutes ?? null,
-      isRecurring: normalized.isRecurring ?? false, recurrenceText: normalized.recurrenceText ?? null,
-      recurrenceJson: normalized.recurrenceJson ?? null, recurrenceSummary: normalized.recurrenceSummary ?? null,
-      recurrenceUntil: normalized.recurrenceUntil ?? null,
-      aiNotificationsEnabled: normalized.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled,
-      importance: normalized.importance, urgency: normalized.urgency, status: normalized.status
+    const snapshot = focusedTaskEditableSnapshot(focusedDraft, isAiNotificationsDefaultEnabled);
+    const baseline = focusedAutosaveSignatureRef.current
+      ? JSON.parse(focusedAutosaveSignatureRef.current) as typeof snapshot
+      : snapshot;
+    const patch = changedDraftFields(baseline, snapshot, FOCUSED_TASK_EDIT_KEYS);
+    // Closing an unchanged form must not overwrite changes made by the AI.
+    if (Object.keys(patch).length === 0) return true;
+    const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
+    await api.updateTask(focusedTask.id, {
+      ...patch,
+      ...(priorityChanged ? { priorityScore: calcScore(snapshot.importance, snapshot.urgency) } : {})
     });
+    focusedAutosaveSignatureRef.current = JSON.stringify({ ...baseline, ...patch });
     return true;
   };
 
