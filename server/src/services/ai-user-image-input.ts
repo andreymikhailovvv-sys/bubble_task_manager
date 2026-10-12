@@ -26,7 +26,15 @@ export function validateUploadedImage(value: UploadedImage): ValidatedImage {
            bytes.subarray(-2).equals(Buffer.from([255,217]))) mimeType = 'image/jpeg';
   else if (bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP' &&
            ['VP8 ', 'VP8L', 'VP8X'].includes(bytes.toString('ascii',12,16))) mimeType = 'image/webp';
-  if (!mimeType) throw new TypeError('Поддерживаются только настоящие PNG, JPEG и WebP.');
+  if (!mimeType) {
+    // Telegram and web chats also accept GIF files. The browser converts GIF
+    // first frames to PNG when sending to AI; direct API requests must instead
+    // receive a clear, actionable error, not a mysterious generic TypeError.
+    if (/^GIF8[79]a/.test(bytes.toString('ascii', 0, 6))) {
+      throw new TypeError('Этот GIF нельзя напрямую редактировать. Перезагрузите страницу и попробуйте снова: чат преобразует первый кадр GIF в PNG. Либо прикрепите PNG, JPEG или WebP.');
+    }
+    throw new TypeError('Прикреплённый файл не распознан как PNG, JPEG или WebP. Сохраните картинку в одном из этих форматов и прикрепите заново.');
+  }
   const advertised = value.mimeType?.toLowerCase();
   if (advertised && advertised !== 'application/octet-stream' && advertised !== mimeType &&
       !(advertised === 'image/jpg' && mimeType === 'image/jpeg')) {
@@ -40,5 +48,15 @@ export function selectUploadedImageForEdit(attachments: UploadedImage[] | undefi
   const images = attachments.filter(isImageCandidate);
   if (!images.length) return null;
   if (images.length > 1) throw new TypeError('Прикреплено несколько изображений. Оставьте одно, которое нужно отредактировать.');
-  return validateUploadedImage(images[0]);
+  try {
+    return validateUploadedImage(images[0]);
+  } catch (error) {
+    // Metadata only. Never log image pixels, base64, filenames or private chat text.
+    console.warn('[AI image edit] uploaded image rejected', {
+      mimeType: images[0].mimeType,
+      declaredBytes: images[0].size,
+      reason: error instanceof Error ? error.message : 'unknown'
+    });
+    throw error;
+  }
 }
