@@ -244,6 +244,10 @@ export const taskService = {
       select: { collaborationId: true }
     }) : null;
     if (input.parentTaskId && !parent) throw new Error('Parent task not found');
+    // A guessed sphere ID must never attach the new task to another user's sector.
+    if (input.sphereId) {
+      await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
+    }
     const created = await prisma.task.create({
       data: {
         title: input.title,
@@ -278,6 +282,28 @@ export const taskService = {
       where: { id, OR: [{ userId }, { collaboration: { members: { some: { userId } } } }] }
     });
     if (currentTask.collaborationId && input.collaborationScope === 'all' && currentTask.userId !== userId) throw new Error('Only collaboration owner can update everyone');
+
+    // Validate referenced objects *before* any member status or task changes.
+    // Own-sector assignments remain legal for each member of a shared task.
+    if (input.sphereId) {
+      await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
+    }
+    if (input.parentTaskId) {
+      await prisma.task.findFirstOrThrow({
+        where: {
+          id: { equals: input.parentTaskId, not: id },
+          parentTaskId: null,
+          ...(currentTask.collaborationId
+            ? {
+                collaborationId: currentTask.collaborationId,
+                collaboration: { members: { some: { userId } } }
+              }
+            : { collaborationId: null, userId })
+        },
+        select: { id: true }
+      });
+    }
+
     const patch: Prisma.TaskUpdateInput = {};
     const isCollaborativeRoot = Boolean(currentTask.collaborationId && !currentTask.parentTaskId);
     const personalSettingsPatch: Prisma.CollaborativeTaskMemberUpdateInput = {};
@@ -304,9 +330,6 @@ export const taskService = {
           && toNotifyBeforeMinutes(input.notifyBeforeMinutes) !== ownMember?.notifyBeforeMinutes)
         || ownStatusChanged || sharedDueDateChanged) {
         personalSettingsPatch.telegramNotifiedAt = null;
-      }
-      if (input.sphereId) {
-        await prisma.sphere.findFirstOrThrow({ where: { id: input.sphereId, userId } });
       }
     }
     if (currentTask.collaborationId && !currentTask.parentTaskId && input.status !== undefined && input.collaborationScope !== 'all') {
