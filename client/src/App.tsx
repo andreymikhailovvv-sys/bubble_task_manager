@@ -2542,7 +2542,9 @@ ${allContext}`,
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
       setFocusAiError(message);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message === INSUFFICIENT_AI_CREDITS_MESSAGE ? INSUFFICIENT_AI_CREDITS_MESSAGE : 'Не удалось ответить в режиме концентрации. Попробуйте ещё раз.' }]);
+      setFocusAiDraft((current) => current.trim() ? current : question);
+      setFocusAiPendingFiles((current) => current.length ? current : focusAiPendingFiles);
+      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
     } finally {
       setFocusAiLoading(false);
       setFocusAiProgress(null);
@@ -2730,6 +2732,8 @@ ${allContext}`,
     } catch (error) {
       const message = formatAiRequestError(error);
       setAiChatError(message);
+      if (quick) setQuickAiChatDraft((current) => current.trim() ? current : question);
+      else setAiChatPendingFiles((current) => current.length ? current : aiChatPendingFiles);
       if (quick) {
         // Compact chat has no aiChatError view. Display failures in its thread.
         const failureMessage: AiChatMessage = {
