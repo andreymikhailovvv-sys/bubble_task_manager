@@ -93,14 +93,20 @@ yookassaPaymentsRouter.post('/webhook', async (req, res) => {
   if (!['payment.succeeded', 'payment.canceled'].includes(event)) return void res.json({ ok: true });
   const providerPaymentId = typeof req.body?.object?.id === 'string' ? req.body.object.id : '';
   if (!providerPaymentId || providerPaymentId.length > 100) return void res.json({ ok: true });
+  let step: 'provider_fetch' | 'credit_reconciliation' = 'provider_fetch';
   try {
     const verified = await yookassaService.getPayment(providerPaymentId);
+    step = 'credit_reconciliation';
     const result = await reconcileCreditPurchaseFromYooKassa(verified);
     console.info('[Payments] YooKassa webhook', { event, providerPaymentId, purchaseId: result.purchase?.id });
     return void res.json({ ok: true });
   } catch (error) {
     console.error('[Payments] YooKassa webhook verification failed', {
       providerPaymentId,
+      step,
+      errorName: error instanceof Error ? error.name : 'unknown',
+      errorCode: error && typeof error === 'object' && 'code' in error
+        && typeof error.code === 'string' && /^P\d{4}$/.test(error.code) ? error.code : undefined,
       httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
       providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
       providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
@@ -120,12 +126,18 @@ yookassaPaymentsRouter.get('/purchases/:purchaseId', requireAuth, async (req, re
   if (purchase.status === 'pending' && purchase.yookassaPaymentId && (!purchase.providerCheckedAt || Date.now() - purchase.providerCheckedAt.getTime() >= STATUS_THROTTLE_MS)) {
     const claimed = await prisma.creditPurchase.updateMany({ where: { id: purchase.id, status: 'pending', OR: [{ providerCheckedAt: null }, { providerCheckedAt: { lte: new Date(Date.now() - STATUS_THROTTLE_MS) } }] }, data: { providerCheckedAt: new Date() } });
     if (claimed.count) {
+      let step: 'provider_fetch' | 'credit_reconciliation' = 'provider_fetch';
       try {
         const verified = await yookassaService.getPayment(purchase.yookassaPaymentId);
+        step = 'credit_reconciliation';
         purchase = (await reconcileCreditPurchaseFromYooKassa(verified, purchase.id)).purchase ?? purchase;
       } catch (error) {
         console.warn('[Payments] YooKassa status reconciliation failed', {
           purchaseId: purchase.id,
+          step,
+          errorName: error instanceof Error ? error.name : 'unknown',
+          errorCode: error && typeof error === 'object' && 'code' in error
+            && typeof error.code === 'string' && /^P\d{4}$/.test(error.code) ? error.code : undefined,
           httpStatus: error instanceof YooKassaError ? error.httpStatus : undefined,
           providerCode: error instanceof YooKassaError ? error.providerCode : undefined,
           providerErrorId: error instanceof YooKassaError ? error.providerErrorId : undefined,
