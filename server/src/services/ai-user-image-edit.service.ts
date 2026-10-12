@@ -20,6 +20,11 @@ export async function editUserImageIfRequested(input: EditInput) {
   if (!isGeneratedImageEditRequest(input.question)) return null;
   // A fresh user upload takes precedence over all older generated images.
   const uploaded = selectUploadedImageForEdit(input.attachments, true);
+  // An Office upload takes precedence over an older generated PNG in history.
+  // Do not silently modify the older image when the current file is DOCX.
+  if (!uploaded && input.attachments?.some(file => /\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(file.name ?? ''))) {
+    return null;
+  }
   let previousId = uploaded ? null : input.sourceImageId ?? null;
   if (!uploaded && !previousId && input.taskId) {
     const recent = await prisma.aiGeneratedDocument.findFirst({
