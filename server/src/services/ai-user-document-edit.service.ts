@@ -45,12 +45,13 @@ export function isDocumentEditRequest(question: string, hasCurrentOfficeAttachme
   return officeTarget || explicitEditObject || hasCurrentOfficeAttachment;
 }
 
-const sourceFormat=(name:string,mime:string):OfficeFormat|null=>{
+export const sourceFormat=(name:string,mime:string):OfficeFormat|null=>{
   // Browsers and Telegram clients sometimes send a misleading image/* MIME
   // for a file whose real extension and contents are DOCX/XLSX. Never route it
   // to the image editor: the OOXML archive is validated before any billing.
-  const accepted = [WORD_DOCUMENT_MIME, EXCEL_MIME, 'application/octet-stream', ''].includes(mime)
-    || mime.toLowerCase().startsWith('image/');
+  const normalizedMime = (mime ?? '').toLowerCase();
+  const accepted = [WORD_DOCUMENT_MIME, EXCEL_MIME, 'application/octet-stream', ''].includes(normalizedMime)
+    || normalizedMime.startsWith('image/');
   if (!accepted) return null;
   return /\.docx$/i.test(name) ? 'docx' : /\.xlsx$/i.test(name) ? 'xlsx' : null;
 };
