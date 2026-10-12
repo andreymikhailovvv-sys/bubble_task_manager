@@ -12,15 +12,39 @@ type Input = {
   onProgress?: (status:'editing_document'|'forming_answer')=>void;
 };
 
-export function isDocumentEditRequest(question:string) {
-  const q=question.trim().toLowerCase();
-  if(!q || q.length>5000)return false;
-  if(/\b(?:создай|сгенерируй|подготовь)\s+(?:новый\s+)?(?:word|excel|документ|таблиц)/i.test(q))return false;
-  if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q) && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
-  if (/(?:картинк|изображен|фотограф|рисунк|пиксел|фон изображения)/i.test(q) &&
-      !/(?:word|excel|docx|xlsx|таблиц|документ|файл)/i.test(q)) return false;
-  return /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|столбц|строк|ячейк|пункт\s+\d|абзац|сортир)/i.test(q);
+/**
+ * Route only requests to MODIFY an Office file to the JSON edit planner.
+ * A document merely present in chat history is not permission to treat ordinary
+ * text generation/analysis as a file mutation.
+ */
+export function isDocumentEditRequest(question: string, hasCurrentOfficeAttachment = false): boolean {
+  const q = question.normalize('NFKC').trim().toLowerCase().replace(/ё/g, 'е');
+  if (!q || q.length > 5000) return false;
+
+  // Text-only answers, outlines, summaries and analyses are ordinary chat,
+  // even when the conversation includes an existing Word/Excel document.
+  if (/(?:только|просто|обычным)\s+(?:в\s+виде\s+)?(?:текстом|текст(?:овый|овый\s+ответ)?)(?![а-яa-z])/i.test(q)
+    || /(?:в\s+(?:виде|формате)\s+(?:обычного\s+)?текста|текстовым\s+ответом|без\s+(?:создания|изменени[яй]|редактировани[яй]|правок)\s+(?:файла|документа|таблицы)|не\s+(?:трогай|меняй|изменяй|редактируй)\s+(?:сам\s+)?(?:файл|документ|таблицу))/i.test(q)) return false;
+
+  // Creating a new file is handled by document creation tools, not by edits.
+  if (/(?:созда|сгенериру|подготов|сдела|оформ)(?:.{0,30})(?:нов(?:ый|ую|ое)\s+)?(?:word|excel|docx|xlsx|документ|таблиц)(?:.{0,12})(?:с\s+нуля)?/i.test(q)
+    && !/(?:исходн|имеющ|существующ|текущ|вложенн|прикрепленн)\w*\s+(?:файл|документ|таблиц)/i.test(q)) return false;
+
+  if (/(?:задач|подзадач|напоминан|дедлайн|сектор|событи|календар|рейтинг)/i.test(q)
+    && !/(?:word|excel|docx|xlsx|таблиц|документ|файл|абзац|ячейк|столбц|строк)/i.test(q)) return false;
+  if (/(?:добав|созда|запиши)\w*.{0,30}(?:заметк|напоминани)/i.test(q)
+    && !/(?:файл|документ|word|excel|docx|xlsx)/i.test(q)) return false;
+  if (/(?:картинк|изображен|фотограф|рисунк|пиксел|фон изображения)/i.test(q)
+    && !/(?:word|excel|docx|xlsx|таблиц|документ|файл)/i.test(q)) return false;
+
+  const mutation = /(?:измен|исправ|отредактир|поправ|замен|переимен|обнов|удал|убер|добав|дополн|перепиш|сократ|встав|формул|сортир|скорректир)/i.test(q);
+  if (!mutation) return false;
+
+  const officeTarget = /(?:word|excel|docx|xlsx|документ|таблиц|файл|абзац|ячейк|столбц|строк|лист[аеуы]?\s*(?:excel|таблиц|№|\d))/i.test(q);
+  const explicitEditObject = /(?:в\s+(?:этом|исходном|текущем|прикрепленном|загруженном)\s+(?:файле|документе|таблице)|(?:сам|этот|исходный|прикрепленный|загруженный)\s+(?:файл|документ)|(?:из\s+файла|в\s+файле|в\s+документе|в\s+таблице))/i.test(q);
+  return officeTarget || explicitEditObject || hasCurrentOfficeAttachment;
 }
+
 const sourceFormat=(name:string,mime:string):OfficeFormat|null=>
   /\.docx$/i.test(name) && [WORD_DOCUMENT_MIME,'application/octet-stream',''].includes(mime)?'docx':
   /\.xlsx$/i.test(name) && [EXCEL_MIME,'application/octet-stream',''].includes(mime)?'xlsx':null;
@@ -96,7 +120,8 @@ export function parseOfficeEditPlanResponse(response: Record<string, unknown>): 
 }
 
 export async function editUserDocumentIfRequested(input:Input) {
-  if(!isDocumentEditRequest(input.question))return null;
+  const currentOfficeFileAttached = (input.attachments ?? []).some(file => Boolean(sourceFormat(file.name, file.mimeType)));
+  if (!isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
   if(input.taskId){
     const allowed=await prisma.task.findFirst({
       where:{id:input.taskId,OR:[
