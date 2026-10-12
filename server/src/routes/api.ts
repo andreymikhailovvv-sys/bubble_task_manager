@@ -264,7 +264,10 @@ const authRequestContext = (req: any) => {
 };
 
 const setAuthCookies = (
-  res: { cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void },
+  res: {
+    cookie: (name: string, value: string, options: ReturnType<typeof authService.cookieOptions>) => void;
+    clearCookie: (name: string, options: ReturnType<typeof authService.cookieOptions>) => void;
+  },
   user: {
     id: string;
     email?: string | null;
@@ -273,6 +276,8 @@ const setAuthCookies = (
     avatarUrl?: string | null;
     googleSub?: string | null;
     deviceId?: string | null;
+    telegramChatId?: string | null;
+    passwordHash?: string | null;
   }
 ) => {
   const token = authService.sign({
@@ -285,11 +290,15 @@ const setAuthCookies = (
     deviceId: user.deviceId
   });
   res.cookie(AUTH_COOKIE_NAME, token, authService.cookieOptions());
-  // Upgrade an authenticated legacy guest to a signed device cookie without
-  // changing their user, tasks, JWT, or device ID.
-  const signedDeviceCookie = user.deviceId ? authService.signDeviceCookie(user.deviceId) : null;
+  // A signed device cookie is a guest credential only. Never mint/reissue it
+  // for a registered account that retains a deviceId after guest conversion.
+  const signedDeviceCookie = isGuestAccount(user) && user.deviceId
+    ? authService.signDeviceCookie(user.deviceId)
+    : null;
   if (signedDeviceCookie) {
     res.cookie(DEVICE_COOKIE_NAME, signedDeviceCookie, authService.deviceCookieOptions());
+  } else {
+    res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
   }
 };
 
@@ -309,6 +318,14 @@ const ensureDeviceUser = async (req: any, res: any) => {
   let user = verifiedDeviceId
     ? await prisma.user.findUnique({ where: { deviceId: verifiedDeviceId } })
     : null;
+
+  // After a guest signs up, its row retains deviceId to preserve workspace
+  // ownership. The same old guest cookie must NOT authenticate that registered
+  // account when the JWT is cleared or expires.
+  if (user && !isGuestAccount(user)) {
+    console.info('[Auth] device cookie belongs to registered account; creating fresh guest', { userId: user.id });
+    user = null;
+  }
 
   if (!user) {
     const deviceId = authService.createDeviceId();
@@ -489,6 +506,10 @@ apiRouter.get('/credits/statistics', requireAuth, asyncHandler(async (req, res) 
 
 apiRouter.post('/auth/logout', (_req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, { ...authService.cookieOptions(), maxAge: undefined });
+  // Critical for sessions upgraded from guest to registered in-place.
+  // Clearing JWT alone allowed /auth/me to immediately restore the same user
+  // through a still-valid signed btm_device cookie.
+  res.clearCookie(DEVICE_COOKIE_NAME, { ...authService.deviceCookieOptions(), maxAge: undefined });
   res.json({ ok: true });
 });
 
@@ -977,7 +998,7 @@ apiRouter.get('/auth/me', async (req, res) => {
     if (freshUser) {
       // The existing JWT remains valid. Refresh only the legacy device cookie,
       // so guest sessions survive JWT expiry without trusting unsigned cookies.
-      if (freshUser.deviceId && authService.resolveDeviceId(req) !== freshUser.deviceId) {
+      if (isGuestAccount(freshUser) && freshUser.deviceId && authService.resolveDeviceId(req) !== freshUser.deviceId) {
         const signedDeviceCookie = authService.signDeviceCookie(freshUser.deviceId);
         if (signedDeviceCookie) {
           res.cookie(DEVICE_COOKIE_NAME, signedDeviceCookie, authService.deviceCookieOptions());
