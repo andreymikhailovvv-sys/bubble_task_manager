@@ -12,6 +12,7 @@ import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthor
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
+import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
@@ -2135,7 +2136,7 @@ export default function App() {
     const fileNames = aiPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
+      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось прочитать приложенный файл';
       setAiError(message);
@@ -2179,9 +2180,15 @@ export default function App() {
       const status = typeof (error as { status?: unknown })?.status === 'number' ? Number((error as { status?: number }).status) : null;
       const message = status === 402 || (error instanceof Error && error.message === INSUFFICIENT_AI_CREDITS_MESSAGE)
         ? INSUFFICIENT_AI_CREDITS_MESSAGE
-        : 'Ошибка отправки сообщения. Попробуйте ещё раз.';
+        : error instanceof Error && error.message.trim()
+          ? error.message.slice(0, 400)
+          : 'Ошибка отправки сообщения. Попробуйте ещё раз.';
       console.error('[AI task chat] send failed', error);
       setAiError(message);
+      // Keep the original upload and prompt ready to retry. The server has
+      // already rejected the request, so do not silently drop the attachment.
+      setAiDraft((current) => current.trim() ? current : question);
+      setAiPendingFiles((current) => current.length ? current : aiPendingFiles);
       setAiDialogByTask((prev) => ({
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: message }]
@@ -2204,12 +2211,15 @@ export default function App() {
     return btoa(binary);
   };
 
-  const fileToAttachmentPayload = async (file: File): Promise<ChatAttachmentPayload> => ({
-    name: file.name,
-    mimeType: resolveAttachmentMimeType(file),
-    size: file.size,
-    contentBase64: await toBase64(file)
-  });
+  const fileToAttachmentPayload = async (file: File, forAiChat = false): Promise<ChatAttachmentPayload> => {
+    const source = forAiChat ? await prepareAiChatImageFile(file) : file;
+    return {
+      name: source.name,
+      mimeType: resolveAttachmentMimeType(source),
+      size: source.size,
+      contentBase64: await toBase64(source)
+    };
+  };
 
   const addFocusedAiFiles = (selectedFiles: File[]) => {
     if (selectedFiles.length === 0) return;
@@ -2496,7 +2506,7 @@ export default function App() {
 
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(focusAiPendingFiles.map((file) => fileToAttachmentPayload(file)));
+      attachmentsPayload = await Promise.all(focusAiPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
     } catch (error) {
       setFocusAiError(error instanceof Error ? error.message : 'Не удалось прочитать приложенный файл');
       return;
@@ -2694,7 +2704,7 @@ ${allContext}`,
     if (quick) setQuickAiChatLoading(true);
     setAiChatError(null);
     try {
-      const attachments = quick ? [] : await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file)));
+      const attachments = quick ? [] : await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
       setAiChatProgress('analyzing_request');
       const result = await api.askAiChatStreaming({
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
