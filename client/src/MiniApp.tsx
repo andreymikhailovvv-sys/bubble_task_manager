@@ -2219,8 +2219,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
       attachmentsPayload = await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
-    } catch {
-      setAiChatError('Не удалось прочитать приложенные файлы');
+    } catch (cause) {
+      setAiChatError(cause instanceof Error ? cause.message : 'Не удалось прочитать приложенные файлы');
       return;
     }
     const userMessageContent = fileNames.length > 0
@@ -2254,6 +2254,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     } catch (e) {
       const message = formatAiRequestError(e);
       setAiChatError(message);
+      setAiChatDraft((current) => current.trim() ? current : question);
+      setAiChatPendingFiles((current) => current.length ? current : aiChatPendingFiles);
       if (activeAiChat?.id === QUICK_AI_CHAT_ID) {
         updateActiveAiChatMessages((messages) => [...messages, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
       }
