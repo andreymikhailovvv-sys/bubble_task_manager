@@ -1,3 +1,4 @@
+import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
@@ -565,8 +566,9 @@ function resolveAttachmentMimeType(file: File): string {
   return MIME_BY_EXTENSION[extension] ?? 'application/octet-stream';
 }
 
-async function fileToAttachmentPayload(file: File): Promise<ChatAttachmentPayload> {
-  const buffer = await file.arrayBuffer();
+async function fileToAttachmentPayload(file: File, forAiChat = false): Promise<ChatAttachmentPayload> {
+  const source = forAiChat ? await prepareAiChatImageFile(file) : file;
+  const buffer = await source.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   let binary = '';
   const chunkSize = 0x8000;
@@ -575,9 +577,9 @@ async function fileToAttachmentPayload(file: File): Promise<ChatAttachmentPayloa
     binary += String.fromCharCode(...chunk);
   }
   return {
-    name: file.name,
-    mimeType: resolveAttachmentMimeType(file),
-    size: file.size,
+    name: source.name,
+    mimeType: resolveAttachmentMimeType(source),
+    size: source.size,
     contentBase64: btoa(binary)
   };
 }
@@ -2216,7 +2218,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const fileNames = aiChatPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file)));
+      attachmentsPayload = await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
     } catch {
       setAiChatError('Не удалось прочитать приложенные файлы');
       return;
@@ -2673,9 +2675,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const fileNames = aiPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
     try {
-      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file)));
-    } catch {
-      setError('Не удалось прочитать приложенные файлы');
+      attachmentsPayload = await Promise.all(aiPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось прочитать приложенные файлы');
       setAiLoadingTaskId(null);
       setAiProgressByTask((current) => { const next = { ...current }; delete next[openedTask.id]; return next; });
       return;
@@ -2709,11 +2711,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
-      if (message === INSUFFICIENT_AI_CREDITS_MESSAGE) {
-        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: [...nextDialog, { role: 'assistant', content: INSUFFICIENT_AI_CREDITS_MESSAGE }] }));
-      } else {
-        setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: baseDialog }));
-      }
+      setAiDraft((current) => current.trim() ? current : question);
+      setAiPendingFiles((current) => current.length ? current : aiPendingFiles);
+      // Do not erase the question from the dialog after a failed image edit.
+      // Show the server's actual validation error so the user can correct it.
+      setAiDialogByTask((prev) => ({
+        ...prev,
+        [openedTask.id]: [...nextDialog, { role: 'assistant', content: message }]
+      }));
     } finally {
       setAiLoadingTaskId(null);
       setAiProgressByTask((current) => { const next = { ...current }; delete next[openedTask.id]; return next; });
