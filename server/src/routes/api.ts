@@ -362,10 +362,23 @@ apiRouter.post('/auth/register', async (req, res) => {
   let user;
   try {
     validatePersonalDataConsent(req.body?.consentAccepted);
+    // Use only server-verified credentials to convert the current anonymous
+    // device account. Never accept a guest ID from the JSON body.
+    const verifiedGuestDeviceId = authService.resolveDeviceId(req);
+    const guestUser = req.user?.id && verifiedGuestDeviceId
+      ? await prisma.user.findFirst({
+          where: {
+            id: req.user.id, deviceId: verifiedGuestDeviceId,
+            username: null, passwordHash: null, email: null,
+            googleSub: null, telegramChatId: null
+          }, select: { id: true }
+        })
+      : null;
     user = await accountRegistrationService.register({
       login,
       password: passwordRaw,
       name: nameRaw,
+      ...(guestUser ? { guestUserId: guestUser.id, verifiedGuestDeviceId: verifiedGuestDeviceId! } : {}),
       personalDataConsent: {
         version: PERSONAL_DATA_CONSENT_VERSION,
         ipAddress: req.ip
@@ -379,7 +392,9 @@ apiRouter.post('/auth/register', async (req, res) => {
         ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
         : error.code === 'CONSENT_REQUIRED'
           ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
-          : { status: 409, message: 'Логин уже занят' };
+          : error.code === 'GUEST_SESSION_INVALID'
+            ? { status: 409, message: 'Гостевая сессия устарела. Перезагрузите страницу и повторите регистрацию.' }
+            : { status: 409, message: 'Логин уже занят' };
     console.warn(`[Auth] register failed reason=${error.code.toLowerCase()} login=${login || 'empty'} ${authRequestContext(req)}`);
     res.status(response.status).json({ error: response.message });
     return;
@@ -1118,7 +1133,9 @@ apiRouter.post('/auth/telegram-web-register', async (req, res) => {
         ? { status: 400, message: 'Пароль должен содержать минимум 6 символов' }
         : error.code === 'CONSENT_REQUIRED'
           ? { status: 400, message: 'Необходимо согласие на обработку персональных данных' }
-          : { status: 409, message: 'Логин уже занят' };
+          : error.code === 'GUEST_SESSION_INVALID'
+            ? { status: 409, message: 'Гостевая сессия устарела. Перезагрузите страницу и повторите регистрацию.' }
+            : { status: 409, message: 'Логин уже занят' };
     res.status(response.status).json({ error: response.message });
     return;
   }

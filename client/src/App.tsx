@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -2718,8 +2718,19 @@ ${allContext}`,
       if (result.taskDataChanged) await load();
       await refreshAiCredits();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
+      const message = formatAiRequestError(error);
       setAiChatError(message);
+      if (quick) {
+        // Compact chat has no aiChatError view. Display failures in its thread.
+        const failureMessage: AiChatMessage = {
+          id: crypto.randomUUID(), role: 'assistant', content: message, createdAt: new Date().toISOString()
+        };
+        setAiChatProjects((prev) => prev.map((project, index) => index === 0 ? {
+          ...project,
+          chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID
+            ? { ...chat, messages: [...chat.messages, failureMessage].slice(-20) } : chat)
+        } : project));
+      }
     } finally {
       setAiChatLoading(false);
       if (quick) setQuickAiChatLoading(false);
@@ -4506,7 +4517,7 @@ ${allContext}`,
 
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <button data-tour="feature-focus-button" type="button" onClick={openFocusSetup} className="focus-mode-button topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-violet-300" title="Режим фокуса с ИИ"><Bot size={16} /> Фокус</button>
-          <button data-tour="credits" type="button" onClick={() => { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title="Посмотреть платные подписки и увеличить ИИ-кредиты"><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 100}</span></button>
+          <button data-tour="credits" type="button" onClick={() => { if (currentUser?.isGuest) { setAuthError(null); setAuthModalMode('register'); } else { setCreditModalView('purchase'); setIsSubscriptionModalOpen(true); } }} className="light-credit-badge topbar-action-button flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-400" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Посмотреть подписки и увеличить ИИ-кредиты'}><Coins size={15} /><span>Кредиты: {currentUser?.aiCredits ?? 0}</span></button>
           <div className="add-menu-wrap relative" onMouseEnter={() => setIsAddMenuOpen(true)} onMouseLeave={() => { if (!isTourAddMenuOpen) setIsAddMenuOpen(false); }}>
             <button data-tour="create-task" className="add-menu-trigger light-primary-action inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" onClick={() => setIsAddMenuOpen((prev) => !prev)}><Plus size={16} /> Новая задача <ChevronDown size={14} /></button>
             {isAddMenuOpen || isTourAddMenuOpen ? <div className="add-menu-popover topbar-dropdown absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-2xl border p-2 shadow-2xl"><button className="add-menu-option add-menu-option-task flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ initialSphereId: spheres[0]?.id }); setIsAddMenuOpen(false); }}><FileText size={14} />Новая задача</button><button data-tour="create-event" className="add-menu-option add-menu-option-event mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold" onClick={() => { setEditorState({ task: { id: '', title: '', description: '', status: 'TODO', importance: 3, urgency: 3, priorityScore: 0, sphereId: spheres[0]?.id ?? null, dueDate: null, parentTaskId: null, taskType: 'EVENT', location: '', notifyBeforeMinutes: 0, isRecurring: false, aiNotificationsEnabled: false } }); setIsAddMenuOpen(false); }}><CalendarDays size={14} />Новое событие</button><button data-tour="create-sector" className="add-menu-option add-menu-option-sector mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50" disabled={spheres.length >= MAX_SPHERES} onClick={() => { setSectorEditorSphere({ id: '', name: '', color: HARMONIOUS_COLORS[0], icon: 'briefcase' }); setIsAddMenuOpen(false); }}><BriefcaseBusiness size={14} />Новый сектор</button></div> : null}
@@ -5010,6 +5021,7 @@ ${allContext}`,
               <h2 className="text-lg font-semibold text-primary">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
               <button className="secondary-button rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs" onClick={closeAuthModal}>Закрыть</button>
             </div>
+            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-lg border border-violet-400/40 bg-violet-500/10 p-3 text-sm text-secondary">Зарегистрируйтесь, чтобы получить 100 пробных ИИ-кредитов и сохранить задачи этого гостевого аккаунта.</p> : null}
             <div className="space-y-2">
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Логин" value={authLogin} onChange={(e) => setAuthLogin(e.target.value)} />
               <input className="form-field w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm" placeholder="Пароль" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />

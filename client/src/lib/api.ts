@@ -11,6 +11,11 @@ type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { ty
 let unauthorizedHandler: UnauthorizedHandler | null = null;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 export const INSUFFICIENT_AI_CREDITS_MESSAGE = 'Системное сообщение: у пользователя недостаточно кредитов для использования ИИ-функции.';
+export const formatAiRequestError = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
+  return message === INSUFFICIENT_AI_CREDITS_MESSAGE || /Недостаточно (?:AI|ИИ) кредитов/i.test(message)
+    ? INSUFFICIENT_AI_CREDITS_MESSAGE : message;
+};
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
 export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
@@ -134,6 +139,7 @@ export type CurrentUser = {
   avatarUrl?: string | null;
   googleSub?: string | null;
   deviceId?: string | null;
+  isGuest?: boolean;
   aiCredits?: number;
   aiCreditsMilli?: number;
   aiCreditsPeriod?: string;

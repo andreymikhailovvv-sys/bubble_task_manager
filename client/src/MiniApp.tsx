@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
@@ -729,7 +729,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
   const [creatingStandaloneNote, setCreatingStandaloneNote] = useState(false);
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
-  const [aiCredits, setAiCredits] = useState(100);
+  const [aiCredits, setAiCredits] = useState(0);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
   const effectiveMiniTheme = useMemo(
@@ -878,7 +878,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       } else {
         ({ user } = await api.getMe());
       }
-      setAiCredits(user.aiCredits ?? 100);
+      setAiCredits(user.aiCredits ?? 0);
       setCurrentUser(user);
 
       const [sphereList, taskList, habitList, quickHistory, syncedProjects] = await Promise.all([
@@ -2206,7 +2206,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const refreshAiCredits = () => {
     void api.getMe()
-      .then(({ user }) => setAiCredits(user.aiCredits ?? 100))
+      .then(({ user }) => setAiCredits(user.aiCredits ?? 0))
       .catch(() => undefined);
   };
 
@@ -2250,7 +2250,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       refreshAiCredits();
       if (result.taskDataChanged) await loadData();
     } catch (e) {
-      setAiChatError(e instanceof Error ? e.message : 'Не удалось получить ответ ИИ');
+      const message = formatAiRequestError(e);
+      setAiChatError(message);
+      if (activeAiChat?.id === QUICK_AI_CHAT_ID) {
+        updateActiveAiChatMessages((messages) => [...messages, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
+      }
     } finally {
       setAiChatLoading(false);
     }
@@ -2828,7 +2832,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             />
             </div>
             <div className="relative inline-flex shrink-0 items-center gap-1">
-              <button type="button" onClick={() => { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title="Купить AI-кредиты" aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
+              <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
                 <span>{aiCredits}</span>
               </button>
@@ -4725,6 +4729,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <h2 id="miniapp-auth-title" className="text-lg font-semibold">{authModalMode === 'login' ? 'Вход в аккаунт' : 'Регистрация'}</h2>
               <button type="button" onClick={closeAuthModal} disabled={authSubmitting} className="rounded-full p-2 text-slate-300 hover:bg-slate-800" aria-label="Закрыть"><X size={18} /></button>
             </div>
+            {authModalMode === 'register' && currentUser?.isGuest ? <p className="mb-3 rounded-xl border border-violet-400/40 bg-violet-500/10 p-3 text-xs text-violet-100">Создайте аккаунт и получите 100 пробных ИИ-кредитов. Ваши гостевые задачи сохранятся.</p> : null}
             <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void submitAuth(); }}>
               <label className="block space-y-1 text-xs text-slate-300">
                 <span>Логин</span>
