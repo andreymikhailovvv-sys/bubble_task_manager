@@ -88,3 +88,53 @@ test('document edit route reuses signed generated-document downloads and billing
   assert.match(handler,/userId:input.userId/);
   assert.match(preview,/Редактирую документ/);
 });
+
+test('text-only request never becomes JSON edits when a DOCX or XLSX exists in chat history', () => {
+  const textRequests = [
+    'Подготовь структуру презентации только текстом, без правок документа',
+    'Просто напиши план презентации в виде текста',
+    'Составь структуру презентации и добавь несколько разделов, но только текстом',
+    'Исправь формулировку тезисов и покажи результат только текстом',
+    'Напиши обычный текст без изменения файла',
+    'Добавь идеи к концепции и напиши их текстом, не меняй документ',
+    'Предложи, как улучшить содержание документа, без редактирования файла',
+    'Проанализируй приложенный Excel и расскажи, что улучшить',
+    'Сделай описание структуры презентации',
+    'Добавь заметку о предстоящей выставке',
+    'Создай заметку с названием «Идеи»',
+    'Переименуй задачу',
+  ];
+  for (const question of textRequests) {
+    assert.equal(isDocumentEditRequest(question), false, question);
+    assert.equal(isDocumentEditRequest(question, true), false, question + ' + attachment');
+  }
+});
+
+test('genuine requests to modify existing Office documents still use structured editing', () => {
+  const edits = [
+    'Исправь опечатку в третьем абзаце Word',
+    'Добавь столбец в Excel',
+    'Удали строки с SEBERO в приложенной таблице',
+    'Замени слово "Париж" на "Москва" в документе',
+    'Перепиши текст в этом файле',
+    'Исправь таблицу в существующем XLSX',
+  ];
+  for (const question of edits) {
+    assert.equal(isDocumentEditRequest(question), true, question);
+  }
+  assert.equal(isDocumentEditRequest('Удали позиции SEBERO', true), true);
+  assert.equal(isDocumentEditRequest('Исправь опечатки', true), true);
+  assert.equal(isDocumentEditRequest('Удали позиции SEBERO'), false, 'no attached document or explicit file target');
+  assert.equal(isDocumentEditRequest('Создай новый Word документ'), false);
+  assert.equal(isDocumentEditRequest('Подготовь новый Excel с данными'), false);
+});
+
+test('document edit router does not intercept natural language text answers', async () => {
+  const [editor, controller] = await Promise.all([
+    readFile(new URL('../src/services/ai-user-document-edit.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
+  ]);
+  assert.match(editor, /if \(!isDocumentEditRequest\(input\.question, currentOfficeFileAttached\)\) return null/);
+  assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
+  assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
+});
