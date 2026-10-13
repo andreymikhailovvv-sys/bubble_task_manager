@@ -15,7 +15,8 @@ export async function completeTaskWithUserConfirmation(
   tasks: CompletionTask[],
   update: (patch: ConfirmedCompletionPatch) => Promise<unknown>,
   confirm: (message: string) => boolean,
-  beforeRequest?: () => Promise<void>
+  beforeRequest?: () => Promise<void>,
+  bulkCompletionPossible = true
 ): Promise<boolean> {
   const unfinished = task.parentTaskId ? 0 : tasks.filter(
     item => item.parentTaskId === task.id && item.status !== 'DONE'
