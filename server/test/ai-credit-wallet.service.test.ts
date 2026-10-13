@@ -275,6 +275,11 @@ test('expired monthly included credit never reappears in a later month after ref
     aiPurchasedCreditsMilli: 2_000, aiCredits: 9, subscriptionPlan: 'free'
   });
   const reservation = await reserveAiCreditsMilli('user-1', 8_000, db as any);
+  // Simulate the reservation having been created in the previous month.
+  // The current UTC clock remains real; refreshing the wallet must expire
+  // its previous-period included allowance.
+  const recorded = db.reservations.get(reservation.id)!;
+  db.reservations.set(reservation.id, { ...recorded, period: '2000-01' });
   db.state = {
     ...db.state!, aiCreditsPeriod: '2000-01', aiIncludedCreditsMilli: 0,
     aiBonusCreditsMilli: 0, aiPurchasedCreditsMilli: 1_000, aiCredits: 1
