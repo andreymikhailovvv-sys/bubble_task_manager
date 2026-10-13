@@ -1,5 +1,5 @@
 import { prisma } from '../db/prisma.js';
-import { taskService } from './task.service.js';
+import { taskService, TaskCompletionConfirmationRequired } from './task.service.js';
 
 export const PLANNER_OPERATIONS = [
   'create_task', 'create_event', 'create_subtask', 'rename', 'set_description',
@@ -235,8 +235,15 @@ export function createPlannerToolsService(db: any = prisma, mutations: Pick<type
     }
     if (value.operation === 'set_notification') patch.notifyBeforeMinutes = Math.round(value.notifyBeforeMinutes ?? 0);
     if (value.operation === 'change_sphere') patch.sphereId = value.sphereId;
-    if (value.operation === 'delete') await mutations.remove(item.id, userId);
-    else await mutations.update(item.id, userId, patch);
+    try {
+      if (value.operation === 'delete') await mutations.remove(item.id, userId);
+      else await mutations.update(item.id, userId, patch);
+    } catch (error) {
+      if (error instanceof TaskCompletionConfirmationRequired) {
+        return errorResult(error.code, 'Нельзя завершить основную задачу, пока в ней есть незавершённые подзадачи. Нужно явно завершить необходимые подзадачи по отдельности или запросить подтверждение пользователя для массового завершения.');
+      }
+      throw error;
+    }
     const labels: Record<string, string> = { rename: `Переименован объект «${item.title}».`, set_description: `Обновлено описание «${item.title}».`, reschedule: `Перенесён объект «${item.title}» на ${new Date(value.dueDate!).toLocaleString('ru-RU', { timeZone: userTimeZone })}.`, clear_due_date: `Срок объекта «${item.title}» очищен.`, complete: `Объект «${item.title}» отмечен выполненным.`, reopen: `Объект «${item.title}» снова открыт.`, delete: `Удалён объект «${item.title}».`, set_priority: `Обновлён приоритет «${item.title}».`, set_notification: `Обновлено уведомление «${item.title}».`, change_sphere: `Изменён сектор «${item.title}».` };
     return { ok: true, operation: value.operation, itemId: item.id, report: labels[value.operation], ...(undoOperation ? { undoOperation } : {}) };
   };
