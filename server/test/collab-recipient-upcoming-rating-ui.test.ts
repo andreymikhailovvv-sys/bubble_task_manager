@@ -35,28 +35,32 @@ test('главная показывает три ближайшие подзад
   assert.equal((web.match(/\{ key: 'all', label: 'все' \}/g) ?? []).length, 2);
 });
 
-test('развёрнутые карточки подзадач увеличивают высоту под длинный текст', async () => {
+test('развёрнутые карточки подзадач сохраняют фиксированную высоту и ограничивают текст', async () => {
   const [web, styles] = await Promise.all([
     readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
   ]);
   assert.equal((web.match(/className="upcoming-subtask-copy min-w-0 flex-1"/g) ?? []).length, 2);
-  assert.match(styles, /\.upcoming-subtask-row \{\s*height: auto;\s*min-height: 7rem;/);
-  assert.match(styles, /\.upcoming-subtask-copy \{[\s\S]*?height: auto;\s*max-height: none;/);
-  assert.match(styles, /\.upcoming-subtask-description \{[\s\S]*?max-height: none;[\s\S]*?white-space: pre-wrap;/);
-  assert.doesNotMatch(web, /upcoming-subtask-row[^\n]*\sh-\[7rem\]/);
+  assert.match(styles, /\.upcoming-subtask-row \{\s*height: 7rem;\s*min-height: 7rem;\s*max-height: 7rem;[\s\S]*?overflow: hidden;/);
+  assert.match(styles, /\.upcoming-subtask-copy \{[\s\S]*?height: 5\.5rem;\s*max-height: 5\.5rem;\s*overflow: hidden;/);
+  assert.match(styles, /\.upcoming-subtask-description \{[\s\S]*?max-height: 2rem;[\s\S]*?-webkit-line-clamp: 2;/);
+  assert.match(styles, /\.upcoming-subtask-title,[\s\S]*?\.upcoming-subtask-deadline \{[\s\S]*?white-space: nowrap;[\s\S]*?text-overflow: ellipsis;/);
 });
 
-test('скругления полей и заметки не перекрываются содержимым', async () => {
-  const [styles, notes] = await Promise.all([
+test('скругления виджета, поля поиска и фон баблов не перекрываются содержимым', async () => {
+  const [web, styles, notes] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8')
   ]);
+  assert.match(web, /workspace-side-rail[^\n]*pb-3 pl-5 pr-3 pt-3/);
+  assert.doesNotMatch(web, /workspace-side-rail[^\n]*pr-0/);
   assert.match(styles, /\.bubble-field-stage \{\s*background: transparent;/);
   assert.match(styles, /\.bubble-field-container \{[\s\S]*?background: var\(--bubble-field-bg\), var\(--canvas-bg\);/);
   assert.match(styles, /\.workspace-widget-card \{\s*overflow: hidden;/);
   assert.match(styles, /\.workspace-global-search-field \{\s*overflow: hidden;/);
   assert.match(styles, /\.standalone-note-open \{[\s\S]*?justify-content: flex-start;/);
+  assert.match(styles, /\.standalone-note-open \.standalone-group-note-label \{[\s\S]*?align-self: flex-start;[\s\S]*?width: fit-content;/);
   assert.match(notes, /standalone-note-open min-w-0 flex-1/);
 });
 

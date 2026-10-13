@@ -2325,6 +2325,12 @@ body[data-theme='dark'] .standalone-group-chip-active {
   flex: 0 0 auto;
   margin-top: 0;
 }
+/* Group badges stay content-sized even though the note card uses a flex column. */
+.standalone-note-open .standalone-group-note-label {
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 100%;
+}
 .standalone-note-card:hover {
   border-color: var(--accent);
   box-shadow: var(--app-card-shadow);
@@ -8095,9 +8101,11 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
   color: #cffafe !important;
 }
 .upcoming-subtask-row {
-  height: auto;
+  height: 7rem;
   min-height: 7rem;
-  align-items: flex-start;
+  max-height: 7rem;
+  align-items: center;
+  overflow: hidden;
 }
 
 
@@ -8117,39 +8125,50 @@ body[data-theme='dark'] .upcoming-subtasks-close-button:hover {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* The expanded upcoming-subtasks list grows with content instead of overlapping it. */
+/* Every expanded subtask card keeps a fixed height, with overflow clipped inside its text area. */
 .upcoming-subtask-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-rows: 1.25rem minmax(0, 2rem) 1rem;
+  align-content: center;
+  row-gap: 0.25rem;
   min-width: 0;
-  height: auto;
-  max-height: none;
+  min-height: 0;
+  height: 5.5rem;
+  max-height: 5.5rem;
+  overflow: hidden;
 }
 .upcoming-subtask-copy > * {
   min-width: 0;
+  min-height: 0;
   max-width: 100%;
   margin-top: 0 !important;
+  overflow: hidden;
 }
 .upcoming-subtask-title,
 .upcoming-subtask-deadline {
   display: block;
   max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 .upcoming-subtask-description {
-  display: block;
-  max-height: none;
-  white-space: pre-wrap;
-  line-height: 1.4;
+  display: -webkit-box;
+  max-width: 100%;
+  max-height: 2rem;
+  white-space: normal;
+  line-height: 1rem;
+  overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 .upcoming-subtask-description > *,
 .upcoming-subtask-description a {
   display: inline;
+  max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
