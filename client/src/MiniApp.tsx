@@ -664,6 +664,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const taskDraftOriginalByIdRef = useRef<Record<string, TaskDraft>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [updatingFocusSubtaskIds, setUpdatingFocusSubtaskIds] = useState<string[]>([]);
+  const updatingFocusSubtasksRef = useRef<Set<string>>(new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPostponingOverdue, setIsPostponingOverdue] = useState(false);
   const [creatingSubtaskForId, setCreatingSubtaskForId] = useState<string | null>(null);
@@ -1653,6 +1655,35 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить задачу');
     } finally {
       setCompletingId(null);
+    }
+  };
+
+  const toggleFocusSubtaskStatus = async (subtask: Task) => {
+    // This checkbox changes a subtask only. Do not call completeTask(), which
+    // may offer to finish its parent when the last subtask is checked.
+    if (!openedTaskId || subtask.parentTaskId !== openedTaskId || updatingFocusSubtasksRef.current.has(subtask.id)) return;
+    const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
+    updatingFocusSubtasksRef.current.add(subtask.id);
+    setUpdatingFocusSubtaskIds((current) => [...current, subtask.id]);
+    setError(null);
+    // Keep a newly checked item on screen, so the same checkbox can undo it.
+    if (nextStatus === 'DONE') setHideClosedOpenedTaskSubtasks(false);
+    setTasks((current) => current.map((item) =>
+      item.id === subtask.id ? { ...item, status: nextStatus } : item
+    ));
+    try {
+      const saved = await api.updateTask(subtask.id, { status: nextStatus });
+      setTasks((current) => current.map((item) =>
+        item.id === subtask.id ? { ...item, ...saved } : item
+      ));
+    } catch (error) {
+      setTasks((current) => current.map((item) =>
+        item.id === subtask.id ? { ...item, status: subtask.status } : item
+      ));
+      setError(error instanceof Error ? error.message : 'Не удалось изменить статус подзадачи');
+    } finally {
+      updatingFocusSubtasksRef.current.delete(subtask.id);
+      setUpdatingFocusSubtaskIds((current) => current.filter((id) => id !== subtask.id));
     }
   };
 
@@ -3680,8 +3711,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       return (
                         <article key={subtask.id} className={`miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              role="checkbox"
+                              aria-checked={subtask.status === 'DONE'}
+                              aria-label={subtask.status === 'DONE' ? `Вернуть подзадачу «${subtask.title}» в работу` : `Завершить подзадачу «${subtask.title}»`}
+                              title={subtask.status === 'DONE' ? 'Вернуть в работу' : 'Отметить выполненной'}
+                              disabled={updatingFocusSubtaskIds.includes(subtask.id)}
+                              className="miniapp-focus-subtask-check-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                              onClick={() => void toggleFocusSubtaskStatus(subtask)}
+                            >
+                              <span className={`miniapp-focus-subtask-check-box flex h-5 w-5 items-center justify-center rounded-md ${subtask.status === 'DONE' ? 'miniapp-focus-subtask-check-box-done' : ''}`}>
+                                {updatingFocusSubtaskIds.includes(subtask.id) ? <Loader2 size={13} className="animate-spin" /> : subtask.status === 'DONE' ? <Check size={14} strokeWidth={3} /> : null}
+                              </span>
+                            </button>
                             <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
-                              <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
                               <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                               {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
