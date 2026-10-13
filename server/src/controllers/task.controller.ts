@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { taskService } from '../services/task.service.js';
+import { taskService, TaskCompletionConfirmationRequired } from '../services/task.service.js';
 
 export const taskController = {
   list: async (req: Request, res: Response) => {
@@ -18,8 +18,20 @@ export const taskController = {
     res.status(201).json(item);
   },
   update: async (req: Request, res: Response) => {
-    const item = await taskService.update(req.params.id, req.user!.id, req.body);
-    res.json(item);
+    try {
+      const item = await taskService.update(req.params.id, req.user!.id, req.body);
+      res.json(item);
+    } catch (error) {
+      if (error instanceof TaskCompletionConfirmationRequired) {
+        res.status(409).json({
+          code: error.code,
+          error: error.message,
+          unfinishedSubtasks: error.unfinishedSubtasks
+        });
+        return;
+      }
+      throw error;
+    }
   },
   remove: async (req: Request, res: Response) => {
     await taskService.remove(req.params.id, req.user!.id, req.query.scope === 'all' ? 'all' : 'me');
