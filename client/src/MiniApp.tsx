@@ -2753,12 +2753,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const userMessage = fileNames.length > 0
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
       : question;
-    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
+    const clientRequestId = crypto.randomUUID();
+    const nextDialog: ChatMessage[] = [...baseDialog, { id: clientRequestId, role: 'user', content: userMessage, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     setAiDraft('');
     setAiPendingFiles([]);
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
+        clientRequestId,
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage,
         mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
