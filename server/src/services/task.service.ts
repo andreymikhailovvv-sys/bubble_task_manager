@@ -23,6 +23,8 @@ interface TaskInput {
   taskType?: 'TASK' | 'EVENT';
   location?: string | null;
   collaborationScope?: 'me' | 'all';
+  /** Only a positively confirmed user action may complete unfinished children. */
+  completeSubtasks?: boolean;
 }
 
 const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined): PrismaTypes.InputJsonValue | PrismaTypes.NullableJsonNullValueInput | undefined => {
@@ -30,6 +32,27 @@ const toRecurrenceJson = (value: PrismaTypes.InputJsonValue | null | undefined):
   if (value === null) return Prisma.JsonNull;
   return value;
 };
+
+export class TaskCompletionConfirmationRequired extends Error {
+  readonly code = 'UNFINISHED_SUBTASKS_REQUIRE_CONFIRMATION';
+  readonly status = 409;
+  constructor(readonly unfinishedSubtasks: number) {
+    super(`У задачи ещё ${unfinishedSubtasks} незавершённых подзадач. Подтвердите их массовое завершение отдельно.`);
+    this.name = 'TaskCompletionConfirmationRequired';
+  }
+}
+
+/** Shared server-side invariant, also used by regression tests. */
+export function enforceExplicitSubtaskCompletion(
+  requestedStatus: TaskInput['status'],
+  isRoot: boolean,
+  unfinishedSubtasks: number,
+  completeSubtasks?: boolean
+): void {
+  if (requestedStatus === 'DONE' && isRoot && unfinishedSubtasks > 0 && completeSubtasks !== true) {
+    throw new TaskCompletionConfirmationRequired(unfinishedSubtasks);
+  }
+}
 
 interface CreateTaskInput extends TaskInput {
   title: string;
@@ -433,6 +456,18 @@ export const taskService = {
     );
 
     const finalTask = await prisma.$transaction(async (tx) => {
+      // Do not auto-complete dozens of subtasks when only the parent was checked.
+      // Check inside the transaction before any status or member updates.
+      let unfinishedChildCount = 0;
+      const completingSharedRootForEveryone = isCollaborativeRoot && input.collaborationScope === 'all';
+      if (input.status === 'DONE' && !currentTask.parentTaskId
+        && (!isCollaborativeRoot || completingSharedRootForEveryone)
+        && !currentTask.isRecurring) {
+        unfinishedChildCount = await tx.task.count({
+          where: { parentTaskId: id, status: { not: 'DONE' } }
+        });
+        enforceExplicitSubtaskCompletion(input.status, true, unfinishedChildCount, input.completeSubtasks);
+      }
       if (isCollaborativeRoot && currentTask.collaborationId) {
         await tx.collaborativeTaskMember.update({
           where: { collaborationId_userId: { collaborationId: currentTask.collaborationId, userId } },
@@ -462,10 +497,15 @@ export const taskService = {
             data: { status: 'TODO', dueDate: nextDue, telegramNotifiedAt: null }
           });
         }
-      } else if (input.status === 'DONE' && !currentTask.parentTaskId) {
-        await tx.task.updateMany({
+      } else if (input.status === 'DONE' && !currentTask.parentTaskId && input.completeSubtasks === true) {
+        // An explicit confirmation is required for every bulk status change.
+        const result = await tx.task.updateMany({
           where: { parentTaskId: id, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
+        });
+        console.warn('[Task] explicit bulk subtask completion', {
+          userId, parentTaskId: id, changedCount: result.count,
+          confirmation: true, collaborationScope: input.collaborationScope ?? 'me'
         });
       }
 
