@@ -1659,8 +1659,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const toggleFocusSubtaskStatus = async (subtask: Task) => {
-    // This checkbox changes a subtask only. Do not call completeTask(), which
-    // may offer to finish its parent when the last subtask is checked.
+    // This checkbox updates only the subtask status and never auto-finishes its parent.
     if (!openedTaskId || subtask.parentTaskId !== openedTaskId || updatingFocusSubtasksRef.current.has(subtask.id)) return;
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
     updatingFocusSubtasksRef.current.add(subtask.id);
