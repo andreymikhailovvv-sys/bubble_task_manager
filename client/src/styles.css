@@ -6209,6 +6209,46 @@ body[data-theme='light'] .miniapp-shell .miniapp-ai-chat-model-cap,
   border-color: rgba(139, 92, 246, 0.28);
 }
 
+/* Large independent hit area, with a visible checked state in both Mini App themes. */
+.miniapp-focus-subtask-check-toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  transition: background-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.miniapp-focus-subtask-check-toggle:hover {
+  background: rgba(139, 92, 246, 0.12);
+}
+.miniapp-focus-subtask-check-toggle:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 1px;
+}
+.miniapp-focus-subtask-check-toggle:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.miniapp-focus-subtask-check-box {
+  border: 1.5px solid #a78bfa;
+  background: rgba(139, 92, 246, 0.09);
+  color: #ddd6fe;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.miniapp-focus-subtask-check-box-done {
+  border-color: #7c3aed;
+  background: #7c3aed;
+  color: #fff;
+}
+.miniapp-light .miniapp-focus-subtask-check-box {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.055);
+  color: #6d28d9;
+}
+.miniapp-light .miniapp-focus-subtask-check-box-done {
+  background: #7c3aed;
+  color: #fff;
+}
+
 .miniapp-focus-subtask-icon-button,
 .miniapp-focus-subtask-visibility-button {
   display: inline-flex;
