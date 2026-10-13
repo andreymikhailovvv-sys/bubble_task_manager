@@ -3339,7 +3339,7 @@ ${allContext}`,
       setFocusedTaskId((current) => current === task.id ? null : current);
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось завершить задачу');
+      window.alert(cause instanceof Error ? cause.message : 'Не удалось завершить задачу');
     } finally {
       unmarkTaskAsClosing(task.id);
     }
