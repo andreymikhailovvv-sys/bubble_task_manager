@@ -118,6 +118,7 @@ model User {
   habitCompletions HabitCompletion[]
   consents     UserConsent[]
   aiUsageEvents AiUsageEvent[]
+  aiCreditReservationRecords AiCreditReservationRecord[]
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
@@ -176,6 +177,25 @@ model AiUsageEvent {
   @@index([userId, createdAt])
   @@index([requestId])
   @@index([actionId])
+}
+
+model AiCreditReservationRecord {
+  id                   String   @id
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period               String
+  includedMilli        Int
+  bonusMilli           Int
+  purchasedMilli       Int
+  totalMilli           Int
+  status               String   @default("RESERVED")
+  chargedMilli         Int      @default(0)
+  refundedMilli        Int      @default(0)
+  expiredIncludedMilli Int      @default(0)
+  createdAt            DateTime @default(now())
+  settledAt            DateTime?
+
+  @@index([userId, status])
 }
 
 model UserConsent {
