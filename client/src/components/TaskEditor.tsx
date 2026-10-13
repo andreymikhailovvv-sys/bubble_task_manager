@@ -1324,7 +1324,7 @@ export function TaskEditor({
                 onClick={() => onComplete?.()}
               >
                 <CheckCircle2 size={16} />
-                Выполнить
+                {task?.status === 'DONE' ? 'Вернуть' : 'Выполнить'}
               </button>
               <button
                 type="button"
