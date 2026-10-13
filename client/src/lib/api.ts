@@ -260,7 +260,7 @@ export const api = {
   deleteSphere: (id: string) => request<{ ok: true }>(`/api/spheres/${id}`, { method: 'DELETE' }),
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
-  updateTask: (id: string, payload: Partial<Task> & { collaborationScope?: 'me' | 'all' }) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  updateTask: (id: string, payload: Partial<Task> & { collaborationScope?: 'me' | 'all'; completeSubtasks?: boolean }) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string, scope: 'me' | 'all' = 'me') => request<{ ok: true }>(`/api/tasks/${id}?scope=${scope}`, { method: 'DELETE' }),
   createTaskShare: (id: string) => request<{ token: string }>(`/api/tasks/${id}/share`, { method: 'POST' }),
   getTaskShare: (token: string) => request<{ title: string; description?: string | null; subtaskCount: number; ownerName: string }>(`/api/task-shares/${token}`),
