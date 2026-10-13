@@ -44,7 +44,7 @@ test('развёрнутые карточки подзадач увеличив�
   assert.match(styles, /\.upcoming-subtask-row \{\s*height: auto;\s*min-height: 7rem;/);
   assert.match(styles, /\.upcoming-subtask-copy \{[\s\S]*?height: auto;\s*max-height: none;/);
   assert.match(styles, /\.upcoming-subtask-description \{[\s\S]*?max-height: none;[\s\S]*?white-space: pre-wrap;/);
-  assert.doesNotMatch(web, /upcoming-subtask-row[^\n]*h-\[7rem\]/);
+  assert.doesNotMatch(web, /upcoming-subtask-row[^\n]*\sh-\[7rem\]/);
 });
 
 test('скругления полей и заметки не перекрываются содержимым', async () => {
