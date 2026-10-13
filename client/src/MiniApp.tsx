@@ -650,6 +650,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
   const [openedSubtaskId, setOpenedSubtaskId] = useState<string | null>(null);
+  const openedTaskContentsScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingOpenedTaskScrollTopRef = useRef<number | null>(null);
   const [hideClosedOpenedTaskSubtasks, setHideClosedOpenedTaskSubtasks] = useState(true);
   const [openedTaskSubtaskFilterMode, setOpenedTaskSubtaskFilterMode] = useState<SubtaskFilterMode>('urgency');
   const [openedTaskSubtaskAuthorFilterUserId, setOpenedTaskSubtaskAuthorFilterUserId] = useState<string | null>(null);
@@ -1665,6 +1667,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     updatingFocusSubtasksRef.current.add(subtask.id);
     setUpdatingFocusSubtaskIds((current) => [...current, subtask.id]);
     setError(null);
+    // Keep the same viewport when a finished subtask is returned to active.
+    // The active/finished sort moves rows and otherwise triggers scroll anchoring.
+    if (nextStatus === 'TODO' && openedTaskContentsScrollRef.current) {
+      pendingOpenedTaskScrollTopRef.current = openedTaskContentsScrollRef.current.scrollTop;
+    }
     // Keep a newly checked item on screen, so the same checkbox can undo it.
     if (nextStatus === 'DONE') setHideClosedOpenedTaskSubtasks(false);
     setTasks((current) => current.map((item) =>
@@ -1683,6 +1690,24 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     } finally {
       updatingFocusSubtasksRef.current.delete(subtask.id);
       setUpdatingFocusSubtaskIds((current) => current.filter((id) => id !== subtask.id));
+    }
+  };
+
+  const restoreOpenedSubtask = async (subtask: Task) => {
+    if (subtask.status !== 'DONE' || completingId === subtask.id) return;
+    setCompletingId(subtask.id);
+    setError(null);
+    if (openedTaskContentsScrollRef.current) {
+      pendingOpenedTaskScrollTopRef.current = openedTaskContentsScrollRef.current.scrollTop;
+    }
+    try {
+      const updated = await api.updateTask(subtask.id, { status: 'TODO' });
+      setTasks((current) => current.map((item) => item.id === subtask.id ? { ...item, ...updated } : item));
+    } catch (cause) {
+      pendingOpenedTaskScrollTopRef.current = null;
+      setError(cause instanceof Error ? cause.message : 'Не удалось вернуть подзадачу');
+    } finally {
+      setCompletingId(null);
     }
   };
 
@@ -2144,8 +2169,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         return createdAtTimestamp(a) - createdAtTimestamp(b);
       });
   }, [hideClosedOpenedTaskSubtasks, openedTask, openedTaskSubtaskAuthorFilterUserId, openedTaskSubtaskFilterMode, subtasksByParent]);
+  useLayoutEffect(() => {
+    const top = pendingOpenedTaskScrollTopRef.current;
+    const container = openedTaskContentsScrollRef.current;
+    if (top === null || !container) return;
+    container.scrollTop = Math.min(top, Math.max(0, container.scrollHeight - container.clientHeight));
+    pendingOpenedTaskScrollTopRef.current = null;
+  }, [openedTaskSubtasks]);
+
+  // Completed subtasks remain openable. Their editor offers "Вернуть" instead of "Выполнить".
   const openedSubtask = openedSubtaskId
-    ? tasks.find((task) => task.id === openedSubtaskId && task.status !== 'DONE') ?? null
+    ? tasks.find((task) => task.id === openedSubtaskId) ?? null
     : null;
   const openedSubtaskParent = openedSubtask?.parentTaskId
     ? tasks.find((task) => task.id === openedSubtask.parentTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
@@ -3536,7 +3570,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
 
-              <div className="min-h-0 flex-1 overflow-y-auto pr-1" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
+              <div ref={openedTaskContentsScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-1" onScroll={() => setIsOpenedTaskSubtaskFilterOpen(false)}>
                 <textarea
                   ref={taskTitleInputRef}
                   value={openedTaskDraft.title}
@@ -3859,8 +3893,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </button>
             ) : openedSubtask ? (
               <div className="miniapp-subtask-actions sticky bottom-0 z-10 -mx-4 mt-4 grid grid-cols-2 gap-2 px-4 pt-3">
-                <button type="button" onClick={() => void completeTask(openedSubtask.id)} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
-                  <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : 'Выполнить'}
+                <button type="button" onClick={() => void (openedSubtask.status === 'DONE' ? restoreOpenedSubtask(openedSubtask) : completeTask(openedSubtask.id))} disabled={completingId === openedSubtask.id} className="miniapp-focus-success-button">
+                  <CheckCircle2 size={14} /> {completingId === openedSubtask.id ? '...' : openedSubtask.status === 'DONE' ? 'Вернуть' : 'Выполнить'}
                 </button>
                 <button type="button" onClick={() => void deleteTask(openedSubtask.id)} disabled={deletingId === openedSubtask.id} className="miniapp-focus-danger-button">
                   <Trash2 size={14} /> {deletingId === openedSubtask.id ? '...' : 'Удалить'}
