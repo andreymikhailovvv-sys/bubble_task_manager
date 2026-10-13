@@ -7490,7 +7490,7 @@ ${allContext}`,
             <div className="upcoming-subtasks-toolbar flex flex-wrap gap-2 px-6 py-3 text-xs">
               {([
                 { key: 'all', label: 'все' },
-                    { key: 'today', label: 'на сегодня' },
+                { key: 'today', label: 'на сегодня' },
                 { key: 'tomorrow', label: 'на завтра' },
                 { key: 'week', label: 'на неделю' },
                 { key: 'no_due', label: 'без срока' }
