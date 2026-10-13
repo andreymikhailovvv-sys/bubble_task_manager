@@ -1,4 +1,4 @@
-export type CompletionTask = { id: string; parentTaskId?: string | null; status: string };
+export type CompletionTask = { id: string; parentTaskId?: string | null; status?: string };
 export type ConfirmedCompletionPatch = { status: 'DONE'; completeSubtasks?: true };
 
 const isConfirmationRequired = (error: unknown) =>
