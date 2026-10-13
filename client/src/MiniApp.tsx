@@ -2754,7 +2754,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
       : question;
     const clientRequestId = crypto.randomUUID();
-    const nextDialog: ChatMessage[] = [...baseDialog, { id: clientRequestId, role: 'user', content: userMessage, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
+    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     setAiDraft('');
     setAiPendingFiles([]);
