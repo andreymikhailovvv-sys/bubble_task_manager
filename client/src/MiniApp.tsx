@@ -1637,7 +1637,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         { id: taskId, parentTaskId: completed?.parentTaskId ?? null, status: completed?.status ?? 'TODO' },
         tasks,
         (patch) => api.updateTask(taskId, { ...patch, collaborationScope: scope ?? 'me' }),
-        (message) => window.confirm(message)
+        (message) => window.confirm(message),
+        undefined,
+        !(task?.isCollaborative && (scope ?? 'me') === 'me')
       );
       if (!completedWithConsent) return;
       await loadData();
