@@ -3709,7 +3709,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="space-y-2">
                     {openedTaskSubtasks.map((subtask) => {
                       return (
-                        <article key={subtask.id} className={`miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm ${subtask.status === 'DONE' ? 'opacity-60' : ''}`}>
+                        <article key={subtask.id} className="miniapp-focus-subtask-row min-h-12 rounded-xl px-3 py-2.5 text-sm">
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
@@ -3726,7 +3726,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                               </span>
                             </button>
                             <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
-                              <span className="min-w-0 flex-1 truncate font-medium">{subtask.title}</span>
+                              <span className={`min-w-0 flex-1 truncate font-medium ${subtask.status === 'DONE' ? 'opacity-60 line-through' : ''}`}>{subtask.title}</span>
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                               {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
                             </button>
