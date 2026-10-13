@@ -119,6 +119,7 @@ model User {
   consents     UserConsent[]
   aiUsageEvents AiUsageEvent[]
   aiCreditReservationRecords AiCreditReservationRecord[]
+  aiChatRequests AiChatRequest[]
   aiChatConversationMemories AiChatConversationMemory[]
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
@@ -177,6 +178,23 @@ model AiUsageEvent {
   @@index([userId, createdAt])
   @@index([requestId])
   @@index([actionId])
+}
+
+// Per-user request deduplication for the general AI chat. An interrupted
+// execution must not be transparently retried because actions may have run.
+model AiChatRequest {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientRequestId String
+  payloadSha256    String
+  status          String   @default("PROCESSING")
+  responseJson    Json?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@unique([userId, clientRequestId])
+  @@index([status, createdAt])
 }
 
 model AiCreditReservationRecord {

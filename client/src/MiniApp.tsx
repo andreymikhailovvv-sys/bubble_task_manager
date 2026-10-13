@@ -2300,6 +2300,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       setAiChatProgress('analyzing_request');
       const result = await api.askAiChatStreaming({
+        clientRequestId: userMessage.id,
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
         model: selectedAiChatModel,

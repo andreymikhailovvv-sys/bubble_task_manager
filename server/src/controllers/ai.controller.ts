@@ -9,6 +9,7 @@ import { logAiTraceSummary } from '../services/ai-trace-summary.service.js';
 import { editUserImageIfRequested } from '../services/ai-user-image-edit.service.js';
 import { editUserDocumentIfRequested } from '../services/ai-user-document-edit.service.js';
 import { isDynamicTextBillingEnabled } from '../services/dynamic-responses-billing.service.js';
+import { claimAiChatRequest, completeAiChatRequest, failAiChatRequest, aiChatDuplicateMessage, AiChatRequestKeyError, type AiChatRequestClaim } from '../services/ai-chat-request.service.js';
 
 type ChatAttachment = {
   name: string;
@@ -70,7 +71,7 @@ const resolveUserTimeZone = async (req: Request): Promise<string> => {
 
 export const aiController = {
   askAiChat: async (req: Request, res: Response) => {
-    const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceDiagnostics: { context: AiChatContextDiagnostics } | null = null; let traceError: unknown = null;
+    const startedAt = Date.now(); const requestId = randomUUID(); let traceResult: any = null; let traceDiagnostics: { context: AiChatContextDiagnostics } | null = null; let traceError: unknown = null; let requestClaim: AiChatRequestClaim | null = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     try {
@@ -78,6 +79,25 @@ export const aiController = {
       if (!question.trim()) {
         if (streaming) { res.status(400).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); writeStreamEvent({ type: 'error', message: 'question is required' }); res.end(); }
         else res.status(400).json({ error: 'question is required' });
+        return;
+      }
+      // Claim before stream headers, OpenAI calls, image/document edits and
+      // wallet debits. Database uniqueness makes this safe across workers.
+      requestClaim = await claimAiChatRequest(req.user!.id, req.body?.clientRequestId, req.body ?? {});
+      if (requestClaim.kind === 'duplicate') {
+        const message = aiChatDuplicateMessage(requestClaim.reason);
+        if (streaming) {
+          res.status(409).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+          writeStreamEvent({ type: 'error', message }); res.end();
+        } else res.status(409).json({ error: message });
+        return;
+      }
+      if (requestClaim.kind === 'replay') {
+        res.set('X-AI-Replayed', 'true');
+        if (streaming) {
+          res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+          writeStreamEvent({ type: 'result', result: requestClaim.response }); res.end();
+        } else res.json(requestClaim.response);
         return;
       }
       if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
@@ -118,9 +138,15 @@ export const aiController = {
         await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       }
       const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
+      await completeAiChatRequest(requestClaim ?? { kind: 'untracked' }, publicResult);
       if (streaming) { writeStreamEvent({ type: 'result', result: publicResult }); res.end(); } else res.json(publicResult);
     } catch (error) {
       traceError = error;
+      if (requestClaim?.kind === 'new') {
+        await failAiChatRequest(requestClaim).catch((finalizationError) => {
+          console.error('[AI chat idempotency] unable to finalize failed request', { requestId, errorName: finalizationError instanceof Error ? finalizationError.name : 'UnknownError' });
+        });
+      }
       // Keep enough context to diagnose errors without logging prompts, file
       // contents, document text, or full model responses.
       console.error('[AI] general chat request failed', {
@@ -128,7 +154,11 @@ export const aiController = {
         errorName: error instanceof Error ? error.name : 'UnknownError',
         stackFrames: error instanceof Error ? error.stack?.split(String.fromCharCode(10)).slice(1, 4).map(line => line.trim().slice(0, 200)) ?? [] : []
       });
-      if (streaming) { writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end(); }
+      if (streaming) {
+        if (!res.headersSent) res.status(error instanceof AiChatRequestKeyError ? 400 : 500).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8' });
+        writeStreamEvent({ type: 'error', message: error instanceof Error ? error.message : 'Unknown AI error' }); res.end();
+      }
+      else if (error instanceof AiChatRequestKeyError) res.status(400).json({ error: error.message });
       else sendAiError(res, error);
     } finally {
       const diagnostics = traceResult?.diagnostics ?? traceDiagnostics; const workflow = traceResult?.workflowDiagnostics;

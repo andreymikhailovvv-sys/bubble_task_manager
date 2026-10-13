@@ -2725,6 +2725,7 @@ ${allContext}`,
       const attachments = quick ? [] : await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
       setAiChatProgress('analyzing_request');
       const result = await api.askAiChatStreaming({
+        clientRequestId: userMessage.id,
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         history,
         model: quick ? 'gpt-6-luna' : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : selectedAiChatModel,
