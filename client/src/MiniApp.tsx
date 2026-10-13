@@ -26,6 +26,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
+import { completeTaskWithUserConfirmation } from './lib/explicitTaskCompletion';
 
 const MINIAPP_EFFICIENCY_BONUSES = {
   doneHabit: 3,
@@ -1632,8 +1633,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setError(null);
     try {
       const completed = tasks.find((item) => item.id === taskId);
-      const updatedTask = await api.updateTask(taskId, { status: 'DONE', collaborationScope: scope ?? 'me' });
-      setTasks((current) => current.map((item) => item.id === taskId ? updatedTask : item));
+      const completedWithConsent = await completeTaskWithUserConfirmation(
+        { id: taskId, parentTaskId: completed?.parentTaskId ?? null, status: completed?.status ?? 'TODO' },
+        tasks,
+        (patch) => api.updateTask(taskId, { ...patch, collaborationScope: scope ?? 'me' }),
+        (message) => window.confirm(message)
+      );
+      if (!completedWithConsent) return;
+      await loadData();
 
       if (!completed?.parentTaskId && openedTaskId === taskId) {
         setDraftByTaskId((current) => {
