@@ -37,6 +37,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
 import { changedDraftFields, mergeRemoteDraftFields } from './lib/taskDraftSync';
+import { completeTaskWithUserConfirmation } from './lib/explicitTaskCompletion';
 
 const MAX_SPHERES = 8;
 
@@ -3318,16 +3319,29 @@ ${allContext}`,
       setCollaborationAction({ task, action: 'complete' });
       return;
     }
-    markTaskAsClosing(task.id);
-    setPoppingTaskId(task.id);
-    await new Promise((resolve) => setTimeout(resolve, 680));
-    await api.updateTask(task.id, { status: 'DONE', collaborationScope: scope ?? 'me' });
-    void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
-    if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
-    unmarkTaskAsClosing(task.id);
-    setEditorState((current) => current?.task?.id === task.id ? null : current);
-    setFocusedTaskId((current) => current === task.id ? null : current);
-    await load();
+    try {
+      const completed = await completeTaskWithUserConfirmation(
+        task,
+        tasks,
+        (patch) => api.updateTask(task.id, { ...patch, collaborationScope: scope ?? 'me' }),
+        (message) => window.confirm(message),
+        async () => {
+          markTaskAsClosing(task.id);
+          setPoppingTaskId(task.id);
+          await new Promise((resolve) => setTimeout(resolve, 680));
+        }
+      );
+      if (!completed) return;
+      void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
+      if (isFocusBonusEligible(task.id)) pushFocusBonusMessage('task', EFFICIENCY_BONUSES.doneTask * (FOCUS_BONUS_MULTIPLIERS.task - 1));
+      setEditorState((current) => current?.task?.id === task.id ? null : current);
+      setFocusedTaskId((current) => current === task.id ? null : current);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось завершить задачу');
+    } finally {
+      unmarkTaskAsClosing(task.id);
+    }
   };
 
   const saveFocusedTask = async () => {
