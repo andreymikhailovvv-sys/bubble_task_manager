@@ -1007,7 +1007,7 @@ export default function App() {
   const [generalAiSearchQuery, setGeneralAiSearchQuery] = useState('');
   const [isGeneralAiSearchOpen, setIsGeneralAiSearchOpen] = useState(false);
   const [isUpcomingSubtasksModalOpen, setIsUpcomingSubtasksModalOpen] = useState(false);
-  const [upcomingSubtasksFilter, setUpcomingSubtasksFilter] = useState<'today' | 'tomorrow' | 'week' | 'no_due'>('today');
+  const [upcomingSubtasksFilter, setUpcomingSubtasksFilter] = useState<'all' | 'today' | 'tomorrow' | 'week' | 'no_due'>('all');
   const [generalAiDraft, setGeneralAiDraft] = useState('');
   const [isGeneralAiFullscreen, setIsGeneralAiFullscreen] = useState(false);
   const [generalAiLoading, setGeneralAiLoading] = useState(false);
@@ -1789,7 +1789,7 @@ export default function App() {
       }))
       .filter(({ dueTimestamp }) => Number.isFinite(dueTimestamp))
       .sort((a, b) => a.dueTimestamp - b.dueTimestamp)
-      .slice(0, 5)
+      .slice(0, 3)
       .map(({ task }) => task);
   }, [subtasks]);
   const filteredUpcomingSubtasksForModal = useMemo(() => {
@@ -1805,6 +1805,7 @@ export default function App() {
     return subtasks
       .filter((task) => task.status !== 'DONE')
       .filter((task) => {
+        if (upcomingSubtasksFilter === 'all') return true;
         if (!task.dueDate) return upcomingSubtasksFilter === 'no_due';
         const due = new Date(task.dueDate);
         if (Number.isNaN(due.getTime())) return upcomingSubtasksFilter === 'no_due';
@@ -6062,6 +6063,7 @@ ${allContext}`,
                 <div className="upcoming-subtasks-toolbar px-6 py-3">
                   <div className="flex flex-wrap gap-2 text-xs">
                   {([
+                    { key: 'all', label: 'все' },
                     { key: 'today', label: 'на сегодня' },
                     { key: 'tomorrow', label: 'на завтра' },
                     { key: 'week', label: 'на неделю' },
@@ -6078,20 +6080,20 @@ ${allContext}`,
                   ))}
                   </div>
                 </div>
-                <ul className="upcoming-subtasks-list flex-1 space-y-2 overflow-y-auto px-6 py-4 text-sm">
+                <ul className="upcoming-subtasks-list min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4 text-sm sm:px-6">
                   {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
                   {filteredUpcomingSubtasksForModal.map((subtask) => (
                     <li
                       key={subtask.id}
-                      className={`upcoming-subtask-row upcoming-subtask-row-sector relative flex h-[7rem] min-h-[7rem] items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''}`}
+                      className={`upcoming-subtask-row upcoming-subtask-row-sector relative flex min-h-[7rem] items-start gap-3 rounded-2xl border px-4 py-3 ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''}`}
                       style={{ '--upcoming-subtask-sector-color': getSubtaskSphereColor(subtask) } as CSSProperties}
                     >
                       <input type="checkbox" className="shrink-0" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
-                      <div className="upcoming-subtask-copy min-h-0 min-w-0 flex-1 overflow-hidden">
-                        <p className={`upcoming-subtask-title truncate text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                      <div className="upcoming-subtask-copy min-w-0 flex-1">
+                        <p className={`upcoming-subtask-title text-sm font-semibold text-primary ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`}><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
                         <div className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></div>
-                        <p className="upcoming-subtask-deadline mt-1 truncate text-[11px] text-subtle">
+                        <p className="upcoming-subtask-deadline mt-1 text-[11px] text-subtle">
                           Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                         </p>
                       </div>
@@ -6099,6 +6101,7 @@ ${allContext}`,
                         <InlineDateTimePickerIcon
                           value={subtask.dueDate}
                           title="Изменить срок подзадачи"
+                          detachedPopup
                           timelineTasks={timelinePickerTasks}
                           className="upcoming-subtask-date-action"
                           onChange={async (dueDate) => {
@@ -7486,6 +7489,7 @@ ${allContext}`,
             </div>
             <div className="upcoming-subtasks-toolbar flex flex-wrap gap-2 px-6 py-3 text-xs">
               {([
+                { key: 'all', label: 'все' },
                 { key: 'today', label: 'на сегодня' },
                 { key: 'tomorrow', label: 'на завтра' },
                 { key: 'week', label: 'на неделю' },
@@ -7501,7 +7505,7 @@ ${allContext}`,
                 </button>
               ))}
             </div>
-            <ul className="upcoming-subtasks-list flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-6 py-4 text-sm">
+            <ul className="upcoming-subtasks-list min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4 text-sm sm:px-6">
               {filteredUpcomingSubtasksForModal.length === 0 ? <li className="surface-muted rounded px-3 py-2 text-subtle">Нет подзадач для выбранного фильтра</li> : null}
               {filteredUpcomingSubtasksForModal.map((subtask) => (
                 <li
@@ -7512,19 +7516,19 @@ ${allContext}`,
                 >
                   <input
                     type="checkbox"
-                    className="mt-1"
+                    className="mt-1 shrink-0"
                     checked={subtask.status === 'DONE'}
                     onClick={(event) => event.stopPropagation()}
                     onChange={async () => { await toggleSubtaskDone(subtask); }}
                   />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-primary [overflow-wrap:anywhere]"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted [overflow-wrap:anywhere]"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
-                    <p className="mt-1 text-[11px] text-subtle">
+                  <div className="upcoming-subtask-copy min-w-0 flex-1">
+                    <p className="upcoming-subtask-title text-sm font-medium text-primary"><LinkifiedText text={subtask.title} stopPropagationOnLinkClick /></p>
+                    <p className="upcoming-subtask-description mt-1 text-xs text-muted"><LinkifiedText text={noteHtmlToPlainText(subtask.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                    <p className="upcoming-subtask-deadline mt-1 text-[11px] text-subtle">
                       Дедлайн: {formatTaskDueDate(subtask.dueDate)}{subtask.dueDate ? ` · ${formatDeadlineLeft(subtask.dueDate)}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <InlineDateTimePickerIcon
                       value={subtask.dueDate}
                       title="Изменить срок подзадачи"

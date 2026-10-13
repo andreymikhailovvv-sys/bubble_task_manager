@@ -340,7 +340,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
                 <div className="standalone-notes-grid grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredNotes.map((note) => (
                     <article key={note.id} className="standalone-note-card group flex min-h-48 flex-col overflow-hidden rounded-2xl border">
-                      <button type="button" className="min-w-0 flex-1 px-4 pb-2 pt-4 text-left" onClick={() => openEditor(note)} aria-label={'Открыть заметку «' + titleOf(note) + '»'}>
+                      <button type="button" className="standalone-note-open min-w-0 flex-1 px-4 pb-2 pt-4 text-left" onClick={() => openEditor(note)} aria-label={'Открыть заметку «' + titleOf(note) + '»'}>
                         <h3 className="break-words text-base font-bold text-primary">{titleOf(note)}</h3>
                         {groupFor(note) ? (
                           <span className="standalone-group-note-label mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
