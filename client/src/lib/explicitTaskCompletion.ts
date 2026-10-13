@@ -18,7 +18,7 @@ export async function completeTaskWithUserConfirmation(
   beforeRequest?: () => Promise<void>,
   bulkCompletionPossible = true
 ): Promise<boolean> {
-  const unfinished = task.parentTaskId ? 0 : tasks.filter(
+  const unfinished = task.parentTaskId || !bulkCompletionPossible ? 0 : tasks.filter(
     item => item.parentTaskId === task.id && item.status !== 'DONE'
   ).length;
   let completeSubtasks = false;
