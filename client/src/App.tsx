@@ -2165,7 +2165,8 @@ export default function App() {
     const userContent = fileNames.length > 0
       ? `${baseUserContent || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
       : baseUserContent;
-    const nextDialog = [...previousDialog, { id: crypto.randomUUID(), role: 'user' as const, content: userContent, ...(focusedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: focusedTask.collaborationColor } : {}) }];
+    const clientRequestId = crypto.randomUUID();
+    const nextDialog = [...previousDialog, { id: clientRequestId, role: 'user' as const, content: userContent, ...(focusedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: focusedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
     setAiDraft('');
     setAiPendingFiles([]);
@@ -2175,6 +2176,7 @@ export default function App() {
 
     try {
       const result = await askTaskAssistant(taskId, {
+        clientRequestId,
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
         userMessage: userContent,
         model: options?.modelOverride ?? focusedAiModel,
@@ -2544,7 +2546,8 @@ export default function App() {
 ${allContext}`,
       `Запрос пользователя: ${question || visibleUserContent}`
     ].join('\n\n');
-    setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', content: userContent }]);
+    const clientRequestId = crypto.randomUUID();
+    setFocusAiMessages((prev) => [...prev, { id: clientRequestId, role: 'user', content: userContent }]);
     setFocusAiDraft('');
     setFocusAiPendingFiles([]);
     setFocusAiError(null);
@@ -2552,7 +2555,7 @@ ${allContext}`,
     setFocusAiProgress('analyzing_request');
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress);
+      const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined }]);
       await refreshAiCredits();
     } catch (error) {
@@ -3659,7 +3662,7 @@ ${allContext}`,
     });
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
+  const askTaskAssistant = async (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
     const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus });
     try {
       const me = await api.getMe();

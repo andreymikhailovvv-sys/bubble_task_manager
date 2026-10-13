@@ -107,8 +107,8 @@ export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>
   return result;
 }
 
-async function askTaskAssistantStreaming(taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
-  const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
+async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
+  const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.();
   if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
   try {
@@ -301,10 +301,10 @@ export const api = {
 
   getTaskAssistantHistory: (taskId: string) =>
     request<{ messages: ChatMessage[] }>(`/api/tasks/${taskId}/ai-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
-  askTaskAssistant: (taskId: string, payload: { question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }) =>
+  askTaskAssistant: (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }) =>
     request<TaskAssistantResult>(`/api/tasks/${taskId}/ai-chat`, {
       method: 'POST',
-      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
+      body: JSON.stringify({ ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() })
     }),
   askTaskAssistantStreaming,
   appendTaskAssistantMessages: (taskId: string, payload: { messages: ChatMessage[] }) =>

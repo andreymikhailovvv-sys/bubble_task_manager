@@ -257,7 +257,7 @@ export const aiController = {
     }
   },
   askTaskAssistant: async (req: Request, res: Response) => {
-    const traceStartedAt = Date.now(); const traceRequestId = randomUUID(); let traceTaskResult: any = null; let traceTaskError: unknown = null;
+    const traceStartedAt = Date.now(); const traceRequestId = randomUUID(); let traceTaskResult: any = null; let traceTaskError: unknown = null; let taskRequestClaim: AiChatRequestClaim | null = null;
     const streaming = (req.get('accept') ?? '').toLowerCase().split(',').some((value) => value.trim().split(';')[0] === 'application/x-ndjson');
     const writeStreamEvent = (event: unknown) => {
       res.write(`${JSON.stringify(event)}\n`);
@@ -282,6 +282,31 @@ export const aiController = {
         return;
       }
 
+      // Recheck active task access before potentially returning a cached
+      // answer. Removed collaborators must not replay private responses.
+      const persistedHistory = await aiAssistantService.listTaskDialogForContext({
+        userId: req.user!.id, taskId: req.params.id
+      });
+      // Server-owned task / route fingerprint scope prevents cross-task replay.
+      taskRequestClaim = await claimAiChatRequest(req.user!.id, req.body?.clientRequestId, {
+        ...(req.body ?? {}), __aiRequestKind: 'task-chat', __aiTaskId: req.params.id
+      });
+      if (taskRequestClaim.kind === 'duplicate') {
+        const message = aiChatDuplicateMessage(taskRequestClaim.reason);
+        if (streaming) {
+          res.status(409).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+          writeStreamEvent({ type: 'error', message }); res.end();
+        } else res.status(409).json({ error: message });
+        return;
+      }
+      if (taskRequestClaim.kind === 'replay') {
+        res.set('X-AI-Replayed', 'true');
+        if (streaming) {
+          res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store' });
+          writeStreamEvent({ type: 'result', result: taskRequestClaim.response }); res.end();
+        } else res.json(taskRequestClaim.response);
+        return;
+      }
       if (streaming) {
         res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' });
         res.flushHeaders();
@@ -296,11 +321,6 @@ export const aiController = {
         model,
         questionLength: question.length,
         userMessageLength: typeof userMessage === 'string' ? userMessage.length : 0
-      });
-
-      const persistedHistory = await aiAssistantService.listTaskDialogForContext({
-        userId: req.user!.id,
-        taskId: req.params.id
       });
 
       const userTimeZone = await resolveUserTimeZone(req);
@@ -357,12 +377,22 @@ export const aiController = {
         answerLength: result.answer.length
       });
 
+      // Complete only after persisted user and assistant dialog messages.
+      await completeAiChatRequest(taskRequestClaim ?? { kind: 'untracked' }, result);
       if (streaming) {
         writeStreamEvent({ type: 'result', result });
         res.end();
       } else res.json(result);
     } catch (error) {
       traceTaskError = error;
+      if (taskRequestClaim?.kind === 'new') {
+        await failAiChatRequest(taskRequestClaim).catch((finalizationError) => {
+          console.error('[AI task chat idempotency] finalization failed', {
+            requestId: traceRequestId,
+            errorName: finalizationError instanceof Error ? finalizationError.name : 'UnknownError'
+          });
+        });
+      }
       const message = error instanceof Error ? error.message : 'Unknown AI error';
       console.error('[AI] /tasks/:id/ai-chat failed', {
         userId: req.user?.id,
@@ -373,10 +403,14 @@ export const aiController = {
         error: message,
         stack: error instanceof Error ? error.stack : null
       });
-      if (streaming && res.headersSent) {
+      if (streaming) {
+        if (!res.headersSent) res.status(error instanceof AiChatRequestKeyError ? 400 : 500).set({
+          'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store'
+        });
         writeStreamEvent({ type: 'error', message });
         res.end();
-      } else sendAiError(res, error);
+      } else if (error instanceof AiChatRequestKeyError) res.status(400).json({ error: message });
+      else sendAiError(res, error);
     } finally {
       logAiTraceSummary({ requestId: traceRequestId, endpoint: 'task-chat', surface: req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : 'unknown', taskId: req.params.id, model: traceTaskResult?.model ?? req.body?.model ?? null, contextMode: process.env.TASK_CHAT_MEMORY_ENABLED === 'true' ? 'v3' : 'v2', memoryRevision: traceTaskResult?.diagnostics?.memoryRevision ?? null, memoryCompactionTriggered: traceTaskResult?.diagnostics?.memoryCompactionTriggered ?? false, providerCalls: traceTaskResult?.diagnostics?.providerCalls ?? 0, toolCalls: traceTaskResult?.diagnostics?.toolCalls ?? 0, toolOperations: traceTaskResult?.diagnostics?.toolOperations ?? [], inputTokensTotal: traceTaskResult?.diagnostics?.inputTokensTotal ?? 0, outputTokensTotal: traceTaskResult?.diagnostics?.outputTokensTotal ?? 0, creditsSpentMilli: traceTaskResult?.billing?.creditsSpentMilli ?? 0, durationMs: Date.now() - traceStartedAt, success: !traceTaskError, ...(!traceTaskError ? {} : { errorCode: traceTaskError instanceof Error ? traceTaskError.name : 'UnknownError' }) });
     }
