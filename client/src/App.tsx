@@ -3329,7 +3329,8 @@ ${allContext}`,
           markTaskAsClosing(task.id);
           setPoppingTaskId(task.id);
           await new Promise((resolve) => setTimeout(resolve, 680));
-        }
+        },
+        !(task.isCollaborative && (scope ?? 'me') === 'me')
       );
       if (!completed) return;
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.doneTask, 'task');
