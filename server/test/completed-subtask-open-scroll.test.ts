@@ -41,7 +41,7 @@ test('web restores finished subtasks, shows Return and keeps scrolled lists in p
   assert.match(app, /ref=\{focusedSubtaskListScrollRef\}/);
   assert.match(app, /ref=\{focusModeSubtaskListScrollRef\}/);
   assert.match(app, /pendingSubtaskScrollRef\.current = \{/);
-  assert.match(app, /focusedSubtaskListScrollRef\.current\.scrollTop/);
-  assert.match(app, /focusModeSubtaskListScrollRef\.current\.scrollTop/);
+  assert.match(app, /focusedSubtaskListScrollRef\.current\?\.scrollTop/);
+  assert.match(app, /focusModeSubtaskListScrollRef\.current\?\.scrollTop/);
   assert.match(app, /useLayoutEffect\(\(\) => \{\s*const pending = pendingSubtaskScrollRef\.current/);
 });
