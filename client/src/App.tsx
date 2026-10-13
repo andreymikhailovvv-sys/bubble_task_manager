@@ -962,6 +962,22 @@ export default function App() {
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
   const [hideClosedFocusedSubtasks, setHideClosedFocusedSubtasks] = useState(true);
+  const focusedSubtaskListScrollRef = useRef<HTMLUListElement | null>(null);
+  const focusModeSubtaskListScrollRef = useRef<HTMLUListElement | null>(null);
+  const pendingSubtaskScrollRef = useRef<{ focused: number | null; focusMode: number | null } | null>(null);
+  useLayoutEffect(() => {
+    const pending = pendingSubtaskScrollRef.current;
+    if (!pending) return;
+    if (focusedSubtaskListScrollRef.current && pending.focused !== null) {
+      const container = focusedSubtaskListScrollRef.current;
+      container.scrollTop = Math.min(pending.focused, Math.max(0, container.scrollHeight - container.clientHeight));
+    }
+    if (focusModeSubtaskListScrollRef.current && pending.focusMode !== null) {
+      const container = focusModeSubtaskListScrollRef.current;
+      container.scrollTop = Math.min(pending.focusMode, Math.max(0, container.scrollHeight - container.clientHeight));
+    }
+    pendingSubtaskScrollRef.current = null;
+  }, [tasks]);
   const [isAddingFocusedSubtask, setIsAddingFocusedSubtask] = useState(false);
   const [focusedSubtaskTitle, setFocusedSubtaskTitle] = useState('');
   const [focusedSubtaskDueDate, setFocusedSubtaskDueDate] = useState<string | null>(null);
@@ -3367,6 +3383,14 @@ ${allContext}`,
 
   const toggleSubtaskDone = async (subtask: Task) => {
     const nextStatus = subtask.status === 'DONE' ? 'TODO' : 'DONE';
+    if (nextStatus === 'TODO') {
+      // Restoring a finished row changes the sort order. Keep the viewport
+      // where it was rather than jumping to the top of the subtask list.
+      pendingSubtaskScrollRef.current = {
+        focused: focusedSubtaskListScrollRef.current?.scrollTop ?? null,
+        focusMode: focusModeSubtaskListScrollRef.current?.scrollTop ?? null
+      };
+    }
     if (nextStatus === 'DONE') {
       markTaskAsClosing(subtask.id);
       setPoppingTaskId(subtask.id);
@@ -4807,7 +4831,7 @@ ${allContext}`,
                     ) : null}
                   </div>
                 </div>
-                <ul className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1" onScroll={() => setIsSubtaskFilterOpen(false)}>
+                <ul ref={focusModeSubtaskListScrollRef} className="focus-subtask-list mt-3 min-h-0 space-y-2 overflow-y-auto pr-1" onScroll={() => setIsSubtaskFilterOpen(false)}>
                   {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusActiveTask.id).filter((subtask) => subtask.status !== 'DONE') : getFocusedSubtaskItems(focusActiveTask.id)).map((subtask) => (
                     <li key={subtask.id} className={`focused-subtask-row relative flex items-center gap-2 overflow-hidden rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ${subtask.status === 'DONE' ? 'opacity-60' : ''} ${closingTaskIds.includes(subtask.id) ? 'focused-subtask-row-completing ring-1 ring-emerald-300/70' : ''} ${subtaskFilterMode === 'importance' ? 'focused-subtask-row-importance' : ''}`}
                       style={subtaskFilterMode === 'importance' ? ({ '--subtask-importance-accent': IMPORTANCE_ACCENT_COLORS[subtask.importance ?? 3] ?? IMPORTANCE_ACCENT_COLORS[3] } as CSSProperties) : undefined}
@@ -6282,7 +6306,15 @@ ${allContext}`,
             setEditorState(null);
             setFocusedTaskId(editorState.task!.parentTaskId!);
           } : undefined}
-          onComplete={editorState.task?.id ? () => completeTask(editorState.task!) : undefined}
+          onComplete={editorState.task?.id ? async () => {
+            const selected = editorState.task!;
+            if (selected.parentTaskId) {
+              await toggleSubtaskDone(selected);
+              setEditorState(null);
+            } else {
+              await completeTask(selected);
+            }
+          } : undefined}
           onDelete={editorState.task?.id ? async () => {
             if (editorState.task!.isCollaborative && editorState.task!.collaborationOwner) {
               setCollaborationAction({ task: editorState.task!, action: 'delete' });
@@ -7053,6 +7085,7 @@ ${allContext}`,
                     reorderVisibleSubtasks(focusedTask.id, nextOrder.map((task) => task.id));
                   }}
                   className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 text-sm"
+                  ref={focusedSubtaskListScrollRef}
                   onScroll={() => setIsSubtaskFilterOpen(false)}
                 >
                   {(hideClosedFocusedSubtasks ? getFocusedSubtaskItems(focusedTask.id).filter((task) => task.status !== 'DONE' || (task.unreadCommentCount ?? 0) > 0) : getFocusedSubtaskItems(focusedTask.id)).map((subtask) => (
