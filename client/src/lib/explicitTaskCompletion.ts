@@ -36,7 +36,7 @@ export async function completeTaskWithUserConfirmation(
   } catch (error) {
     // Another user or tab may have added a subtask since local data was read.
     // Even then, never permit an unconfirmed bulk completion.
-    if (!completeSubtasks && !task.parentTaskId && isConfirmationRequired(error)) {
+    if (!completeSubtasks && !task.parentTaskId && bulkCompletionPossible && isConfirmationRequired(error)) {
       if (!confirm('Обнаружены новые незавершённые подзадачи. Завершить все подзадачи вместе с основной задачей?')) return false;
       completeSubtasks = true;
       await update(payload());
