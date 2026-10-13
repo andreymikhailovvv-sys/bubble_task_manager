@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { Prisma } from '@prisma/client';
 import {
   AI_CHAT_MAX_CACHED_RESULT_BYTES, aiChatPayloadHash,
   claimAiChatRequest, completeAiChatRequest, failAiChatRequest,
@@ -41,8 +42,7 @@ class MemoryStore {
       this.rows.set(key, {
         ...row, ...data,
         responseJson: data.responseJson === undefined ? row.responseJson : (
-          typeof data.responseJson === 'object' && data.responseJson !== null && 'toString' in data.responseJson
-          && String(data.responseJson) === 'DbNull' ? null : data.responseJson
+          data.responseJson === Prisma.DbNull ? null : data.responseJson
         )
       });
       return { count: 1 };
