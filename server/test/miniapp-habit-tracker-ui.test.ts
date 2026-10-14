@@ -69,7 +69,7 @@ test('создание привычки сохраняет прежние пол
   assert.match(styles, /body|\.miniapp-shell:not\(\.miniapp-light\) \.miniapp-habit-create-panel/);
   // The settings renderer is reused, so the creation form retains the same
   // icon, color, repetitions, reminders, duration, and recurrence controls.
-  const sharedFields = source.slice(source.indexOf('  const renderHabitSettingsFields = () =>'), source.indexOf('  const ', source.indexOf('  const renderHabitSettingsFields = () =>') + 10));
+  const sharedFields = source.slice(source.indexOf('  const renderHabitSettingsFields = () =>'), source.indexOf('\n  const ', source.indexOf('  const renderHabitSettingsFields = () =>') + 10));
   for (const field of ['Иконка', 'Цвет круга', 'Повторов в день', 'Уведомления', 'Продолжительность привычки']) {
     assert.ok(sharedFields.includes(field), field);
   }
