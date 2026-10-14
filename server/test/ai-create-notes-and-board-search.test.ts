@@ -119,12 +119,13 @@ test('notes search sits below the top actions beside the groups without an overs
   assert.match(styles, /\.standalone-notes-search \{[^}]*overflow:\s*hidden/s);
 });
 
-test('latest news describes notes and both theme variants without low-contrast fixed text', async () => {
+test('notes announcement remains in the news archive with both accessible theme variants', async () => {
   const [news, styles] = await Promise.all([
     readFile(new URL('../../client/src/components/UpdatesMenu.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
   ]);
-  assert.match(news, /LATEST_NEWS_ID = '2026-10-12-personal-notes-and-ai'/);
+  assert.match(news, /LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker'/);
+  assert.ok(news.indexOf('14 октября 2026') < news.indexOf('12 октября 2026'));
   assert.ok(news.indexOf('12 октября 2026') < news.indexOf('11 октября 2026'));
   for (const phrase of ['Личные заметки', 'Группы, цвета и быстрый поиск',
     'Заметки вместе с ИИ и Telegram', 'Все записи доступны в одном аккаунте']) {
