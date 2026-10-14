@@ -108,6 +108,7 @@ export async function loadAiFileCatalog(input: {
   taskId?: string;
   projectId?: string;
   chatId?: string;
+  currentMessageId?: string;
   currentUploads?: CurrentUpload[];
   history?: AiFileHistoryReference[];
 }): Promise<AiFileCatalog> {
@@ -135,7 +136,7 @@ export async function loadAiFileCatalog(input: {
         take: AI_FILE_CATALOG_RECENT_PER_SOURCE
       }),
       prisma.aiConversationAttachment.findMany({
-        where: { userId: input.userId, taskId: input.taskId },
+        where: { userId: input.userId, taskId: input.taskId, ...(validId(input.currentMessageId) ? { messageId: { not: input.currentMessageId } } : {}) },
         select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true, messageId: true },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: AI_FILE_CATALOG_RECENT_PER_SOURCE
@@ -172,7 +173,7 @@ export async function loadAiFileCatalog(input: {
   const historyMessageIds = (input.history ?? []).slice(-50).map((message) => message.id).filter(validId);
   const savedUploads = validId(input.projectId) && validId(input.chatId) && historyMessageIds.length
     ? await prisma.aiConversationAttachment.findMany({
-        where: { userId: input.userId, taskId: null, projectId: input.projectId, chatId: input.chatId, messageId: { in: historyMessageIds } },
+        where: { userId: input.userId, taskId: null, projectId: input.projectId, chatId: input.chatId, messageId: { in: historyMessageIds.filter((id) => id !== input.currentMessageId) } },
         select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true, messageId: true },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: AI_FILE_CATALOG_RECENT_PER_SOURCE
