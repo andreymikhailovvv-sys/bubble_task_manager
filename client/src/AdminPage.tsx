@@ -47,6 +47,7 @@ export default function AdminPage() {
   const [creditUsageMonth, setCreditUsageMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [creditUsageExporting, setCreditUsageExporting] = useState(false);
   const [subscriptionUpdating, setSubscriptionUpdating] = useState(false);
+  const [telegramPilotUpdating, setTelegramPilotUpdating] = useState(false);
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -142,6 +143,22 @@ export default function AdminPage() {
       setError(e instanceof Error ? e.message : 'Не удалось изменить тариф');
     } finally {
       setSubscriptionUpdating(false);
+    }
+  }
+
+  async function updateTelegramPilot(pilotEnabled: boolean) {
+    if (!selectedUser || telegramPilotUpdating) return;
+    setTelegramPilotUpdating(true);
+    setError('');
+    try {
+      const response = await api.adminSetTelegramUserClientPilot({ password, userId: selectedUser.id, pilotEnabled });
+      setUsers((current) => current.map((user) => user.id === response.userId
+        ? { ...user, telegramUserClientPilotEnabled: response.telegramUserClientPilotEnabled, telegramUserClientConnected: response.telegramUserClientConnected }
+        : user));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Не удалось изменить доступ к Telegram');
+    } finally {
+      setTelegramPilotUpdating(false);
     }
   }
 
@@ -399,6 +416,19 @@ export default function AdminPage() {
                     <option value="max">Максимум</option>
                   </select>
                 </label>
+                <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
+                  <h3 className="text-sm font-semibold">Telegram-ассистент: закрытый пилот</h3>
+                  <p className="mt-1 text-xs text-slate-400">Разрешение на будущую интеграцию личного Telegram. Не подключает аккаунт, не читает переписку и не отправляет сообщения.</p>
+                  <p className="mt-2 text-xs text-slate-300">
+                    Доступ: {selectedUser.telegramUserClientPilotEnabled ? 'разрешён' : 'закрыт'} ·
+                    Сессия: {selectedUser.telegramUserClientConnected ? 'подключена' : 'не подключена'}
+                  </p>
+                  <button type="button" disabled={telegramPilotUpdating}
+                    onClick={() => void updateTelegramPilot(!selectedUser.telegramUserClientPilotEnabled)}
+                    className="mt-3 rounded-md border border-cyan-500/60 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50">
+                    {telegramPilotUpdating ? 'Сохранение…' : selectedUser.telegramUserClientPilotEnabled ? 'Закрыть доступ' : 'Разрешить пилот'}
+                  </button>
+                </div>
                 <div className="mt-5 border-t border-slate-700 pt-4">
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
                     <div>
