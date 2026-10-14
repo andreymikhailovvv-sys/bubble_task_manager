@@ -138,7 +138,7 @@ test('controller guards requests before streaming and all AI calls; clients send
   const chatSection = controller.slice(controller.indexOf('  askAiChat: async'), controller.indexOf('  getGeneralAssistantHistory:'));
   const claimAt = chatSection.indexOf('requestClaim = await claimAiChatRequest(');
   const streamAt = chatSection.indexOf('res.flushHeaders()');
-  const toolsAt = chatSection.indexOf('editUserDocumentIfRequested(');
+  const toolsAt = chatSection.indexOf('await saveConversationUploads(');
   const chargeAt = chatSection.indexOf('aiAssistantService.askAiChat(');
   const completedAt = chatSection.indexOf('await completeAiChatRequest(');
   const responseAt = chatSection.indexOf("writeStreamEvent({ type: 'result', result: publicResult })");

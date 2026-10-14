@@ -108,7 +108,7 @@ test('task endpoint checks membership before ledger lookup and stream headers', 
   const access = a.indexOf('aiAssistantService.listTaskDialogForContext(');
   const claimAt = a.indexOf('taskRequestClaim = await claimAiChatRequest(');
   const stream = a.indexOf('res.flushHeaders()');
-  const edit = a.indexOf('editUserDocumentIfRequested(');
+  const edit = a.indexOf('await saveConversationUploads(');
   const model = a.indexOf('aiAssistantService.askTaskAssistant(');
   const firstAppend = a.indexOf('aiAssistantService.appendTaskDialogMessages(');
   const lastAppend = a.indexOf('aiAssistantService.appendTaskDialogAssistantMessage(');

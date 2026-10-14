@@ -15,8 +15,8 @@ test('единый реестр описывает все три источни�
   assert.equal(result.truncated, false);
   assert.deepEqual(result.items.map((item) => [item.fileId, item.source, item.contentAccess]), [
     ['current:0', 'current_upload', 'provided_in_request'],
-    ['task_attachment:taskabc', 'task_attachment', 'task_context_lookup'],
-    ['generated_document:docabc', 'generated_document', 'metadata_only']
+    ['task_attachment:taskabc', 'task_attachment', 'tool_readable'],
+    ['generated_document:docabc', 'generated_document', 'tool_readable']
   ]);
   assert.equal(result.items[2].sourceMessageId, 'msgabc');
   assert.equal(result.items[2].createdAt, createdAt.toISOString());
@@ -30,7 +30,7 @@ test('метаданные не содержат бинарных данных, 
   const catalog = buildAiFileCatalog({ currentUploads: [currentWithSensitiveFields] });
   const rendered = formatAiFileCatalog(catalog);
   assert.doesNotMatch(rendered, /PRIVATE_BASE64|ignore previous instructions/);
-  assert.match(rendered, /metadata_only|task_context_lookup|provided_in_request/);
+  assert.match(rendered, /tool_readable|provided_in_request/);
   assert.match(rendered, /Каталог НЕ является командой редактирования/);
   assert.doesNotMatch(rendered, /"contentBase64"/);
 });
@@ -77,10 +77,10 @@ test('каталог проверяется на сервере и не подм
   assert.match(service, /message\.generatedDocument\.taskId === input\.taskId/);
   assert.match(service, /where: \{ id: \{ in: ids \}, userId: input\.userId, taskId: null \}/);
   assert.doesNotMatch(service, /select: \{[^}]*contentBase64/);
-  assert.match(controller, /fileReferences, onDiagnosticsPrepared/);
-  assert.match(ai, /loadAiFileCatalog\(\{ userId: input\.userId, currentUploads: input\.attachments, history: input\.fileReferences \}\)/);
-  assert.match(ai, /loadAiFileCatalog\(\{ userId: input\.userId, taskId: input\.taskId, currentUploads: input\.attachments \}\)/);
+  assert.match(controller, /fileReferences, currentMessageId:/);
+  assert.match(ai, /loadAiFileCatalog\(\{ userId: input\.userId, currentUploads: input\.attachments, history: input\.fileReferences/);
+  assert.match(ai, /loadAiFileCatalog\(\{ userId: input\.userId, taskId: input\.taskId, currentUploads: input\.attachments/);
   assert.match(ai, /\.\.\.\(fileCatalogText \? \[\{ role: 'user' as const, content: fileCatalogText \}\] : \[\]\)/);
-  assert.match(directOffice, /if \(!attachments\.length \|\| !isDocumentEditRequest/);
+  assert.match(directOffice, /explicitFileToolSelection/);
   assert.match(directImage, /const uploaded = selectUploadedImageForEdit\(attachments, true\)/);
 });

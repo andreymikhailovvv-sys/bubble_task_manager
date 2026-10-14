@@ -51,16 +51,14 @@ test('correctly labelled PNG remains eligible, and wrong pixels are still reject
     /Прикреплённый файл не распознан как PNG, JPEG или WebP/);
 });
 
-test('the controller routes document edits before image edits on both endpoints',async()=>{
-  const source=await readFile(new URL('../src/controllers/ai.controller.ts',import.meta.url),'utf8');
-  const general=source.slice(source.indexOf('  askAiChat: async'),source.indexOf('  getGeneralAssistantHistory: async'));
-  const task=source.slice(source.indexOf('  askTaskAssistant: async'),source.indexOf('  appendTaskAssistant'));
-  for(const endpoint of [general,task]){
-    assert.ok(endpoint.indexOf('const directDocumentEdit = await editUserDocumentIfRequested(') <
-      endpoint.indexOf('const directImageEdit = directDocumentEdit ? null : await editUserImageIfRequested('),
-      'Office edit must run before any image edit');
-    assert.match(endpoint,/directImageEdit \?\? directDocumentEdit \?\?/);
-    assert.match(endpoint,/writeStreamEvent\(\{ type: 'error', message/);
+test('the controller leaves file intent and specific source selection to the model', async () => {
+  const source = await readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8');
+  const general = source.slice(source.indexOf('  askAiChat: async'), source.indexOf('  getGeneralAssistantHistory: async'));
+  const task = source.slice(source.indexOf('  askTaskAssistant: async'), source.indexOf('  appendTaskAssistant'));
+  for (const endpoint of [general, task]) {
+    assert.doesNotMatch(endpoint, /directDocumentEdit|directImageEdit|editUserImageIfRequested\(/);
+    assert.match(endpoint, /saveConversationUploads\(/);
+    assert.match(endpoint, /aiAssistantService\.ask/);
   }
 });
 
