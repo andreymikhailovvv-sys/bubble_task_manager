@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Coins, FileSpreadsheet, FileText, ImagePlus, MessageCircle, Mic, Newspaper, Search, SendHorizontal, Sparkles, StickyNote, Tags, WandSparkles, X } from 'lucide-react';
+import { BookOpen, CalendarCheck2, Coins, FileSpreadsheet, FileText, Flame, ImagePlus, MessageCircle, Mic, Newspaper, Search, SendHorizontal, Settings2, Sparkles, StickyNote, Tags, TrendingUp, WandSparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-12-personal-notes-and-ai';
+export const LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -59,7 +59,34 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
-            <article className="updates-lesson updates-news-latest updates-news-notes rounded-2xl border p-4">
+            <article className="updates-lesson updates-news-latest updates-news-habits rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="updates-news-date updates-news-date--cyan text-[11px] font-semibold uppercase tracking-[0.14em]">14 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Привычки в Mini App: теперь с календарём и статистикой</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><CalendarCheck2 size={18} /></span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">Следить за прогрессом стало удобнее: откройте привычку в Telegram Mini App, чтобы посмотреть историю выполнения, увидеть свои серии и понять, насколько регулярно удаётся придерживаться плана.</p>
+              <div className="mt-3 space-y-2">
+                <div className="updates-news-habits-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><CalendarCheck2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Календарь привычки по месяцам</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Выполненные дни подсвечены и соединяются в непрерывную цепочку. Частичные выполнения отмечены отдельно. Листайте месяцы свайпами или стрелками, чтобы увидеть историю.</p>
+                </div>
+                <div className="updates-news-habits-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><TrendingUp size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Ваш прогресс в цифрах</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Смотрите процент выполнения за выбранный месяц, текущую и лучшую серию, а также количество успешных дней. В расчёт входят только запланированные дни, без будущих дат.</p>
+                </div>
+                <div className="updates-news-habits-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Settings2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Больше места для главного</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Настройки иконки, цвета, повторов и уведомлений теперь спрятаны под шестерёнкой. Название и кнопка выполнения остались на виду, а окно создания привычки не изменилось.</p>
+                </div>
+              </div>
+              <span className="updates-news-tag updates-news-tag--cyan mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold">
+                <Flame size={13} className="shrink-0" /> Каждый день складывается в результат
+              </span>
+            </article>
+            <article className="updates-lesson updates-news-notes rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="updates-news-date updates-news-date--violet text-[11px] font-semibold uppercase tracking-[0.14em]">12 октября 2026</p>
