@@ -1209,6 +1209,7 @@ apiRouter.patch('/notes/:id', requireAuth, asyncHandler(async (req, res) => {
 apiRouter.delete('/notes/:id', requireAuth, asyncHandler(standaloneNoteController.remove));
 
 apiRouter.get('/habits', requireAuth, asyncHandler(habitController.list));
+apiRouter.get('/habits/:id/history', requireAuth, asyncHandler(habitController.history));
 apiRouter.post('/habits', requireAuth, asyncHandler(habitController.create));
 apiRouter.patch('/habits/:id', requireAuth, asyncHandler(habitController.update));
 apiRouter.post('/habits/:id/complete', requireAuth, asyncHandler(habitController.complete));
