@@ -252,6 +252,7 @@ type AskTaskAssistantInput = {
   mode?: 'fast' | 'smart';
   model?: AiChatModel;
   attachments?: ChatAttachment[];
+  currentMessageId?: string;
   userTimeZone?: string;
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
@@ -305,6 +306,7 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   requestId?: string;
   attachments?: ChatAttachment[];
   fileReferences?: AiFileHistoryReference[];
+  currentMessageId?: string;
   onProgress?: (status: AiChatProgressStatus) => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
 };
@@ -1331,7 +1333,7 @@ export const aiAssistantService = {
       }
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences, projectId: input.projectId, chatId: input.chatId });
+      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences, projectId: input.projectId, chatId: input.chatId, currentMessageId: input.currentMessageId });
       const fileCatalogText = formatAiFileCatalog(fileCatalog);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
       const providerHistory = toOpenAiGeneralHistory(history);
@@ -1960,7 +1962,7 @@ export const aiAssistantService = {
     // deliberately excluded from the assistant context; the user must attach
     // a file to the chat explicitly when they want the model to process it.
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-    const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments });
+    const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments, currentMessageId: input.currentMessageId });
     const fileCatalogText = formatAiFileCatalog(fileCatalog);
     const hasAttachments = Boolean(attachmentsMessage);
     const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
