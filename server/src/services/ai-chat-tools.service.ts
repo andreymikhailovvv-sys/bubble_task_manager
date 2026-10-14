@@ -148,6 +148,7 @@ type ToolLoopOptions = {
   request: (input: unknown[]) => Promise<ToolResponse>;
   executeTool: (name: string, argumentsValue: unknown, round: number) => Promise<unknown>;
   consumeAdditionalInput?: () => unknown[];
+  finalizeAfterTool?: (name: string, result: unknown) => string | null;
 };
 
 const outputText = (response: ToolResponse) => {
@@ -248,6 +249,8 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
       const result = await options.executeTool(name, args, toolCalls);
       input.push({ type: 'function_call_output', call_id: callId, output: JSON.stringify(result) });
       if (options.consumeAdditionalInput) input.push(...options.consumeAdditionalInput());
+      const completedAnswer = options.finalizeAfterTool?.(name, result);
+      if (completedAnswer) return { answer: completedAnswer, providerCalls, toolCalls };
     }
   }
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
@@ -306,6 +309,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
       loop = await runAiChatToolLoop({
       initialInput: input.messages,
       consumeAdditionalInput: () => extraProviderInput.splice(0),
+      finalizeAfterTool: (name, result) => name === 'edit_file' && generatedDocument && result && typeof result === 'object' && (result as { ok?: unknown }).ok === true
+        ? String((result as { message?: unknown }).message || 'Файл изменён. Новая версия прикреплена к сообщению.') : null,
       request: async (requestInput) => {
         const providerCallIndex = providerCallCount + 1;
         const isForcedFinalRound = providerCallIndex === MAX_PROVIDER_CALLS;
