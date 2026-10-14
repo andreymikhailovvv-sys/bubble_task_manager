@@ -25,16 +25,44 @@ const color = (declarations: string) => {
   return rgb(hex);
 };
 
-test('previous AI image / Word / Excel story remains available after newest notes announcement', async () => {
+test('new habit tracker news is first, while notes and previous releases remain available', async () => {
   const menu = await readFile(menuPath, 'utf8');
-  assert.match(menu, /LATEST_NEWS_ID = '2026-10-12-personal-notes-and-ai'/);
-  assert.ok(menu.indexOf('12 октября 2026') < menu.indexOf('11 октября 2026'));
-  assert.ok(menu.indexOf('11 октября 2026') < menu.indexOf('8 октября 2026'));
-  for (const phrase of ['Создание и редактирование изображений', 'Правки в Word и Excel',
-    'PNG, JPG или WebP', 'DOCX или XLSX', 'Документы без ручного копирования']) {
+  assert.match(menu, /LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker'/);
+  const dates = ['14 октября 2026', '12 октября 2026', '11 октября 2026', '8 октября 2026'];
+  for (const date of dates) assert.ok(menu.includes(date), 'Missing date: ' + date);
+  for (let i = 1; i < dates.length; i++) {
+    assert.ok(menu.indexOf(dates[i - 1]) < menu.indexOf(dates[i]), 'News not in newest-first order');
+  }
+  for (const phrase of [
+    'Привычки в Mini App: теперь с календарём и статистикой',
+    'Календарь привычки по месяцам',
+    'Ваш прогресс в цифрах',
+    'Больше места для главного',
+    'Личные заметки: всё важное в одном месте',
+    'Создание и редактирование изображений',
+    'Правки в Word и Excel', 'PNG, JPG или WebP',
+    'DOCX или XLSX', 'Документы без ручного копирования'
+  ]) {
     assert.ok(menu.includes(phrase), phrase);
   }
+  assert.match(menu, /hasUnreadNews/);
   assert.doesNotMatch(menu, /text-fuchsia-300|text-cyan-300|text-violet-300/);
+});
+
+test('habit tracker announcement uses distinct backgrounds in both themes and shared news tags', async () => {
+  const [menu, css] = await Promise.all([readFile(menuPath, 'utf8'), readFile(cssPath, 'utf8')]);
+  assert.match(menu, /updates-lesson updates-news-latest updates-news-habits/);
+  assert.match(menu, /updates-news-habits-feature/);
+  assert.match(menu, /updates-news-tag--cyan/);
+  for (const selector of [
+    '.updates-news-habits',
+    '.updates-news-habits-feature',
+    "body[data-theme='dark'] .updates-news-habits",
+    "body[data-theme='dark'] .updates-news-habits-feature"
+  ]) {
+    assert.match(rule(css, selector), /background:/);
+    assert.match(rule(css, selector), /border-color:|border:/);
+  }
 });
 
 test('all news badges have accessible light and dark text contrast', async () => {

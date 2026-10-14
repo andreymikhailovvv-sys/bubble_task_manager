@@ -7497,6 +7497,31 @@ body[data-theme='dark'] .updates-news-latest {
   background: linear-gradient(145deg, rgba(88,28,135,.24), rgba(49,46,129,.18) 53%, rgba(8,47,73,.2));
   border-color: rgba(196,181,253,.28);
 }
+
+/* New habit-tracker announcement follows the existing news-card layout,
+   with a calm cyan/emerald accent in both themes. */
+.updates-news-habits {
+  background: linear-gradient(145deg, #ecfeff, #f0fdf4 53%, #f5f3ff);
+  border-color: #99e6eb;
+}
+.updates-news-habits-feature {
+  min-width: 0;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid #bae6e9;
+  color: var(--text-primary);
+}
+.updates-news-habits-feature svg { color: #0e7490; }
+.updates-news-habits-feature p { color: var(--text-muted); }
+body[data-theme='dark'] .updates-news-habits {
+  background: linear-gradient(145deg, rgba(8, 88, 104, .26), rgba(6, 78, 59, .19) 53%, rgba(76, 29, 149, .19));
+  border-color: rgba(103, 232, 249, .34);
+}
+body[data-theme='dark'] .updates-news-habits-feature {
+  background: rgba(15, 23, 42, .43);
+  border-color: rgba(103, 232, 249, .2);
+  color: var(--text-primary);
+}
+body[data-theme='dark'] .updates-news-habits-feature svg { color: #67e8f9; }
 body[data-theme='dark'] .updates-news-feature--image {
   color: #f5d0fe; background: rgba(88,28,135,.19); border-color: rgba(240,171,252,.28);
 }
