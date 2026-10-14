@@ -215,7 +215,8 @@ export type TelegramManualSendAudit = {
   createdAt: string;
   completedAt: string | null;
 };
-export type TelegramManualSendStatus = { enabled: boolean; audit: TelegramManualSendAudit[] };
+export type TelegramManualSendStatus = { enabled: boolean; aiDraftEnabled: boolean; audit: TelegramManualSendAudit[] };
+export type TelegramDraftTone = 'neutral' | 'friendly' | 'formal';
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
 export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
@@ -465,6 +466,10 @@ export const api = {
   adminTelegramManualSendStatus: (payload: { password: string; userId: string }) =>
     request<TelegramManualSendStatus>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-status`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramAiDraft: (payload: { password: string; userId: string; instructions: string; tone: TelegramDraftTone }) =>
+    request<{ text: string; model: string }>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/ai-draft`,
       { method: 'POST', body: JSON.stringify(payload) }),
   adminTelegramManualSendPreview: (payload: { password: string; userId: string; recipientKind: 'saved' | 'username'; username?: string; text: string }) =>
     request<TelegramManualSendPreview>(
