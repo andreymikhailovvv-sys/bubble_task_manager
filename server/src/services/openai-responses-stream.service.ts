@@ -1,3 +1,5 @@
+import { openAiFetch } from '../lib/openai-fetch.js';
+
 type OpenAiStreamEvent = { type?: unknown; response?: unknown; error?: unknown };
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -127,4 +129,25 @@ export async function readOpenAiResponsesStreamWithRecovery(
   }
   options.onRecovery?.('unavailable', { responseId, attempt: RECOVERY_DELAYS_MS.length, eventCount, status: 'recovery_exhausted' });
   throw new Error('Поток ответа OpenAI прервался, а готовый ответ восстановить не удалось. Повторите запрос.', { cause: originalError });
+}
+
+
+/** Retrieve the exact stored response, without replaying potentially mutating tools. */
+export async function retrieveOpenAiResponse(
+  responseId: string,
+  apiKey: string,
+  requestId: string,
+  model?: string
+): Promise<Record<string, unknown>> {
+  if (!/^resp_[a-zA-Z0-9_-]+$/.test(responseId)) throw new Error('Invalid OpenAI response identifier');
+  const response = await openAiFetch(
+    'https://api.openai.com/v1/responses/' + encodeURIComponent(responseId),
+    { method: 'GET', headers: { Authorization: 'Bearer ' + apiKey, 'X-Client-Request-Id': requestId + ':recover' } },
+    { requestId: requestId + ':recover', model }
+  );
+  if (!response.ok) throw new Error('OpenAI response retrieval failed: ' + response.status);
+  const payload = await response.json();
+  const data = asRecord(payload);
+  if (!data || data.id !== responseId) throw new Error('OpenAI recovery returned an unexpected response ID');
+  return data;
 }
