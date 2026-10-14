@@ -5,6 +5,7 @@ import { StringSession } from 'teleproto/sessions';
 import { prisma } from '../db/prisma.js';
 import { canUseTelegramUserClient } from '../lib/telegram-user-client-access.js';
 import { decryptTelegramUserSession, encryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
+import { matchesBotLinkedTelegramAccount } from '../lib/telegram-user-client-binding.js';
 
 // A login is deliberately process-local. A restarted process requires a fresh QR.
 // Do not distribute these endpoints across replicas without sticky sessions/Redis ownership.
@@ -140,7 +141,7 @@ async function runLogin(attempt: Attempt, credentials: {apiId: number; apiHash: 
     });
     if (attempt.controller.signal.aborted) throw new Error('Login cancelled');
     const telegramId = String(me.id);
-    if (telegramId !== attempt.expectedTelegramId || Boolean('bot' in me && me.bot)) {
+    if (!matchesBotLinkedTelegramAccount(attempt.expectedTelegramId, telegramId, Boolean('bot' in me && me.bot))) {
       throw new TelegramUserClientError(409, 'Telegram-аккаунт не совпадает с выбранным пользователем Планировыча');
     }
     const owner = await eligible(attempt.userId);
@@ -195,6 +196,12 @@ export const telegramUserClientAuth = {
     };
   },
   async begin(userId: string) {
+    // Release long-completed outcomes to avoid unbounded admin-session memory growth.
+    for (const [key, old] of attempts) {
+      if (!['starting', 'qr', 'password_required', 'verifying_password'].includes(old.status) && Date.now() > old.expiresAt + 600_000) {
+        attempts.delete(key);
+      }
+    }
     const user = await eligible(userId);
     const credentials = config();
     if (user.telegramUserClientConnection?.encryptedSession) {
