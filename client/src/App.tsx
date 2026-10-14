@@ -938,6 +938,7 @@ export default function App() {
   const [closingTaskIds, setClosingTaskIds] = useState<string[]>([]);
   const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [focusedDraft, setFocusedDraft] = useState<Partial<Task> | null>(null);
+  const [focusedSaveError, setFocusedSaveError] = useState<string | null>(null);
   const [isFocusedNotesEditorOpen, setIsFocusedNotesEditorOpen] = useState(false);
   const [isFocusedSettingsOpen, setIsFocusedSettingsOpen] = useState(false);
   const [isFocusedCalendarExportOpen, setIsFocusedCalendarExportOpen] = useState(false);
@@ -1856,6 +1857,7 @@ export default function App() {
 
   useEffect(() => {
     if (!focusedTask) {
+      setFocusedSaveError(null);
       setFocusedDraft(null);
       setIsFocusedNotesEditorOpen(false);
       setIsFocusedSettingsOpen(false);
@@ -1879,6 +1881,7 @@ export default function App() {
       focusedAutosaveSignatureRef.current = null;
       return;
     }
+    setFocusedSaveError(null);
     setIsFocusedNotesEditorOpen(false);
     setIsFocusedSettingsOpen(false);
     setIsEditingFocusedTitle(false);
@@ -1933,12 +1936,20 @@ export default function App() {
     focusedAutosaveTimeoutRef.current = setTimeout(() => {
       const score = calcScore(normalized.importance, normalized.urgency);
       const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
-      void api.updateTask(focusedTask.id, { ...patch, ...(priorityChanged ? { priorityScore: score } : {}) }).then(() => {
+      void api.updateTask(focusedTask.id, { ...patch, ...(priorityChanged ? { priorityScore: score } : {}) }).then((savedTask) => {
         const latestBaseline = focusedAutosaveSignatureRef.current
           ? JSON.parse(focusedAutosaveSignatureRef.current) as typeof snapshot : snapshot;
         focusedAutosaveSignatureRef.current = JSON.stringify({ ...latestBaseline, ...patch });
+        // Only server-confirmed values may enter the task list. An optimistic
+        // setTasks here is mistaken for a remote update by draft reconciliation
+        // and marks the sphere change as saved before the PATCH is sent.
+        setTasks((current) => current.map((task) => (
+          task.id === savedTask.id ? { ...task, ...savedTask } : task
+        )));
+        setFocusedSaveError(null);
       }).catch((error) => {
         console.error('[Task] focused autosave failed', error);
+        setFocusedSaveError(error instanceof Error ? error.message : 'Не удалось сохранить изменения задачи');
       });
     }, 700);
     return () => {
@@ -1962,12 +1973,19 @@ export default function App() {
     // Closing an unchanged form must not overwrite changes made by the AI.
     if (Object.keys(patch).length === 0) return true;
     const priorityChanged = patch.importance !== undefined || patch.urgency !== undefined;
-    await api.updateTask(focusedTask.id, {
-      ...patch,
-      ...(priorityChanged ? { priorityScore: calcScore(snapshot.importance, snapshot.urgency) } : {})
-    });
-    focusedAutosaveSignatureRef.current = JSON.stringify({ ...baseline, ...patch });
-    return true;
+    try {
+      await api.updateTask(focusedTask.id, {
+        ...patch,
+        ...(priorityChanged ? { priorityScore: calcScore(snapshot.importance, snapshot.urgency) } : {})
+      });
+      focusedAutosaveSignatureRef.current = JSON.stringify({ ...baseline, ...patch });
+      setFocusedSaveError(null);
+      return true;
+    } catch (error) {
+      console.error('[Task] focused save failed', error);
+      setFocusedSaveError(error instanceof Error ? error.message : 'Не удалось сохранить изменения задачи');
+      return false;
+    }
   };
 
   const closeFocusedTask = async () => {
@@ -1975,7 +1993,7 @@ export default function App() {
       setFocusedTaskId(null);
       return;
     }
-    await flushFocusedTaskSave();
+    if (!(await flushFocusedTaskSave())) return;
     setFocusedTaskId(null);
     await load();
   };
@@ -6817,6 +6835,7 @@ ${allContext}`,
                         <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
                         <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
                       </div>
+                      {focusedSaveError ? <p role="alert" className="rounded-xl border border-rose-400/50 bg-rose-50 px-3 py-2 text-xs text-rose-700">Не удалось сохранить изменения: {focusedSaveError}</p> : null}
                   <div className="task-edit-compact-grid mt-4 grid grid-cols-2 items-end gap-3">
                     <label className="block text-xs font-semibold text-muted">Сектор
                       <div className="focus-sector-dropdown relative mt-1">
@@ -6837,10 +6856,12 @@ ${allContext}`,
                             {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
                               <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => {
                                 const nextSphereId = sphere.id || null;
+                                // Keep the selection in the unsaved draft. Do not
+                                // mutate focusedTask via setTasks until the API
+                                // confirms the new sphere, or the reconciliation
+                                // effect will treat it as already persisted.
                                 setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: nextSphereId }));
-                                setTasks((current) => current.map((task) => (
-                                  task.id === focusedTask.id ? { ...task, sphereId: nextSphereId } : task
-                                )));
+                                setFocusedSaveError(null);
                                 setIsFocusedSphereDropdownOpen(false);
                               }}>
                                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sphere.color }} />
