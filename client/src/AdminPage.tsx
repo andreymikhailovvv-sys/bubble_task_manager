@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus } from './lib/api';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus, type TelegramDraftTone } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -60,6 +60,13 @@ export default function AdminPage() {
   const [telegramSendBusy, setTelegramSendBusy] = useState(false);
   const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
   const [telegramSendError, setTelegramSendError] = useState<string | null>(null);
+  const [telegramDraftInstructions, setTelegramDraftInstructions] = useState('');
+  const [telegramDraftTone, setTelegramDraftTone] = useState<TelegramDraftTone>('neutral');
+  const [telegramDraftText, setTelegramDraftText] = useState('');
+  const [telegramDraftBusy, setTelegramDraftBusy] = useState(false);
+  const [telegramDraftError, setTelegramDraftError] = useState<string | null>(null);
+  const selectedUserIdRef = useRef(selectedUserId);
+  selectedUserIdRef.current = selectedUserId;
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -196,6 +203,10 @@ export default function AdminPage() {
     setTelegramSendNotice(null);
     setTelegramSendError(null);
     setTelegramSendStatus(null);
+    setTelegramDraftInstructions('');
+    setTelegramDraftTone('neutral');
+    setTelegramDraftText('');
+    setTelegramDraftError(null);
     if (!selectedUserId || !password) return;
     let cancelled = false;
     void api.adminTelegramManualSendStatus({ password, userId: selectedUserId })
@@ -203,6 +214,26 @@ export default function AdminPage() {
       .catch(() => { if (!cancelled) setTelegramSendStatus(null); });
     return () => { cancelled = true; };
   }, [selectedUserId, password]);
+
+  async function generateTelegramAiDraft() {
+    if (!selectedUserId || telegramDraftBusy || !telegramSendStatus?.aiDraftEnabled) return;
+    const userId = selectedUserId;
+    setTelegramDraftBusy(true);
+    setTelegramDraftError(null);
+    setTelegramDraftText('');
+    try {
+      const result = await api.adminTelegramAiDraft({
+        password, userId, instructions: telegramDraftInstructions, tone: telegramDraftTone
+      });
+      if (selectedUserIdRef.current === userId) setTelegramDraftText(result.text);
+    } catch (error) {
+      if (selectedUserIdRef.current === userId) {
+        setTelegramDraftError(error instanceof Error ? error.message : 'Не удалось подготовить сообщение');
+      }
+    } finally {
+      setTelegramDraftBusy(false);
+    }
+  }
 
   async function manualTelegramPreview() {
     if (!selectedUserId || telegramSendBusy) return;
@@ -575,6 +606,49 @@ export default function AdminPage() {
                             {telegramSendStatus?.enabled === false && (
                               <p className="mt-2 text-xs text-amber-300">Отправка выключена. Для проверки установите TELEGRAM_USER_SEND_ENABLED=true в Timeweb и выполните деплой.</p>
                             )}
+                            <div className="mt-4 rounded-lg border border-violet-500/30 bg-violet-950/15 p-3">
+                              <h5 className="text-sm font-semibold text-violet-200">ИИ-помощник: подготовить сообщение</h5>
+                              <p className="mt-1 text-xs text-slate-400">ИИ создаёт только текст, не видит переписки и не может отправлять сообщения. Описание задачи передаётся OpenAI. Отправка по-прежнему требует отдельной проверки получателя и подтверждения.</p>
+                              {!telegramSendStatus?.aiDraftEnabled && (
+                                <p className="mt-2 text-xs text-amber-300">ИИ-черновики отключены. В Timeweb установите TELEGRAM_USER_AI_DRAFT_ENABLED=true и выполните деплой.</p>
+                              )}
+                              <label className="mt-3 block text-xs text-slate-300">Что нужно написать
+                                <textarea value={telegramDraftInstructions} maxLength={2500} rows={3}
+                                  onChange={(e) => { setTelegramDraftInstructions(e.target.value); setTelegramDraftText(''); setTelegramDraftError(null); }}
+                                  placeholder="Напиши коротко и вежливо, что я смогу прислать документы завтра после обеда…"
+                                  className="mt-1 block w-full resize-y rounded border border-slate-600 bg-slate-900 p-2 text-sm text-white" />
+                              </label>
+                              <label className="mt-3 block text-xs text-slate-300">Стиль
+                                <select value={telegramDraftTone}
+                                  onChange={(e) => { setTelegramDraftTone(e.target.value as TelegramDraftTone); setTelegramDraftText(''); }}
+                                  className="mt-1 block rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white">
+                                  <option value="neutral">Нейтральный</option>
+                                  <option value="friendly">Дружелюбный</option>
+                                  <option value="formal">Деловой</option>
+                                </select>
+                              </label>
+                              <button type="button" disabled={telegramDraftBusy || !telegramSendStatus?.aiDraftEnabled || !telegramDraftInstructions.trim()}
+                                onClick={() => void generateTelegramAiDraft()}
+                                className="mt-3 rounded bg-violet-700 px-3 py-2 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-40">
+                                {telegramDraftBusy ? 'Готовим текст…' : 'Составить черновик с ИИ'}
+                              </button>
+                              {telegramDraftText && (
+                                <div className="mt-3 border-t border-slate-700 pt-3">
+                                  <label className="block text-xs text-slate-300">Черновик ИИ, можно отредактировать
+                                    <textarea value={telegramDraftText} rows={4} maxLength={1000}
+                                      onChange={(e) => setTelegramDraftText(e.target.value)}
+                                      className="mt-1 block w-full resize-y rounded border border-violet-600/50 bg-slate-950 p-2 text-sm text-white" />
+                                  </label>
+                                  <button type="button" disabled={telegramSendBusy || !telegramDraftText.trim()}
+                                    onClick={() => { setTelegramSendText(telegramDraftText); setTelegramSendPreview(null); setTelegramSendNotice(null); }}
+                                    className="mt-2 rounded border border-violet-400/70 px-3 py-2 text-sm text-violet-100 hover:bg-violet-700/20 disabled:opacity-40">
+                                    Использовать текст для отправки
+                                  </button>
+                                  <p className="mt-2 text-xs text-slate-400">Перенос текста не отправляет сообщение. После переноса отдельно проверьте получателя и подтвердите отправку.</p>
+                                </div>
+                              )}
+                              {telegramDraftError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramDraftError}</p>}
+                            </div>
                             <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-200">
                               <label className="flex items-center gap-2">
                                 <input type="radio" checked={telegramSendKind === 'saved'} onChange={() => { setTelegramSendKind('saved'); setTelegramSendPreview(null); }} />
