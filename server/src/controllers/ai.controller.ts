@@ -109,29 +109,21 @@ export const aiController = {
       const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
       const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
-      // Edit a current Word/Excel document before considering old images or ambiguous edit intent.
-      const latestDocumentId = Array.isArray(req.body?.history)
-        ? [...req.body.history].reverse().find((message: any) =>
-            message?.role === 'assistant' &&
-            ['application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(message?.generatedDocument?.mimeType)
-          )?.generatedDocument?.id : undefined;
+      // Only an attachment of this request may enter the direct editor.
       const directDocumentEdit = await editUserDocumentIfRequested({
         userId: req.user!.id, question,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        sourceDocumentId: typeof latestDocumentId === 'string' ? latestDocumentId : undefined,
         apiKey: process.env.OPENAI_API_KEY ?? '', model: requestedModel ?? 'gpt-5.4-mini',
         ...(streaming ? { onProgress: (status: 'editing_document' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
       });
       const directImageEdit = directDocumentEdit ? null : await editUserImageIfRequested({
         userId: req.user!.id, question,
         attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        sourceImageId: typeof req.body?.sourceImageId === 'string' ? req.body.sourceImageId : undefined,
         apiKey: process.env.OPENAI_API_KEY ?? '', model: requestedModel ?? 'gpt-5.4-mini',
         dynamicBilling: isDynamicTextBillingEnabled(req.user!.id),
         ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
       });
-      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, sourceImageId: typeof req.body?.sourceImageId === 'string' && req.body.sourceImageId.length <= 128 ? req.body.sourceImageId : undefined, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });

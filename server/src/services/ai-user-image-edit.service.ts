@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { prisma } from '../db/prisma.js';
 import { generateAiImage } from './ai-image-generation.service.js';
 import { isGeneratedImageEditRequest } from './ai-image-edit-intent.js';
 import { selectUploadedImageForEdit, type UploadedImage } from './ai-user-image-input.js';
@@ -9,7 +8,6 @@ type EditInput = {
   taskId?: string;
   question: string;
   attachments?: UploadedImage[];
-  sourceImageId?: string;
   apiKey: string;
   onProgress?: (status: 'editing_image' | 'forming_answer') => void;
   model: string;
@@ -18,22 +16,13 @@ type EditInput = {
 
 export async function editUserImageIfRequested(input: EditInput) {
   if (!isGeneratedImageEditRequest(input.question)) return null;
-  // A fresh user upload takes precedence over all older generated images.
-  const uploaded = selectUploadedImageForEdit(input.attachments, true);
-  // An Office upload takes precedence over an older generated PNG in history.
-  // Do not silently modify the older image when the current file is DOCX.
-  if (!uploaded && input.attachments?.some(file => /\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(file.name ?? ''))) {
-    return null;
-  }
-  let previousId = uploaded ? null : input.sourceImageId ?? null;
-  if (!uploaded && !previousId && input.taskId) {
-    const recent = await prisma.aiGeneratedDocument.findFirst({
-      where: { userId: input.userId, taskId: input.taskId, mimeType: 'image/png' },
-      select: { id: true }, orderBy: { createdAt: 'desc' }
-    });
-    previousId = recent?.id ?? null;
-  }
-  if (!uploaded && !previousId) return null;
+  // Only a file attached in THIS message can be passed to a direct editor.
+  // Neither last-generated task PNGs nor client-provided "last image" IDs
+  // establish user intent or a source selection.
+  const attachments = input.attachments ?? [];
+  if (attachments.some(file => /\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(file.name ?? ''))) return null;
+  const uploaded = selectUploadedImageForEdit(attachments, true);
+  if (!uploaded) return null;
 
   const requestId = randomUUID();
   input.onProgress?.('editing_image');
@@ -42,8 +31,7 @@ export async function editUserImageIfRequested(input: EditInput) {
       userId: input.userId, taskId: input.taskId,
       actionId: requestId, apiKey: input.apiKey,
       args: { prompt: input.question, size: 'auto' },
-      uploadedSourceImage: uploaded ?? undefined,
-      sourceImageId: uploaded ? undefined : previousId ?? undefined
+      uploadedSourceImage: uploaded
     });
     return {
       answer: 'Изображение отредактировано. Новая версия прикреплена к сообщению.',

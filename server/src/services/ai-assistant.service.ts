@@ -20,7 +20,6 @@ import { taskAccessWhere } from '../lib/task-access.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
-import { isGeneratedImageEditRequest } from './ai-image-edit-intent.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -302,7 +301,6 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   chatId?: string;
   clientSurface?: 'web' | 'miniapp';
   requestId?: string;
-  sourceImageId?: string;
   attachments?: ChatAttachment[];
   onProgress?: (status: AiChatProgressStatus) => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
@@ -1302,51 +1300,6 @@ export const aiAssistantService = {
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
     const actionRequestId = input.requestId ?? randomUUID();
-    // Follow-up edits need actual pixels from the user's previously generated
-    // image. The text model never receives those pixels from chat history.
-    // Handle an explicit image edit directly with GPT Image, avoiding a
-    // pointless text-model round that can return an empty response.
-    if (input.sourceImageId && isGeneratedImageEditRequest(question)) {
-      input.onProgress?.('generating_image');
-      try {
-        const edited = await generateAiImage({
-          userId: input.userId, actionId: actionRequestId, apiKey,
-          sourceImageId: input.sourceImageId,
-          args: { prompt: question, size: 'auto' }
-        });
-        const context: AiChatContextDiagnostics = {
-          contextMode: 'legacy', memoryRevision: null,
-          memoryCompactionTriggered: false, memoryCompactionBatches: 0,
-          memoryCaughtUp: true, fallback: false, fallbackReason: null,
-          unsummarizedMessages: 0, unsummarizedEstimatedTokens: 0
-        };
-        input.onDiagnosticsPrepared?.({ context });
-        return {
-          answer: 'Изображение изменено. Новая версия прикреплена к сообщению.',
-          model, generatedDocument: edited.document,
-          imageCreditsSpentMilli: edited.creditsSpentMilli,
-          taskDataChanged: false, actionReports: [], undoOperations: [],
-          webSearchUsed: false, webSources: [], webCitations: [],
-          billing: { mode: isDynamicTextBillingEnabled(input.userId) ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli: edited.creditsSpentMilli },
-          workflowDiagnostics: {
-            providerStreaming: false, webSearchProgressObserved: false,
-            providerCalls: 0, toolCalls: 1, toolOperations: ['edit_image'],
-            batchToolCalls: 0, batchActionsRequested: 0,
-            batchActionsSucceeded: 0, batchActionsFailed: 0,
-            inputTokensTotal: 0, outputTokensTotal: 0,
-            webSearchUsed: false, webSearchCallsActual: 0,
-            webSearchCallsBilled: 0, webSearchLimit: 1,
-            webSearchLimitExceeded: false, webSearchDuplicateItems: 0,
-            webSearchSearchItemsRaw: 0, webSearchCreditsMilliBilled: 0,
-            providerWebSearchCostMilli: 0, webSearchCalls: 0,
-            webSearchCreditsMilli: 0, webSourceCount: 0
-          },
-          diagnostics: { requestId: actionRequestId, context }
-        };
-      } finally {
-        input.onProgress?.('forming_answer');
-      }
-    }
     const operation = async () => {
       const now = new Date();
       const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
@@ -1400,6 +1353,7 @@ export const aiAssistantService = {
             'Перед web_search сформулируй один максимально информативный поисковый запрос, способный закрыть вопрос за один поиск. За один пользовательский запрос доступен максимум один веб-поиск: не обходи ограничение. Если web_search уже использован, продолжай на основе полученных данных и не инициируй новый поиск. Не генерируй промежуточные фразы «Сейчас я поищу в интернете» или «Выполняю поиск»: состояние инструментов показывает интерфейс.',
             'После web_search основывай актуальные утверждения на найденных данных, не выдумывай источники и не представляй как установленный факт то, чего результаты не подтверждают. Не вызывай дополнительный web_search, если лимит исчерпан.',
             'Если пользователь явно просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай инструменту подробный визуальный промпт; сервер вернёт готовое PNG-вложение. Не используй этот инструмент для текстовых вопросов. Не объявляй о готовом файле до подтверждения инструмента.',
+            'Не трактуй просьбы «исправь его», «переделай этот файл», «прочитай абзац», «измени вложение» как создание изображения. Никогда не генерируй картинку вместо чтения или редактирования Word/Excel/PDF. Старое изображение или документ из истории не является автоматически выбранным файлом. Пока нет выбора файла из истории: для правки ранее созданного файла попроси прикрепить его к текущему сообщению; если непонятно, какой именно файл, уточни до любых платных действий.',
             'Если пользователь просит прислать, подготовить, оформить или скачать документ Word, используй create_word_document. Для Excel, XLSX, электронной таблицы или табличного отчёта файлом используй create_excel_workbook. Передай инструменту данные и структуру, сервер соберёт файл. После успешного вызова кратко сообщи, что файл готов; не обещай создать файл позже. Не создавай два документа за один запрос.',
             'Ссылайся на найденную задачу или подзадачу только маркером [[task_ref=ID]], не показывай ID обычным текстом. После успешного создания задачи, события или подзадачи добавь к названию маркер [[task_ref=ID]] с ID из результата task_action. Не придумывай ID. Отвечай на русском языке.'
           ].join(' ')
@@ -1981,6 +1935,7 @@ export const aiAssistantService = {
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
       'Если пользователь просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай подробный визуальный промпт; готовый PNG сервер добавит во вложения. Не говори об успешной генерации, пока инструмент не подтвердил её.',
+      'Не генерируй новое изображение по просьбе прочитать или изменить существующий документ, а также по местоимениям «его», «её», «это». Предыдущий PNG не считается автоматически выбранным. Если пользователь хочет отредактировать старый документ или изображение, но не прикрепил его к текущему сообщению, объясни, что для правки пока нужно прикрепить файл заново. При неоднозначности уточни файл до каких-либо действий.',
       'Текст пользователю пиши только в answer.',
       'Ты видишь только краткий preview активных подзадач и metadata сохранённых файлов. Если нужна подзадача вне preview, полный список, description или старая/выполненная подзадача — используй task_context_lookup. Не придумывай отсутствующие подзадачи.',
       'Если пользователь просит все подзадачи, полный список, классифицировать, сгруппировать, отсортировать или сравнить все подзадачи, расставить приоритеты среди всех либо найти закономерности по всему списку, нельзя отвечать только по preview. Сначала вызови task_context_lookup с operation=list_subtasks. Если result.hasMore=true, запрашивай следующую страницу с offset=result.nextOffset и продолжай до hasMore=false в пределах tool budget. Для точечного поиска нескольких подходящих подзадач используй search_subtasks.',
