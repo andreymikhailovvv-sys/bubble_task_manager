@@ -81,8 +81,8 @@ test('document edit route reuses signed generated-document downloads and billing
     readFile(new URL('../src/services/ai-user-document-edit.service.ts',import.meta.url),'utf8'),
     readFile(new URL('../../client/src/components/AiProgress.tsx',import.meta.url),'utf8')
   ]);
-  assert.match(controller,/directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
-  assert.match(controller,/directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
+  assert.match(controller, /const result = await aiAssistantService\.askAiChat/);
+  assert.match(controller, /const result = await aiAssistantService\.askTaskAssistant/);
   assert.match(handler,/settleDynamicResponsesCall/);
   assert.match(handler,/refundDynamicResponsesCall/);
   assert.match(handler,/userId:input.userId/);
@@ -134,9 +134,9 @@ test('document edit router does not intercept natural language text answers', as
     readFile(new URL('../src/services/ai-user-document-edit.service.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
   ]);
-  assert.match(editor, /if \(!attachments\.length \|\| !isDocumentEditRequest\(input\.question, currentOfficeFileAttached\)\) return null/);
-  assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
-  assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
+  assert.match(editor, /explicitFileToolSelection/);
+  assert.match(controller, /const result = await aiAssistantService\.askAiChat/);
+  assert.match(controller, /const result = await aiAssistantService\.askTaskAssistant/);
 });
 
 
