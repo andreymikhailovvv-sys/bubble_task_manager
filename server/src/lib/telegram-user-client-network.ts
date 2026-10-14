@@ -230,9 +230,10 @@ export class HttpConnectTelegramSocket {
 export function telegramUserClientNetworkOptions(env: NodeJS.ProcessEnv = process.env) {
   const config = proxyConfig(env);
   if (!config) return {};
+  const activeConfig: ProxyConfig = config;
   const Socket = class extends HttpConnectTelegramSocket {
     constructor(_ignoredProxy?: unknown, keepAliveInterval?: number) {
-      super(config, keepAliveInterval);
+      super(activeConfig, keepAliveInterval);
     }
   };
   return { networkSocket: Socket };
