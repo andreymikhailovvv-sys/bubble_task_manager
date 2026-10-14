@@ -34,6 +34,7 @@ import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
 import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
+import { telegramUserClientSend } from '../services/telegram-user-client-send.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -715,6 +716,33 @@ apiRouter.post('/admin/users/:userId/telegram-user-client/disconnect', async (re
   res.set('Cache-Control', 'no-store, private');
   try { res.json(await telegramUserClientAuth.disconnect(String(req.params.userId ?? ''))); }
   catch (error) { telegramAuthError(res, error); }
+});
+
+// PR3 is admin-only and uses the same password protection as the QR connection.
+// These routes must never be registered as AI tools or Telegram bot commands.
+apiRouter.post('/admin/users/:userId/telegram-user-client/send-status', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try { res.json(await telegramUserClientSend.status(String(req.params.userId ?? ''))); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/send-preview', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try {
+    res.json(await telegramUserClientSend.preview(
+      String(req.params.userId ?? ''), req.body?.recipientKind, req.body?.username, req.body?.text
+    ));
+  } catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/send-confirm', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try {
+    res.json(await telegramUserClientSend.confirm(String(req.params.userId ?? ''), req.body?.confirmationId));
+  } catch (error) { telegramAuthError(res, error); }
 });
 
 apiRouter.post('/admin/subscription-links', async (req, res) => {
