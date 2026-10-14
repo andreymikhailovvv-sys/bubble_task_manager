@@ -2117,6 +2117,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const habitModalDateKey = toDateKey(new Date());
   const habitModalCompleted = editingHabit ? Math.min(getHabitCompletedForDate(editingHabit, habitModalDateKey), editingHabit.targetCount) : 0;
   const isHabitCompletionActionPending = editingHabit ? completingHabitIds.includes(editingHabit.id) : false;
+  const closeHabitEditor = () => {
+    if (!editingHabit || savingHabit) return;
+    const original = habitToDraft(editingHabit);
+    if (JSON.stringify(habitDraft) === JSON.stringify(original)) {
+      closeMiniWindowWithMotion('habit', closeHabitModal);
+      return;
+    }
+    void saveHabit();
+  };
   const renderHabitSettingsFields = () => (
     <div className="space-y-4">
               <div className="space-y-2">
@@ -4608,7 +4617,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <button type="button" onClick={() => setIsHabitSettingsOpen((open) => !open)} className="miniapp-focus-icon-button" title="Настройки привычки" aria-label="Настройки привычки" aria-expanded={isHabitSettingsOpen} aria-controls="miniapp-habit-edit-settings">
                     <Settings size={16} />
                   </button>
-                  <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-focus-icon-button" title="Сохранить и закрыть" aria-label="Сохранить и закрыть окно">
+                  <button type="button" onClick={closeHabitEditor} disabled={savingHabit} className="miniapp-focus-icon-button" title="Сохранить и закрыть" aria-label="Сохранить и закрыть окно">
                     {savingHabit ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
                   </button>
                 </div>
