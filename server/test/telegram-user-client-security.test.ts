@@ -17,7 +17,9 @@ test('encrypts MTProto session with fresh nonce, authenticates owner and recover
 
 test('rejects modified encrypted data and incorrect keys', () => {
   const value = encryptTelegramUserSession('auth-key-data', 'user-a', KEY);
-  const tampered = value.slice(0, -1) + (value.endsWith('A') ? 'B' : 'A');
+  const parts = value.split('.');
+  parts[2] = (parts[2][0] === 'A' ? 'B' : 'A') + parts[2].slice(1);
+  const tampered = parts.join('.');
   assert.throws(() => decryptTelegramUserSession(tampered, 'user-a', KEY));
   assert.throws(() => decryptTelegramUserSession(value, 'user-a', 'ab'.repeat(32)), /authentication failed/);
   assert.throws(() => decryptTelegramUserSession('plaintext', 'user-a', KEY), /Invalid Telegram session envelope/);
