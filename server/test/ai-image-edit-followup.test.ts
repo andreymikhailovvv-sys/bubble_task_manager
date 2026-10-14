@@ -4,22 +4,26 @@ import test from 'node:test';
 import { isGeneratedImageEditRequest } from '../src/services/ai-image-edit-intent.js';
 import { runAiChatToolLoop } from '../src/services/ai-chat-tools.service.js';
 
-test('image edit intent handles follow-ups but not unrelated task edits', () => {
+test('image editing requires an explicit image reference, not an ambiguous follow-up', () => {
   for (const prompt of [
     'Измени картинку: добавь Луну',
     'Переделай изображение, сделай фон светлее',
     'Добавь текст на картинку',
     'Убери звёзды с изображения',
-    'Исправь её, пусть будет реалистично',
-    'А теперь сделай фон тёмным',
-    'Edit the image and replace the sky',
+    'Edit the image and replace the sky'
   ]) assert.equal(isGeneratedImageEditRequest(prompt), true, prompt);
   for (const prompt of [
+    'Исправь её, пусть будет реалистично',
+    'А теперь сделай фон тёмным',
+    'Измени его',
+    'Поменяй цвет',
+    'Отредактируй файл',
+    'Прочитай третий абзац документа и перепиши его',
     'Нарисуй новую картинку',
     'Измени дедлайн задачи',
     'Добавь задачу на завтра',
     'Сделай Excel таблицу',
-    'Сколько у меня кредитов?',
+    'Сколько у меня кредитов?'
   ]) assert.equal(isGeneratedImageEditRequest(prompt), false, prompt);
 });
 
@@ -51,28 +55,27 @@ test('two empty model responses fail safely instead of retrying indefinitely', a
   assert.equal(calls, 2);
 });
 
-test('previous-image edits validate ownership and preserve metered image generation', async () => {
-  const [image, assistant, controller, api, web, mini] = await Promise.all([
+test('previous-image IDs are no longer inferred or sent by clients; ownership remains checked in generation', async () => {
+  const [image, assistant, controller, api, web, mini, directEditor, documentEditor] = await Promise.all([
     readFile(new URL('../src/services/ai-image-generation.service.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/ai-user-image-edit.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/ai-user-document-edit.service.ts', import.meta.url), 'utf8')
   ]);
   assert.match(image, /userId: input\.userId, mimeType: 'image\/png'/);
-  assert.match(image, /openAiFetch\(/);
   assert.match(image, /images\/edits/);
-  assert.match(image, /sourceImageId/);
-  assert.match(image, /images: \[\{ image_url:/);
   assert.match(image, /reserveAiCreditsMilliUpTo/);
   assert.match(image, /settleAiCreditReservation/);
   assert.match(image, /refundAiCreditReservation/);
-  assert.match(assistant, /isGeneratedImageEditRequest\(question\)/);
-  assert.match(assistant, /sourceImageId: input\.sourceImageId/);
-  assert.match(assistant, /onProgress\?\.\('generating_image'\)/);
-  assert.match(controller, /sourceImageId: typeof req\.body\?\.sourceImageId/);
-  assert.match(api, /sourceImageId\?: string/);
-  assert.match(web, /sourceImageId: \[\.\.\.history\]\.reverse/);
-  assert.match(mini, /sourceImageId: \[\.\.\.history\]\.reverse/);
+  assert.doesNotMatch(web, /sourceImageId: \[\.\.\.history\]\.reverse/);
+  assert.doesNotMatch(mini, /sourceImageId: \[\.\.\.history\]\.reverse/);
+  assert.doesNotMatch(api, /sourceImageId\?: string/);
+  assert.doesNotMatch(controller, /latestDocumentId|sourceDocumentId:|sourceImageId:/);
+  assert.doesNotMatch(assistant, /input\.sourceImageId|isGeneratedImageEditRequest\(question\)/);
+  assert.doesNotMatch(directEditor, /findFirst\(|previousId|input\.sourceImageId/);
+  assert.doesNotMatch(documentEditor, /aiGeneratedDocument\.findFirst|input\.sourceDocumentId/);
 });
