@@ -115,6 +115,7 @@ model User {
   aiConversationAttachments AiConversationAttachment[]
   telegramSessions TelegramSession[]
   telegramUserClientConnection TelegramUserClientConnection?
+  telegramUserClientSendAudits TelegramUserClientSendAudit[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -559,6 +560,21 @@ model TelegramUserClientConnection {
   connectedAt       DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+
+// Audit metadata only. No message body, Telegram session or password is persisted.
+model TelegramUserClientSendAudit {
+  id                  String   @id
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipientKind       String
+  recipientTelegramId String
+  result              String   @default("PENDING")
+  createdAt           DateTime @default(now())
+  completedAt         DateTime?
+
+  @@index([userId, createdAt])
 }
 
 model TelegramSession {
