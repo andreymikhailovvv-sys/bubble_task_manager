@@ -44,3 +44,36 @@ test('Mini App X saves only manual field edits, not old task snapshots', async (
   assert.match(mini, /mergeRemoteDraftFields\(baseline, local, fresh,/);
   assert.match(mini, /saveAndCloseTaskEditor\(openedTask\.id, 'task'\)/);
 });
+
+
+test('focus task sector stays dirty until server confirms its update', async () => {
+  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const selectStart = web.indexOf('const nextSphereId = sphere.id || null;');
+  const selectEnd = web.indexOf('setIsFocusedSphereDropdownOpen(false);', selectStart);
+  assert.ok(selectStart >= 0 && selectEnd > selectStart, 'sector dropdown handler must exist');
+  const selection = web.slice(selectStart, selectEnd);
+  assert.match(selection, /setFocusedDraft\(\(prev\) => \(\{ \.\.\.\(prev \?\? \{\}\), sphereId: nextSphereId \}\)\)/);
+  assert.doesNotMatch(selection, /setTasks\(/, 'must not change remote task list before PATCH succeeds');
+
+  const baseline = { sphereId: 'sphere-old', title: 'Планы' };
+  const newDraft = { ...baseline, sphereId: 'sphere-new' };
+  assert.deepEqual(changedDraftFields(baseline, newDraft, ['sphereId', 'title']), { sphereId: 'sphere-new' });
+
+  const saveStart = web.indexOf('focusedAutosaveTimeoutRef.current = setTimeout(() => {');
+  const saveEnd = web.indexOf('  const flushFocusedTaskSave = async', saveStart);
+  const autosave = web.slice(saveStart, saveEnd);
+  assert.match(autosave, /api\.updateTask\(focusedTask\.id,/);
+  assert.match(autosave, /\.then\(\(savedTask\) =>/);
+  assert.match(autosave, /task\.id === savedTask\.id \? \{ \.\.\.task, \.\.\.savedTask \} : task/);
+  assert.ok(autosave.indexOf('focusedAutosaveSignatureRef.current = JSON.stringify') < autosave.indexOf('setTasks('), 'server reply must be acknowledged before task list changes');
+});
+
+test('failed focus task saves are visible and do not close an unsaved editor', async () => {
+  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const flush = web.slice(web.indexOf('  const flushFocusedTaskSave = async () =>'), web.indexOf('  const closeFocusedTask = async () =>'));
+  const close = web.slice(web.indexOf('  const closeFocusedTask = async () =>'), web.indexOf('  const applyFocusedRecurrence = async () =>'));
+  assert.match(flush, /setFocusedSaveError\(error instanceof Error/);
+  assert.match(flush, /return false;/);
+  assert.match(close, /if \(!\(await flushFocusedTaskSave\(\)\)\) return;/);
+  assert.match(web, /role="alert"[^\n]*Не удалось сохранить изменения:/);
+});
