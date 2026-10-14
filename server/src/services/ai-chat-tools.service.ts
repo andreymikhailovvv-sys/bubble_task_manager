@@ -391,7 +391,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           create_word_document: 'forming_answer',
           create_excel_workbook: 'forming_answer',
           generate_image: 'generating_image',
-          read_file: 'reading_file',
+          read_file: 'reading_attachment',
           edit_file: 'editing_document'
         };
         const progress = progressByTool[name];
