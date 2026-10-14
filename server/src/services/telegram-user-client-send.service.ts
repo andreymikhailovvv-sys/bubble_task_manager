@@ -34,7 +34,7 @@ type Draft = {
 };
 const drafts = new Map<string, Draft>();
 
-export function normalizeManualTelegramRequest(kind: unknown, username: unknown, text: unknown) {
+export function normalizeManualTelegramRequest(kind: unknown, username: unknown, text: unknown): { kind: ManualTelegramTarget; username: string | null; text: string } {
   if (kind !== 'saved' && kind !== 'username') {
     throw new TelegramUserClientError(400, 'Выберите «Избранное» или получателя по @username');
   }
