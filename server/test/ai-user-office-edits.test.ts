@@ -134,7 +134,7 @@ test('document edit router does not intercept natural language text answers', as
     readFile(new URL('../src/services/ai-user-document-edit.service.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
   ]);
-  assert.match(editor, /if \(!isDocumentEditRequest\(input\.question, currentOfficeFileAttached\)\) return null/);
+  assert.match(editor, /if \(!attachments\.length \|\| !isDocumentEditRequest\(input\.question, currentOfficeFileAttached\)\) return null/);
   assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askAiChat/);
   assert.match(controller, /directDocumentEdit \?\? await aiAssistantService\.askTaskAssistant/);
 });
