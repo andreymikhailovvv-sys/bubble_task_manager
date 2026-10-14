@@ -8794,3 +8794,60 @@ body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus-visible {
   .miniapp-habit-tracker-day { min-height: 28px; border-radius: 8px; font-size: 11px; }
   .miniapp-habit-tracker-calendar { padding: 10px; }
 }
+
+
+/* Habit creation shares the editor sheet's visual language. Only the inner
+   content scrolls; the create action remains visible above the safe area. */
+.miniapp-habit-create-panel {
+  border-radius: 2rem 2rem 0 0;
+}
+.miniapp-habit-create-content {
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.miniapp-habit-create-panel .miniapp-habit-editor-completion {
+  border-color: rgba(139, 92, 246, .24);
+  background: #f8fafc;
+}
+.miniapp-habit-create-panel .miniapp-habit-recurrence-panel,
+.miniapp-habit-create-panel .miniapp-habit-duration-summary,
+.miniapp-habit-create-panel .miniapp-habit-stepper {
+  border-radius: 1rem;
+}
+.miniapp-habit-create-panel .miniapp-habit-create-bottom {
+  flex: none;
+  position: relative;
+  z-index: 2;
+}
+.miniapp-habit-modal-panel.miniapp-habit-create-panel input.miniapp-habit-editor-name {
+  border-radius: .75rem;
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  outline: none;
+}
+.miniapp-habit-modal-panel.miniapp-habit-create-panel input.miniapp-habit-editor-name:focus {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, .12);
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-create-panel .miniapp-habit-editor-completion {
+  border-color: rgba(139, 92, 246, .24);
+  background: rgba(15, 23, 42, .38);
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel.miniapp-habit-create-panel input.miniapp-habit-editor-name {
+  border-color: rgba(139, 92, 246, .34);
+  background: rgba(15, 23, 42, .48);
+  color: #f8fafc;
+}
+.miniapp-shell:not(.miniapp-light) .miniapp-habit-modal-panel.miniapp-habit-create-panel input.miniapp-habit-editor-name:focus {
+  border-color: rgba(167, 139, 250, .7);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, .14);
+}
+@media (min-width: 640px) {
+  .miniapp-habit-create-panel { border-radius: 2rem; }
+}
+@media (max-width: 639px) {
+  .miniapp-habit-create-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
