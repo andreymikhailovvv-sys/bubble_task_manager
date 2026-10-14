@@ -129,7 +129,7 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
       attachments: [file], apiKey: input.apiKey, model: input.model, explicitFileToolSelection: true
     });
     if (!result?.generatedDocument) return { response: { ok: false, code: 'NO_EDITS', message: result?.answer ?? 'Редактирование не выполнено.' } };
-    return { response: { ok: true, fileName: result.generatedDocument.fileName, fileId: args.fileId, format },
+    return { response: { ok: true, fileName: result.generatedDocument.fileName, fileId: args.fileId, format, message: result.answer },
       document: result.generatedDocument, creditsSpentMilli: result.billing.creditsSpentMilli };
   }
   if (/^image\//i.test(file.mimeType) || /\.(png|jpe?g|webp)$/i.test(file.name)) {
@@ -138,7 +138,7 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
       userId: input.userId, taskId: input.taskId, actionId: input.actionId,
       apiKey: input.apiKey, args: { prompt: args.instruction, size: 'auto' }, uploadedSourceImage: validated
     });
-    return { response: { ok: true, fileName: edited.document.fileName, fileId: args.fileId, format: 'image' },
+    return { response: { ok: true, fileName: edited.document.fileName, fileId: args.fileId, format: 'image', message: 'Изображение изменено. Новая версия прикреплена к сообщению.' },
       document: edited.document, creditsSpentMilli: edited.creditsSpentMilli };
   }
   return { response: { ok: false, code: 'UNSUPPORTED_EDIT_FORMAT', message: 'Редактирование поддерживается для DOCX, XLSX и PNG/JPEG/WebP.' } };
