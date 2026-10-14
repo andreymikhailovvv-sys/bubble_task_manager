@@ -2161,6 +2161,10 @@ export const aiAssistantService = {
                 if (result.document) {
                   editedFileDocument = result.document;
                   editedFileCreditsMilli += result.creditsSpentMilli ?? 0;
+                  rawAnswer = JSON.stringify({
+                    answer: result.response.message || 'Файл изменён. Новая версия прикреплена к сообщению.',
+                    actions: [], document: null, spreadsheet: null
+                  });
                 }
               } catch (error) {
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({
@@ -2229,6 +2233,7 @@ export const aiAssistantService = {
             console.info('[AI task context tool] call', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallIndex: toolCallsExecuted, operation: args.operation, ok: lookupResult.ok === true, resultCount: Array.isArray(lookupResult.results) ? lookupResult.results.length : Array.isArray(lookupResult.attachments) ? lookupResult.attachments.length : null, queryLength: typeof args.query === 'string' ? args.query.length : null, fetchedAttachmentSize: lookup.attachment?.size ?? null });
             console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
           }
+          if (rawAnswer) break;
         }
         if (!rawAnswer && (generatedImage || editedFileDocument)) rawAnswer = JSON.stringify({ answer: 'Файл изменён. Новая версия прикреплена к сообщению.', actions: [], document: null, spreadsheet: null });
         if (!rawAnswer) throw new Error('TASK_CHAT_CONTEXT_PROVIDER_CALL_LIMIT');
