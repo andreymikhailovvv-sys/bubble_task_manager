@@ -112,6 +112,7 @@ model User {
   generalAiMessages GeneralAiMessage[]
   aiChatProjects Json?
   taskAttachments TaskAttachment[]
+  aiConversationAttachments AiConversationAttachment[]
   telegramSessions TelegramSession[]
   telegramUserClientConnection TelegramUserClientConnection?
   habits       Habit[]
@@ -283,6 +284,7 @@ model Task {
   comments            TaskComment[]
   commentReadStates   TaskCommentReadState[]
   generatedDocuments  AiGeneratedDocument[]
+  aiConversationAttachments AiConversationAttachment[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -414,6 +416,31 @@ model GeneralAiMessage {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+
+// Durable copies of files uploaded in AI chat messages. Each attachment
+// is scoped to its originating request and the owning chat or task.
+model AiConversationAttachment {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId        String?
+  task          Task?     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  projectId     String?
+  chatId        String?
+  messageId     String
+  ordinal       Int
+  fileName      String
+  mimeType      String
+  size          Int
+  contentBase64 String
+  createdAt     DateTime  @default(now())
+
+  @@unique([userId, messageId, ordinal])
+  @@index([userId, taskId, createdAt])
+  @@index([userId, projectId, chatId, createdAt])
+  @@index([userId, messageId])
 }
 
 model AiGeneratedDocument {
