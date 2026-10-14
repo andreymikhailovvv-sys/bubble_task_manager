@@ -8,7 +8,7 @@ import { EXCEL_MIME } from './excel-workbook.service.js';
 type Attachment = { name: string; mimeType: string; contentBase64: string; size: number };
 type Input = {
   userId: string; taskId?: string; question: string; model: string; apiKey: string;
-  attachments?: Attachment[]; sourceDocumentId?: string;
+  attachments?: Attachment[];
   onProgress?: (status:'editing_document'|'forming_answer')=>void;
 };
 
@@ -136,8 +136,12 @@ export function interpretEmptyOfficeEditPlan(summary: unknown): { fallbackToText
 }
 
 export async function editUserDocumentIfRequested(input:Input) {
-  const currentOfficeFileAttached = (input.attachments ?? []).some(file => Boolean(sourceFormat(file.name, file.mimeType)));
-  if (!isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
+  const attachments = input.attachments ?? [];
+  const currentOfficeFileAttached = attachments.some(file => Boolean(sourceFormat(file.name, file.mimeType)));
+  // There is no direct file selection in history yet. Never look up an
+  // arbitrary previous document just because the prompt mentions editing.
+  // A direct edit is possible only with a file supplied by this message.
+  if (!attachments.length || !isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
   if(input.taskId){
     const allowed=await prisma.task.findFirst({
       where:{id:input.taskId,OR:[
@@ -148,7 +152,6 @@ export async function editUserDocumentIfRequested(input:Input) {
     });
     if(!allowed)throw new TypeError('Задача недоступна для редактирования документа.');
   }
-  const attachments=input.attachments ?? [];
   // Never silently edit an older document when the current attachment
   // is an unsupported PDF/DOC/XLS or a mismatched claimed Office type.
   const officeLike=attachments.filter(a=>/\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(a.name) ||
@@ -158,28 +161,12 @@ export async function editUserDocumentIfRequested(input:Input) {
   }
   const candidates=attachments.filter(a=>sourceFormat(a.name,a.mimeType));
   if(candidates.length>1)throw new TypeError('Прикреплено несколько Word/Excel файлов. Оставьте один для редактирования.');
-  let format:OfficeFormat|null=null;
-  let sourceBuffer:Buffer|null=null;
-  let sourceName='';
-  if(candidates.length){
-    const file=candidates[0];
-    format=sourceFormat(file.name,file.mimeType);
-    sourceBuffer=uploadBuffer(file);
-    sourceName=file.name;
-  }else{
-    const fromHistory=input.sourceDocumentId ? await prisma.aiGeneratedDocument.findFirst({
-      where:{id:input.sourceDocumentId,userId:input.userId,mimeType:{in:[WORD_DOCUMENT_MIME,EXCEL_MIME]}},
-      select:{id:true,fileName:true,mimeType:true,contentBase64:true,size:true}
-    }):null;
-    const previous=fromHistory ?? (input.taskId ? await prisma.aiGeneratedDocument.findFirst({
-      where:{userId:input.userId,taskId:input.taskId,mimeType:{in:[WORD_DOCUMENT_MIME,EXCEL_MIME]}},
-      orderBy:{createdAt:'desc'},select:{id:true,fileName:true,mimeType:true,contentBase64:true,size:true}
-    }):null);
-    if(!previous)return null;
-    format=previous.mimeType===WORD_DOCUMENT_MIME?'docx':'xlsx';
-    sourceName=previous.fileName;
-    sourceBuffer=uploadBuffer({name:previous.fileName,mimeType:previous.mimeType,size:previous.size,contentBase64:previous.contentBase64});
-  }
+  if (!candidates.length) return null;
+  // The source is precisely the one Office document in this message.
+  const file = candidates[0];
+  const format = sourceFormat(file.name, file.mimeType);
+  const sourceBuffer = uploadBuffer(file);
+  const sourceName = file.name;
   if(!format || !sourceBuffer)return null;
   const preview=getOfficeDocumentPreview(sourceBuffer,format);
   if(preview.text.length<3)throw new TypeError('Не удалось извлечь содержимое документа для безопасного редактирования.');
