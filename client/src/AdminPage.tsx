@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -52,6 +52,14 @@ export default function AdminPage() {
   const [telegramPassword, setTelegramPassword] = useState('');
   const [telegramAuthBusy, setTelegramAuthBusy] = useState(false);
   const [telegramAuthError, setTelegramAuthError] = useState<string | null>(null);
+  const [telegramSendKind, setTelegramSendKind] = useState<'saved' | 'username'>('saved');
+  const [telegramSendUsername, setTelegramSendUsername] = useState('');
+  const [telegramSendText, setTelegramSendText] = useState('');
+  const [telegramSendPreview, setTelegramSendPreview] = useState<TelegramManualSendPreview | null>(null);
+  const [telegramSendStatus, setTelegramSendStatus] = useState<TelegramManualSendStatus | null>(null);
+  const [telegramSendBusy, setTelegramSendBusy] = useState(false);
+  const [telegramSendNotice, setTelegramSendNotice] = useState<string | null>(null);
+  const [telegramSendError, setTelegramSendError] = useState<string | null>(null);
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -179,6 +187,68 @@ export default function AdminPage() {
     }, 2500);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selectedUserId, password, telegramAuth?.status, telegramAuth?.attemptId]);
+
+  useEffect(() => {
+    setTelegramSendPreview(null);
+    setTelegramSendText('');
+    setTelegramSendUsername('');
+    setTelegramSendKind('saved');
+    setTelegramSendNotice(null);
+    setTelegramSendError(null);
+    setTelegramSendStatus(null);
+    if (!selectedUserId || !password) return;
+    let cancelled = false;
+    void api.adminTelegramManualSendStatus({ password, userId: selectedUserId })
+      .then((result) => { if (!cancelled) setTelegramSendStatus(result); })
+      .catch(() => { if (!cancelled) setTelegramSendStatus(null); });
+    return () => { cancelled = true; };
+  }, [selectedUserId, password]);
+
+  async function manualTelegramPreview() {
+    if (!selectedUserId || telegramSendBusy) return;
+    const userId = selectedUserId;
+    setTelegramSendBusy(true);
+    setTelegramSendNotice(null);
+    setTelegramSendError(null);
+    setTelegramSendPreview(null);
+    try {
+      const preview = await api.adminTelegramManualSendPreview({
+        password, userId, recipientKind: telegramSendKind,
+        username: telegramSendKind === 'username' ? telegramSendUsername : undefined,
+        text: telegramSendText
+      });
+      if (userId === selectedUserId) setTelegramSendPreview(preview);
+    } catch (error) {
+      setTelegramSendError(error instanceof Error ? error.message : 'Не удалось проверить получателя');
+    } finally {
+      setTelegramSendBusy(false);
+    }
+  }
+
+  async function manualTelegramConfirm() {
+    if (!selectedUserId || !telegramSendPreview || telegramSendBusy) return;
+    const userId = selectedUserId;
+    const confirmationId = telegramSendPreview.confirmationId;
+    setTelegramSendBusy(true);
+    setTelegramSendPreview(null);
+    setTelegramSendError(null);
+    setTelegramSendNotice(null);
+    try {
+      await api.adminTelegramManualSendConfirm({ password, userId, confirmationId });
+      if (userId === selectedUserId) {
+        setTelegramSendNotice('Сообщение отправлено. Повторное подтверждение невозможно.');
+        setTelegramSendText('');
+      }
+    } catch (error) {
+      setTelegramSendError(error instanceof Error ? error.message : 'Не удалось подтвердить отправку');
+    } finally {
+      try {
+        const status = await api.adminTelegramManualSendStatus({ password, userId });
+        if (userId === selectedUserId) setTelegramSendStatus(status);
+      } catch { /* keep last audit */ }
+      setTelegramSendBusy(false);
+    }
+  }
 
   async function telegramAuthAction(action: 'start' | 'cancel' | 'disconnect' | 'password') {
     if (!selectedUserId || telegramAuthBusy) return;
@@ -480,7 +550,7 @@ export default function AdminPage() {
                 </label>
                 <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
                   <h3 className="text-sm font-semibold">Telegram-ассистент: закрытый пилот</h3>
-                  <p className="mt-1 text-xs text-slate-400">Подключение личного Telegram только с подтверждением владельца. Переписка не читается, сообщения не отправляются, ИИ не имеет доступа.</p>
+                  <p className="mt-1 text-xs text-slate-400">Ручная отправка только после предпросмотра и отдельного подтверждения администратора. Переписка не читается, ИИ не имеет доступа к отправке.</p>
                   <p className="mt-2 text-xs text-slate-300">
                     Доступ: {selectedUser.telegramUserClientPilotEnabled ? 'разрешён' : 'закрыт'} ·
                     Сессия: {selectedUser.telegramUserClientConnected ? 'подключена' : 'не подключена'}
@@ -498,7 +568,75 @@ export default function AdminPage() {
                       {!telegramAuth?.enabled && <p className="mt-2 text-xs text-amber-300">MTProto отключён на сервере. Для QR-подключения настройте переменные окружения Timeweb.</p>}
                       {telegramAuth?.connected ? (
                         <div className="mt-3">
-                          <p className="text-sm text-emerald-300">Личный Telegram подключён. Отправка сообщений ещё недоступна.</p>
+                          <p className="text-sm text-emerald-300">Личный Telegram подключён.</p>
+                          <div className="mt-4 rounded-lg border border-slate-600 bg-slate-950/50 p-3">
+                            <h4 className="text-sm font-semibold text-slate-100">Тестовая ручная отправка</h4>
+                            <p className="mt-1 text-xs text-slate-400">Отправка возможна только из этой админ-панели. Не более 3 попыток за 10 минут и 12 за сутки, пауза минимум 20 секунд. Никаких рассылок и самостоятельных действий ИИ.</p>
+                            {telegramSendStatus?.enabled === false && (
+                              <p className="mt-2 text-xs text-amber-300">Отправка выключена. Для проверки установите TELEGRAM_USER_SEND_ENABLED=true в Timeweb и выполните деплой.</p>
+                            )}
+                            <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-200">
+                              <label className="flex items-center gap-2">
+                                <input type="radio" checked={telegramSendKind === 'saved'} onChange={() => { setTelegramSendKind('saved'); setTelegramSendPreview(null); }} />
+                                В «Избранное»
+                              </label>
+                              <label className="flex items-center gap-2">
+                                <input type="radio" checked={telegramSendKind === 'username'} onChange={() => { setTelegramSendKind('username'); setTelegramSendPreview(null); }} />
+                                По @username
+                              </label>
+                            </div>
+                            {telegramSendKind === 'username' && (
+                              <label className="mt-3 block text-xs text-slate-300">Получатель (только личный пользователь, не группа и не бот)
+                                <input type="text" autoComplete="off" value={telegramSendUsername}
+                                  onChange={(event) => { setTelegramSendUsername(event.target.value); setTelegramSendPreview(null); }}
+                                  placeholder="@username" maxLength={33}
+                                  className="mt-1 block w-full max-w-md rounded border border-slate-600 bg-slate-900 p-2 text-sm text-white" />
+                              </label>
+                            )}
+                            <label className="mt-3 block text-xs text-slate-300">Текст сообщения
+                              <textarea value={telegramSendText} maxLength={1000} rows={3}
+                                onChange={(event) => { setTelegramSendText(event.target.value); setTelegramSendPreview(null); }}
+                                className="mt-1 block w-full resize-y rounded border border-slate-600 bg-slate-900 p-2 text-sm text-white" />
+                            </label>
+                            <button type="button" disabled={telegramSendBusy || !telegramSendStatus?.enabled || !telegramSendText.trim()}
+                              onClick={() => void manualTelegramPreview()}
+                              className="mt-3 rounded bg-cyan-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-40">
+                              {telegramSendBusy ? 'Проверка…' : 'Проверить получателя и текст'}
+                            </button>
+                            {telegramSendPreview && (
+                              <div className="mt-3 rounded-lg border border-amber-500/60 bg-amber-950/30 p-3">
+                                <p className="text-sm font-semibold text-amber-200">Подтверждение отправки</p>
+                                <p className="mt-2 text-xs text-slate-200">Получатель: <strong>{telegramSendPreview.recipientName}</strong> (Telegram ID {telegramSendPreview.recipientId})</p>
+                                <p className="mt-2 whitespace-pre-wrap break-words rounded bg-slate-950 p-3 text-sm text-white">{telegramSendPreview.text}</p>
+                                <p className="mt-2 text-xs text-amber-200">Внимание: отправится от имени подключённого личного Telegram. Подтверждение одноразовое, действует 90 секунд.</p>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button type="button" disabled={telegramSendBusy || Date.now() >= telegramSendPreview.expiresAt}
+                                    onClick={() => void manualTelegramConfirm()}
+                                    className="rounded bg-amber-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">
+                                    {telegramSendBusy ? 'Отправка…' : 'Подтверждаю, отправить'}
+                                  </button>
+                                  <button type="button" disabled={telegramSendBusy} onClick={() => setTelegramSendPreview(null)}
+                                    className="rounded border border-slate-500 px-3 py-2 text-sm">Отмена</button>
+                                </div>
+                              </div>
+                            )}
+                            {telegramSendNotice && <p role="status" className="mt-2 text-xs text-emerald-300">{telegramSendNotice}</p>}
+                            {telegramSendError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramSendError}</p>}
+                            {telegramSendStatus && (
+                              <div className="mt-4 border-t border-slate-700 pt-3">
+                                <h5 className="text-xs font-semibold text-slate-200">Последние операции (без текстов сообщений)</h5>
+                                {telegramSendStatus.audit.length === 0 && <p className="mt-1 text-xs text-slate-400">Отправок ещё не было.</p>}
+                                <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                                  {telegramSendStatus.audit.map((entry) => (
+                                    <li key={entry.id}>
+                                      {new Date(entry.createdAt).toLocaleString('ru-RU')}: {entry.recipientKind === 'saved' ? 'Избранное' : 'Личный контакт'}
+                                      {' · '}{entry.result === 'SENT' ? 'Отправлено' : entry.result === 'FAILED' ? 'Не отправлено' : entry.result === 'UNKNOWN' ? 'Результат неизвестен' : 'Выполняется'}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
                           <button type="button" disabled={telegramAuthBusy} onClick={() => void telegramAuthAction('disconnect')}
                             className="mt-2 rounded-md border border-rose-500/60 px-3 py-2 text-sm text-rose-200 hover:bg-rose-500/10 disabled:opacity-50">
                             Отключить личный Telegram
