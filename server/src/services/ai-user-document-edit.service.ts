@@ -9,6 +9,7 @@ type Attachment = { name: string; mimeType: string; contentBase64: string; size:
 type Input = {
   userId: string; taskId?: string; question: string; model: string; apiKey: string;
   attachments?: Attachment[];
+  explicitFileToolSelection?: boolean;
   onProgress?: (status:'editing_document'|'forming_answer')=>void;
 };
 
@@ -141,7 +142,7 @@ export async function editUserDocumentIfRequested(input:Input) {
   // There is no direct file selection in history yet. Never look up an
   // arbitrary previous document just because the prompt mentions editing.
   // A direct edit is possible only with a file supplied by this message.
-  if (!attachments.length || !isDocumentEditRequest(input.question, currentOfficeFileAttached)) return null;
+  if (!attachments.length || (!input.explicitFileToolSelection && !isDocumentEditRequest(input.question, currentOfficeFileAttached))) return null;
   if(input.taskId){
     const allowed=await prisma.task.findFirst({
       where:{id:input.taskId,OR:[
