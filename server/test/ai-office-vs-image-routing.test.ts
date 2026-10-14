@@ -6,7 +6,7 @@ import { buildExcelWorkbookBuffer, EXCEL_MIME } from '../src/services/excel-work
 import { getOfficeDocumentPreview } from '../src/services/ooxml-document-editor.js';
 import { selectUploadedImageForEdit, validateUploadedImage } from '../src/services/ai-user-image-input.js';
 import { editUserImageIfRequested } from '../src/services/ai-user-image-edit.service.js';
-import { sourceFormat, isDocumentEditRequest } from '../src/services/ai-user-document-edit.service.js';
+import { sourceFormat, isDocumentEditRequest, editUserDocumentIfRequested } from '../src/services/ai-user-document-edit.service.js';
 import { isGeneratedImageEditRequest } from '../src/services/ai-image-edit-intent.js';
 
 const word = buildWordDocumentBuffer({
@@ -25,7 +25,7 @@ test('DOCX never enters the image editor, even with a misleading image MIME', ()
   assert.equal(sourceFormat(upload.name,upload.mimeType),'docx');
   assert.match(getOfficeDocumentPreview(word,'docx').text,/Исправь старую формулировку/);
   assert.equal(isDocumentEditRequest('Измени её, пожалуйста',true),true);
-  assert.equal(isGeneratedImageEditRequest('Измени её, пожалуйста'),true);
+  assert.equal(isGeneratedImageEditRequest('Измени её, пожалуйста'),false);
 });
 
 test('XLSX is routed to Office editing despite an incorrect image MIME', () => {
@@ -70,4 +70,49 @@ test('Office classification remains strict about file type and validates actual 
   assert.equal(sourceFormat('scanned.pdf','application/pdf'),null);
   assert.equal(sourceFormat('fake.png','image/png'),null);
   assert.throws(()=>getOfficeDocumentPreview(Buffer.from('not an OOXML archive'),'docx'));
+});
+
+test('an older task image is never chosen as source when no image is attached now', async () => {
+  const legacyClientArguments = {
+    userId: 'owner',
+    taskId: 'task',
+    sourceImageId: 'older-image',
+    question: 'Измени картинку и добавь луну',
+    attachments: [],
+    apiKey: 'not-needed',
+    model: 'gpt-5.4-mini',
+    dynamicBilling: false
+  };
+  // Even if an outdated client sends sourceImageId, the service ignores it.
+  const result = await editUserImageIfRequested(legacyClientArguments);
+  assert.equal(result, null);
+});
+
+test('an older Office file is never edited without attachment in current message', async () => {
+  const oldDocumentRequest = {
+    userId: 'owner',
+    taskId: 'task',
+    sourceDocumentId: 'old-word-doc',
+    question: 'Исправь текст в документе',
+    attachments: [],
+    apiKey: 'not-needed',
+    model: 'gpt-5.4-mini'
+  };
+  // No database lookup, OpenAI call or wallet reservation may occur.
+  const result = await editUserDocumentIfRequested(oldDocumentRequest);
+  assert.equal(result, null);
+});
+
+test('an ambiguous edit with an old image and a fresh document never invokes image editing', async () => {
+  const result = await editUserImageIfRequested({
+    userId: 'owner',
+    taskId: 'task',
+    sourceImageId: 'older-image',
+    question: 'Исправь её и покажи результат',
+    attachments: [file('Договор.docx', WORD_DOCUMENT_MIME, word)],
+    apiKey: 'not-needed',
+    model: 'gpt-5.4-mini',
+    dynamicBilling: false
+  });
+  assert.equal(result, null);
 });
