@@ -199,6 +199,23 @@ export type TelegramUserClientAuthStatus = {
   passwordHint: string | null;
   error: string | null;
 };
+export type TelegramManualSendPreview = {
+  confirmationId: string;
+  recipientName: string;
+  recipientId: string;
+  recipientKind: 'saved' | 'username';
+  text: string;
+  expiresAt: number;
+};
+export type TelegramManualSendAudit = {
+  id: string;
+  recipientKind: 'saved' | 'username';
+  recipientTelegramId: string;
+  result: 'PENDING' | 'SENT' | 'FAILED' | 'UNKNOWN';
+  createdAt: string;
+  completedAt: string | null;
+};
+export type TelegramManualSendStatus = { enabled: boolean; audit: TelegramManualSendAudit[] };
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
 export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
@@ -444,6 +461,18 @@ export const api = {
   adminTelegramUserClientDisconnect: (payload: { password: string; userId: string }) =>
     request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramManualSendStatus: (payload: { password: string; userId: string }) =>
+    request<TelegramManualSendStatus>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-status`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramManualSendPreview: (payload: { password: string; userId: string; recipientKind: 'saved' | 'username'; username?: string; text: string }) =>
+    request<TelegramManualSendPreview>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-preview`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramManualSendConfirm: (payload: { password: string; userId: string; confirmationId: string }) =>
+    request<{ ok: boolean; auditId: string }>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-confirm`,
       { method: 'POST', body: JSON.stringify(payload) }),
   adminSetTelegramUserClientPilot: (payload: { password: string; userId: string; pilotEnabled: boolean }) =>
     request<{ userId: string; telegramUserClientPilotEnabled: boolean; telegramUserClientConnected: boolean }>(
