@@ -102,6 +102,17 @@ export const aiController = {
       }
       if (streaming) { res.status(200).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); }
       const history = Array.isArray(req.body?.history) ? req.body.history.filter((m: any) => (m?.role === 'user' || m?.role === 'assistant') && typeof m?.content === 'string').map((m: any) => ({ ...(typeof m.id === 'string' ? { id: m.id } : {}), role: m.role, content: m.content })) : [];
+      // File IDs from the browser's history are hints only. The catalog
+      // service checks every referenced document against the signed-in owner.
+      const fileReferences = Array.isArray(req.body?.history)
+        ? req.body.history.slice(-50).filter((m: any) => m?.role === 'assistant')
+          .map((m: any) => ({
+            role: 'assistant' as const,
+            ...(typeof m.id === 'string' ? { id: m.id } : {}),
+            ...(typeof m.generatedDocument?.id === 'string'
+              ? { generatedDocument: { id: m.generatedDocument.id } } : {})
+          }))
+        : [];
       const requestedModel = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'].includes(req.body?.model) ? req.body.model as 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol' : undefined;
       const userTimeZone = await resolveUserTimeZone(req);
       const projectTitle = typeof req.body?.projectTitle === 'string' ? req.body.projectTitle : undefined;
@@ -123,7 +134,7 @@ export const aiController = {
         dynamicBilling: isDynamicTextBillingEnabled(req.user!.id),
         ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
       });
-      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], fileReferences, onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
