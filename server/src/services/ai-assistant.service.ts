@@ -20,7 +20,6 @@ import { taskAccessWhere } from '../lib/task-access.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
-import { isGeneratedImageEditRequest } from './ai-image-edit-intent.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -302,7 +301,6 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   chatId?: string;
   clientSurface?: 'web' | 'miniapp';
   requestId?: string;
-  sourceImageId?: string;
   attachments?: ChatAttachment[];
   onProgress?: (status: AiChatProgressStatus) => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
@@ -1302,51 +1300,6 @@ export const aiAssistantService = {
     if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
     const model = AI_CHAT_MODEL_BY_OPTION[input.model ?? 'gpt-5.4-mini'] ?? AI_CHAT_MODEL_MINI;
     const actionRequestId = input.requestId ?? randomUUID();
-    // Follow-up edits need actual pixels from the user's previously generated
-    // image. The text model never receives those pixels from chat history.
-    // Handle an explicit image edit directly with GPT Image, avoiding a
-    // pointless text-model round that can return an empty response.
-    if (input.sourceImageId && isGeneratedImageEditRequest(question)) {
-      input.onProgress?.('generating_image');
-      try {
-        const edited = await generateAiImage({
-          userId: input.userId, actionId: actionRequestId, apiKey,
-          sourceImageId: input.sourceImageId,
-          args: { prompt: question, size: 'auto' }
-        });
-        const context: AiChatContextDiagnostics = {
-          contextMode: 'legacy', memoryRevision: null,
-          memoryCompactionTriggered: false, memoryCompactionBatches: 0,
-          memoryCaughtUp: true, fallback: false, fallbackReason: null,
-          unsummarizedMessages: 0, unsummarizedEstimatedTokens: 0
-        };
-        input.onDiagnosticsPrepared?.({ context });
-        return {
-          answer: 'Изображение изменено. Новая версия прикреплена к сообщению.',
-          model, generatedDocument: edited.document,
-          imageCreditsSpentMilli: edited.creditsSpentMilli,
-          taskDataChanged: false, actionReports: [], undoOperations: [],
-          webSearchUsed: false, webSources: [], webCitations: [],
-          billing: { mode: isDynamicTextBillingEnabled(input.userId) ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli: edited.creditsSpentMilli },
-          workflowDiagnostics: {
-            providerStreaming: false, webSearchProgressObserved: false,
-            providerCalls: 0, toolCalls: 1, toolOperations: ['edit_image'],
-            batchToolCalls: 0, batchActionsRequested: 0,
-            batchActionsSucceeded: 0, batchActionsFailed: 0,
-            inputTokensTotal: 0, outputTokensTotal: 0,
-            webSearchUsed: false, webSearchCallsActual: 0,
-            webSearchCallsBilled: 0, webSearchLimit: 1,
-            webSearchLimitExceeded: false, webSearchDuplicateItems: 0,
-            webSearchSearchItemsRaw: 0, webSearchCreditsMilliBilled: 0,
-            providerWebSearchCostMilli: 0, webSearchCalls: 0,
-            webSearchCreditsMilli: 0, webSourceCount: 0
-          },
-          diagnostics: { requestId: actionRequestId, context }
-        };
-      } finally {
-        input.onProgress?.('forming_answer');
-      }
-    }
     const operation = async () => {
       const now = new Date();
       const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
