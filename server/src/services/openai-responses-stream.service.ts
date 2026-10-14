@@ -128,7 +128,7 @@ export async function readOpenAiResponsesStreamWithRecovery(
     }
   }
   options.onRecovery?.('unavailable', { responseId, attempt: RECOVERY_DELAYS_MS.length, eventCount, status: 'recovery_exhausted' });
-  throw new Error('Поток ответа OpenAI прервался, а готовый ответ восстановить не удалось. Повторите запрос.', { cause: originalError });
+  throw new Error('Поток ответа OpenAI прервался, а готовый ответ восстановить не удалось. Повторите запрос.');
 }
 
 
