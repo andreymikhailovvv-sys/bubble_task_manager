@@ -606,6 +606,7 @@ apiRouter.post('/admin/users', async (req, res) => {
       email: true,
       username: true,
       telegramChatId: true,
+      telegramUserClientConnection: { select: { pilotEnabled: true, connectedAt: true } },
       subscriptionPlan: true,
       aiCredits: true,
       aiCreditsPeriod: true,
@@ -616,9 +617,48 @@ apiRouter.post('/admin/users', async (req, res) => {
     }
   });
 
-  res.json({ users: users.map(({ telegramChatId, ...user }) => ({ ...user, telegramLinked: Boolean(telegramChatId) })) });
+  res.set('Cache-Control', 'no-store');
+  res.json({ users: users.map(({ telegramChatId, telegramUserClientConnection, ...user }) => ({
+    ...user,
+    telegramLinked: Boolean(telegramChatId),
+    telegramUserClientPilotEnabled: telegramUserClientConnection?.pilotEnabled === true,
+    telegramUserClientConnected: telegramUserClientConnection?.connectedAt != null
+  })) });
 });
 
+
+// Admin-only pilot allowlist. This route cannot create a Telegram authorization.
+apiRouter.post('/admin/users/:userId/telegram-user-client-pilot', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store');
+  const userId = String(req.params.userId ?? '').trim();
+  const pilotEnabled = req.body?.pilotEnabled;
+  if (!userId || userId.length > 128 || typeof pilotEnabled !== 'boolean') {
+    res.status(400).json({ error: 'Некорректные параметры доступа к Telegram' });
+    return;
+  }
+  const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!exists) {
+    res.status(404).json({ error: 'Пользователь не найден' });
+    return;
+  }
+
+  // Disabling the pilot also removes the locally stored credential (if any).
+  // Future MTProto support must additionally perform best-effort remote logout.
+  const connection = await prisma.telegramUserClientConnection.upsert({
+    where: { userId },
+    create: { userId, pilotEnabled },
+    update: pilotEnabled
+      ? { pilotEnabled: true }
+      : { pilotEnabled: false, encryptedSession: null, telegramAccountId: null, connectedAt: null },
+    select: { pilotEnabled: true, connectedAt: true }
+  });
+  res.json({
+    userId,
+    telegramUserClientPilotEnabled: connection.pilotEnabled,
+    telegramUserClientConnected: connection.connectedAt != null
+  });
+});
 
 apiRouter.post('/admin/subscription-links', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;

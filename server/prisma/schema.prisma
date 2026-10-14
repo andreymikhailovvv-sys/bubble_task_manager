@@ -113,6 +113,7 @@ model User {
   aiChatProjects Json?
   taskAttachments TaskAttachment[]
   telegramSessions TelegramSession[]
+  telegramUserClientConnection TelegramUserClientConnection?
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -519,6 +520,18 @@ model HabitCompletion {
   @@index([habitId, dateKey])
   @@index([userId, dateKey])
   @@index([completedAt])
+}
+
+// Independent MTProto user-client credentials. Never reuse TelegramSession (Bot API dialog state).
+model TelegramUserClientConnection {
+  userId            String   @id
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pilotEnabled      Boolean  @default(false)
+  encryptedSession  String?  @db.Text
+  telegramAccountId String?
+  connectedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 model TelegramSession {

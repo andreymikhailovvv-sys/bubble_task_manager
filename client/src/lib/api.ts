@@ -185,6 +185,8 @@ export type AdminUser = {
   aiCreditsPeriod: string;
   subscriptionPlan: AdminSubscriptionPlan;
   telegramLinked: boolean;
+  telegramUserClientPilotEnabled: boolean;
+  telegramUserClientConnected: boolean;
   createdAt: string;
 };
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
@@ -417,6 +419,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  adminSetTelegramUserClientPilot: (payload: { password: string; userId: string; pilotEnabled: boolean }) =>
+    request<{ userId: string; telegramUserClientPilotEnabled: boolean; telegramUserClientConnected: boolean }>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client-pilot`,
+      { method: 'POST', body: JSON.stringify({ password: payload.password, pilotEnabled: payload.pilotEnabled }) }
+    ),
   adminSaveSubscriptionLinks: (payload: { password: string; links: SubscriptionLinks }) =>
     request<{ links: SubscriptionLinks }>('/api/admin/subscription-links', {
       method: 'POST',
