@@ -189,6 +189,16 @@ export type AdminUser = {
   telegramUserClientConnected: boolean;
   createdAt: string;
 };
+export type TelegramUserClientAuthStatus = {
+  enabled: boolean;
+  connected: boolean;
+  status: 'idle' | 'starting' | 'qr' | 'password_required' | 'verifying_password' | 'connected' | 'failed' | 'cancelled';
+  attemptId: string | null;
+  qrDataUrl: string | null;
+  qrExpiresAt: number | null;
+  passwordHint: string | null;
+  error: string | null;
+};
 export type AdminBroadcastTarget = 'user' | 'all' | 'paid' | 'free';
 export type AdminBroadcastImage = { fileName: string; mimeType: string; contentBase64: string };
 
@@ -419,6 +429,22 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  adminTelegramUserClientStatus: (payload: { password: string; userId: string }) =>
+    request<TelegramUserClientAuthStatus>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/status`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramUserClientStart: (payload: { password: string; userId: string }) =>
+    request<{ attemptId: string; status: string }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/start`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramUserClientPassword: (payload: { password: string; userId: string; attemptId: string; telegramPassword: string }) =>
+    request<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/password`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramUserClientCancel: (payload: { password: string; userId: string; attemptId: string }) =>
+    request<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/cancel`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramUserClientDisconnect: (payload: { password: string; userId: string }) =>
+    request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
+      { method: 'POST', body: JSON.stringify(payload) }),
   adminSetTelegramUserClientPilot: (payload: { password: string; userId: string; pilotEnabled: boolean }) =>
     request<{ userId: string; telegramUserClientPilotEnabled: boolean; telegramUserClientConnected: boolean }>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client-pilot`,

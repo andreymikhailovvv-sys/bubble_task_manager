@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -48,6 +48,10 @@ export default function AdminPage() {
   const [creditUsageExporting, setCreditUsageExporting] = useState(false);
   const [subscriptionUpdating, setSubscriptionUpdating] = useState(false);
   const [telegramPilotUpdating, setTelegramPilotUpdating] = useState(false);
+  const [telegramAuth, setTelegramAuth] = useState<TelegramUserClientAuthStatus | null>(null);
+  const [telegramPassword, setTelegramPassword] = useState('');
+  const [telegramAuthBusy, setTelegramAuthBusy] = useState(false);
+  const [telegramAuthError, setTelegramAuthError] = useState<string | null>(null);
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -146,6 +150,63 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    setTelegramAuth(null);
+    setTelegramPassword('');
+    setTelegramAuthError(null);
+    if (!selectedUserId || !password || !users.length) return;
+    let cancelled = false;
+    void api.adminTelegramUserClientStatus({ password, userId: selectedUserId })
+      .then((value) => { if (!cancelled) setTelegramAuth(value); })
+      .catch(() => { if (!cancelled) setTelegramAuth(null); });
+    return () => { cancelled = true; };
+  }, [selectedUserId, password, users.length]);
+
+  useEffect(() => {
+    if (!selectedUserId || !password || !telegramAuth || !['starting', 'qr', 'password_required', 'verifying_password'].includes(telegramAuth.status)) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      void api.adminTelegramUserClientStatus({ password, userId: selectedUserId })
+        .then((value) => {
+          if (cancelled) return;
+          setTelegramAuth(value);
+          if (value.connected) {
+            setUsers((users) => users.map((user) => user.id === selectedUserId ? { ...user, telegramUserClientConnected: true } : user));
+            setTelegramPassword('');
+          }
+        })
+        .catch((error) => { if (!cancelled) setTelegramAuthError(error instanceof Error ? error.message : 'Ошибка проверки Telegram'); });
+    }, 2500);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [selectedUserId, password, telegramAuth?.status, telegramAuth?.attemptId]);
+
+  async function telegramAuthAction(action: 'start' | 'cancel' | 'disconnect' | 'password') {
+    if (!selectedUserId || telegramAuthBusy) return;
+    setTelegramAuthBusy(true);
+    setTelegramAuthError(null);
+    try {
+      if (action === 'start') {
+        await api.adminTelegramUserClientStart({ password, userId: selectedUserId });
+      } else if (action === 'cancel' && telegramAuth?.attemptId) {
+        await api.adminTelegramUserClientCancel({ password, userId: selectedUserId, attemptId: telegramAuth.attemptId });
+      } else if (action === 'password' && telegramAuth?.attemptId) {
+        await api.adminTelegramUserClientPassword({
+          password, userId: selectedUserId, attemptId: telegramAuth.attemptId, telegramPassword
+        });
+        setTelegramPassword('');
+      } else if (action === 'disconnect') {
+        const result = await api.adminTelegramUserClientDisconnect({ password, userId: selectedUserId });
+        setUsers((users) => users.map((user) => user.id === selectedUserId ? { ...user, telegramUserClientConnected: false } : user));
+        if (result.remoteLogout === 'failed') setTelegramAuthError('Локальная сессия удалена, но Telegram не подтвердил отзыв. Удалите сеанс Планировыча в Telegram → Настройки → Устройства.');
+      }
+      setTelegramAuth(await api.adminTelegramUserClientStatus({ password, userId: selectedUserId }));
+    } catch (error) {
+      setTelegramAuthError(error instanceof Error ? error.message : 'Не удалось выполнить операцию');
+    } finally {
+      setTelegramAuthBusy(false);
+    }
+  }
+
   async function updateTelegramPilot(pilotEnabled: boolean) {
     if (!selectedUser || telegramPilotUpdating) return;
     setTelegramPilotUpdating(true);
@@ -155,6 +216,7 @@ export default function AdminPage() {
       setUsers((current) => current.map((user) => user.id === response.userId
         ? { ...user, telegramUserClientPilotEnabled: response.telegramUserClientPilotEnabled, telegramUserClientConnected: response.telegramUserClientConnected }
         : user));
+      setTelegramAuth(await api.adminTelegramUserClientStatus({ password, userId: selectedUser.id }));
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Не удалось изменить доступ к Telegram');
     } finally {
@@ -418,7 +480,7 @@ export default function AdminPage() {
                 </label>
                 <div className="mt-4 rounded-lg border border-slate-700 bg-slate-800/60 p-3">
                   <h3 className="text-sm font-semibold">Telegram-ассистент: закрытый пилот</h3>
-                  <p className="mt-1 text-xs text-slate-400">Разрешение на будущую интеграцию личного Telegram. Не подключает аккаунт, не читает переписку и не отправляет сообщения.</p>
+                  <p className="mt-1 text-xs text-slate-400">Подключение личного Telegram только с подтверждением владельца. Переписка не читается, сообщения не отправляются, ИИ не имеет доступа.</p>
                   <p className="mt-2 text-xs text-slate-300">
                     Доступ: {selectedUser.telegramUserClientPilotEnabled ? 'разрешён' : 'закрыт'} ·
                     Сессия: {selectedUser.telegramUserClientConnected ? 'подключена' : 'не подключена'}
@@ -428,6 +490,59 @@ export default function AdminPage() {
                     className="mt-3 rounded-md border border-cyan-500/60 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50">
                     {telegramPilotUpdating ? 'Сохранение…' : selectedUser.telegramUserClientPilotEnabled ? 'Закрыть доступ' : 'Разрешить пилот'}
                   </button>
+                  {selectedUser.telegramUserClientPilotEnabled && (
+                    <div className="mt-4 border-t border-slate-700 pt-3">
+                      <p className="text-xs text-slate-400">
+                        Для безопасности разрешено подключить только тот Telegram-аккаунт, который уже связан с ботом Планировыча у выбранного пользователя.
+                      </p>
+                      {!telegramAuth?.enabled && <p className="mt-2 text-xs text-amber-300">MTProto отключён на сервере. Для QR-подключения настройте переменные окружения Timeweb.</p>}
+                      {telegramAuth?.connected ? (
+                        <div className="mt-3">
+                          <p className="text-sm text-emerald-300">Личный Telegram подключён. Отправка сообщений ещё недоступна.</p>
+                          <button type="button" disabled={telegramAuthBusy} onClick={() => void telegramAuthAction('disconnect')}
+                            className="mt-2 rounded-md border border-rose-500/60 px-3 py-2 text-sm text-rose-200 hover:bg-rose-500/10 disabled:opacity-50">
+                            Отключить личный Telegram
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-3">
+                          {(!telegramAuth || ['idle', 'failed', 'cancelled', 'connected'].includes(telegramAuth.status)) && (
+                            <button type="button" disabled={telegramAuthBusy || !telegramAuth?.enabled}
+                              onClick={() => void telegramAuthAction('start')}
+                              className="rounded-md bg-cyan-600 px-3 py-2 text-sm text-white hover:bg-cyan-500 disabled:opacity-50">
+                              Подключить Telegram через QR
+                            </button>
+                          )}
+                          {telegramAuth?.status === 'qr' && telegramAuth.qrDataUrl && (
+                            <div className="mt-3">
+                              <img src={telegramAuth.qrDataUrl} alt="Одноразовый QR-код подключения Telegram" width={260} height={260} className="rounded-lg bg-white p-2" />
+                              <p className="mt-2 text-xs text-slate-300">Telegram на телефоне → Настройки → Устройства → Подключить устройство. Отсканируйте QR и подтвердите вход.</p>
+                            </div>
+                          )}
+                          {telegramAuth?.status === 'starting' && <p className="mt-2 text-xs text-slate-300">Запрос QR-кода у Telegram…</p>}
+                          {telegramAuth?.status === 'verifying_password' && <p className="mt-2 text-xs text-slate-300">Проверка пароля 2FA…</p>}
+                          {telegramAuth?.status === 'password_required' && (
+                            <form className="mt-3" onSubmit={(e) => { e.preventDefault(); void telegramAuthAction('password'); }}>
+                              <label className="block text-xs text-slate-300">Пароль двухэтапной аутентификации Telegram
+                                {telegramAuth.passwordHint ? ` (подсказка: ${telegramAuth.passwordHint})` : ''}
+                                <input autoComplete="off" type="password" value={telegramPassword}
+                                  onChange={(e) => setTelegramPassword(e.target.value)}
+                                  className="mt-1 block w-full max-w-xs rounded-md border border-slate-600 bg-slate-950 p-2 text-sm" />
+                              </label>
+                              <button type="submit" disabled={telegramAuthBusy || !telegramPassword}
+                                className="mt-2 rounded-md bg-cyan-600 px-3 py-2 text-sm disabled:opacity-50">Подтвердить пароль</button>
+                            </form>
+                          )}
+                          {telegramAuth?.error && <p className="mt-2 text-xs text-amber-300">{telegramAuth.error}</p>}
+                          {telegramAuth?.attemptId && ['starting', 'qr', 'password_required', 'verifying_password'].includes(telegramAuth.status) && (
+                            <button type="button" disabled={telegramAuthBusy} onClick={() => void telegramAuthAction('cancel')}
+                              className="mt-3 rounded-md border border-slate-500 px-3 py-2 text-xs disabled:opacity-50">Отменить подключение</button>
+                          )}
+                        </div>
+                      )}
+                      {telegramAuthError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramAuthError}</p>}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-5 border-t border-slate-700 pt-4">
                   <div className="mb-3 flex flex-wrap items-end justify-between gap-3">

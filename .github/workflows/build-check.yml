@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify Telegram identity binding
+        run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Telegram user-client cryptography and access gating
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image generation and document regressions

@@ -32,6 +32,7 @@ import { FixedWindowRateLimiter, type RateLimitDecision } from '../lib/security-
 import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
+import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -643,8 +644,12 @@ apiRouter.post('/admin/users/:userId/telegram-user-client-pilot', async (req, re
     return;
   }
 
-  // Disabling the pilot also removes the locally stored credential (if any).
-  // Future MTProto support must additionally perform best-effort remote logout.
+  // Revoke the permission before cleaning up any in-flight authorization.
+  if (!pilotEnabled) {
+    await prisma.telegramUserClientConnection.updateMany({ where: { userId }, data: { pilotEnabled: false } });
+    await telegramUserClientAuth.revoke(userId);
+  }
+  // Upsert additionally clears credentials as defense in depth.
   const connection = await prisma.telegramUserClientConnection.upsert({
     where: { userId },
     create: { userId, pilotEnabled },
@@ -658,6 +663,54 @@ apiRouter.post('/admin/users/:userId/telegram-user-client-pilot', async (req, re
     telegramUserClientPilotEnabled: connection.pilotEnabled,
     telegramUserClientConnected: connection.connectedAt != null
   });
+});
+
+const telegramAuthError = (res: Response, error: unknown) => {
+  if (error instanceof TelegramUserClientError) {
+    res.status(error.statusCode).json({ error: error.message });
+  } else {
+    res.status(503).json({ error: 'Не удалось выполнить операцию с Telegram. Повторите позже' });
+  }
+};
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/status', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try { res.json(await telegramUserClientAuth.getStatus(String(req.params.userId ?? ''))); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/start', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try { res.json(await telegramUserClientAuth.begin(String(req.params.userId ?? ''))); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/password', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  const telegramPassword = req.body?.telegramPassword;
+  if (typeof telegramPassword !== 'string' || !telegramPassword || telegramPassword.length > 256) {
+    res.status(400).json({ error: 'Введите пароль двухэтапной аутентификации Telegram' });
+    return;
+  }
+  try { res.json(await telegramUserClientAuth.submitPassword(String(req.params.userId ?? ''), String(req.body?.attemptId ?? ''), telegramPassword)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/cancel', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try { res.json(await telegramUserClientAuth.cancel(String(req.params.userId ?? ''), String(req.body?.attemptId ?? ''))); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/disconnect', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try { res.json(await telegramUserClientAuth.disconnect(String(req.params.userId ?? ''))); }
+  catch (error) { telegramAuthError(res, error); }
 });
 
 apiRouter.post('/admin/subscription-links', async (req, res) => {
