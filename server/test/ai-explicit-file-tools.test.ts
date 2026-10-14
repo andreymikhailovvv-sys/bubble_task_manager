@@ -101,3 +101,23 @@ test('сервер больше не запускает прямой редак�
   assert.match(migration, /FOREIGN KEY \("userId"\)/);
   assert.match(migration, /FOREIGN KEY \("taskId"\)/);
 });
+
+
+test('после успешного edit_file не делается лишний запрос к платной модели', async () => {
+  let providerCalls = 0;
+  const loop = await runAiChatToolLoop({
+    initialInput: [{ role: 'user', content: 'Измени документ' }],
+    request: async () => {
+      providerCalls += 1;
+      if (providerCalls > 1) throw new Error('second provider request would risk losing paid result');
+      return { output: [{ type: 'function_call', call_id: 'edit-1', name: 'edit_file',
+        arguments: '{"fileId":"current:0","instruction":"Замени дату"}' }] };
+    },
+    executeTool: async () => ({ ok: true, message: 'Новая версия документа готова' }),
+    finalizeAfterTool: (name, result) => name === 'edit_file' && (result as { ok: boolean }).ok
+      ? (result as { message: string }).message : null
+  });
+  assert.equal(providerCalls, 1);
+  assert.equal(loop.answer, 'Новая версия документа готова');
+  assert.equal(loop.toolCalls, 1);
+});
