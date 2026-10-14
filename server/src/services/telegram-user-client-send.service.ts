@@ -135,17 +135,16 @@ function cleanExpired() {
 }
 
 export function checkManualTelegramSendWindow(times: Date[], now: number = Date.now()): number {
-  const last10 = times.filter((time) => now - time.getTime() < 10 * 60_000).length;
-  const recent = times.filter((time) => now - time.getTime() < 24 * 60 * 60_000).length;
-  if (recent >= MAX_PER_DAY || last10 >= MAX_PER_10_MIN ||
-      times.some((time) => now - time.getTime() < MIN_SEND_GAP_MS)) {
-    return Math.max(20, Math.ceil((Math.max(
-      recent >= MAX_PER_DAY ? times[recent - MAX_PER_DAY].getTime() + 24 * 60 * 60_000 : 0,
-      last10 >= MAX_PER_10_MIN ? times[last10 - MAX_PER_10_MIN].getTime() + 10 * 60_000 : 0,
-      ...times.map((time) => time.getTime() + MIN_SEND_GAP_MS)
-    ) - now) / 1000));
-  }
-  return 0;
+  const sorted = times.map((time) => time.getTime())
+    .filter((time) => Number.isFinite(time) && time > now - 24 * 60 * 60_000)
+    .sort((a, b) => b - a);
+  const last10 = sorted.filter((time) => time > now - 10 * 60_000);
+  const deadlines: number[] = [];
+  if (sorted.length >= MAX_PER_DAY) deadlines.push(sorted[MAX_PER_DAY - 1] + 24 * 60 * 60_000);
+  if (last10.length >= MAX_PER_10_MIN) deadlines.push(last10[MAX_PER_10_MIN - 1] + 10 * 60_000);
+  if (sorted.length) deadlines.push(sorted[0] + MIN_SEND_GAP_MS);
+  const deadline = Math.max(now, ...deadlines);
+  return deadline > now ? Math.max(1, Math.ceil((deadline - now) / 1000)) : 0;
 }
 
 async function claimSend(item: Draft) {
@@ -208,7 +207,9 @@ export const telegramUserClientSend = {
     const input = normalizeManualTelegramRequest(kind, username, text);
     const owner = await connectedOwner(userId);
     cleanExpired();
-    if (drafts.size >= MAX_PENDING_PREVIEWS && !drafts.has(userId)) {
+    // A new request invalidates a prior preview even if recipient lookup fails.
+    drafts.delete(userId);
+    if (drafts.size >= MAX_PENDING_PREVIEWS) {
       throw new TelegramUserClientError(429, 'Слишком много неподтверждённых сообщений');
     }
     const client = await openClient(owner);
