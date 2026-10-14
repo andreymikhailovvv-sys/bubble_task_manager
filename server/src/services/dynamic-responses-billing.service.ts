@@ -1,12 +1,12 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, calculateOpenAiUsageCost, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
-import { readOpenAiResponsesStream } from './openai-responses-stream.service.js';
+import { readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 
 export type DynamicTextFeature = 'ai_chat' | 'ai_chat_planner' | 'general_assistant' | 'recurrence' | 'generate_subtasks' | 'generate_task' | 'optimize_timeline' | 'overdue_postpone';
 
 export const DYNAMIC_TEXT_OUTPUT_LIMITS: Record<DynamicTextFeature, { min: number; max: number }> = {
-  ai_chat: { min: 512, max: 4096 },
+  ai_chat: { min: 512, max: 8192 },
   ai_chat_planner: { min: 256, max: 4096 },
   general_assistant: { min: 512, max: 4096 },
   recurrence: { min: 128, max: 1024 },
@@ -157,7 +157,14 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
     const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': requestId }, body: JSON.stringify(responsePayload) });
     if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
     const responseJson = (input.stream
-      ? await readOpenAiResponsesStream(response.body, input.onProviderEvent)
+      ? await readOpenAiResponsesStreamWithRecovery(response.body, {
+          onEvent: input.onProviderEvent,
+          retrieveResponse: (responseId) => retrieveOpenAiResponse(responseId, input.apiKey, requestId, model),
+          onRecovery: (stage, detail) => console.warn('[AI streaming] recovery', {
+            requestId, model, feature: input.feature, providerCallIndex: input.providerCallIndex,
+            stage, ...detail
+          })
+        })
       : await response.json()) as DynamicResponsesCall['responseJson'];
     const webSearchAnalysis = input.feature === 'ai_chat' ? analyzeWebSearchCalls(responseJson) : analyzeWebSearchCalls({});
     const webSearchCallsActual = webSearchAnalysis.uniqueSearchCalls + webSearchAnalysis.searchCallsWithoutId;
