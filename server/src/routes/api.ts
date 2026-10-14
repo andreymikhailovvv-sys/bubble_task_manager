@@ -35,6 +35,7 @@ import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsa
 import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
 import { telegramUserClientSend } from '../services/telegram-user-client-send.service.js';
+import { telegramUserClientDraft } from '../services/telegram-user-client-draft.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -725,6 +726,17 @@ apiRouter.post('/admin/users/:userId/telegram-user-client/send-status', async (r
   res.set('Cache-Control', 'no-store, private');
   try { res.json(await telegramUserClientSend.status(String(req.params.userId ?? ''))); }
   catch (error) { telegramAuthError(res, error); }
+});
+
+// AI produces editable text only. It cannot invoke send-confirm or send-preview.
+apiRouter.post('/admin/users/:userId/telegram-user-client/ai-draft', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  try {
+    res.json(await telegramUserClientDraft.generate(
+      String(req.params.userId ?? ''), req.body?.instructions, req.body?.tone
+    ));
+  } catch (error) { telegramAuthError(res, error); }
 });
 
 apiRouter.post('/admin/users/:userId/telegram-user-client/send-preview', async (req, res) => {
