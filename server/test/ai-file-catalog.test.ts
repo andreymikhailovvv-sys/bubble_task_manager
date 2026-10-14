@@ -9,7 +9,7 @@ test('единый реестр описывает все три источни�
   const result = buildAiFileCatalog({
     currentUploads: [{ name: 'Сегодня.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 125 }],
     taskAttachments: [{ id: 'taskabc', name: 'Договор.docx', mimeType: 'application/octet-stream', size: 500, createdAt }],
-    generatedDocuments: [{ id: 'docabc', name: 'Иллюстрация.png', mimeType: 'image/png', size: 300, createdAt, messageId: 'msgabc' }]
+    generatedDocuments: [{ id: 'docabc', fileName: 'Иллюстрация.png', mimeType: 'image/png', size: 300, createdAt, messageId: 'msgabc' }]
   });
   assert.equal(result.version, 1);
   assert.equal(result.truncated, false);
