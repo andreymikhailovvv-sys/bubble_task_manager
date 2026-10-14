@@ -6,6 +6,7 @@ import { prisma } from '../db/prisma.js';
 import { canUseTelegramUserClient } from '../lib/telegram-user-client-access.js';
 import { decryptTelegramUserSession, encryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
 import { matchesBotLinkedTelegramAccount } from '../lib/telegram-user-client-binding.js';
+import { classifyTelegramUserNetworkError, telegramUserClientNetworkOptions } from '../lib/telegram-user-client-network.js';
 
 // A login is deliberately process-local. A restarted process requires a fresh QR.
 // Do not distribute these endpoints across replicas without sticky sessions/Redis ownership.
@@ -172,9 +173,15 @@ async function runLogin(attempt: Attempt, credentials: {apiId: number; apiHash: 
     clearTimeout(attempt.timer);
   } catch (error) {
     if (attempt.status !== 'cancelled' && attempt.status !== 'failed') {
+      const category = classifyTelegramUserNetworkError(error);
+      console.error('[TelegramUserClient] authorization failed', { phase: attempt.status, category });
       const message = error instanceof TelegramUserClientError ? error.message
         : attempt.controller.signal.aborted ? 'Время авторизации истекло'
-        : 'Не удалось подключить Telegram. Проверьте настройки и повторите попытку';
+        : category === 'proxy_rejected'
+          ? 'Прокси отклонил соединение с Telegram. Проверьте прокси на сервере'
+          : category === 'proxy_timeout' || category === 'network_timeout' || category === 'network_unavailable'
+            ? 'Нет соединения с серверами Telegram по MTProto. Проверьте доступность прокси'
+            : 'Не удалось подключить Telegram. Проверьте настройки и повторите попытку';
       release(attempt, 'failed', message);
     }
   } finally {
@@ -217,7 +224,8 @@ export const telegramUserClientAuth = {
     const attempt: Attempt = {
       id: randomUUID(), userId, expectedTelegramId: user.telegramChatId!,
       controller, client: new TelegramClient(new StringSession(''), credentials.apiId, credentials.apiHash, {
-        connectionRetries: 2
+        connectionRetries: 2,
+        ...telegramUserClientNetworkOptions()
       }), createdAt: Date.now(), expiresAt: Date.now() + ATTEMPT_TTL_MS,
       status: 'starting', qrDataUrl: null, qrExpiresAt: null, passwordHint: null, error: null,
       passwordCount: 0, passwordResolver: null, passwordRejecter: null,
@@ -269,7 +277,10 @@ export const telegramUserClientAuth = {
     try {
       const credentials = config();
       const plaintext = decryptTelegramUserSession(encrypted, userId);
-      const client = new TelegramClient(new StringSession(plaintext), credentials.apiId, credentials.apiHash, { connectionRetries: 1 });
+      const client = new TelegramClient(new StringSession(plaintext), credentials.apiId, credentials.apiHash, {
+        connectionRetries: 1,
+        ...telegramUserClientNetworkOptions()
+      });
       await client.connect();
       const loggedOut = await client.logOut();
       return { ok: true, remoteLogout: loggedOut ? 'ok' as const : 'failed' as const };

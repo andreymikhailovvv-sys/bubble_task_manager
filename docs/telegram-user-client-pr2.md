@@ -38,3 +38,23 @@ Adds only account authorization for a user whose Telegram identity was already l
 
 ## No new Prisma migration
 All required fields were added by PR 1; the current PR adds npm dependencies and admin connection logic.
+
+## Troubleshooting (MTProto HTTP CONNECT hotfix)
+
+A Timeweb server may be unable to connect directly to Telegram DCs.
+For example: `149.154.167.51:443/TCPFull timed out after 10s`.
+The Bot API proxy is **not automatically applied** to teleproto.
+The follow-up hotfix supplies a CONNECT tunnel for teleproto's raw TCP
+using the existing `TELEGRAM_PROXY_URL` and optional
+`TELEGRAM_PROXY_USERNAME`/`TELEGRAM_PROXY_PASSWORD`. A dedicated
+`TELEGRAM_USER_PROXY_URL` can override the shared proxy URL.
+
+After deploying the fix, click "Connect Telegram via QR" again.
+The QR should be returned through the same Timeweb service, using the
+existing proxy to Telegram. If the proxy rejects raw TCP tunnels to
+Telegram IP:443 (HTTP status 403/407/etc.), a separate proxy permitting
+CONNECT to Telegram DC IPs is needed. Never fall back silently to direct
+MTProto when a proxy is configured.
+
+The login failure logger records only phase and a safe category, never
+QR tokens, application hashes, 2FA passwords, raw proxy URLs or sessions.

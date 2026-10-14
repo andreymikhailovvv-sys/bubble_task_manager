@@ -33,6 +33,7 @@ import { CREDIT_PACKS, type CreditPackKey } from '../config/credit-packs.js';
 import { creditPacksResponse, yookassaPaymentsRouter } from './yookassa-payments.js';
 import { buildCreditUsageExcelXml, getCreditUsageStatistics, getMonthlyCreditUsageExport } from '../services/ai-credit-statistics.service.js';
 import { telegramUserClientAuth, TelegramUserClientError } from '../services/telegram-user-client-auth.service.js';
+import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -668,6 +669,9 @@ apiRouter.post('/admin/users/:userId/telegram-user-client-pilot', async (req, re
 const telegramAuthError = (res: Response, error: unknown) => {
   if (error instanceof TelegramUserClientError) {
     res.status(error.statusCode).json({ error: error.message });
+  } else if (error instanceof TelegramUserProxyConfigurationError) {
+    console.error('[TelegramUserClient] invalid MTProto proxy configuration');
+    res.status(503).json({ error: 'Некорректная настройка прокси для Telegram MTProto на сервере' });
   } else {
     res.status(503).json({ error: 'Не удалось выполнить операцию с Telegram. Повторите позже' });
   }
