@@ -6,9 +6,7 @@ import { computeNextRecurringDueDate } from '../services/task.service.js';
 import { createAiBillingSystemNotification } from '../services/ai-billing-notification.service.js';
 import { randomUUID } from 'node:crypto';
 import { logAiTraceSummary } from '../services/ai-trace-summary.service.js';
-import { editUserImageIfRequested } from '../services/ai-user-image-edit.service.js';
-import { editUserDocumentIfRequested } from '../services/ai-user-document-edit.service.js';
-import { isDynamicTextBillingEnabled } from '../services/dynamic-responses-billing.service.js';
+import { saveConversationUploads } from '../services/ai-conversation-attachments.service.js';
 import { claimAiChatRequest, completeAiChatRequest, failAiChatRequest, aiChatDuplicateMessage, AiChatRequestKeyError, type AiChatRequestClaim } from '../services/ai-chat-request.service.js';
 
 type ChatAttachment = {
@@ -105,11 +103,11 @@ export const aiController = {
       // File IDs from the browser's history are hints only. The catalog
       // service checks every referenced document against the signed-in owner.
       const fileReferences = Array.isArray(req.body?.history)
-        ? req.body.history.slice(-50).filter((m: any) => m?.role === 'assistant')
+        ? req.body.history.slice(-50).filter((m: any) => m?.role === 'user' || m?.role === 'assistant')
           .map((m: any) => ({
-            role: 'assistant' as const,
+            role: m.role as 'user' | 'assistant',
             ...(typeof m.id === 'string' ? { id: m.id } : {}),
-            ...(typeof m.generatedDocument?.id === 'string'
+            ...(m.role === 'assistant' && typeof m.generatedDocument?.id === 'string'
               ? { generatedDocument: { id: m.generatedDocument.id } } : {})
           }))
         : [];
@@ -120,21 +118,18 @@ export const aiController = {
       const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId : undefined;
       const chatId = typeof req.body?.chatId === 'string' ? req.body.chatId : undefined;
       const clientSurface = req.body?.clientSurface === 'web' || req.body?.clientSurface === 'miniapp' ? req.body.clientSurface : undefined;
-      // Only an attachment of this request may enter the direct editor.
-      const directDocumentEdit = await editUserDocumentIfRequested({
-        userId: req.user!.id, question,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        apiKey: process.env.OPENAI_API_KEY ?? '', model: requestedModel ?? 'gpt-5.4-mini',
-        ...(streaming ? { onProgress: (status: 'editing_document' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
+      // Persist uploads under the authenticated user and this message ID.
+      // Model tools, not pre-model regex routes, decide read versus edit.
+      await saveConversationUploads({
+        userId: req.user!.id, messageId: req.body?.clientRequestId,
+        projectId, chatId, files: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
-      const directImageEdit = directDocumentEdit ? null : await editUserImageIfRequested({
-        userId: req.user!.id, question,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        apiKey: process.env.OPENAI_API_KEY ?? '', model: requestedModel ?? 'gpt-5.4-mini',
-        dynamicBilling: isDynamicTextBillingEnabled(req.user!.id),
-        ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
-      });
-      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askAiChat({ userId: req.user!.id, question, history, model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface, requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [], fileReferences, onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; }, ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history,
+        model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface,
+        requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        fileReferences, currentMessageId: req.body?.clientRequestId,
+        onDiagnosticsPrepared: (diagnostics) => { traceDiagnostics = diagnostics; },
+        ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
@@ -327,29 +322,14 @@ export const aiController = {
       });
 
       const userTimeZone = await resolveUserTimeZone(req);
-      // A Word/Excel attachment is not an image, even if the user says "измени её".
-      const directDocumentEdit = await editUserDocumentIfRequested({
-        userId: req.user!.id, taskId: req.params.id, question,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        apiKey: process.env.OPENAI_API_KEY ?? '', model: model ?? 'gpt-5.4-mini',
-        ...(streaming ? { onProgress: (status: 'editing_document' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
+      await saveConversationUploads({
+        userId: req.user!.id, taskId: req.params.id, messageId: req.body?.clientRequestId,
+        files: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
-      const directImageEdit = directDocumentEdit ? null : await editUserImageIfRequested({
-        userId: req.user!.id, taskId: req.params.id, question,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        apiKey: process.env.OPENAI_API_KEY ?? '', model: model ?? 'gpt-5.4-mini',
-        dynamicBilling: isDynamicTaskChatBillingEnabled(req.user!.id),
-        ...(streaming ? { onProgress: (status: 'editing_image' | 'forming_answer') => writeStreamEvent({ type: 'status', status }) } : {})
-      });
-      const result = directImageEdit ?? directDocumentEdit ?? await aiAssistantService.askTaskAssistant({
-        userId: req.user!.id,
-        taskId: req.params.id,
-        question,
-        history: persistedHistory,
-        mode,
-        model,
-        attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
-        userTimeZone,
+      const result = await aiAssistantService.askTaskAssistant({
+        userId: req.user!.id, taskId: req.params.id, question, history: persistedHistory,
+        mode, model, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
+        currentMessageId: req.body?.clientRequestId, userTimeZone,
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
         skipEfficiencyBonus: req.body?.skipEfficiencyBonus === true,
         ...(streaming ? { onProgress: (status: import('../services/task-ai-progress.js').TaskAiProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {})
