@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState, type CSSProperties, type TouchEvent } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Flame, Target, Trophy } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type TouchEvent } from 'react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Flame, Target, Trophy } from 'lucide-react';
 import type { Habit } from '../lib/types';
+import { api } from '../lib/api';
 
 type HabitDay = {
   key: string;
@@ -107,9 +108,32 @@ const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
   const today = new Date();
   const [monthOffset, setMonthOffset] = useState(0);
+  const [history, setHistory] = useState<Habit['stats'] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
   const startX = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    let active = true;
+    setHistory(null);
+    setHistoryError(false);
+    void api.getHabitHistory(habit.id).then((stats) => {
+      if (active) setHistory(stats);
+    }).catch(() => {
+      if (active) setHistoryError(true);
+    });
+    return () => { active = false; };
+  }, [habit.id]);
+  const historyHabit = useMemo(() => {
+    if (history === null) return habit;
+    const combined = new Map(history.map((stat) => [stat.dateKey, stat]));
+    habit.stats.forEach((stat) => combined.set(stat.dateKey, stat));
+    // The open editor can add/remove today's completion optimistically.
+    // A removed record must override the originally fetched history too.
+    const currentKey = dayKey(new Date());
+    if (!habit.stats.some((stat) => stat.dateKey === currentKey)) combined.delete(currentKey);
+    return { ...habit, stats: Array.from(combined.values()) };
+  }, [habit, history]);
   const shownMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-  const tracker = useMemo(() => computeHabitTracker(habit, shownMonth, today), [habit, monthOffset, today.getDate(), today.getMonth(), today.getFullYear()]);
+  const tracker = useMemo(() => computeHabitTracker(historyHabit, shownMonth, today), [historyHabit, monthOffset, today.getDate(), today.getMonth(), today.getFullYear()]);
   const oldestMonth = new Date(tracker.created.getFullYear(), tracker.created.getMonth(), 1);
   const canGoBack = shownMonth > oldestMonth;
   const canGoForward = monthOffset < 0;
@@ -153,8 +177,8 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
             {tracker.days.map((day, index) => {
               const belongsToMonth = day.date.getMonth() === shownMonth.getMonth();
               const active = belongsToMonth && day.date <= tracker.today && day.scheduled;
-              const before = index > 0 && tracker.days[index - 1].done && tracker.days[index - 1].date.getDay() !== 0;
-              const after = index < tracker.days.length - 1 && tracker.days[index + 1].done && day.date.getDay() !== 0;
+              const before = index > 0 && tracker.days[index - 1].done && tracker.days[index - 1].date.getMonth() === shownMonth.getMonth();
+              const after = index < tracker.days.length - 1 && tracker.days[index + 1].done && tracker.days[index + 1].date.getMonth() === shownMonth.getMonth();
               const joinedBefore = day.done && before && index % 7 !== 0;
               const joinedAfter = day.done && after && index % 7 !== 6;
               return <div
@@ -176,6 +200,7 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
             })}
           </div>
         </div>
+        {history === null ? <p role="status" className="mt-2 text-[11px] text-muted">{historyError ? 'Полную историю получить не удалось. Показаны последние отметки.' : 'Загружаем историю выполнения…'}</p> : null}
         <div className="miniapp-habit-tracker-legend mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
           <span><i className="miniapp-habit-tracker-legend-dot miniapp-habit-tracker-legend-done" />Выполнено</span>
           <span><i className="miniapp-habit-tracker-legend-dot miniapp-habit-tracker-legend-partial" />Частично</span>
@@ -202,7 +227,7 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
           <small>из доступной истории</small>
         </div>
         <div className="miniapp-habit-tracker-stat rounded-2xl border p-3">
-          <CheckCircle2Icon />
+          <CheckCircle2 size={18} className="miniapp-habit-tracker-stat-icon" />
           <strong>{tracker.doneMonth}</strong>
           <span>Успешных дней</span>
           <small>в выбранном месяце</small>
@@ -212,6 +237,3 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
   );
 }
 
-function CheckCircle2Icon() {
-  return <Target size={18} className="miniapp-habit-tracker-stat-icon"/>;
-}
