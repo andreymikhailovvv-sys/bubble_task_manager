@@ -218,6 +218,33 @@ const serializeHabit = async (rawHabit: Awaited<ReturnType<typeof prisma.habit.f
 };
 
 export const habitService = {
+  // The summary API only carries 120 dates. Fetch complete history on demand
+  // when a particular habit's tracker is opened, without bloating the list.
+  history: async (id: string, userId: string) => {
+    await prisma.habit.findFirstOrThrow({ where: { id, userId } });
+    const [stats, automatic] = await Promise.all([
+      prisma.habitCompletion.groupBy({
+        by: ['dateKey'],
+        where: { habitId: id, userId },
+        _sum: { amount: true },
+        _count: { _all: true },
+        _max: { completedAt: true },
+        orderBy: { dateKey: 'desc' }
+      }),
+      prisma.habitCompletion.findMany({
+        where: { habitId: id, userId, source: 'AUTO_DURATION' },
+        select: { dateKey: true }
+      })
+    ]);
+    const automaticDates = new Set(automatic.map((item) => item.dateKey));
+    return stats.map((item) => ({
+      dateKey: item.dateKey,
+      amount: item._sum.amount ?? 0,
+      events: item._count._all,
+      completedAt: item._max.completedAt?.toISOString() ?? null,
+      autoCompleted: automaticDates.has(item.dateKey)
+    }));
+  },
   list: async (userId: string) => {
     const habits = await prisma.habit.findMany({
       where: { userId, isArchived: false },
