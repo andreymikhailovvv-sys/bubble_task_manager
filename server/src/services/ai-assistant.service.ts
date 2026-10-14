@@ -18,6 +18,7 @@ import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { loadAiFileCatalog, formatAiFileCatalog, type AiFileHistoryReference } from './ai-file-catalog.service.js';
+import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool } from './ai-file-operations.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
@@ -237,7 +238,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1330,7 +1331,7 @@ export const aiAssistantService = {
       }
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences });
+      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences, projectId: input.projectId, chatId: input.chatId });
       const fileCatalogText = formatAiFileCatalog(fileCatalog);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
       const providerHistory = toOpenAiGeneralHistory(history);
@@ -1372,7 +1373,9 @@ export const aiAssistantService = {
       console.info('[AI file catalog] prepared', { requestId: actionRequestId, surface: 'general', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
       input.onDiagnosticsPrepared?.({ context });
-      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
+      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress,
+        fileTools: { userId: input.userId, projectId: input.projectId, chatId: input.chatId, catalog: fileCatalog,
+          uploads: input.attachments, model, apiKey, actionId: actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) } });
       return { ...result, diagnostics: { requestId: actionRequestId, context } };
     };
     if (isDynamicTextBillingEnabled(input.userId)) return operation();
@@ -2060,6 +2063,8 @@ export const aiAssistantService = {
 
     let providerCallIndex = 0;
     let generatedImage: AiImageGenerationResult | null = null;
+    let editedFileDocument: GeneratedDocumentMeta | null = null;
+    let editedFileCreditsMilli = 0;
     for (const model of modelCandidates) {
       const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
@@ -2135,9 +2140,37 @@ export const aiAssistantService = {
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
               continue;
             }
+            if (call.name === 'read_file' || call.name === 'edit_file') {
+              toolCallsExecuted += 1;
+              if (call.name === 'edit_file' && (editedFileDocument || generatedImage)) {
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'FILE_ALREADY_CREATED' }) });
+                continue;
+              }
+              try {
+                const result = await executeAiFileTool({
+                  userId: input.userId, taskId: input.taskId, catalog: fileCatalog,
+                  uploads: input.attachments, model, apiKey, actionId: requestId, dynamicBilling
+                }, call.name === 'read_file' ? 'read' : 'edit', args);
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result.response) });
+                if (result.modelAttachment) {
+                  const fileMessage = buildAttachmentsPromptMessage([result.modelAttachment]);
+                  if (fileMessage) providerInput.push(fileMessage);
+                }
+                if (result.document) {
+                  editedFileDocument = result.document;
+                  editedFileCreditsMilli += result.creditsSpentMilli ?? 0;
+                }
+              } catch (error) {
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({
+                  ok: false, code: 'FILE_OPERATION_FAILED',
+                  message: error instanceof Error ? error.message : 'Операция с файлом не выполнена.'
+                }) });
+              }
+              continue;
+            }
             if (call.name === 'generate_image') {
               toolCallsExecuted += 1;
-              if (generatedImage) {
+              if (generatedImage || editedFileDocument) {
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_ALREADY_CREATED' }) });
               } else {
                 input.onProgress?.('generating_image');
@@ -2195,7 +2228,7 @@ export const aiAssistantService = {
             console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: args.operation, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
           }
         }
-        if (!rawAnswer && generatedImage) rawAnswer = JSON.stringify({ answer: 'Изображение готово. PNG-файл прикреплён к сообщению.', actions: [], document: null, spreadsheet: null });
+        if (!rawAnswer && (generatedImage || editedFileDocument)) rawAnswer = JSON.stringify({ answer: 'Файл изменён. Новая версия прикреплена к сообщению.', actions: [], document: null, spreadsheet: null });
         if (!rawAnswer) throw new Error('TASK_CHAT_CONTEXT_PROVIDER_CALL_LIMIT');
         if (input.mode === 'smart' && model !== FULL_MODEL) {
           console.warn('[AI] Smart mode fallback model used', {
@@ -2219,7 +2252,7 @@ export const aiAssistantService = {
         const parsed = parseGeneralAssistantPayload(rawAnswer);
         const excelSpec = extractExcelWorkbookSpecFromAssistantPayload(rawAnswer);
         const documentSpec = excelSpec ? null : extractWordDocumentSpecFromAssistantPayload(rawAnswer);
-        const generatedDocument = generatedImage?.document ?? (excelSpec
+        const generatedDocument = generatedImage?.document ?? editedFileDocument ?? (excelSpec
           ? await excelWorkbookService.create({ userId: input.userId, taskId: input.taskId, spec: excelSpec })
           : documentSpec
             ? await wordDocumentService.create({ userId: input.userId, taskId: input.taskId, spec: documentSpec })
@@ -2444,9 +2477,9 @@ ${actionAwareAnswer}`
         });
 
         if (creditReservation) await commitAiCreditReservation(input.userId, creditReservation, { actionId: requestId, feature: input.billingFeature ?? 'task_chat', model });
-        let creditsSpentMilli = (creditReservation?.totalMilli ?? 0) + (generatedImage?.creditsSpentMilli ?? 0);
+        let creditsSpentMilli = (creditReservation?.totalMilli ?? 0) + (generatedImage?.creditsSpentMilli ?? 0) + editedFileCreditsMilli;
         if (dynamicBilling && dynamicCalls.length > 0) {
-          creditsSpentMilli = generatedImage?.creditsSpentMilli ?? 0;
+          creditsSpentMilli = (generatedImage?.creditsSpentMilli ?? 0) + editedFileCreditsMilli;
           for (const call of dynamicCalls) {
             const settlement = await settleAiCreditReservation(call.reservation, call.actualCreditsMilli);
             creditsSpentMilli += settlement.chargedMilli;
