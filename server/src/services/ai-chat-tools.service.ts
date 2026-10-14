@@ -6,7 +6,7 @@ import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageS
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
 import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservation } from './ai-credit-wallet.service.js';
-import { getWebSearchProgressStatus, readOpenAiResponsesStream } from './openai-responses-stream.service.js';
+import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage } from './ai-image-generation.service.js';
@@ -352,7 +352,14 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         }
         const response = await openAiFetch('https://api.openai.com/v1/responses', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` }, body: JSON.stringify({ ...providerPayload, stream: true }) });
         if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
-        const payload = await readOpenAiResponsesStream(response.body, observeProviderEvent) as ToolResponse;
+        const payload = await readOpenAiResponsesStreamWithRecovery(response.body, {
+          onEvent: observeProviderEvent,
+          retrieveResponse: (responseId) => retrieveOpenAiResponse(responseId, input.apiKey, requestId + ':ai-chat:' + providerCallIndex, input.model),
+          onRecovery: (stage, detail) => console.warn('[AI streaming] recovery', {
+            requestId, model: input.model, feature: 'ai_chat_legacy', providerCallIndex,
+            stage, ...detail
+          })
+        }) as ToolResponse;
         inputTokensTotal += typeof payload.usage?.input_tokens === 'number' ? payload.usage.input_tokens : 0;
         outputTokensTotal += typeof payload.usage?.output_tokens === 'number' ? payload.usage.output_tokens : 0;
         providerCallCount = providerCallIndex;
