@@ -200,7 +200,9 @@ export const telegramUserClientSend = {
       where: { userId }, orderBy: { createdAt: 'desc' }, take: 20,
       select: { id: true, recipientKind: true, recipientTelegramId: true, result: true, createdAt: true, completedAt: true }
     });
-    return { enabled: isManualTelegramSendingEnabled(), audit };
+    return { enabled: isManualTelegramSendingEnabled(),
+      aiDraftEnabled: isManualTelegramSendingEnabled() && process.env.TELEGRAM_USER_AI_DRAFT_ENABLED === 'true',
+      audit };
   },
 
   async preview(userId: string, kind: unknown, username: unknown, text: unknown) {
