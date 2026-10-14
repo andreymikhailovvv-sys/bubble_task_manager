@@ -1915,6 +1915,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openCreateHabitModal = () => {
+    setError(null);
     setIsHabitSettingsOpen(false);
     setEditingHabitId(null);
     setHabitDraft(createEmptyHabitDraft());
@@ -1925,6 +1926,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openEditHabitModal = (habit: Habit) => {
+    setError(null);
     setIsHabitSettingsOpen(false);
     setClosingMiniWindow(null);
     setEditingHabitId(habit.id);
@@ -4505,35 +4507,36 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ) : null}
 
       {isHabitModalOpen && !editingHabitId ? (
-        <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('habit')}`}>
-          <div className="miniapp-slide-panel miniapp-habit-modal-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 text-slate-950 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-950">{editingHabitId ? 'Редактирование привычки' : 'Новая привычка'}</h2>
-                <p className="text-xs text-slate-400">Нажатие на круг — редактирование, зажатие — отметка выполнения.</p>
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-create-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Создание привычки">
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Новая привычка</p>
+                  <p className="mt-1 text-xs text-slate-400">Выберите параметры и создайте привычку.</p>
+                </div>
+                <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} disabled={savingHabit} className="miniapp-focus-icon-button" aria-label="Закрыть создание привычки" title="Закрыть">
+                  <X size={16} />
+                </button>
               </div>
-              <button type="button" onClick={() => closeMiniWindowWithMotion('habit', closeHabitModal)} className="rounded-md border border-slate-600 p-1 text-slate-300" aria-label="Закрыть окно">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-[68px_1fr] items-center gap-3">
+              <div className="miniapp-habit-create-content min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto pb-4 pr-1">
+              <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
                 <div
                   className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border"
-                  style={{ '--habit-color': habitDraft.color, '--habit-progress': '65%' } as CSSProperties}
+                  style={{ '--habit-color': habitDraft.color, '--habit-progress': '0%' } as CSSProperties}
                 >
                   <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
                   <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
                 </div>
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <label className="block text-xs text-slate-300">Название привычки</label>
                   <input
                     value={habitDraft.name}
                     onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))}
                     placeholder="Например, вода или зарядка"
-                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                    className="miniapp-habit-editor-name w-full min-w-0 rounded-xl border px-3 py-2 text-sm font-semibold"
                   />
-                  <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2">
+                  <div className="miniapp-habit-editor-completion space-y-2 rounded-xl border px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs text-slate-300">Выполнено</span>
                       <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
@@ -4570,40 +4573,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               </div>
 
-              {renderHabitSettingsFields()}
-              <div className="flex gap-2">
-                {editingHabitId ? (
-                  <button
-                    type="button"
-                    onClick={() => void deleteHabit(editingHabitId)}
-                    disabled={deletingHabitId === editingHabitId}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/60 px-3 py-2 text-sm text-rose-200 disabled:opacity-60"
-                  >
-                    <Trash2 size={14} />
-                    {deletingHabitId === editingHabitId ? 'Удаляем…' : 'Удалить'}
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => void saveHabit()}
-                  disabled={savingHabit}
-                  className="inline-flex flex-1 items-center justify-center rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium disabled:opacity-60"
-                >
-                  {savingHabit ? 'Сохраняем…' : editingHabitId ? 'Сохранить привычку' : 'Создать привычку'}
+
+                {renderHabitSettingsFields()}
+              </div>
+              <div className="miniapp-habit-create-bottom miniapp-habit-editor-bottom mt-3 pt-3">
+                {error ? <p role="alert" className="mb-2 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
+                <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-habit-editor-save w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50">
+                  {savingHabit ? 'Создаём…' : 'Создать привычку'}
                 </button>
               </div>
-              {editingHabitId ? (
-                <button
-                  type="button"
-                  onClick={() => void finishHabit(editingHabitId)}
-                  disabled={finishingHabitId === editingHabitId}
-                  className="inline-flex w-full items-center justify-center rounded-xl border border-amber-500/70 px-3 py-2.5 text-sm font-semibold text-amber-700 disabled:opacity-60"
-                >
-                  {finishingHabitId === editingHabitId ? 'Завершаем…' : 'Завершить'}
-                </button>
-              ) : null}
             </div>
-          </div>
+          </section>
         </div>
       ) : null}
 
@@ -4630,7 +4610,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                   {renderHabitSettingsFields()}
                   <div className="mt-4 grid gap-2 border-t pt-4">
-                    <button type="button" disabled={savingHabit} onClick={() => void saveHabit()} className="miniapp-habit-editor-save rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{savingHabit ? 'Сохраняем…' : 'Сохранить изменения'}</button>
                     <div className="grid grid-cols-2 gap-2">
                       <button type="button" disabled={finishingHabitId === editingHabit.id} onClick={() => void finishHabit(editingHabit.id)} className="miniapp-habit-editor-secondary rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{finishingHabitId === editingHabit.id ? 'Завершаем…' : 'Завершить привычку'}</button>
                       <button type="button" disabled={deletingHabitId === editingHabit.id} onClick={() => void deleteHabit(editingHabit.id)} className="miniapp-habit-editor-danger rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{deletingHabitId === editingHabit.id ? 'Удаляем…' : 'Удалить привычку'}</button>
@@ -4662,9 +4641,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
                 <MiniAppHabitTracker habit={editingHabit} />
               </div>
-              <div className="miniapp-habit-editor-bottom mt-3 pt-3">
-                <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-habit-editor-save w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50">{savingHabit ? 'Сохраняем…' : 'Сохранить изменения'}</button>
-              </div>
+              {error ? <p role="alert" className="mt-3 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
             </div>
           </section>
         </div>
