@@ -280,6 +280,7 @@ export const api = {
   completeTrainingLesson: (lessonId: string) =>
     request<{ awarded: boolean; reward: number; user: CurrentUser }>(`/api/training/lessons/${lessonId}/complete`, { method: 'POST' }),
   getHabits: () => request<Habit[]>('/api/habits'),
+  getHabitHistory: (id: string) => request<Habit['stats']>(`/api/habits/${encodeURIComponent(id)}/history`),
   createHabit: (payload: Partial<Habit>) => request<Habit>('/api/habits', { method: 'POST', body: JSON.stringify(payload) }),
   updateHabit: (id: string, payload: Partial<Habit>) => request<Habit>(`/api/habits/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   completeHabit: (id: string, payload: { dateKey: string; amount?: number; completedAt?: string }) =>

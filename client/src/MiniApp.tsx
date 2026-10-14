@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
+import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
@@ -674,6 +675,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createEditorType, setCreateEditorType] = useState<'task' | 'event'>('task');
   const [isHabitModalOpen, setIsHabitModalOpen] = useState(false);
+  const [isHabitSettingsOpen, setIsHabitSettingsOpen] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
   const [habitDraft, setHabitDraft] = useState<HabitDraft>(() => createEmptyHabitDraft());
   const [savingHabit, setSavingHabit] = useState(false);
@@ -1913,6 +1915,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openCreateHabitModal = () => {
+    setIsHabitSettingsOpen(false);
     setEditingHabitId(null);
     setHabitDraft(createEmptyHabitDraft());
     setIsCustomHabitIconOpen(false);
@@ -1922,6 +1925,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openEditHabitModal = (habit: Habit) => {
+    setIsHabitSettingsOpen(false);
+    setClosingMiniWindow(null);
     setEditingHabitId(habit.id);
     setHabitDraft(habitToDraft(habit));
     setIsCustomHabitIconOpen(!HABIT_ICON_OPTIONS.includes(habit.icon || ''));
@@ -1930,6 +1935,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const closeHabitModal = () => {
+    setIsHabitSettingsOpen(false);
     setIsHabitModalOpen(false);
     setEditingHabitId(null);
     setHabitDraft(createEmptyHabitDraft());
@@ -1970,7 +1976,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         void recordMiniAppEfficiencyBonus(MINIAPP_EFFICIENCY_BONUSES.createdHabit);
       }
       await loadData();
-      closeHabitModal();
+      if (editingHabitId) closeMiniWindowWithMotion('habit', closeHabitModal);
+      else closeHabitModal();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить привычку');
     } finally {
@@ -2110,6 +2117,263 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const habitModalDateKey = toDateKey(new Date());
   const habitModalCompleted = editingHabit ? Math.min(getHabitCompletedForDate(editingHabit, habitModalDateKey), editingHabit.targetCount) : 0;
   const isHabitCompletionActionPending = editingHabit ? completingHabitIds.includes(editingHabit.id) : false;
+  const closeHabitEditor = () => {
+    if (!editingHabit || savingHabit) return;
+    const original = habitToDraft(editingHabit);
+    if (JSON.stringify(habitDraft) === JSON.stringify(original)) {
+      closeMiniWindowWithMotion('habit', closeHabitModal);
+      return;
+    }
+    void saveHabit();
+  };
+  const renderHabitSettingsFields = () => (
+    <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Иконка</label>
+                <div className="flex flex-wrap gap-2">
+                  {HABIT_ICON_OPTIONS.map((icon) => (
+                    <button
+                      key={icon}
+                      type="button"
+                      onClick={() => {
+                        setHabitDraft((prev) => ({ ...prev, icon }));
+                        setIsCustomHabitIconOpen(false);
+                        setCustomHabitIconDraft('');
+                      }}
+                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${habitDraft.icon === icon ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomHabitIconOpen((prev) => !prev)}
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${isCustomHabitIconOpen ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
+                    aria-label="Выбрать свой эмодзи"
+                    title="Выбрать свой эмодзи"
+                  >
+                    <Plus size={17} />
+                  </button>
+                </div>
+                {isCustomHabitIconOpen ? (
+                  <input
+                    value={customHabitIconDraft}
+                    onChange={(event) => {
+                      const icon = normalizeCustomHabitIcon(event.target.value);
+                      setCustomHabitIconDraft(icon);
+                      if (icon) setHabitDraft((prev) => ({ ...prev, icon }));
+                    }}
+                    placeholder="Вставьте свой эмодзи"
+                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
+                    inputMode="text"
+                    aria-label="Свой эмодзи для привычки"
+                  />
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Цвет круга</label>
+                <div className="flex flex-wrap gap-2">
+                  {HABIT_COLOR_OPTIONS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, color }))}
+                      className={`h-9 w-9 rounded-full border-2 ${habitDraft.color === color ? 'border-white' : 'border-slate-700'}`}
+                      style={{ backgroundColor: color }}
+                      aria-label={`Выбрать цвет ${color}`}
+                    />
+                  ))}
+                  <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-200" aria-label="Выбрать свой цвет">
+                    <Palette size={18} />
+                    <input
+                      type="color"
+                      value={habitDraft.color}
+                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, color: event.target.value }))}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Повторов в день</label>
+                <div className="miniapp-habit-stepper grid grid-cols-[44px_1fr_44px] items-center overflow-hidden rounded-xl border">
+                  <button
+                    type="button"
+                    onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.max(1, parseHabitTargetCount(prev.targetCount) - 1)) }))}
+                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
+                    disabled={parseHabitTargetCount(habitDraft.targetCount) <= 1}
+                    aria-label="Уменьшить количество повторов"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTargetCount(habitDraft.targetCount)}</div>
+                  <button
+                    type="button"
+                    onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.min(99, parseHabitTargetCount(prev.targetCount) + 1)) }))}
+                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
+                    disabled={parseHabitTargetCount(habitDraft.targetCount) >= 99}
+                    aria-label="Увеличить количество повторов"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs text-slate-300">Уведомления</label>
+                <input
+                  ref={habitReminderTimeInputRef}
+                  type="time"
+                  value={habitDraft.reminderTime}
+                  onChange={(event) => {
+                    const nextTime = event.target.value;
+                    setHabitDraft((prev) => ({
+                      ...prev,
+                      reminderTime: nextTime,
+                      reminderTimes: nextTime ? normalizeHabitReminderTimes([...prev.reminderTimes, nextTime]) : prev.reminderTimes
+                    }));
+                  }}
+                  className="sr-only"
+                  aria-label="Время нового уведомления"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {habitDraft.reminderTimes.map((time) => (
+                    <span key={time} className="miniapp-habit-reminder-chip inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium text-slate-200">
+                      {time}
+                      <button
+                        type="button"
+                        onClick={() => setHabitDraft((prev) => {
+                          const reminderTimes = prev.reminderTimes.filter((item) => item !== time);
+                          return { ...prev, reminderTimes, reminderTime: reminderTimes[0] ?? '' };
+                        })}
+                        className="text-slate-400 hover:text-rose-200"
+                        aria-label={`Удалить уведомление ${time}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = habitReminderTimeInputRef.current;
+                      if (!input) return;
+                      const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
+                      if (pickerInput.showPicker) pickerInput.showPicker();
+                      else pickerInput.click();
+                    }}
+                    className="miniapp-habit-add-reminder inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold"
+                    aria-label="Добавить уведомление"
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                    {!habitDraft.reminderTimes.length ? <span>Добавить уведомление</span> : null}
+                  </button>
+                </div>
+              </div>
+
+              <div className="miniapp-habit-recurrence-panel space-y-3 rounded-lg border p-3">
+                <label className="block text-xs text-slate-300">Продолжительность привычки</label>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  {([
+                    ['FOREVER', 'Постоянно'],
+                    ['UNTIL_DATE', 'До даты'],
+                    ['REPEAT_COUNT', 'По повторам']
+                  ] as Array<[HabitDurationMode, string]>).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, durationMode: mode }))}
+                      className={`miniapp-habit-duration-option rounded-full border px-2 py-2 ${habitDraft.durationMode === mode ? 'miniapp-habit-duration-option-active' : 'miniapp-habit-weekday-muted'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {habitDraft.durationMode === 'UNTIL_DATE' ? (
+                  <input
+                    type="date"
+                    value={habitDraft.endDate}
+                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, endDate: event.target.value }))}
+                    className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
+                  />
+                ) : null}
+                {habitDraft.durationMode === 'REPEAT_COUNT' ? (
+                  <div className="miniapp-habit-stepper grid grid-cols-[44px_1fr_44px] items-center overflow-hidden rounded-xl border">
+                    <button
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.max(1, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) - 1)) }))}
+                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
+                      disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) <= 1}
+                      aria-label="Уменьшить общее количество повторов"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget)}</div>
+                    <button
+                      type="button"
+                      onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.min(9999, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) + 1)) }))}
+                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
+                      disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) >= 9999}
+                      aria-label="Увеличить общее количество повторов"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                ) : null}
+                <p className="miniapp-habit-duration-summary rounded-lg border px-3 py-2 text-xs">{formatHabitDurationRemaining(habitDraft, editingHabit)}</p>
+              </div>
+
+              <div className="miniapp-habit-recurrence-panel space-y-2 rounded-lg border p-3">
+                <label className="block text-xs text-slate-300">Как часто повторяется</label>
+                <CustomSelect
+                  value={habitDraft.recurrenceType}
+                  onChange={(value) => setHabitDraft((prev) => ({ ...prev, recurrenceType: value as HabitRecurrenceType }))}
+                  options={[{ value: 'DAILY', label: 'Каждый день' }, { value: 'INTERVAL', label: 'Через интервал' }, { value: 'WEEKDAYS', label: 'По конкретным дням' }]}
+                  ariaLabel="Повторение привычки"
+                  detachedPopup={Boolean(editingHabitId)}
+                />
+
+                {habitDraft.recurrenceType === 'INTERVAL' ? (
+                  <div className="space-y-2">
+                    <label className="block text-xs text-slate-300">Каждые N дней</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      value={habitDraft.intervalDays}
+                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, intervalDays: Math.max(1, Number(event.target.value) || 1) }))}
+                      className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
+                    />
+                  </div>
+                ) : null}
+
+                {habitDraft.recurrenceType === 'WEEKDAYS' ? (
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_OPTIONS.map((day) => {
+                      const isSelected = habitDraft.weekdays.includes(day.value);
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => setHabitDraft((prev) => ({
+                            ...prev,
+                            weekdays: isSelected ? prev.weekdays.filter((value) => value !== day.value) : [...prev.weekdays, day.value]
+                          }))}
+                          className={`rounded-full border px-3 py-1 text-xs ${isSelected ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'miniapp-habit-weekday-muted'}`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <p className="text-xs text-slate-400">{formatHabitSchedule(habitDraft)}</p>
+              </div>
+
+    </div>
+  );
 
   const openedTask = openedTaskId
     ? tasks.find((task) => task.id === openedTaskId && !task.parentTaskId && task.status !== 'DONE') ?? null
@@ -4240,7 +4504,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>
       ) : null}
 
-      {isHabitModalOpen ? (
+      {isHabitModalOpen && !editingHabitId ? (
         <div className={`miniapp-slide-backdrop fixed inset-0 z-50 flex items-end bg-slate-950/85 sm:items-center sm:justify-center ${getMiniWindowMotionClass('habit')}`}>
           <div className="miniapp-slide-panel miniapp-habit-modal-panel max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-slate-200 bg-white p-4 text-slate-950 sm:max-h-[88vh] sm:max-w-xl sm:rounded-2xl">
             <div className="mb-3 flex items-start justify-between gap-3">
@@ -4306,249 +4570,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Иконка</label>
-                <div className="flex flex-wrap gap-2">
-                  {HABIT_ICON_OPTIONS.map((icon) => (
-                    <button
-                      key={icon}
-                      type="button"
-                      onClick={() => {
-                        setHabitDraft((prev) => ({ ...prev, icon }));
-                        setIsCustomHabitIconOpen(false);
-                        setCustomHabitIconDraft('');
-                      }}
-                      className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${habitDraft.icon === icon ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
-                    >
-                      {icon}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomHabitIconOpen((prev) => !prev)}
-                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full border text-lg ${isCustomHabitIconOpen ? 'border-sky-400 bg-sky-500/20' : 'border-slate-600 bg-slate-800'}`}
-                    aria-label="Выбрать свой эмодзи"
-                    title="Выбрать свой эмодзи"
-                  >
-                    <Plus size={17} />
-                  </button>
-                </div>
-                {isCustomHabitIconOpen ? (
-                  <input
-                    value={customHabitIconDraft}
-                    onChange={(event) => {
-                      const icon = normalizeCustomHabitIcon(event.target.value);
-                      setCustomHabitIconDraft(icon);
-                      if (icon) setHabitDraft((prev) => ({ ...prev, icon }));
-                    }}
-                    placeholder="Вставьте свой эмодзи"
-                    className="w-full rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm"
-                    inputMode="text"
-                    aria-label="Свой эмодзи для привычки"
-                  />
-                ) : null}
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Цвет круга</label>
-                <div className="flex flex-wrap gap-2">
-                  {HABIT_COLOR_OPTIONS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setHabitDraft((prev) => ({ ...prev, color }))}
-                      className={`h-9 w-9 rounded-full border-2 ${habitDraft.color === color ? 'border-white' : 'border-slate-700'}`}
-                      style={{ backgroundColor: color }}
-                      aria-label={`Выбрать цвет ${color}`}
-                    />
-                  ))}
-                  <label className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-slate-600 bg-slate-800 text-slate-200" aria-label="Выбрать свой цвет">
-                    <Palette size={18} />
-                    <input
-                      type="color"
-                      value={habitDraft.color}
-                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, color: event.target.value }))}
-                      className="sr-only"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Повторов в день</label>
-                <div className="miniapp-habit-stepper grid grid-cols-[44px_1fr_44px] items-center overflow-hidden rounded-xl border">
-                  <button
-                    type="button"
-                    onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.max(1, parseHabitTargetCount(prev.targetCount) - 1)) }))}
-                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
-                    disabled={parseHabitTargetCount(habitDraft.targetCount) <= 1}
-                    aria-label="Уменьшить количество повторов"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTargetCount(habitDraft.targetCount)}</div>
-                  <button
-                    type="button"
-                    onClick={() => setHabitDraft((prev) => ({ ...prev, targetCount: String(Math.min(99, parseHabitTargetCount(prev.targetCount) + 1)) }))}
-                    className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
-                    disabled={parseHabitTargetCount(habitDraft.targetCount) >= 99}
-                    aria-label="Увеличить количество повторов"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs text-slate-300">Уведомления</label>
-                <input
-                  ref={habitReminderTimeInputRef}
-                  type="time"
-                  value={habitDraft.reminderTime}
-                  onChange={(event) => {
-                    const nextTime = event.target.value;
-                    setHabitDraft((prev) => ({
-                      ...prev,
-                      reminderTime: nextTime,
-                      reminderTimes: nextTime ? normalizeHabitReminderTimes([...prev.reminderTimes, nextTime]) : prev.reminderTimes
-                    }));
-                  }}
-                  className="sr-only"
-                  aria-label="Время нового уведомления"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  {habitDraft.reminderTimes.map((time) => (
-                    <span key={time} className="miniapp-habit-reminder-chip inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium text-slate-200">
-                      {time}
-                      <button
-                        type="button"
-                        onClick={() => setHabitDraft((prev) => {
-                          const reminderTimes = prev.reminderTimes.filter((item) => item !== time);
-                          return { ...prev, reminderTimes, reminderTime: reminderTimes[0] ?? '' };
-                        })}
-                        className="text-slate-400 hover:text-rose-200"
-                        aria-label={`Удалить уведомление ${time}`}
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = habitReminderTimeInputRef.current;
-                      if (!input) return;
-                      const pickerInput = input as HTMLInputElement & { showPicker?: () => void };
-                      if (pickerInput.showPicker) pickerInput.showPicker();
-                      else pickerInput.click();
-                    }}
-                    className="miniapp-habit-add-reminder inline-flex items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold"
-                    aria-label="Добавить уведомление"
-                  >
-                    <Plus size={15} strokeWidth={2.5} />
-                    {!habitDraft.reminderTimes.length ? <span>Добавить уведомление</span> : null}
-                  </button>
-                </div>
-              </div>
-
-              <div className="miniapp-habit-recurrence-panel space-y-3 rounded-lg border p-3">
-                <label className="block text-xs text-slate-300">Продолжительность привычки</label>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  {([
-                    ['FOREVER', 'Постоянно'],
-                    ['UNTIL_DATE', 'До даты'],
-                    ['REPEAT_COUNT', 'По повторам']
-                  ] as Array<[HabitDurationMode, string]>).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setHabitDraft((prev) => ({ ...prev, durationMode: mode }))}
-                      className={`miniapp-habit-duration-option rounded-full border px-2 py-2 ${habitDraft.durationMode === mode ? 'miniapp-habit-duration-option-active' : 'miniapp-habit-weekday-muted'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {habitDraft.durationMode === 'UNTIL_DATE' ? (
-                  <input
-                    type="date"
-                    value={habitDraft.endDate}
-                    onChange={(event) => setHabitDraft((prev) => ({ ...prev, endDate: event.target.value }))}
-                    className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
-                  />
-                ) : null}
-                {habitDraft.durationMode === 'REPEAT_COUNT' ? (
-                  <div className="miniapp-habit-stepper grid grid-cols-[44px_1fr_44px] items-center overflow-hidden rounded-xl border">
-                    <button
-                      type="button"
-                      onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.max(1, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) - 1)) }))}
-                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-minus inline-flex h-11 items-center justify-center disabled:opacity-50"
-                      disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) <= 1}
-                      aria-label="Уменьшить общее количество повторов"
-                    >
-                      <Minus size={16} />
-                    </button>
-                    <div className="miniapp-habit-stepper-value text-center text-base font-semibold">{parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget)}</div>
-                    <button
-                      type="button"
-                      onClick={() => setHabitDraft((prev) => ({ ...prev, totalRepeatTarget: String(Math.min(9999, parseHabitTotalRepeatTarget(prev.totalRepeatTarget) + 1)) }))}
-                      className="miniapp-habit-stepper-button miniapp-habit-stepper-button-plus inline-flex h-11 items-center justify-center disabled:opacity-50"
-                      disabled={parseHabitTotalRepeatTarget(habitDraft.totalRepeatTarget) >= 9999}
-                      aria-label="Увеличить общее количество повторов"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                ) : null}
-                <p className="miniapp-habit-duration-summary rounded-lg border px-3 py-2 text-xs">{formatHabitDurationRemaining(habitDraft, editingHabit)}</p>
-              </div>
-
-              <div className="miniapp-habit-recurrence-panel space-y-2 rounded-lg border p-3">
-                <label className="block text-xs text-slate-300">Как часто повторяется</label>
-                <CustomSelect
-                  value={habitDraft.recurrenceType}
-                  onChange={(value) => setHabitDraft((prev) => ({ ...prev, recurrenceType: value as HabitRecurrenceType }))}
-                  options={[{ value: 'DAILY', label: 'Каждый день' }, { value: 'INTERVAL', label: 'Через интервал' }, { value: 'WEEKDAYS', label: 'По конкретным дням' }]}
-                  ariaLabel="Повторение привычки"
-                />
-
-                {habitDraft.recurrenceType === 'INTERVAL' ? (
-                  <div className="space-y-2">
-                    <label className="block text-xs text-slate-300">Каждые N дней</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={habitDraft.intervalDays}
-                      onChange={(event) => setHabitDraft((prev) => ({ ...prev, intervalDays: Math.max(1, Number(event.target.value) || 1) }))}
-                      className="miniapp-habit-field w-full rounded-md border px-3 py-2 text-sm"
-                    />
-                  </div>
-                ) : null}
-
-                {habitDraft.recurrenceType === 'WEEKDAYS' ? (
-                  <div className="flex flex-wrap gap-2">
-                    {WEEKDAY_OPTIONS.map((day) => {
-                      const isSelected = habitDraft.weekdays.includes(day.value);
-                      return (
-                        <button
-                          key={day.value}
-                          type="button"
-                          onClick={() => setHabitDraft((prev) => ({
-                            ...prev,
-                            weekdays: isSelected ? prev.weekdays.filter((value) => value !== day.value) : [...prev.weekdays, day.value]
-                          }))}
-                          className={`rounded-full border px-3 py-1 text-xs ${isSelected ? 'border-emerald-400 bg-emerald-500/20 text-emerald-200' : 'miniapp-habit-weekday-muted'}`}
-                        >
-                          {day.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                <p className="text-xs text-slate-400">{formatHabitSchedule(habitDraft)}</p>
-              </div>
-
+              {renderHabitSettingsFields()}
               <div className="flex gap-2">
                 {editingHabitId ? (
                   <button
@@ -4582,6 +4604,69 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               ) : null}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {isHabitModalOpen && editingHabit ? (
+        <div className={`miniapp-slide-backdrop fixed inset-0 z-[95] flex items-end bg-slate-950/70 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4 ${getMiniWindowMotionClass('habit')}`}>
+          <section className="miniapp-slide-panel miniapp-focus-panel miniapp-habit-modal-panel miniapp-habit-editor-panel relative max-h-[94vh] w-full overflow-hidden rounded-t-[2rem] border p-4 shadow-2xl sm:max-h-[88vh] sm:max-w-xl sm:rounded-[2rem]" role="dialog" aria-modal="true" aria-label="Редактирование привычки">
+            <div className="flex max-h-[calc(94vh-2rem)] min-h-0 flex-col sm:max-h-[calc(88vh-2rem)]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-400">Привычка</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setIsHabitSettingsOpen((open) => !open)} className="miniapp-focus-icon-button" title="Настройки привычки" aria-label="Настройки привычки" aria-expanded={isHabitSettingsOpen} aria-controls="miniapp-habit-edit-settings">
+                    <Settings size={16} />
+                  </button>
+                  <button type="button" onClick={closeHabitEditor} disabled={savingHabit} className="miniapp-focus-icon-button" title="Сохранить и закрыть" aria-label="Сохранить и закрыть окно">
+                    {savingHabit ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                  </button>
+                </div>
+              </div>
+              {isHabitSettingsOpen ? (
+                <div id="miniapp-habit-edit-settings" className="miniapp-task-settings-panel miniapp-habit-settings-panel absolute left-3 right-3 top-14 z-[75] max-h-[calc(94vh-6rem)] overflow-y-auto rounded-3xl border p-4 shadow-2xl sm:left-auto sm:right-4 sm:w-[370px] sm:max-h-[calc(88vh-6rem)]">
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Настройки привычки</h3>
+                    <button type="button" onClick={() => setIsHabitSettingsOpen(false)} className="miniapp-focus-icon-button" aria-label="Закрыть настройки"><X size={14}/></button>
+                  </div>
+                  {renderHabitSettingsFields()}
+                  <div className="mt-4 grid gap-2 border-t pt-4">
+                    <button type="button" disabled={savingHabit} onClick={() => void saveHabit()} className="miniapp-habit-editor-save rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">{savingHabit ? 'Сохраняем…' : 'Сохранить изменения'}</button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" disabled={finishingHabitId === editingHabit.id} onClick={() => void finishHabit(editingHabit.id)} className="miniapp-habit-editor-secondary rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{finishingHabitId === editingHabit.id ? 'Завершаем…' : 'Завершить привычку'}</button>
+                      <button type="button" disabled={deletingHabitId === editingHabit.id} onClick={() => void deleteHabit(editingHabit.id)} className="miniapp-habit-editor-danger rounded-xl border px-3 py-2.5 text-xs font-semibold disabled:opacity-50">{deletingHabitId === editingHabit.id ? 'Удаляем…' : 'Удалить привычку'}</button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <div className="miniapp-habit-editor-content min-h-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden pr-1">
+                <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-3">
+                  <div className="miniapp-habit-circle relative inline-flex h-[68px] w-[68px] items-center justify-center rounded-full border" style={{ '--habit-color': habitDraft.color, '--habit-progress': `${Math.round((habitModalCompleted / Math.max(1, parseHabitTargetCount(habitDraft.targetCount))) * 100)}%` } as CSSProperties}>
+                    <span className="miniapp-habit-circle-core absolute inset-[6px] rounded-full" />
+                    <span className="relative z-10 text-2xl">{habitDraft.icon}</span>
+                  </div>
+                  <div className="min-w-0 space-y-2">
+                    <label className="block text-xs text-slate-300">Название привычки</label>
+                    <input value={habitDraft.name} onChange={(event) => setHabitDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Название привычки" className="miniapp-habit-editor-name w-full rounded-xl border px-3 py-2 text-sm font-semibold" aria-label="Название привычки" />
+                    <div className="miniapp-habit-editor-completion rounded-xl border px-3 py-2">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-xs text-slate-300">Сегодня выполнено</span>
+                        <span className="text-xs font-semibold text-slate-100">{habitModalCompleted} из {parseHabitTargetCount(habitDraft.targetCount)}</span>
+                      </div>
+                      <div className="grid grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
+                        <button type="button" onClick={() => void uncompleteHabit(editingHabit)} className="miniapp-habit-counter-button inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted <= 0 || isHabitCompletionActionPending} aria-label="Снять отметку повтора"><Minus size={14}/></button>
+                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-complete-button inline-flex h-9 items-center justify-center rounded-lg px-2 text-sm font-semibold text-white disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending}>Выполнить</button>
+                        <button type="button" onClick={() => void completeHabit(editingHabit)} className="miniapp-habit-counter-button miniapp-habit-counter-button-positive inline-flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-50" disabled={habitModalCompleted >= parseHabitTargetCount(habitDraft.targetCount) || isHabitCompletionActionPending} aria-label="Отметить повтор"><Plus size={14}/></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <MiniAppHabitTracker habit={editingHabit} />
+              </div>
+              <div className="miniapp-habit-editor-bottom mt-3 pt-3">
+                <button type="button" onClick={() => void saveHabit()} disabled={savingHabit} className="miniapp-habit-editor-save w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50">{savingHabit ? 'Сохраняем…' : 'Сохранить изменения'}</button>
+              </div>
+            </div>
+          </section>
         </div>
       ) : null}
 

@@ -5,6 +5,9 @@ export const habitController = {
   list: async (req: Request, res: Response) => {
     res.json(await habitService.list(req.user!.id));
   },
+  history: async (req: Request, res: Response) => {
+    res.json(await habitService.history(req.params.id, req.user!.id));
+  },
   create: async (req: Request, res: Response) => {
     res.status(201).json(await habitService.create(req.user!.id, req.body));
   },
