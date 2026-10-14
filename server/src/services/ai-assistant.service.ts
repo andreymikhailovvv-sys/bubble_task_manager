@@ -17,6 +17,7 @@ import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CH
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService } from './task.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
+import { loadAiFileCatalog, formatAiFileCatalog, type AiFileHistoryReference } from './ai-file-catalog.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
@@ -302,6 +303,7 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   clientSurface?: 'web' | 'miniapp';
   requestId?: string;
   attachments?: ChatAttachment[];
+  fileReferences?: AiFileHistoryReference[];
   onProgress?: (status: AiChatProgressStatus) => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
 };
@@ -1328,6 +1330,8 @@ export const aiAssistantService = {
       }
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences });
+      const fileCatalogText = formatAiFileCatalog(fileCatalog);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
       const providerHistory = toOpenAiGeneralHistory(history);
       const messages: Array<OpenAiTextMessage | OpenAiUserAttachmentMessage> = [
@@ -1361,9 +1365,11 @@ export const aiAssistantService = {
         { role: 'user', content: `Проект: ${input.projectTitle || 'Без проекта'}. Чат: ${input.chatTitle || 'Новый чат'}. Локальное время пользователя: ${now.toLocaleString('ru-RU', { timeZone: userTimeZone })} (${formatTimeZoneLabel(userTimeZone)}).` },
         ...(memoryBlock ? [{ role: 'system' as const, content: memoryBlock }] : []),
         ...providerHistory,
+        ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
         { role: 'user', content: question },
         ...(attachmentsMessage ? [attachmentsMessage] : [])
       ];
+      console.info('[AI file catalog] prepared', { requestId: actionRequestId, surface: 'general', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
       input.onDiagnosticsPrepared?.({ context });
       const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress });
@@ -1951,6 +1957,8 @@ export const aiAssistantService = {
     // deliberately excluded from the assistant context; the user must attach
     // a file to the chat explicitly when they want the model to process it.
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
+    const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments });
+    const fileCatalogText = formatAiFileCatalog(fileCatalog);
     const hasAttachments = Boolean(attachmentsMessage);
     const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
     const useMemory = useContextV2 && memoryFeatureEnabled && !isSmartPostponeRequest;
@@ -1991,6 +1999,7 @@ export const aiAssistantService = {
         ].join('\n')
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
+      ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
       ...(memoryReady ? [{ role: 'user' as const, content: formatTaskChatMemory(memoryResult!.memory!.summary) }] : []),
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),
@@ -1998,6 +2007,7 @@ export const aiAssistantService = {
     ];
 
     const requestId = randomUUID();
+    console.info('[AI file catalog] prepared', { requestId, surface: 'task', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
     const contextDiagnostics: TaskChatContextDiagnostics | null = contextV2?.diagnostics ?? null;
     if (contextDiagnostics) {
       console.info('[AI task context] prepared', {
