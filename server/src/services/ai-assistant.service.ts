@@ -1782,7 +1782,10 @@ export const aiAssistantService = {
   listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
     await prisma.task.findFirstOrThrow({ where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] }, select: { id: true } });
     return prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId, messageKind: 'AI', OR: [{ telegramReadOwnerId: null }, { telegramReadOwnerId: input.userId }] },
+      // Do not put a private Telegram-derived answer into task-wide AI memory.
+      // Task memory is shared by taskId; even the consenting owner must not
+      // accidentally compact a private summary into shared model memory.
+      where: { taskId: input.taskId, messageKind: 'AI', telegramReadOwnerId: null },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, role: true, content: true, createdAt: true }
     });
