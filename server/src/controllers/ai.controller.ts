@@ -1,4 +1,5 @@
 import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-consent.service.js';
+import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { Request, Response } from 'express';
 import { aiAssistantService, type AiChatContextDiagnostics } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
@@ -76,6 +77,10 @@ export const aiController = {
     try {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
       const telegramContinuation = req.body?.telegramRead != null;
+      if (telegramContinuation && !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+        res.status(403).json({ error: 'Подтверждение чтения Telegram доступно только на сайте Планировыча' });
+        return;
+      }
       if (!question.trim()) {
         if (streaming) { res.status(400).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); writeStreamEvent({ type: 'error', message: 'question is required' }); res.end(); }
         else res.status(400).json({ error: 'question is required' });
@@ -266,6 +271,11 @@ export const aiController = {
       (res as Response & { flush?: () => void }).flush?.();
     };
     try {
+      if (req.body?.telegramRead != null &&
+          !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+        res.status(403).json({ error: 'Подтверждение Telegram допустимо только из Планировыча' });
+        return;
+      }
       const { question, userMessage } = req.body as {
         question?: string;
         userMessage?: string;
