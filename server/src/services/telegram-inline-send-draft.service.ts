@@ -33,6 +33,17 @@ export function matchTelegramRecipient(requested: string, dialogs: TelegramPriva
   const exact = dialogs.filter(d => [d.name, d.username ?? ''].some(v => v.replace(/^@/, '').trim().toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ') === query));
   if (exact.length === 1) return { match: 'exact' as const, recipient: exact[0] };
   if (exact.length > 1) return { match: 'ambiguous' as const, recipient: null };
+  // Russian dative recipient phrasing, e.g. "Ване Иванову" -> "Иван Иванов".
+  // Use this only for a *unique surname*, never guess if multiple users match.
+  const tokens = query.split(' ');
+  if (tokens.length >= 2) {
+    const targetSurname = tokens[tokens.length - 1].replace(/(ов|ев|ёв)у$/u, '$1');
+    if (targetSurname.length >= 5) {
+      const surnameMatches = dialogs.filter(d => d.name.trim().toLocaleLowerCase('ru-RU').split(/\\s+/).at(-1) === targetSurname);
+      if (surnameMatches.length === 1) return { match: 'unique' as const, recipient: surnameMatches[0] };
+      if (surnameMatches.length > 1) return { match: 'ambiguous' as const, recipient: null };
+    }
+  }
   const partial = dialogs.filter(d => [d.name, d.username ?? ''].some(v =>
     v.toLocaleLowerCase('ru-RU').includes(query)));
   return partial.length === 1 ? { match: 'unique' as const, recipient: partial[0] } :
