@@ -138,11 +138,11 @@ async function requireAnalysisPermission(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { telegramChatId: true, telegramUserClientConnection: { select: {
-      pilotEnabled: true, encryptedSession: true, telegramAccountId: true, connectedAt: true
+      pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, telegramAccountId: true, connectedAt: true
     } } }
   });
   const link = user?.telegramUserClientConnection;
-  if (!canUseTelegramUserClient(link?.pilotEnabled === true) || !link?.encryptedSession ||
+  if (!canUseTelegramUserClient(link?.pilotEnabled === true) || !link?.encryptedSession || !link.encryptedApiCredentials ||
       !link.connectedAt || !link.telegramAccountId || link.telegramAccountId !== user?.telegramChatId) {
     throw new TelegramUserClientError(403, 'Доступ к Telegram не подтверждён или отозван');
   }
