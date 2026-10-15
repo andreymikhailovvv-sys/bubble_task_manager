@@ -84,26 +84,27 @@ function initializeProxy(): void {
   initialized = true;
 }
 
-export type OpenAiFetchOptions = { requestId?: string; model?: string };
+export type OpenAiFetchOptions = { requestId?: string; model?: string; maxAttempts?: 1 | 2 | 3 };
 
 export function createOpenAiFetch(fetchImpl: FetchLike, sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))) {
   return async (input: OpenAiFetchInput, init?: OpenAiFetchInit, options: OpenAiFetchOptions = {}) => {
     initializeProxy();
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      console.info('[AI] OpenAI HTTP attempt', { ...options, attempt, maxAttempts: 3, proxy: proxyDetails });
+    const maxAttempts = options.maxAttempts ?? 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      console.info('[AI] OpenAI HTTP attempt', { ...options, attempt, maxAttempts, proxy: proxyDetails });
       try {
         const response = await fetchImpl(input, proxyAgent ? { ...init, dispatcher: proxyAgent } : init);
         console.info('[AI] OpenAI response status', { ...options, attempt, status: response.status });
         const retryableStatus = response.status === 429 || response.status >= 500;
-        if (!retryableStatus || attempt === 3) return response;
+        if (!retryableStatus || attempt === maxAttempts) return response;
         // A response body must be released before reusing the connection for the retry.
         await response.body?.cancel();
         console.warn('[AI] Retrying OpenAI HTTP response', { ...options, attempt, status: response.status, delayMs: RETRY_DELAYS_MS[attempt - 1] });
       } catch (error) {
         const normalizedError = normalizeOpenAiError(error);
         const retryable = isRetryableOpenAiError(error);
-        console.error('[AI] OpenAI network error', { ...options, attempt, maxAttempts: 3, proxy: proxyDetails, retryable, error: normalizedError });
-        if (!retryable || attempt === 3) throw error;
+        console.error('[AI] OpenAI network error', { ...options, attempt, maxAttempts, proxy: proxyDetails, retryable, error: normalizedError });
+        if (!retryable || attempt === maxAttempts) throw error;
         console.warn('[AI] Retrying OpenAI network error', { ...options, attempt, delayMs: RETRY_DELAYS_MS[attempt - 1] });
       }
       await sleep(RETRY_DELAYS_MS[attempt - 1]);
