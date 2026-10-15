@@ -11,6 +11,7 @@ import { wordDocumentService, type GeneratedDocumentMeta } from './word-document
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage } from './ai-image-generation.service.js';
 import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, type FileToolContext } from './ai-file-operations.service.js';
+import { prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -119,6 +120,14 @@ export const AI_CHAT_OPENAI_TOOLS = [
   AI_IMAGE_TOOL,
   AI_READ_FILE_TOOL,
   AI_EDIT_FILE_TOOL,
+  {
+    type: 'function', name: 'prepare_telegram_send', strict: true,
+    description: 'Подготовить Telegram-сообщение для отправки, но НЕ отправлять. Используй только когда пользователь явно просит отправить/переслать в Telegram конкретному человеку или в «Избранное». Сначала сформируй законченный текст на основе текущего диалога и при необходимости найденных заметок/задач. Затем передай адресата в recipient и готовый текст в text. Сервис проверит имя среди реальных личных диалогов. В ответе появится интерактивный блок с текстом и получателем, где пользователь может изменить получателя и нажать «Отправить». Не говори, что уже отправил. При неоднозначном имени не угадывай. Не вызывай инструмент для простого упоминания Telegram без просьбы отправить.',
+    parameters: { type: 'object', additionalProperties: false, required: ['recipient', 'text'], properties: {
+      recipient: { type: 'string', description: 'Имя/фамилия или @username получателя, как выразился пользователь; либо Избранное' },
+      text: { type: 'string', description: 'Полный готовый текст для отправки, до 4000 символов' }
+    } }
+  },
   {
     type: 'function', name: 'create_excel_workbook', strict: true,
     description: 'Создать и прикрепить к ответу настоящий Excel-файл (.xlsx). Используй при запросе электронной таблицы, Excel, XLSX или отчёта файлом. Модель передаёт только содержимое и структуру листов, сервер собирает XLSX. Не более одного файла за запрос.',
@@ -263,6 +272,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   let noteCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
+  let telegramSendDraft: TelegramInlineSendDraft | null = null;
   let imageCreditsSpentMilli = 0;
   let fileEditCreditsSpentMilli = 0;
   const extraProviderInput: unknown[] = [];
@@ -397,12 +407,22 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           create_excel_workbook: 'forming_answer',
           generate_image: 'generating_image',
           read_file: 'reading_attachment',
-          edit_file: 'editing_document'
+          edit_file: 'editing_document',
+          prepare_telegram_send: 'forming_answer'
         };
         const progress = progressByTool[name];
         if (progress) emitProgress(progress);
         console.info('[AI chat tool] call', { requestId, userId: input.userId, providerCallIndex: providerCallCount, toolCallIndex: round, operation: name });
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'INVALID_ARGUMENTS', message: 'Аргументы tool должны быть объектом.' };
+        if (name === 'prepare_telegram_send') {
+          if (telegramSendDraft) return { ok: false, code: 'ALREADY_PREPARED', message: 'Карточка Telegram уже подготовлена. Не создавайте вторую.' };
+          const result = await prepareTelegramInlineSendDraft(input.userId, value);
+          if (result.ok) {
+            telegramSendDraft = result.draft;
+            return { ok: true, prepared: true, needsRecipientSelection: !result.draft.recipientId, message: 'Карточка с текстом и получателем добавлена к ответу. Сообщение НЕ отправлено. Отправка только по нажатию пользователя.' };
+          }
+          return result;
+        }
         if (name === 'create_note') {
           if (noteCreated) return { ok: false, code: 'NOTE_ALREADY_CREATED', message: 'За один запрос уже создана заметка.' };
           try {
@@ -581,7 +601,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
-    return { answer: loop.answer, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+    return { answer: loop.answer, telegramSendDraft, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
