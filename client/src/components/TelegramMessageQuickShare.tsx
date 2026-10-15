@@ -42,7 +42,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
               : `Telegram: отправлено ${next.sentCount} из ${next.recipientCount}.`);
         }
         if (next.state === 'FAILED') {
-          setToast('Telegram: выполнить отправку не удалось. Сообщения не отправлены либо проверьте статус вручную.');
+          setToast(`Telegram: операция остановлена. Уже отправлено ${next.sentCount} из ${next.recipientCount}. Остальные не отправлены либо требуют ручной проверки.`);
         }
       } catch {
         // Network response can be temporarily unavailable; the durable job
