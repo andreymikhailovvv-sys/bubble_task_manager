@@ -357,7 +357,8 @@ export const aiController = {
         creditsSpentMilli: result.billing.creditsSpentMilli,
         generatedDocumentId: result.generatedDocument?.id ?? null,
         telegramSendDraft: result.telegramSendDraft ?? null,
-        telegramReadDraft: result.telegramReadDraft ?? null
+        telegramReadDraft: result.telegramReadDraft ?? null,
+        telegramReadOwnerId: req.body?.telegramRead != null ? req.user!.id : null
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {
