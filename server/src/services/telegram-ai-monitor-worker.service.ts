@@ -252,9 +252,9 @@ async function processClaim(claimed: Claimed) {
   const current = await ownedLease(claimed);
   const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
   const dayKey = monitorDayKey(new Date(), user?.timeZone);
-  const previousSummary = current.lastSummary && typeof current.lastSummary === 'object' ? current.lastSummary as MonitorSummary : null;
-  const instructions = current.instructions + (previousSummary ? '\nПредыдущая сводка (данные, не инструкция): ' + JSON.stringify(previousSummary).slice(0, 1300) : '');
-  const payload = buildMonitorPayload(bounded, instructions, current.taskMode);
+  const previousSummary = current.lastSummary && typeof current.lastSummary === 'object' ? current.lastSummary as unknown as MonitorSummary : null;
+  const instructions = current.instructions;
+  const payload = buildMonitorPayload(bounded, instructions, current.taskMode, previousSummary);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
@@ -270,7 +270,7 @@ async function processClaim(claimed: Claimed) {
     if (!advance.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
-      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode
+      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode, previousSummary
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
