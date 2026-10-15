@@ -6,6 +6,7 @@ import { decryptTelegramUserSession } from '../lib/telegram-user-client-crypto.j
 import { telegramUserClientNetworkOptions } from '../lib/telegram-user-client-network.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
+import { buildTelegramAnalysisSnapshot } from '../lib/telegram-user-client-analysis-snapshot.js';
 
 // Closed, owner-only reader for PR5. This module is never exported as an AI tool.
 // No dialogs, message texts, attachments, or peer-access data are persisted.
@@ -182,6 +183,7 @@ export const telegramUserClientRead = {
       return {
         dialog: { id: selectedId, name },
         messages: safe,
+        analysisSnapshot: buildTelegramAnalysisSnapshot(selectedId, safe),
         limit: HISTORY_LIMIT
       };
     });

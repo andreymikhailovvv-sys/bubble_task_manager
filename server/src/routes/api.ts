@@ -37,6 +37,7 @@ import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client
 import { telegramUserClientSend } from '../services/telegram-user-client-send.service.js';
 import { telegramUserClientDraft } from '../services/telegram-user-client-draft.service.js';
 import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
+import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -769,6 +770,25 @@ apiRouter.post('/admin/users/:userId/telegram-user-client/dialogs', async (req, 
     const userId = String(req.params.userId ?? '');
     requireTelegramReadOwner(req.user?.id, userId);
     res.json(await telegramUserClientRead.list(userId));
+  } catch (error) { telegramAuthError(res, error); }
+});
+
+// PR6: human-triggered consent to share precisely the selected bounded
+// history snapshot with OpenAI. No AI tools and no Telegram sending here.
+apiRouter.post('/admin/users/:userId/telegram-user-client/analyze-dialog', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  res.set('Pragma', 'no-cache');
+  try {
+    const userId = String(req.params.userId ?? '');
+    requireTelegramReadOwner(req.user?.id, userId);
+    res.json(await telegramUserClientDialogAssistant.analyze(userId, {
+      dialogId: req.body?.dialogId,
+      fingerprint: req.body?.fingerprint,
+      consent: req.body?.consent,
+      instruction: req.body?.instruction,
+      tone: req.body?.tone
+    }));
   } catch (error) { telegramAuthError(res, error); }
 });
 
