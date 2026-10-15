@@ -615,7 +615,6 @@ apiRouter.post('/admin/users', async (req, res) => {
       email: true,
       username: true,
       telegramChatId: true,
-      telegramUserClientConnection: { select: { pilotEnabled: true, connectedAt: true } },
       subscriptionPlan: true,
       aiCredits: true,
       aiCreditsPeriod: true,
@@ -627,11 +626,9 @@ apiRouter.post('/admin/users', async (req, res) => {
   });
 
   res.set('Cache-Control', 'no-store');
-  res.json({ users: users.map(({ telegramChatId, telegramUserClientConnection, ...user }) => ({
+  res.json({ users: users.map(({ telegramChatId, ...user }) => ({
     ...user,
-    telegramLinked: Boolean(telegramChatId),
-    telegramUserClientPilotEnabled: telegramUserClientConnection?.pilotEnabled === true,
-    telegramUserClientConnected: telegramUserClientConnection?.connectedAt != null
+    telegramLinked: Boolean(telegramChatId)
   })) });
 });
 
