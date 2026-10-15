@@ -163,7 +163,7 @@ body[data-theme] .telegram-quick-share__textarea:focus {
   border-radius: 12px;
   font-size: 12px;
   line-height: 1.45;
-  box-shadow: 0 9px 28px rgba(2, 6, 23, .22);
+  box-shadow: 0 9px 26px rgba(2, 6, 23, .22);
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
@@ -199,45 +199,113 @@ body[data-theme] .telegram-quick-share__textarea:focus {
   }
 }
 
-/* Shared web/Mini App message action: same bordered circular Telegram button.
-   Scope specificity prevents generic Mini App button rules from overriding it. */
-body[data-theme] button.telegram-quick-share__trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
+/* One shared Telegram action across web and Mini App.
+   Mini App's light theme applies a global !important rule to *every* button
+   in an AI message. Match and exceed that specificity so it cannot replace
+   the circular icon with a white square or black glyph. */
+body[data-theme] button.telegram-quick-share__trigger,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message button.telegram-quick-share__trigger {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  display: grid !important;
+  place-items: center !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  max-width: 26px !important;
+  max-height: 26px !important;
   padding: 0 !important;
-  border: 1px solid rgba(2, 132, 199, .42) !important;
+  margin: 0 !important;
+  flex: 0 0 26px !important;
+  border: 1px solid rgba(2, 132, 199, .52) !important;
   border-radius: 9999px !important;
-  background: rgba(2, 132, 199, .07) !important;
-  color: #0284c7 !important;
+  background: rgba(14, 165, 233, .12) !important;
+  background-image: none !important;
+  color: #0369a1 !important;
+  opacity: 1 !important;
   box-shadow: none !important;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: background-color 140ms ease, border-color 140ms ease;
+  line-height: 0 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  transition: background-color 140ms ease, border-color 140ms ease !important;
 }
-body[data-theme] button.telegram-quick-share__trigger:hover {
-  background: rgba(2, 132, 199, .16) !important;
+
+body[data-theme] button.telegram-quick-share__trigger:hover,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover {
   border-color: #0284c7 !important;
+  background: rgba(14, 165, 233, .24) !important;
+  color: #075985 !important;
 }
-body[data-theme='dark'] button.telegram-quick-share__trigger {
+
+/* Dark messages keep their previous cool blue accent. */
+body[data-theme='dark'] button.telegram-quick-share__trigger,
+body[data-theme='dark'] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message button.telegram-quick-share__trigger {
   color: #7dd3fc !important;
-  border-color: rgba(125, 211, 252, .55) !important;
-  background: rgba(14, 165, 233, .10) !important;
+  border-color: rgba(125, 211, 252, .58) !important;
+  background: rgba(14, 165, 233, .15) !important;
 }
-body[data-theme='dark'] button.telegram-quick-share__trigger:hover {
-  background: rgba(14, 165, 233, .22) !important;
+
+body[data-theme='dark'] button.telegram-quick-share__trigger:hover,
+body[data-theme='dark'] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover {
+  background: rgba(14, 165, 233, .28) !important;
+  color: #e0f2fe !important;
 }
-body[data-theme] button.telegram-quick-share__trigger:focus-visible {
-  outline: 2px solid #0284c7 !important;
-  outline-offset: 2px;
+
+/* User-authored bubbles can be saturated blue or custom participant colors.
+   A translucent deep-navy circle with white glyph reads against any of them.
+   Keep this last so light Mini App's blanket white-button rule cannot win. */
+body[data-theme] .ai-chat-message-user button.telegram-quick-share__trigger,
+body[data-theme] .quick-ai-chat-message-user button.telegram-quick-share__trigger,
+body[data-theme] .chat-message-user button.telegram-quick-share__trigger,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message-user button.telegram-quick-share__trigger,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user button.telegram-quick-share__trigger,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user button.telegram-quick-share__trigger {
+  background: rgba(7, 35, 77, .74) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, .76) !important;
 }
-body[data-theme] button.telegram-quick-share__trigger svg {
-  display: block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
+body[data-theme] .ai-chat-message-user button.telegram-quick-share__trigger:hover,
+body[data-theme] .quick-ai-chat-message-user button.telegram-quick-share__trigger:hover,
+body[data-theme] .chat-message-user button.telegram-quick-share__trigger:hover,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover,
+.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover {
+  background: rgba(2, 22, 54, .95) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme] button.telegram-quick-share__trigger:focus-visible,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:focus-visible {
+  outline: 2px solid #38bdf8 !important;
+  outline-offset: 2px !important;
+}
+
+/* Position the same filled SVG optically at the circle's center regardless
+   of button line-height and icon styles imposed by Mini App. */
+button.telegram-quick-share__trigger svg,
+body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger svg {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translate(-50%, -50%) translate(.5px, .5px) !important;
+  flex: none !important;
+  fill: currentColor !important;
+  stroke: none !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
 }
