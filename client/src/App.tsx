@@ -32,6 +32,7 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
+import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { WebCitations } from './components/WebCitations';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
@@ -4466,6 +4467,7 @@ ${allContext}`,
           onOpenSubtask={(subtask) => setEditorState({ task: subtask })}
           onOpenNote={(id) => setRequestedStandaloneNote({ id, serial: Date.now() })}
         />
+        <TelegramIntegrationsMenu onConnectBot={() => void openTelegramLinkModal()} />
         <a className="public-nav-link shrink-0 px-2 py-2 text-sm" href="/about">О сервисе</a>
         <div className="auth-actions" aria-label="Управление аккаунтом">
           {hasAccount ? (
