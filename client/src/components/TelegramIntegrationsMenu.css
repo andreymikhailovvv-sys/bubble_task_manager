@@ -73,6 +73,15 @@ body[data-theme='light'] .telegram-integrations-modal {
   .telegram-integrations-modal__panel { padding: 16px; }
 }
 
+/* Stored assistant chat profiles share the existing light/dark modal palette. */
+.telegram-ai-profile {
+  border-color: var(--integration-border);
+  background: var(--integration-surface);
+  color: var(--integration-text);
+}
+.telegram-ai-profile:hover { background: var(--integration-hover); }
+.telegram-ai-profile--active { border-color: var(--integration-accent); background: var(--integration-hover); }
+
 /* Copyable Telegram API app settings example, matching both themes. */
 .telegram-integrations-modal__app-example {
   list-style: none;
