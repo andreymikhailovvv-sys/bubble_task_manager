@@ -26,8 +26,8 @@ const TASK_NAMES = ['Не добавлять задачи', 'Предлагат�
 const CHECK_NAMES = ['Каждые 5 минут', 'Каждые 30 минут', 'Каждые 3 часа'] as const;
 const CREDIT_NAMES = ['50', '100', '250', '500', '1 000', '2 500', '5 000', 'Без ограничения'] as const;
 
-function indexOfValue<T>(options: readonly T[], value: T): number {
-  const found = options.indexOf(value);
+function indexOfValue<T extends string | number | null>(options: readonly T[], value: string | number | null): number {
+  const found = options.findIndex(option => option === value);
   return found < 0 ? 0 : found;
 }
 
