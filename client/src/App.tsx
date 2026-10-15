@@ -2934,7 +2934,7 @@ ${allContext}`,
         creditsSpentMilli: result.billing?.creditsSpentMilli,
         webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations,
         generatedDocument: result.generatedDocument ?? undefined,
-        telegramSendDraft: result.telegramSendDraft ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined,
+        telegramSendDraft: result.telegramSendDraft ?? undefined,
         telegramReadDraft: result.telegramReadDraft ?? undefined
       };
       setAiChatProjects(prev => prev.map(p => p.id !== projectId ? p : {
@@ -2977,7 +2977,7 @@ ${allContext}`,
         id: crypto.randomUUID(), role: 'assistant', content: result.answer,
         creditsSpentMilli: result.billing?.creditsSpentMilli,
         generatedDocument: result.generatedDocument ?? undefined,
-        telegramSendDraft: result.telegramSendDraft ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined,
+        telegramSendDraft: result.telegramSendDraft ?? undefined,
         telegramReadDraft: result.telegramReadDraft ?? undefined
       };
       if (focus) setFocusAiMessages(prev => [...prev, response]);
