@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../lib/telegram-quick-share-crypto.js';
-import { isReadablePersonalDialog, isTelegramUserReadEnabled } from './telegram-user-client-read.service.js';
+import { isTelegramUserReadEnabled } from './telegram-user-client-read.service.js';
+import { parseTelegramSendTargetId, telegramSendTargetFromDialog } from './telegram-send-targets.service.js';
 import { connectedOwner, openClient, checkManualTelegramSendWindow } from './telegram-user-client-send.service.js';
 import { isTelegramAiDraftEnabled } from './telegram-user-client-draft.service.js';
 import { isManualTelegramSendingEnabled } from './telegram-user-client-send.service.js';
@@ -21,8 +22,8 @@ export function validateQuickRecipients(value: unknown): string[] {
   }
   const result: string[] = [];
   for (const id of value) {
-    if (typeof id !== 'string' || (id !== TELEGRAM_SAVED_MESSAGES_ID && !/^[1-9][0-9]{0,19}$/.test(id)) || result.includes(id)) {
-      throw new TelegramUserClientError(400, 'Нужно выбрать разных личных получателей из списка Telegram');
+    if (typeof id !== 'string' || (id !== TELEGRAM_SAVED_MESSAGES_ID && !parseTelegramSendTargetId(id)) || result.includes(id)) {
+      throw new TelegramUserClientError(400, 'Выберите разных людей или беседы из списка Telegram');
     }
     result.push(id);
   }
@@ -83,7 +84,7 @@ async function postpone(jobId: string, seconds: number) {
   });
 }
 
-async function claimAudit(userId: string, recipientId: string, auditId: string, accountId: string, saved: boolean) {
+async function claimAudit(userId: string, recipientId: string, auditId: string, accountId: string, kind: 'saved' | 'dialog' | 'group' | 'supergroup') {
   const existing = await prisma.telegramUserClientSendAudit.findUnique({ where: { id: auditId } });
   if (existing) {
     // A previous worker may have crashed after remote delivery. The ledger
@@ -120,7 +121,7 @@ async function claimAudit(userId: string, recipientId: string, auditId: string, 
     const delay = checkManualTelegramSendWindow(recent.map(x => x.createdAt), now);
     if (delay) return { kind: 'delay' as const, seconds: delay };
     await tx.telegramUserClientSendAudit.create({
-      data: { id: auditId, userId, recipientKind: saved ? 'saved' : 'dialog', recipientTelegramId: recipientId, result: 'PENDING' }
+      data: { id: auditId, userId, recipientKind: kind, recipientTelegramId: recipientId, result: 'PENDING' }
     });
     return { kind: 'new' as const };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -174,21 +175,30 @@ async function performJob(job: {
     const owner = await connectedOwner(job.userId);
     client = await openClient(owner);
     const saved = target === TELEGRAM_SAVED_MESSAGES_ID;
-    // "Избранное" is a real MTProto self-chat, not a fake numeric dialog ID.
-    // Numeric targets must still belong to a private user dialog.
+    // The worker does not resolve arbitrary peer IDs. Every non-Saved
+    // recipient must still be a currently available group or private dialog
+    // in this exact owner's Telegram list, even after queue delays.
     let inputEntity;
+    let recipientKind: 'saved' | 'dialog' | 'group' | 'supergroup';
     if (saved) {
       inputEntity = await client.getInputEntity('me');
+      recipientKind = 'saved';
     } else {
+      const parsed = parseTelegramSendTargetId(target);
+      if (!parsed) {
+        await finishRecipient(job, 'FAILED');
+        return;
+      }
       const rows = await client.getDialogs({ limit: 150, ignoreMigrated: true });
-      const dialog = rows.find(row => isReadablePersonalDialog(row, owner.telegramAccountId) && String(row.entity.id) === target);
+      const dialog = rows.find(row => telegramSendTargetFromDialog(row, owner.telegramAccountId)?.id === target);
       if (!dialog) {
         await finishRecipient(job, 'FAILED');
         return;
       }
       inputEntity = dialog.inputEntity;
+      recipientKind = parsed.kind === 'user' ? 'dialog' : parsed.kind;
     }
-    const claimed = await claimAudit(job.userId, saved ? owner.telegramAccountId : target, auditId, owner.telegramAccountId, saved);
+    const claimed = await claimAudit(job.userId, saved ? owner.telegramAccountId : target, auditId, owner.telegramAccountId, recipientKind);
     if (claimed.kind === 'delay') { await postpone(job.id, claimed.seconds); return; }
     if (claimed.kind === 'existing') { await finishRecipient(job, claimed.result); return; }
     auditClaimed = true;
