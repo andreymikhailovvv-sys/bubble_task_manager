@@ -72,6 +72,15 @@ export type GeneratedDocument = {
   size: number;
 };
 
+export type TelegramReadDraft = {
+  requestId: string;
+  requestedChat: string;
+  chatName: string | null;
+  chatId: string | null;
+  match: 'exact' | 'unique' | 'ambiguous' | 'not_found';
+};
+export type TelegramReadApproval = { requestId: string; chatId: string; count: 10 | 20 | 30 | 50 | 100 };
+
 export type TelegramInlineSendDraft = {
   requestId: string;
   text: string;
@@ -95,6 +104,7 @@ export type ChatMessage = {
   recipientName?: string;
   generatedDocument?: GeneratedDocument;
   telegramSendDraft?: TelegramInlineSendDraft;
+  telegramReadDraft?: TelegramReadDraft;
 };
 
 export type WebSource = { title: string; url: string };

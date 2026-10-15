@@ -179,6 +179,57 @@ export const telegramUserClientRead = {
       };
     });
   },
+  async aiHistory(userId: string, dialogId: unknown, count: number) {
+    // This entry point is deliberately NOT an LLM tool. Invoke only from
+    // the consent-consuming endpoint, after a real browser click.
+    if (![10, 20, 30, 50, 100].includes(count)) {
+      throw new TelegramUserClientError(400, 'Выберите 10, 20, 30, 50 или 100 сообщений');
+    }
+    if (typeof dialogId !== 'string' || dialogId.length > 60) {
+      throw new TelegramUserClientError(400, 'Неверный Telegram-чат');
+    }
+    return withReadClient(userId, 'history', async (client, owner) => {
+      const rows = await client.getDialogs({ limit: MAX_SCANNED_DIALOGS, ignoreMigrated: true });
+      const row = rows.find(dialog => telegramSendTargetFromDialog(dialog, owner.accountId)?.id === dialogId);
+      if (!row) throw new TelegramUserClientError(404, 'Чат отсутствует в доступных личных и групповых диалогах');
+      const target = telegramSendTargetFromDialog(row, owner.accountId);
+      if (!target) throw new TelegramUserClientError(404, 'Этот чат недоступен для чтения');
+      // No markAsRead, no downloads, no files, no logging of message bodies.
+      const messages = await client.getMessages(row.inputEntity, { limit: count });
+      const participants = new Map<string, number>();
+      const items = messages
+        .filter((message): message is Api.Message => message instanceof Api.Message)
+        .reverse()
+        .map(message => {
+          const raw = typeof message.message === 'string' ? message.message : '';
+          return {
+            date: typeof message.date === 'number' ? message.date : 0,
+            speaker: message.out ? 'Вы' : target.kind === 'user' ? target.name : (() => {
+              const from = (message as Api.Message & { sender?: unknown; senderId?: unknown }).sender;
+              if (from instanceof Api.User) {
+                const name = [from.firstName, from.lastName].filter(Boolean).join(' ').trim();
+                if (name) return name.slice(0, 100);
+              }
+              const peer = String((message as Api.Message & { senderId?: unknown }).senderId ?? 'unknown');
+              if (!participants.has(peer)) participants.set(peer, participants.size + 1);
+              return 'Участник ' + participants.get(peer);
+            })(),
+            text: raw.slice(0, 1200),
+            truncated: raw.length > 1200,
+            hasMedia: Boolean(message.media)
+          };
+        });
+      // Overall bounded provider data size even for 100 very long messages.
+      let used = 0;
+      const bounded = items.map(item => {
+        const left = Math.max(0, 72000 - used);
+        const text = item.text.slice(0, left);
+        used += text.length;
+        return { ...item, text, truncated: item.truncated || text.length < item.text.length };
+      });
+      return { chatName: target.name, kind: target.kind, requestedCount: count, messages: bounded };
+    });
+  },
   async history(userId: string, dialogId: unknown) {
     const selectedId = validateTelegramDialogId(dialogId);
     return withReadClient(userId, 'history', async (client, owner) => {

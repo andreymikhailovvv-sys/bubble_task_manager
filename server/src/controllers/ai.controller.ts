@@ -1,3 +1,5 @@
+import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-consent.service.js';
+import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { Request, Response } from 'express';
 import { aiAssistantService, type AiChatContextDiagnostics } from '../services/ai-assistant.service.js';
 import { telegramService } from '../services/telegram.service.js';
@@ -74,6 +76,11 @@ export const aiController = {
     const writeStreamEvent = (event: unknown) => { res.write(`${JSON.stringify(event)}\n`); (res as Response & { flush?: () => void }).flush?.(); };
     try {
       const question = typeof req.body?.question === 'string' ? req.body.question : '';
+      const telegramContinuation = req.body?.telegramRead != null;
+      if (telegramContinuation && !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+        res.status(403).json({ error: 'Подтверждение чтения Telegram доступно только на сайте Планировыча' });
+        return;
+      }
       if (!question.trim()) {
         if (streaming) { res.status(400).set({ 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no' }); writeStreamEvent({ type: 'error', message: 'question is required' }); res.end(); }
         else res.status(400).json({ error: 'question is required' });
@@ -124,7 +131,9 @@ export const aiController = {
         userId: req.user!.id, messageId: req.body?.clientRequestId,
         projectId, chatId, files: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
-      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question, history,
+      const telegramContext = telegramContinuation
+        ? await consumeTelegramAiReadRequest(req.user!.id, null, req.body.telegramRead) : null;
+      const result = await aiAssistantService.askAiChat({ userId: req.user!.id, question: telegramContext ?? question, history,
         model: requestedModel, userTimeZone, projectTitle, chatTitle, projectId, chatId, clientSurface,
         requestId, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         fileReferences, currentMessageId: req.body?.clientRequestId,
@@ -132,7 +141,7 @@ export const aiController = {
         ...(streaming ? { onProgress: (status: import('../services/ai-chat-progress.js').AiChatProgressStatus) => writeStreamEvent({ type: 'status', status }) } : {}) });
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
-        await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
+        if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
         await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
       }
       const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
@@ -262,6 +271,11 @@ export const aiController = {
       (res as Response & { flush?: () => void }).flush?.();
     };
     try {
+      if (req.body?.telegramRead != null &&
+          !telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+        res.status(403).json({ error: 'Подтверждение Telegram допустимо только из Планировыча' });
+        return;
+      }
       const { question, userMessage } = req.body as {
         question?: string;
         userMessage?: string;
@@ -326,8 +340,10 @@ export const aiController = {
         userId: req.user!.id, taskId: req.params.id, messageId: req.body?.clientRequestId,
         files: Array.isArray(req.body?.attachments) ? req.body.attachments : []
       });
+      const telegramContext = req.body?.telegramRead != null
+        ? await consumeTelegramAiReadRequest(req.user!.id, req.params.id, req.body.telegramRead) : null;
       const result = await aiAssistantService.askTaskAssistant({
-        userId: req.user!.id, taskId: req.params.id, question, history: persistedHistory,
+        userId: req.user!.id, taskId: req.params.id, question: telegramContext ?? question, history: persistedHistory,
         mode, model, attachments: Array.isArray(req.body?.attachments) ? req.body.attachments : [],
         currentMessageId: req.body?.clientRequestId, userTimeZone,
         billingMode: isDynamicTaskChatBillingEnabled(req.user!.id) ? 'dynamic' : 'legacy',
@@ -337,7 +353,7 @@ export const aiController = {
       traceTaskResult = result;
 
       const normalizedUserMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
-      if (normalizedUserMessage) {
+      if (normalizedUserMessage && req.body?.telegramRead == null) {
         await aiAssistantService.appendTaskDialogMessages({
           userId: req.user!.id,
           taskId: req.params.id,
@@ -350,7 +366,9 @@ export const aiController = {
         content: result.answer,
         creditsSpentMilli: result.billing.creditsSpentMilli,
         generatedDocumentId: result.generatedDocument?.id ?? null,
-        telegramSendDraft: result.telegramSendDraft ?? null
+        telegramSendDraft: result.telegramSendDraft ?? null,
+        telegramReadDraft: result.telegramReadDraft ?? null,
+        telegramReadOwnerId: req.body?.telegramRead != null ? req.user!.id : null
       });
 
       console.info('[AI] /tasks/:id/ai-chat response sent', {

@@ -1,11 +1,11 @@
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft } from './types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type ApiError = Error & { status?: number; code?: string };
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_workspace' | 'searching_notes' | 'reading_note' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image' | 'editing_document';
-export type TaskAssistantResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; billing?: AiBilling };
+export type TaskAssistantResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
@@ -107,7 +107,7 @@ export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>
   return result;
 }
 
-async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp' }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
+async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
   const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.();
   if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
@@ -119,14 +119,14 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   }
 }
 
-export type AiChatResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AiChatResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
   while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value, { stream: !done }); const lines = buffer.split('\n'); buffer = lines.pop() ?? ''; lines.forEach(consume); if (done) break; }
   consume(buffer); if (!result) throw new Error('Сервер не вернул результат чата ИИ'); return result;
 }
-async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[] }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
+async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
   const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
 }
@@ -428,7 +428,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
     }),
-  askAiChat: (payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[] }) =>
+  askAiChat: (payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }) =>
     request<AiChatResult>('/api/ai-chat', {
       method: 'POST',
       body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
