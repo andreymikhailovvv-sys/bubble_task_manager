@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
-import type { TelegramSendTarget } from './telegram-send-targets.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { validateQuickText } from './telegram-quick-share-ai.service.js';
 
