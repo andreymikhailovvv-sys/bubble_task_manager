@@ -1733,7 +1733,7 @@ export const aiAssistantService = {
     });
 
     const messages = await prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId },
+      where: { taskId: input.taskId, OR: [{ telegramReadOwnerId: null }, { telegramReadOwnerId: input.userId }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
         role: true,
@@ -1782,7 +1782,7 @@ export const aiAssistantService = {
   listTaskDialogForContext: async (input: { userId: string; taskId: string }): Promise<TaskChatContextMessage[]> => {
     await prisma.task.findFirstOrThrow({ where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] }, select: { id: true } });
     return prisma.taskAiMessage.findMany({
-      where: { taskId: input.taskId, messageKind: 'AI' },
+      where: { taskId: input.taskId, messageKind: 'AI', OR: [{ telegramReadOwnerId: null }, { telegramReadOwnerId: input.userId }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: { id: true, role: true, content: true, createdAt: true }
     });
@@ -1812,7 +1812,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1830,7 +1830,8 @@ export const aiAssistantService = {
         creditsSpentMilli: input.creditsSpentMilli,
         generatedDocumentId: input.generatedDocumentId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
-        ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {})
+        ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}),
+        ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
       }
     });
   },
