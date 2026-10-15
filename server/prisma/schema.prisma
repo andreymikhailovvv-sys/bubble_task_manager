@@ -119,6 +119,7 @@ model User {
   telegramQuickSendJobs TelegramQuickSendJob[]
   telegramAiReadRequests TelegramAiReadRequest[]
   telegramAiChatPolicies TelegramAiChatPolicy[]
+  telegramAiMonitorCalls TelegramAiMonitorCall[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -640,11 +641,46 @@ model TelegramAiChatPolicy {
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
   dailyCreditLimitMilli   Int?     @default(50000)
   isEnabled               Boolean  @default(false)
+  lastSeenMessageId       Int?
+  lastCheckedAt           DateTime?
+  nextCheckAt             DateTime?
+  leaseToken              String?
+  leasedUntil             DateTime?
+  lastSummary             Json?
+  lastSummaryAt           DateTime?
+  lastError               String?
+  monitorRevision         Int      @default(0)
+  summaryRequested        Boolean  @default(false)
+  creditDayKey            String?
+  dailySpentMilli         Int      @default(0)
+  dailyReservedMilli      Int      @default(0)
+  totalSpentMilli         Int      @default(0)
+  monitorCalls            TelegramAiMonitorCall[]
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   @@unique([userId, chatId])
   @@index([userId, isEnabled])
+  @@index([isEnabled, nextCheckAt, leasedUntil], map: "TelegramAiChatPolicy_due_idx")
+}
+
+// Metadata-only provider call ledger; no Telegram text or access credentials.
+model TelegramAiMonitorCall {
+  id            String   @id
+  policyId      String
+  policy        TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reservationId String   @unique
+  creditDayKey  String
+  reservedMilli Int
+  chargedMilli  Int      @default(0)
+  state         String   @default("RESERVED")
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  @@index([state, createdAt])
+  @@index([policyId, creditDayKey])
 }
 
 model TelegramSession {
