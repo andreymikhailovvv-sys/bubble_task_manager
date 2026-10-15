@@ -90,7 +90,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
         onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
         <button type="button" className="public-nav-link integration-menu__trigger shrink-0 px-2 py-2 text-sm"
           aria-label="Интеграции" aria-expanded={open}
-          onClick={() => setOpen(value => !value)}
+          onClick={() => setOpen(true)}
           onFocus={() => setOpen(true)}>
           <Link2 size={15} /> Интеграции <ChevronDown size={14} />
         </button>
