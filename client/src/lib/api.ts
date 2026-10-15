@@ -200,6 +200,12 @@ export type TelegramUserClientAuthStatus = {
   passwordHint: string | null;
   error: string | null;
 };
+export type TelegramChatCapability = {
+  connected: boolean;
+  readEnabled: boolean;
+  analyzeEnabled: boolean;
+  sendEnabled: boolean;
+};
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
 export type TelegramPrivateMessage = {
   id: number; date: number; out: boolean; senderName: string;
@@ -491,6 +497,28 @@ export const api = {
     request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
       { method: 'POST', body: JSON.stringify(payload) }),
+  telegramChatCapability: () =>
+    request<TelegramChatCapability>('/api/telegram-user-client/chat/status'),
+  telegramChatDialogs: () =>
+    request<TelegramDialogList>('/api/telegram-user-client/chat/dialogs', {
+      method: 'POST', body: '{}'
+    }),
+  telegramChatHistory: (dialogId: string) =>
+    request<TelegramDialogHistory>('/api/telegram-user-client/chat/history', {
+      method: 'POST', body: JSON.stringify({ dialogId })
+    }),
+  telegramChatAnalyze: (payload: { dialogId: string; fingerprint: string; consent: true; instruction: string; tone: TelegramDraftTone }) =>
+    request<TelegramDialogAiResult>('/api/telegram-user-client/chat/analyze', {
+      method: 'POST', body: JSON.stringify(payload)
+    }),
+  telegramChatSendPreview: (payload: { recipientKind: 'username' | 'saved'; username?: string; text: string }) =>
+    request<TelegramManualSendPreview>('/api/telegram-user-client/chat/send-preview', {
+      method: 'POST', body: JSON.stringify(payload)
+    }),
+  telegramChatSendConfirm: (confirmationId: string) =>
+    request<{ ok: boolean; auditId: string }>('/api/telegram-user-client/chat/send-confirm', {
+      method: 'POST', body: JSON.stringify({ confirmationId })
+    }),
   adminTelegramPrivateDialogs: (payload: { password: string; userId: string }) =>
     request<TelegramDialogList>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/dialogs`,

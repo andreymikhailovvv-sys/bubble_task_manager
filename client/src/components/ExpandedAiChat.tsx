@@ -1,8 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Paperclip, Plus, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { MessageCircle, PanelLeftClose, PanelLeftOpen, Paperclip, Plus, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
 import { CustomSelect } from './CustomSelect';
 import type { AiChatModel } from '../lib/types';
+
+const TelegramChatAssistantPanel = lazy(() => import('./TelegramChatAssistantPanel').then((module) => ({ default: module.TelegramChatAssistantPanel })));
 
 export type ExpandedAiChatThread = { id: string; title: string; messages: unknown[] };
 export type ExpandedAiChatProject = { id: string; title: string; color: string; icon: string; chats: ExpandedAiChatThread[] };
@@ -36,6 +38,7 @@ type Props = {
 
 export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend }: Props) {
   const [draft, setDraft] = useState('');
+  const [telegramOpen, setTelegramOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -47,6 +50,8 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   const nearBottomRef = useRef(true);
   const scrollFrameRef = useRef<number | null>(null);
   const previousChatIdRef = useRef<string | undefined>(undefined);
+
+  useEffect(() => { setTelegramOpen(false); }, [activeChat?.id]);
 
   useLayoutEffect(() => {
     const composer = composerRef.current;
@@ -121,6 +126,12 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             <button className={`ai-chat-header-button ${sidebarCollapsed ? '' : 'is-invisible'}`} onClick={() => setSidebarCollapsed(false)} aria-label="Показать панель проектов"><PanelLeftOpen size={18} /></button>
             <div className="min-w-0 flex-1"><div className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-700"><Sparkles size={13} /> Чат с ИИ</div><h2 className="mt-1 truncate text-xl font-bold text-primary">{activeChat?.title ?? 'Новый чат'}</h2><p className="truncate text-xs text-muted">{activeChat?.id === quickChatId ? 'Развернутая версия быстрых запросов к ИИ' : 'ИИ поможет с вопросами, задачами и расписанием'}</p></div>
             <CustomSelect value={model} options={modelOptions} onChange={(value) => onModelChange(value as AiChatModel)} className="ai-chat-expanded-model w-40" buttonClassName="ai-chat-model-cap-button rounded-xl border px-3 py-2 text-xs font-semibold text-primary" menuClassName="ai-chat-model-cap-menu surface-popover text-primary" ariaLabel="Выбрать модель чата" />
+            <button type="button" onClick={() => setTelegramOpen(true)}
+              className="ai-chat-header-button inline-flex items-center gap-1.5 rounded-xl px-2.5 text-xs font-semibold"
+              aria-label="Telegram: прочитать переписку и подготовить ответ"
+              title="Личный Telegram: выбрать чат, получить ответ от ИИ">
+              <MessageCircle size={18} /><span className="hidden sm:inline">Telegram</span>
+            </button>
             <button className="ai-chat-header-button" onClick={onClose} aria-label="Закрыть чат"><X size={18} /></button>
           </header>
           {dragActive ? <div className="ai-chat-drop-overlay">Перетащите файл, чтобы прикрепить его</div> : null}
@@ -134,6 +145,11 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             {pendingFiles.length ? <div className="mb-2 flex flex-wrap gap-1.5">{pendingFiles.map((file) => <button key={`${file.name}-${file.size}`} type="button" onClick={() => onRemoveFile(file)} className="ai-chat-file-pill">📎 <span className="max-w-48 truncate">{file.name}</span> ×</button>)}</div> : null}
             <div className="ai-chat-composer flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder="Напишите сообщение…" /><input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm hover:bg-violet-500 disabled:opacity-50" aria-label="Отправить" disabled={loading || (!draft.trim() && pendingFiles.length === 0)} onClick={submit}><SendHorizontal size={18} /></button></div>
           </div>
+          {telegramOpen ? (
+            <Suspense fallback={<div className="fixed inset-0 z-[190] grid place-items-center bg-slate-950/70 text-sm text-white">Открываем Telegram…</div>}>
+              <TelegramChatAssistantPanel onClose={() => setTelegramOpen(false)} />
+            </Suspense>
+          ) : null}
         </section>
       </div>
     </div>
