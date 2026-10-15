@@ -43,6 +43,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-user-client-chat-integration.test.ts
       - name: Verify Telegram message quick-share, sealed queue and AI rewrite restrictions
         run: node --import tsx --test server/test/telegram-quick-share.test.ts
+      - name: Verify AI-created Telegram inline send proposals and contact ambiguity
+        run: node --import tsx --test server/test/telegram-ai-inline-send.test.ts
       - name: Verify Telegram identity binding
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Telegram user-client cryptography and access gating
