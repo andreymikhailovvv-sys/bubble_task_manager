@@ -13,6 +13,7 @@ import { reconcilePendingCreditPurchases } from './services/credit-purchase-reco
 import { aiAssistantService } from './services/ai-assistant.service.js';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
+import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -200,3 +201,12 @@ const runTelegramQuickShare = () => telegramQuickShare.drain().catch(() => {
 });
 setTimeout(runTelegramQuickShare, 3_000).unref();
 setInterval(runTelegramQuickShare, 2_500).unref();
+
+// Database-leased chat monitoring: at most one worker owns a chat at a time,
+// even when the application runs in multiple replicas. Disabled by default
+// per chat; no environment variable or separate Telegram connection required.
+const runTelegramAiMonitor = () => telegramAiMonitorWorker.drain().catch(() => {
+  console.warn('[TelegramMonitor] scheduler iteration failed');
+});
+setTimeout(runTelegramAiMonitor, 8_000).unref();
+setInterval(runTelegramAiMonitor, 30_000).unref();
