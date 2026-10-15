@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, ExternalLink, Loader2, MessageCircle, RefreshCcw, Search, SendHorizontal, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, MessageCircle, RefreshCcw, Search, SendHorizontal, ShieldCheck, Sparkles, X } from 'lucide-react';
 import {
   api, type TelegramAnalysisSnapshot, type TelegramChatCapability, type TelegramDialogAiResult,
   type TelegramDialogHistory, type TelegramDraftTone, type TelegramManualSendPreview, type TelegramPrivateDialog
