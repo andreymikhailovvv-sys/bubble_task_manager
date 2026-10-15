@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Loader2, MessageCircle, Search, Send, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
 import { api, type TelegramPrivateDialog, type TelegramQuickSendJob } from '../lib/api';
 
 type Mode = 'recipients' | 'edit' | 'preview';
@@ -245,7 +245,9 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
       <button type="button" onClick={() => void show()} title="Отправить это сообщение в Telegram"
         aria-label="Отправить сообщение в Telegram"
         className={`inline-flex items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10 hover:text-sky-400 ${compact ? 'h-5 w-5' : 'h-6 w-6'}`}>
-        <Send size={compact ? 12 : 14} strokeWidth={1.8} />
+        <svg width={compact ? 14 : 16} height={compact ? 14 : 16} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M21.6 2.5a1.2 1.2 0 0 0-1.24-.15L2.5 9.85a1.15 1.15 0 0 0 .15 2.17l4.42 1.47 1.72 5.26a1.16 1.16 0 0 0 1.88.5l2.6-2.35 4.66 3.43a1.2 1.2 0 0 0 1.9-.76l2.15-15.94a1.2 1.2 0 0 0-.38-1.13ZM9.3 12.93l8.38-6.3-6.75 8.26-.28 2.04-1.35-4Z" />
+        </svg>
       </button>
       {modal ? createPortal(modal, document.body) : null}
       {toast && !open ? createPortal(
