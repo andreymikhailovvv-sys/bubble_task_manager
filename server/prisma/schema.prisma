@@ -376,6 +376,7 @@ model TaskAiMessage {
   creditsSpentMilli Int?
   messageKind String      @default("AI")
   recipientUserId String?
+  telegramSendDraft Json?
   generatedDocumentId String? @unique
   generatedDocument AiGeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: SetNull)
   createdAt DateTime      @default(now())
