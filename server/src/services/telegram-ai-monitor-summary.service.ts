@@ -133,7 +133,7 @@ export async function analyzeMonitorMessages(input: {
     },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(65_000)
-  }, { requestId: input.requestId, model: TELEGRAM_MONITOR_MODEL });
+  }, { requestId: input.requestId, model: TELEGRAM_MONITOR_MODEL, maxAttempts: 1 });
   if (!response.ok) throw new Error('OpenAI monitor request failed: ' + response.status);
   const output = await response.json() as Record<string, unknown> & { usage?: OpenAiUsage; id?: unknown };
   if (!output.usage || typeof output.usage.input_tokens !== 'number' || typeof output.usage.output_tokens !== 'number') {
