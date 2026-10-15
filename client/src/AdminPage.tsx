@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus, type TelegramDraftTone, type TelegramPrivateDialog, type TelegramDialogHistory } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus, type TelegramDraftTone, type TelegramPrivateDialog, type TelegramDialogHistory, type TelegramDialogAiResult } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -71,8 +71,17 @@ export default function AdminPage() {
   const [telegramPrivateHistory, setTelegramPrivateHistory] = useState<TelegramDialogHistory | null>(null);
   const [telegramPrivateReadBusy, setTelegramPrivateReadBusy] = useState(false);
   const [telegramPrivateReadError, setTelegramPrivateReadError] = useState<string | null>(null);
+  const [telegramAnalysisConsent, setTelegramAnalysisConsent] = useState(false);
+  const [telegramAnalysisInstruction, setTelegramAnalysisInstruction] = useState('');
+  const [telegramAnalysisTone, setTelegramAnalysisTone] = useState<TelegramDraftTone>('neutral');
+  const [telegramAnalysisBusy, setTelegramAnalysisBusy] = useState(false);
+  const [telegramAnalysisError, setTelegramAnalysisError] = useState<string | null>(null);
+  const [telegramAnalysisResult, setTelegramAnalysisResult] = useState<TelegramDialogAiResult | null>(null);
+  const [telegramAnalysisReply, setTelegramAnalysisReply] = useState('');
   const selectedUserIdRef = useRef(selectedUserId);
   selectedUserIdRef.current = selectedUserId;
+  const telegramSelectedDialogIdRef = useRef(telegramSelectedDialogId);
+  telegramSelectedDialogIdRef.current = telegramSelectedDialogId;
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
   const [broadcastUserId, setBroadcastUserId] = useState('');
   const [broadcastText, setBroadcastText] = useState('');
@@ -219,6 +228,13 @@ export default function AdminPage() {
     setTelegramPrivateHistory(null);
     setTelegramPrivateReadBusy(false);
     setTelegramPrivateReadError(null);
+    setTelegramAnalysisConsent(false);
+    setTelegramAnalysisInstruction('');
+    setTelegramAnalysisTone('neutral');
+    setTelegramAnalysisBusy(false);
+    setTelegramAnalysisError(null);
+    setTelegramAnalysisResult(null);
+    setTelegramAnalysisReply('');
     if (!selectedUserId || !password) return;
     let cancelled = false;
     void api.adminTelegramManualSendStatus({ password, userId: selectedUserId })
@@ -255,6 +271,10 @@ export default function AdminPage() {
     setTelegramPrivateHistory(null);
     setTelegramSelectedDialogId(null);
     setTelegramPrivateDialogs(null);
+    setTelegramAnalysisConsent(false);
+    setTelegramAnalysisResult(null);
+    setTelegramAnalysisReply('');
+    setTelegramAnalysisError(null);
     try {
       const result = await api.adminTelegramPrivateDialogs({ password, userId });
       if (selectedUserIdRef.current === userId) {
@@ -277,6 +297,10 @@ export default function AdminPage() {
     setTelegramPrivateReadBusy(true);
     setTelegramPrivateReadError(null);
     setTelegramPrivateHistory(null);
+    setTelegramAnalysisConsent(false);
+    setTelegramAnalysisResult(null);
+    setTelegramAnalysisReply('');
+    setTelegramAnalysisError(null);
     try {
       const result = await api.adminTelegramPrivateHistory({ password, userId, dialogId });
       if (selectedUserIdRef.current === userId) setTelegramPrivateHistory(result);
@@ -287,6 +311,55 @@ export default function AdminPage() {
     } finally {
       if (selectedUserIdRef.current === userId) setTelegramPrivateReadBusy(false);
     }
+  }
+
+  async function analyzeTelegramSelectedDialog() {
+    if (!selectedUserId || !telegramPrivateHistory || telegramAnalysisBusy ||
+        !telegramAnalysisConsent || !telegramSendStatus?.aiDraftEnabled) return;
+    const userId = selectedUserId;
+    const dialogId = telegramPrivateHistory.dialog.id;
+    const fingerprint = telegramPrivateHistory.analysisSnapshot.fingerprint;
+    setTelegramAnalysisBusy(true);
+    setTelegramAnalysisError(null);
+    setTelegramAnalysisResult(null);
+    setTelegramAnalysisReply('');
+    // Consent is spent on this exact request, not retained for next analysis.
+    setTelegramAnalysisConsent(false);
+    try {
+      const result = await api.adminTelegramAnalyzeDialog({
+        password, userId, dialogId, fingerprint, consent: true,
+        tone: telegramAnalysisTone, instruction: telegramAnalysisInstruction
+      });
+      if (selectedUserIdRef.current === userId && telegramSelectedDialogIdRef.current === dialogId) {
+        setTelegramAnalysisResult(result);
+        setTelegramAnalysisReply(result.reply);
+      }
+    } catch (error) {
+      if (selectedUserIdRef.current === userId && telegramSelectedDialogIdRef.current === dialogId) {
+        setTelegramAnalysisError(error instanceof Error ? error.message : 'Не удалось проанализировать переписку');
+      }
+    } finally {
+      if (selectedUserIdRef.current === userId) setTelegramAnalysisBusy(false);
+    }
+  }
+
+  function useTelegramAnalysisReply() {
+    if (!telegramAnalysisReply.trim() || !telegramPrivateHistory) return;
+    const recipient = telegramPrivateDialogs?.find((item) => item.id === telegramPrivateHistory.dialog.id);
+    setTelegramSendText(telegramAnalysisReply);
+    // Existing PR3 rules still resolve the actual @username and ask for a
+    // separate preview and one-time confirmation before sending.
+    if (recipient?.username) {
+      setTelegramSendKind('username');
+      setTelegramSendUsername(recipient.username);
+    } else {
+      setTelegramSendKind('username');
+      setTelegramSendUsername('');
+    }
+    setTelegramSendPreview(null);
+    setTelegramSendNotice(null);
+    setTelegramSendError(recipient?.username ? null :
+      'У выбранного собеседника нет публичного @username. Текст перенесён, но автоматическая отправка в этот чат пока не поддерживается.');
   }
 
   async function manualTelegramPreview() {
@@ -351,6 +424,9 @@ export default function AdminPage() {
         setTelegramPassword('');
       } else if (action === 'disconnect') {
         const result = await api.adminTelegramUserClientDisconnect({ password, userId: selectedUserId });
+        setTelegramAnalysisConsent(false);
+        setTelegramAnalysisResult(null);
+        setTelegramAnalysisReply('');
         setTelegramPrivateDialogs(null);
         setTelegramSelectedDialogId(null);
         setTelegramPrivateHistory(null);
@@ -372,6 +448,9 @@ export default function AdminPage() {
     try {
       const response = await api.adminSetTelegramUserClientPilot({ password, userId: selectedUser.id, pilotEnabled });
       if (!pilotEnabled) {
+        setTelegramAnalysisConsent(false);
+        setTelegramAnalysisResult(null);
+        setTelegramAnalysisReply('');
         setTelegramPrivateDialogs(null);
         setTelegramSelectedDialogId(null);
         setTelegramPrivateHistory(null);
@@ -694,6 +773,10 @@ export default function AdminPage() {
                                         setTelegramSelectedDialogId(dialog.id);
                                         setTelegramPrivateHistory(null);
                                         setTelegramPrivateReadError(null);
+                                        setTelegramAnalysisConsent(false);
+                                        setTelegramAnalysisResult(null);
+                                        setTelegramAnalysisReply('');
+                                        setTelegramAnalysisError(null);
                                       }}
                                       className={`block w-full rounded px-3 py-2 text-left text-sm disabled:opacity-60 ${telegramSelectedDialogId === dialog.id ? 'bg-cyan-900/50 text-cyan-100' : 'bg-slate-800/50 text-slate-200 hover:bg-slate-700/60'}`}>
                                       <span className="block break-words font-medium">{dialog.name}</span>
@@ -721,7 +804,12 @@ export default function AdminPage() {
                                   <h5 className="text-xs font-semibold text-slate-200">
                                     История с {telegramPrivateHistory.dialog.name} ({telegramPrivateHistory.messages.length} сообщений)
                                   </h5>
-                                  <button type="button" onClick={() => setTelegramPrivateHistory(null)}
+                                  <button type="button" onClick={() => {
+                                      setTelegramPrivateHistory(null);
+                                      setTelegramAnalysisConsent(false);
+                                      setTelegramAnalysisResult(null);
+                                      setTelegramAnalysisReply('');
+                                    }}
                                     className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300">Скрыть историю</button>
                                 </div>
                                 {telegramPrivateHistory.messages.length === 0 && (
@@ -741,7 +829,80 @@ export default function AdminPage() {
                                     </div>
                                   ))}
                                 </div>
-                                <p className="mt-3 text-xs text-slate-400">История хранится только на этой странице. В ИИ-черновики она не подставляется.</p>
+                                <div className="mt-4 rounded-lg border border-violet-500/40 bg-violet-950/20 p-3">
+                                  <h5 className="text-sm font-semibold text-violet-200">ИИ-анализ выбранной переписки</h5>
+                                  <p className="mt-1 text-xs text-slate-300">
+                                    Только по вашему отдельному разрешению OpenAI получит до 15 последних сообщений этого диалога:
+                                    текст каждого до 1200 символов, без вложений и имён Telegram-контактов.
+                                    Ничего не отправляется собеседнику.
+                                  </p>
+                                  <details className="mt-3 rounded border border-slate-700 p-2">
+                                    <summary className="cursor-pointer text-xs font-semibold text-slate-200">
+                                      Посмотреть точные сообщения для ИИ ({telegramPrivateHistory.analysisSnapshot.messageCount})
+                                    </summary>
+                                    <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                                      {telegramPrivateHistory.analysisSnapshot.messages.map((message) => (
+                                        <div key={message.id} className="rounded bg-slate-950/80 p-2 text-xs">
+                                          <p className="font-medium text-slate-300">{message.speaker} {message.date ? '· ' + new Date(message.date * 1000).toLocaleString('ru-RU') : ''}</p>
+                                          <p className="mt-1 whitespace-pre-wrap break-words text-slate-100">
+                                            {message.text || (message.hasMedia ? '[Вложение: содержимое не передаётся]' : '[Нет текстового содержимого]')}
+                                          </p>
+                                          {message.truncated && <p className="text-amber-300">Для анализа текст сокращён</p>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+                                  <label className="mt-3 block text-xs text-slate-300">Что нужно выяснить или учесть (необязательно)
+                                    <textarea value={telegramAnalysisInstruction} rows={2} maxLength={600}
+                                      onChange={(e) => { setTelegramAnalysisInstruction(e.target.value); setTelegramAnalysisResult(null); setTelegramAnalysisReply(''); }}
+                                      placeholder="Подведи итог договорённостей и предложи, как ответить..."
+                                      className="mt-1 block w-full resize-y rounded border border-slate-600 bg-slate-950 p-2 text-sm text-white" />
+                                  </label>
+                                  <label className="mt-3 block text-xs text-slate-300">Тон ответа
+                                    <select value={telegramAnalysisTone}
+                                      onChange={(e) => { setTelegramAnalysisTone(e.target.value as TelegramDraftTone); setTelegramAnalysisResult(null); setTelegramAnalysisReply(''); }}
+                                      className="mt-1 block rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm text-white">
+                                      <option value="neutral">Нейтральный</option>
+                                      <option value="friendly">Дружелюбный</option>
+                                      <option value="formal">Деловой</option>
+                                    </select>
+                                  </label>
+                                  <label className="mt-3 flex items-start gap-2 text-xs text-slate-200">
+                                    <input type="checkbox" checked={telegramAnalysisConsent}
+                                      onChange={(e) => setTelegramAnalysisConsent(e.target.checked)}
+                                      className="mt-0.5" />
+                                    <span>Подтверждаю передачу показанных выше сообщений этого диалога в OpenAI для анализа и подготовки ответа.</span>
+                                  </label>
+                                  <button type="button"
+                                    disabled={!telegramAnalysisConsent || telegramAnalysisBusy || telegramPrivateReadBusy || !telegramSendStatus?.aiDraftEnabled || telegramPrivateHistory.analysisSnapshot.messageCount === 0}
+                                    onClick={() => void analyzeTelegramSelectedDialog()}
+                                    className="mt-3 rounded bg-violet-700 px-3 py-2 text-sm font-medium text-white hover:bg-violet-600 disabled:opacity-40">
+                                    {telegramAnalysisBusy ? 'Анализ переписки…' : 'Передать выбранные сообщения ИИ и подготовить ответ'}
+                                  </button>
+                                  {telegramAnalysisError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramAnalysisError}</p>}
+                                  {telegramAnalysisResult && (
+                                    <div className="mt-4 border-t border-slate-700 pt-3">
+                                      <h6 className="text-sm font-semibold text-slate-100">О чём договорились</h6>
+                                      <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-200">{telegramAnalysisResult.summary}</p>
+                                      <label className="mt-4 block text-xs text-slate-300">
+                                        Предложенный ответ (можно изменить)
+                                        <textarea value={telegramAnalysisReply} rows={4} maxLength={1000}
+                                          onChange={(e) => setTelegramAnalysisReply(e.target.value)}
+                                          className="mt-1 block w-full resize-y rounded border border-violet-600 bg-slate-950 p-2 text-sm text-white" />
+                                      </label>
+                                      <button type="button" disabled={!telegramAnalysisReply.trim() || telegramSendBusy}
+                                        onClick={() => useTelegramAnalysisReply()}
+                                        className="mt-2 rounded border border-violet-500 px-3 py-2 text-sm text-violet-100 hover:bg-violet-900/20 disabled:opacity-40">
+                                        Перенести ответ в форму отправки
+                                      </button>
+                                      <p className="mt-2 text-xs text-slate-400">
+                                        Отправка не происходит автоматически. После переноса потребуется ещё раз проверить имя и ID адресата, затем отдельно подтвердить отправку.
+                                        Контакт без публичного @username пока не поддерживается для отправки.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="mt-3 text-xs text-slate-400">История хранится только в этой вкладке. В OpenAI передаётся исключительно после отдельного подтверждения выше.</p>
                               </div>
                             )}
                             {telegramPrivateReadError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramPrivateReadError}</p>}
