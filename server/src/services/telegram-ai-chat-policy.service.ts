@@ -4,6 +4,7 @@ import { parseTelegramSendTargetId } from './telegram-send-targets.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
+import { monitorDayKey } from './telegram-ai-monitor-worker.service.js';
 
 // PR1 has no worker and NO autonomous Telegram access. Configuration is not
 // approval to start reading or writing. PR2 must implement an explicit activation.
@@ -77,13 +78,20 @@ function validateTargetId(chatId: unknown): string {
 
 export const telegramAiChatPolicyService = {
   async list(userId: string) {
-    const policies = await prisma.telegramAiChatPolicy.findMany({
-      where: { userId },
-      orderBy: { updatedAt: 'desc' },
-      take: MAX_CHATS
-    });
-    // isEnabled is intentionally always false in PR1.
-    return { policies, activationAvailable: false, maximumChats: MAX_CHATS };
+    const [policies, owner] = await Promise.all([
+      prisma.telegramAiChatPolicy.findMany({
+        where: { userId }, orderBy: { updatedAt: 'desc' }, take: MAX_CHATS
+      }),
+      prisma.user.findUnique({ where: { id: userId }, select: { timeZone: true } })
+    ]);
+    const dayKey = monitorDayKey(new Date(), owner?.timeZone);
+    return {
+      policies: policies.map(policy => ({
+        ...policy, spentTodayMilli: policy.creditDayKey === dayKey ? policy.dailySpentMilli : 0,
+        reservedTodayMilli: policy.creditDayKey === dayKey ? policy.dailyReservedMilli : 0
+      })),
+      activationAvailable: true, maximumChats: MAX_CHATS
+    };
   },
 
   async save(userId: string, chatIdInput: unknown, payload: unknown) {
@@ -128,10 +136,12 @@ export const telegramAiChatPolicyService = {
       update: {
         chatKind: target.kind, chatTitle: target.name,
         ...settings,
-        isEnabled: false
+        isEnabled: false, monitorRevision: { increment: 1 },
+        leaseToken: null, leasedUntil: null, nextCheckAt: null,
+        summaryRequested: false
       }
     });
-    return { policy, activationAvailable: false };
+    return { policy, activationAvailable: true };
   },
 
   async remove(userId: string, chatIdInput: unknown) {
