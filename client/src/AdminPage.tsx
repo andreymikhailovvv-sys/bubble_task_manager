@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus, type TelegramDraftTone } from './lib/api';
+import { api, type AdminBroadcastImage, type AdminBroadcastTarget, type AdminSubscriptionPlan, type AdminUser, type CreditUsageStatistics, type SubscriptionLinks, type TelegramUserClientAuthStatus, type TelegramManualSendPreview, type TelegramManualSendStatus, type TelegramDraftTone, type TelegramPrivateDialog, type TelegramDialogHistory } from './lib/api';
 import { CreditUsageStats } from './components/CreditUsageStats';
 
 const BROADCAST_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -65,6 +65,12 @@ export default function AdminPage() {
   const [telegramDraftText, setTelegramDraftText] = useState('');
   const [telegramDraftBusy, setTelegramDraftBusy] = useState(false);
   const [telegramDraftError, setTelegramDraftError] = useState<string | null>(null);
+  const [telegramPrivateDialogs, setTelegramPrivateDialogs] = useState<TelegramPrivateDialog[] | null>(null);
+  const [telegramPrivateDialogsLimited, setTelegramPrivateDialogsLimited] = useState(false);
+  const [telegramSelectedDialogId, setTelegramSelectedDialogId] = useState<string | null>(null);
+  const [telegramPrivateHistory, setTelegramPrivateHistory] = useState<TelegramDialogHistory | null>(null);
+  const [telegramPrivateReadBusy, setTelegramPrivateReadBusy] = useState(false);
+  const [telegramPrivateReadError, setTelegramPrivateReadError] = useState<string | null>(null);
   const selectedUserIdRef = useRef(selectedUserId);
   selectedUserIdRef.current = selectedUserId;
   const [broadcastTarget, setBroadcastTarget] = useState<AdminBroadcastTarget>('all');
@@ -207,6 +213,12 @@ export default function AdminPage() {
     setTelegramDraftTone('neutral');
     setTelegramDraftText('');
     setTelegramDraftError(null);
+    setTelegramPrivateDialogs(null);
+    setTelegramPrivateDialogsLimited(false);
+    setTelegramSelectedDialogId(null);
+    setTelegramPrivateHistory(null);
+    setTelegramPrivateReadBusy(false);
+    setTelegramPrivateReadError(null);
     if (!selectedUserId || !password) return;
     let cancelled = false;
     void api.adminTelegramManualSendStatus({ password, userId: selectedUserId })
@@ -232,6 +244,48 @@ export default function AdminPage() {
       }
     } finally {
       setTelegramDraftBusy(false);
+    }
+  }
+
+  async function loadTelegramPrivateDialogs() {
+    if (!selectedUserId || telegramPrivateReadBusy || !telegramAuth?.readEnabled) return;
+    const userId = selectedUserId;
+    setTelegramPrivateReadBusy(true);
+    setTelegramPrivateReadError(null);
+    setTelegramPrivateHistory(null);
+    setTelegramSelectedDialogId(null);
+    setTelegramPrivateDialogs(null);
+    try {
+      const result = await api.adminTelegramPrivateDialogs({ password, userId });
+      if (selectedUserIdRef.current === userId) {
+        setTelegramPrivateDialogs(result.dialogs);
+        setTelegramPrivateDialogsLimited(result.limited);
+      }
+    } catch (error) {
+      if (selectedUserIdRef.current === userId) {
+        setTelegramPrivateReadError(error instanceof Error ? error.message : 'Не удалось загрузить диалоги Telegram');
+      }
+    } finally {
+      if (selectedUserIdRef.current === userId) setTelegramPrivateReadBusy(false);
+    }
+  }
+
+  async function loadTelegramPrivateHistory() {
+    if (!selectedUserId || !telegramSelectedDialogId || telegramPrivateReadBusy || !telegramAuth?.readEnabled) return;
+    const userId = selectedUserId;
+    const dialogId = telegramSelectedDialogId;
+    setTelegramPrivateReadBusy(true);
+    setTelegramPrivateReadError(null);
+    setTelegramPrivateHistory(null);
+    try {
+      const result = await api.adminTelegramPrivateHistory({ password, userId, dialogId });
+      if (selectedUserIdRef.current === userId) setTelegramPrivateHistory(result);
+    } catch (error) {
+      if (selectedUserIdRef.current === userId) {
+        setTelegramPrivateReadError(error instanceof Error ? error.message : 'Не удалось прочитать переписку');
+      }
+    } finally {
+      if (selectedUserIdRef.current === userId) setTelegramPrivateReadBusy(false);
     }
   }
 
@@ -297,6 +351,9 @@ export default function AdminPage() {
         setTelegramPassword('');
       } else if (action === 'disconnect') {
         const result = await api.adminTelegramUserClientDisconnect({ password, userId: selectedUserId });
+        setTelegramPrivateDialogs(null);
+        setTelegramSelectedDialogId(null);
+        setTelegramPrivateHistory(null);
         setUsers((users) => users.map((user) => user.id === selectedUserId ? { ...user, telegramUserClientConnected: false } : user));
         if (result.remoteLogout === 'failed') setTelegramAuthError('Локальная сессия удалена, но Telegram не подтвердил отзыв. Удалите сеанс Планировыча в Telegram → Настройки → Устройства.');
       }
@@ -314,6 +371,11 @@ export default function AdminPage() {
     setError('');
     try {
       const response = await api.adminSetTelegramUserClientPilot({ password, userId: selectedUser.id, pilotEnabled });
+      if (!pilotEnabled) {
+        setTelegramPrivateDialogs(null);
+        setTelegramSelectedDialogId(null);
+        setTelegramPrivateHistory(null);
+      }
       setUsers((current) => current.map((user) => user.id === response.userId
         ? { ...user, telegramUserClientPilotEnabled: response.telegramUserClientPilotEnabled, telegramUserClientConnected: response.telegramUserClientConnected }
         : user));
@@ -600,6 +662,91 @@ export default function AdminPage() {
                       {telegramAuth?.connected ? (
                         <div className="mt-3">
                           <p className="text-sm text-emerald-300">Личный Telegram подключён.</p>
+                          <div className="mt-4 rounded-lg border border-slate-600 bg-slate-950/50 p-3">
+                            <h4 className="text-sm font-semibold text-slate-100">Личные переписки Telegram</h4>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Только для владельца этого аккаунта Планировыча. Диалоги загружаются вручную, без текста последних сообщений.
+                              История появится только после выбора собеседника и отдельного запроса. Данные не сохраняются в базе и не передаются ИИ.
+                            </p>
+                            {!telegramAuth?.readEnabled && (
+                              <p className="mt-2 text-xs text-amber-300">
+                                Чтение отключено. Для закрытого пилота добавьте TELEGRAM_USER_READ_ENABLED=true на Timeweb.
+                              </p>
+                            )}
+                            <button type="button"
+                              disabled={!telegramAuth?.readEnabled || telegramPrivateReadBusy}
+                              onClick={() => void loadTelegramPrivateDialogs()}
+                              className="mt-3 rounded border border-cyan-500/70 px-3 py-2 text-sm text-cyan-100 hover:bg-cyan-900/30 disabled:opacity-40">
+                              {telegramPrivateReadBusy && telegramPrivateDialogs === null ? 'Загрузка…' : 'Показать личные чаты'}
+                            </button>
+                            {telegramPrivateDialogs && (
+                              <div className="mt-3">
+                                <p className="text-xs text-slate-400">
+                                  Найдено личных чатов: {telegramPrivateDialogs.length}
+                                  {telegramPrivateDialogsLimited ? ' (показана часть, максимум 60)' : ''}
+                                </p>
+                                {telegramPrivateDialogs.length === 0 && <p className="mt-2 text-xs text-slate-400">Доступных личных переписок нет.</p>}
+                                <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded border border-slate-700 p-2">
+                                  {telegramPrivateDialogs.map((dialog) => (
+                                    <button key={dialog.id} type="button" disabled={telegramPrivateReadBusy}
+                                      aria-pressed={telegramSelectedDialogId === dialog.id}
+                                      onClick={() => {
+                                        setTelegramSelectedDialogId(dialog.id);
+                                        setTelegramPrivateHistory(null);
+                                        setTelegramPrivateReadError(null);
+                                      }}
+                                      className={`block w-full rounded px-3 py-2 text-left text-sm disabled:opacity-60 ${telegramSelectedDialogId === dialog.id ? 'bg-cyan-900/50 text-cyan-100' : 'bg-slate-800/50 text-slate-200 hover:bg-slate-700/60'}`}>
+                                      <span className="block break-words font-medium">{dialog.name}</span>
+                                      {dialog.username && <span className="block text-xs text-slate-400">{dialog.username}</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {telegramSelectedDialogId && (
+                              <div className="mt-3">
+                                <p className="text-xs text-slate-300">
+                                  Выбран чат: {telegramPrivateDialogs?.find((item) => item.id === telegramSelectedDialogId)?.name ?? 'Личный диалог'}
+                                </p>
+                                <button type="button" disabled={telegramPrivateReadBusy || !telegramAuth?.readEnabled}
+                                  onClick={() => void loadTelegramPrivateHistory()}
+                                  className="mt-2 rounded bg-cyan-700 px-3 py-2 text-sm text-white hover:bg-cyan-600 disabled:opacity-40">
+                                  {telegramPrivateReadBusy ? 'Загрузка сообщений…' : 'Прочитать последние 30 сообщений'}
+                                </button>
+                              </div>
+                            )}
+                            {telegramPrivateHistory && telegramSelectedDialogId === telegramPrivateHistory.dialog.id && (
+                              <div className="mt-3 rounded border border-slate-700 bg-slate-900/70 p-3">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                  <h5 className="text-xs font-semibold text-slate-200">
+                                    История с {telegramPrivateHistory.dialog.name} ({telegramPrivateHistory.messages.length} сообщений)
+                                  </h5>
+                                  <button type="button" onClick={() => setTelegramPrivateHistory(null)}
+                                    className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-300">Скрыть историю</button>
+                                </div>
+                                {telegramPrivateHistory.messages.length === 0 && (
+                                  <p className="text-xs text-slate-400">В этом диалоге нет сообщений для отображения.</p>
+                                )}
+                                <div className="max-h-96 space-y-3 overflow-y-auto">
+                                  {telegramPrivateHistory.messages.map((message) => (
+                                    <div key={message.id}
+                                      className={`rounded-lg border p-3 text-sm ${message.out ? 'border-cyan-700/40 bg-cyan-950/30' : 'border-slate-700 bg-slate-800/60'}`}>
+                                      <div className="mb-1 flex flex-wrap justify-between gap-2 text-xs text-slate-400">
+                                        <span>{message.senderName}</span>
+                                        <time>{message.date ? new Date(message.date * 1000).toLocaleString('ru-RU') : ''}</time>
+                                      </div>
+                                      <p className="whitespace-pre-wrap break-words text-slate-100">{message.text || (message.hasMedia ? '[Медиа без текстовой подписи]' : '[Служебное сообщение]')}</p>
+                                      {message.hasMedia && <p className="mt-1 text-xs text-slate-400">Медиафайл не загружался</p>}
+                                      {message.truncated && <p className="mt-1 text-xs text-amber-300">Длинный текст показан частично</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="mt-3 text-xs text-slate-400">История хранится только на этой странице. В ИИ-черновики она не подставляется.</p>
+                              </div>
+                            )}
+                            {telegramPrivateReadError && <p role="alert" className="mt-2 text-xs text-rose-300">{telegramPrivateReadError}</p>}
+                          </div>
+
                           <div className="mt-4 rounded-lg border border-slate-600 bg-slate-950/50 p-3">
                             <h4 className="text-sm font-semibold text-slate-100">Тестовая ручная отправка</h4>
                             <p className="mt-1 text-xs text-slate-400">Отправка возможна только из этой админ-панели. Не более 3 попыток за 10 минут и 12 за сутки, пауза минимум 20 секунд. Никаких рассылок и самостоятельных действий ИИ.</p>

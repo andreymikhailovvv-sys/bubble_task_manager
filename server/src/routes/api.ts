@@ -36,6 +36,7 @@ import { telegramUserClientAuth, TelegramUserClientError } from '../services/tel
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
 import { telegramUserClientSend } from '../services/telegram-user-client-send.service.js';
 import { telegramUserClientDraft } from '../services/telegram-user-client-draft.service.js';
+import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -754,6 +755,31 @@ apiRouter.post('/admin/users/:userId/telegram-user-client/send-confirm', async (
   res.set('Cache-Control', 'no-store, private');
   try {
     res.json(await telegramUserClientSend.confirm(String(req.params.userId ?? ''), req.body?.confirmationId));
+  } catch (error) { telegramAuthError(res, error); }
+});
+
+// PR5: reading another person's messages is more sensitive than manual send.
+// Both admin password AND the signed-in *owner* of the connected Telegram
+// account are required. An admin cannot inspect any other pilot user's chats.
+apiRouter.post('/admin/users/:userId/telegram-user-client/dialogs', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  res.set('Pragma', 'no-cache');
+  try {
+    const userId = String(req.params.userId ?? '');
+    requireTelegramReadOwner(req.user?.id, userId);
+    res.json(await telegramUserClientRead.list(userId));
+  } catch (error) { telegramAuthError(res, error); }
+});
+
+apiRouter.post('/admin/users/:userId/telegram-user-client/history', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return;
+  res.set('Cache-Control', 'no-store, private');
+  res.set('Pragma', 'no-cache');
+  try {
+    const userId = String(req.params.userId ?? '');
+    requireTelegramReadOwner(req.user?.id, userId);
+    res.json(await telegramUserClientRead.history(userId, req.body?.dialogId));
   } catch (error) { telegramAuthError(res, error); }
 });
 

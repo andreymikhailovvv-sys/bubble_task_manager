@@ -198,6 +198,8 @@ export const telegramUserClientAuth = {
     if (!user) throw new TelegramUserClientError(404, 'Пользователь не найден');
     return {
       enabled: canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true),
+      readEnabled: canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true) &&
+        process.env.TELEGRAM_USER_READ_ENABLED === 'true',
       connected: Boolean(user.telegramUserClientConnection?.connectedAt),
       ...safeState(attempts.get(userId))
     };
