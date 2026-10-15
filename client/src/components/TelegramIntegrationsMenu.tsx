@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, ChevronDown, ChevronRight, KeyRound, Link2, Loader2, Send, Smartphone, X } from 'lucide-react';
 import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
@@ -6,6 +7,7 @@ import './TelegramIntegrationsMenu.css';
 type Integration = 'bot' | 'messages';
 type Props = { onConnectBot: () => void };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
+type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
 
 export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   const [open, setOpen] = useState(false);
@@ -19,7 +21,46 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const popupRef = useRef<HTMLDivElement>(null);
+  const floatingRef = useRef<HTMLDivElement>(null);
+  const closeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [placement, setPlacement] = useState<MenuPlacement | null>(null);
   const active = useRef(false);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current);
+    closeTimeout.current = null;
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    // The popup is portaled outside the header: allow the pointer to cross
+    // the small gap without making the menu vanish.
+    closeTimeout.current = setTimeout(() => setOpen(false), 180);
+  }, [cancelClose]);
+
+  const updatePlacement = useCallback(() => {
+    const anchor = popupRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const width = Math.min(352, Math.max(0, window.innerWidth - 24));
+    const left = Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12));
+    const availableBelow = Math.max(0, window.innerHeight - rect.bottom - 16);
+    const availableAbove = Math.max(0, rect.top - 16);
+    const above = availableBelow < 240 && availableAbove > availableBelow;
+    setPlacement({
+      left, width,
+      ...(above
+        ? { bottom: Math.max(12, window.innerHeight - rect.top + 8) }
+        : { top: Math.max(12, rect.bottom + 8) }),
+      maxHeight: Math.max(80, above ? availableAbove - 8 : availableBelow - 8)
+    });
+  }, []);
+
+  const openMenu = useCallback(() => {
+    cancelClose();
+    updatePlacement();
+    setOpen(true);
+  }, [cancelClose, updatePlacement]);
 
   const refresh = useCallback(async () => {
     try {
@@ -32,8 +73,22 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
 
   useEffect(() => {
     active.current = true;
-    return () => { active.current = false; };
+    return () => {
+      active.current = false;
+      if (closeTimeout.current) clearTimeout(closeTimeout.current);
+    };
   }, []);
+  useEffect(() => {
+    if (!open) return;
+    const reposition = () => updatePlacement();
+    // Capture scroll from every scroll container, not just the window.
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, updatePlacement]);
   useEffect(() => {
     if (open || dialogOpen) void refresh();
   }, [open, dialogOpen, refresh]);
@@ -46,15 +101,20 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
     if (!open && !dialogOpen) return;
     const onEscape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      cancelClose();
       if (dialogOpen) setDialogOpen(false); else setOpen(false);
     };
     const onOutside = (e: PointerEvent) => {
-      if (!dialogOpen && popupRef.current && !popupRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!dialogOpen && !popupRef.current?.contains(target) && !floatingRef.current?.contains(target)) {
+        cancelClose();
+        setOpen(false);
+      }
     };
     document.addEventListener('keydown', onEscape);
     document.addEventListener('pointerdown', onOutside);
     return () => { document.removeEventListener('keydown', onEscape); document.removeEventListener('pointerdown', onOutside); };
-  }, [open, dialogOpen]);
+  }, [open, dialogOpen, cancelClose]);
 
   const perform = async (fn: () => Promise<unknown>) => {
     if (busy) return;
@@ -87,15 +147,18 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   return (
     <>
       <div className="integration-menu relative" ref={popupRef}
-        onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+        onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
         <button type="button" className="public-nav-link integration-menu__trigger shrink-0 px-2 py-2 text-sm"
           aria-label="Интеграции" aria-expanded={open}
-          onClick={() => setOpen(true)}
-          onFocus={() => setOpen(true)}>
+          onClick={openMenu}
+          onFocus={openMenu}>
           <Link2 size={15} /> Интеграции <ChevronDown size={14} />
         </button>
-        {open && (
-          <div className="integration-menu__popup absolute right-0 top-full z-[80] w-[min(22rem,calc(100vw-2rem))] rounded-2xl border p-3 shadow-2xl">
+        {open && placement && createPortal(
+          <div ref={floatingRef} className="integration-menu__popup fixed z-[900] rounded-2xl border p-3 shadow-2xl"
+            style={placement as CSSProperties}
+            onMouseEnter={cancelClose} onMouseLeave={scheduleClose}
+            onFocus={cancelClose}>
             <h3 className="mb-2 px-1 text-sm font-bold">Интеграции</h3>
             <p className="integration-menu__muted mb-3 px-1 text-xs">Подключайте сервисы к своему аккаунту Планировыча.</p>
             {(['bot', 'messages'] as const).map(kind => {
@@ -131,11 +194,11 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
                 </div>
               );
             })}
-          </div>
+          </div>, document.body
         )}
       </div>
-      {dialogOpen && (
-        <div className="telegram-integrations-modal fixed inset-0 z-[190] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={closeModal}>
+      {dialogOpen && createPortal(
+        <div className="telegram-integrations-modal fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={closeModal}>
           <section role="dialog" aria-modal="true" aria-label="Подключить отправку в Telegram"
             className="telegram-integrations-modal__panel max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border p-5 shadow-2xl"
             onClick={e => e.stopPropagation()}>
@@ -210,7 +273,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
             {status?.error && <p role="alert" className="telegram-integrations-modal__warning mt-3 text-sm">{status.error}</p>}
             {notice && <p role="status" className="telegram-integrations-modal__success mt-3 text-sm">{notice}</p>}
           </section>
-        </div>
+        </div>, document.body
       )}
     </>
   );
