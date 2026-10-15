@@ -2966,7 +2966,7 @@ ${allContext}`,
         question: 'Продолжи исходный запрос по разрешённой пользователем переписке Telegram.',
         userMessage: '',
         telegramRead: approval,
-        model: focusedAiModel,
+        model: focus ? focusAiModel : focusedAiModel,
         clientSurface: 'web',
         skipEfficiencyBonus: focus
       }, { onStatus: status => {
