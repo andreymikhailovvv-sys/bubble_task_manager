@@ -189,9 +189,15 @@ export type AdminUser = {
   telegramUserClientConnected: boolean;
   createdAt: string;
 };
+export type TelegramIntegrationStatus = TelegramUserClientAuthStatus & {
+  botConnected: boolean;
+  credentialsSet: boolean;
+  sendEnabled: boolean;
+};
 export type TelegramUserClientAuthStatus = {
   enabled: boolean;
   readEnabled: boolean;
+  credentialsSet?: boolean;
   connected: boolean;
   status: 'idle' | 'starting' | 'qr' | 'password_required' | 'verifying_password' | 'connected' | 'failed' | 'cancelled';
   attemptId: string | null;
@@ -492,22 +498,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
-  adminTelegramUserClientStatus: (payload: { password: string; userId: string }) =>
-    request<TelegramUserClientAuthStatus>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/status`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramUserClientStart: (payload: { password: string; userId: string }) =>
-    request<{ attemptId: string; status: string }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/start`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramUserClientPassword: (payload: { password: string; userId: string; attemptId: string; telegramPassword: string }) =>
-    request<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/password`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramUserClientCancel: (payload: { password: string; userId: string; attemptId: string }) =>
-    request<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/cancel`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramUserClientDisconnect: (payload: { password: string; userId: string }) =>
-    request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
-      { method: 'POST', body: JSON.stringify(payload) }),
+  telegramIntegrationStatus: () =>
+    request<TelegramIntegrationStatus>('/api/telegram-user-client/integrations/status'),
+  telegramIntegrationConfigure: (apiId: string, apiHash: string) =>
+    request<{ ok: true; credentialsSet: true }>('/api/telegram-user-client/integrations/configure', {
+      method: 'POST', body: JSON.stringify({ apiId, apiHash })
+    }),
+  telegramIntegrationStart: () =>
+    request<{ attemptId: string; status: string }>('/api/telegram-user-client/integrations/start', {
+      method: 'POST', body: '{}'
+    }),
+  telegramIntegrationPassword: (attemptId: string, telegramPassword: string) =>
+    request<{ ok: true }>('/api/telegram-user-client/integrations/password', {
+      method: 'POST', body: JSON.stringify({ attemptId, telegramPassword })
+    }),
+  telegramIntegrationCancel: (attemptId: string) =>
+    request<{ ok: true }>('/api/telegram-user-client/integrations/cancel', {
+      method: 'POST', body: JSON.stringify({ attemptId })
+    }),
+  telegramIntegrationDisconnect: () =>
+    request<{ ok: true; remoteLogout: 'ok' | 'failed' | 'not_needed' }>('/api/telegram-user-client/integrations/disconnect', {
+      method: 'POST', body: '{}'
+    }),
   telegramQuickSend: (payload: { requestId: string; recipientIds: string[]; text: string; mode: 'DIRECT' | 'REWRITE_AND_SEND'; instruction?: string }) =>
     request<TelegramQuickSendJob>('/api/telegram-user-client/chat/quick-send', {
       method: 'POST', body: JSON.stringify(payload)
