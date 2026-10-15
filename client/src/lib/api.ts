@@ -215,6 +215,28 @@ export type TelegramQuickSendJob = {
   createdAt: string;
   completedAt: string | null;
 };
+export type TelegramAiChatSettings = {
+  mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
+  analysisLevel: 'IMPORTANT' | 'STANDARD' | 'DETAILED';
+  checkIntervalMinutes: number;
+  maxMessagesPerCheck: number;
+  summaryFrequency: 'OFF' | 'DAILY' | 'WEEKLY';
+  instructions: string;
+  notifyImportant: boolean;
+  suggestTasks: boolean;
+  dailyCreditLimitMilli: number;
+  monthlyCreditLimitMilli: number;
+};
+export type TelegramAiChatPolicy = TelegramAiChatSettings & {
+  id: string;
+  userId: string;
+  chatId: string;
+  chatKind: 'user' | 'group' | 'supergroup';
+  chatTitle: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 export type TelegramChatCapability = {
   connected: boolean;
   readEnabled: boolean;
@@ -520,6 +542,14 @@ export const api = {
     request<{ ok: true; remoteLogout: 'ok' | 'failed' | 'not_needed' }>('/api/telegram-user-client/integrations/disconnect', {
       method: 'POST', body: '{}'
     }),
+  telegramAssistantPolicies: () =>
+    request<{ policies: TelegramAiChatPolicy[]; activationAvailable: boolean; maximumChats: number }>('/api/telegram-user-client/assistant/chats'),
+  telegramAssistantSavePolicy: (chatId: string, policy: TelegramAiChatSettings) =>
+    request<{ policy: TelegramAiChatPolicy; activationAvailable: false }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}`, {
+      method: 'PUT', body: JSON.stringify(policy)
+    }),
+  telegramAssistantDeletePolicy: (chatId: string) =>
+    request<{ ok: true }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }),
   telegramQuickSend: (payload: { requestId: string; recipientIds: string[]; text: string; mode: 'DIRECT' | 'REWRITE_AND_SEND'; instruction?: string }) =>
     request<TelegramQuickSendJob>('/api/telegram-user-client/chat/quick-send', {
       method: 'POST', body: JSON.stringify(payload)
