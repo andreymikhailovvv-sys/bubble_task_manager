@@ -96,14 +96,14 @@ async function checkDraftAccess(userId: string) {
     select: {
       telegramChatId: true,
       telegramUserClientConnection: { select: {
-        pilotEnabled: true, encryptedSession: true, telegramAccountId: true, connectedAt: true
+        pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, telegramAccountId: true, connectedAt: true
       } }
     }
   });
   if (!user) throw new TelegramUserClientError(404, 'Пользователь не найден');
   const connection = user.telegramUserClientConnection;
   if (!canUseTelegramUserClient(connection?.pilotEnabled === true) ||
-      !connection?.connectedAt || !connection.encryptedSession ||
+      !connection?.connectedAt || !connection.encryptedSession || !connection.encryptedApiCredentials ||
       !connection.telegramAccountId || user.telegramChatId !== connection.telegramAccountId) {
     throw new TelegramUserClientError(403, 'Для ИИ-черновика требуется действующее подключение Telegram и разрешение пилота');
   }
