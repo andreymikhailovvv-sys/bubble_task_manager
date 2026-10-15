@@ -973,9 +973,14 @@ function extractUnexpectedTaskAssistantText(source: Record<string, unknown>): st
 
 const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
 
-export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number): string {
+export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number, failedFileEditReason?: string | null): string {
   const normalized = answer.trim();
   if (actionsCount > 0 || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
+  // A document edit is not a task_action. If the editor reported a failure,
+  // do not overwrite it with an unrelated "no task action" diagnostic.
+  const admitsFailure = /(?:не\s+(?:удалось|получилось|выполнено|измен[её]н)|остал(?:ся|ась)\s+без\s+изменений|невозможно|не\s+смог)/iu.test(normalized);
+  if (admitsFailure) return normalized;
+  if (failedFileEditReason) return 'Файл не изменён. ' + failedFileEditReason.slice(0, 700);
   return 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
 }
 
@@ -2075,6 +2080,7 @@ export const aiAssistantService = {
     let generatedImage: AiImageGenerationResult | null = null;
     let editedFileDocument: GeneratedDocumentMeta | null = null;
     let editedFileCreditsMilli = 0;
+    let failedFileEditReason: string | null = null;
     for (const model of modelCandidates) {
       const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
@@ -2179,11 +2185,15 @@ export const aiAssistantService = {
                   uploads: input.attachments, model, apiKey, actionId: requestId, dynamicBilling
                 }, call.name === 'read_file' ? 'read' : 'edit', args);
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result.response) });
+                if (call.name === 'edit_file' && !result.response.ok) {
+                  failedFileEditReason = result.response.message || 'Редактор не смог применить изменения к выбранному файлу.';
+                }
                 if (result.modelAttachment) {
                   const fileMessage = buildAttachmentsPromptMessage([result.modelAttachment]);
                   if (fileMessage) providerInput.push(fileMessage);
                 }
                 if (result.document) {
+                  failedFileEditReason = null;
                   editedFileDocument = result.document;
                   editedFileCreditsMilli += result.creditsSpentMilli ?? 0;
                   rawAnswer = JSON.stringify({
@@ -2192,6 +2202,7 @@ export const aiAssistantService = {
                   });
                 }
               } catch (error) {
+                if (call.name === 'edit_file') failedFileEditReason = error instanceof Error ? error.message : 'Редактор не смог изменить файл.';
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({
                   ok: false, code: 'FILE_OPERATION_FAILED',
                   message: error instanceof Error ? error.message : 'Операция с файлом не выполнена.'
@@ -2490,7 +2501,7 @@ export const aiAssistantService = {
           actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
         }
 
-        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0));
+        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0), failedFileEditReason);
         const answer = parsed.actions.length > 0 && appliedActionsCount === 0
           ? `Не удалось применить изменения по запросу. Проверьте формулировку и попробуйте ещё раз.
 
