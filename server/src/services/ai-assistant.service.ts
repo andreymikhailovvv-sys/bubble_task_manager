@@ -5,6 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools } from './ai-chat-tools.service.js';
+import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { requiresNoteCreation } from './ai-create-note.service.js';
 import { selectRequiredPersonalLookup } from './ai-personal-search-intent.js';
 import type { AiChatProgressStatus } from './ai-chat-progress.js';
@@ -238,7 +239,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1734,6 +1735,7 @@ export const aiAssistantService = {
         userId: true,
         messageKind: true,
         recipientUserId: true,
+        telegramSendDraft: true,
         generatedDocument: { select: { id: true, fileName: true, mimeType: true, size: true } },
         user: { select: { name: true, username: true } }
       }
@@ -1759,6 +1761,9 @@ export const aiAssistantService = {
         : {}),
       ...(message.role === 'assistant' && message.generatedDocument
         ? { generatedDocument: message.generatedDocument }
+        : {}),
+      ...(message.role === 'assistant' && message.userId === input.userId && message.telegramSendDraft
+        ? { telegramSendDraft: message.telegramSendDraft as TelegramInlineSendDraft }
         : {})
     }));
   },
@@ -1796,7 +1801,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1812,7 +1817,8 @@ export const aiAssistantService = {
         role: 'assistant',
         content,
         creditsSpentMilli: input.creditsSpentMilli,
-        generatedDocumentId: input.generatedDocumentId ?? null
+        generatedDocumentId: input.generatedDocumentId ?? null,
+        ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {})
       }
     });
   },
@@ -1948,6 +1954,7 @@ export const aiAssistantService = {
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
       'Если пользователь просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай подробный визуальный промпт; готовый PNG сервер добавит во вложения. Не говори об успешной генерации, пока инструмент не подтвердил её.',
       'Не генерируй новое изображение по просьбе прочитать или изменить существующий документ, а также по местоимениям «его», «её», «это». Предыдущий PNG не считается автоматически выбранным. Для работы с файлом самостоятельно выбери fileId из КАТАЛОГА ФАЙЛОВ: вызови read_file для чтения и edit_file только при явной просьбе изменить. Не нужно повторно прикреплять старый файл, если он уже есть в каталоге и доступен через инструмент. При неоднозначности уточни конкретный файл, не вызывая редактора.',
+      'Если пользователь явно просит отправить или переслать сообщение в Telegram (например, «подведи итог обсуждения задачи и отправь Ване»), сформируй законченный текст и вызови prepare_telegram_send с recipient и text. Инструмент ничего не отправляет: он только создаёт карточку Telegram под ответом, с текстом, выбранным контактом и кнопкой «Отправить». Пользователь подтвердит отправку сам. Не говори, что сообщение уже отправлено. Не угадывай Telegram ID. Если адресат не назван, сначала уточни.',
       'Текст пользователю пиши только в answer.',
       'Ты видишь только краткий preview активных подзадач и metadata сохранённых файлов. Если нужна подзадача вне preview, полный список, description или старая/выполненная подзадача — используй task_context_lookup. Не придумывай отсутствующие подзадачи.',
       'Если пользователь просит все подзадачи, полный список, классифицировать, сгруппировать, отсортировать или сравнить все подзадачи, расставить приоритеты среди всех либо найти закономерности по всему списку, нельзя отвечать только по preview. Сначала вызови task_context_lookup с operation=list_subtasks. Если result.hasMore=true, запрашивай следующую страницу с offset=result.nextOffset и продолжай до hasMore=false в пределах tool budget. Для точечного поиска нескольких подходящих подзадач используй search_subtasks.',
@@ -2073,6 +2080,7 @@ export const aiAssistantService = {
       let pendingDynamicReservation: WalletReservation | null = null;
       try {
         const providerInput: TaskChatProviderInput[] = [...messages];
+        let telegramSendDraft: TelegramInlineSendDraft | null = null;
         const fetchedAttachmentIds = new Set<string>();
         const loadedSubtaskIds = new Set<string>();
         let rawAnswer = '';
@@ -2141,6 +2149,22 @@ export const aiAssistantService = {
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
+              continue;
+            }
+            if (call.name === 'prepare_telegram_send') {
+              toolCallsExecuted += 1;
+              if (telegramSendDraft) {
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id,
+                  output: JSON.stringify({ ok: false, code: 'ALREADY_PREPARED' }) });
+              } else {
+                const proposal = await prepareTelegramInlineSendDraft(input.userId, args);
+                if (proposal.ok) telegramSendDraft = proposal.draft;
+                providerInput.push({ type: 'function_call_output', call_id: call.call_id,
+                  output: JSON.stringify(proposal.ok
+                    ? { ok: true, prepared: true, needsRecipientSelection: !proposal.draft.recipientId, message: 'Карточка Telegram подготовлена, сообщение не отправлено.' }
+                    : proposal) });
+              }
+              input.onProgress?.('forming_answer');
               continue;
             }
             if (call.name === 'read_file' || call.name === 'edit_file') {
@@ -2504,7 +2528,7 @@ ${actionAwareAnswer}`
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, generatedDocument, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, generatedDocument, telegramSendDraft, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
