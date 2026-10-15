@@ -39,6 +39,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-user-client-read.test.ts
       - name: Verify Telegram AI selected-dialog consent and snapshot isolation
         run: node --import tsx --test server/test/telegram-user-client-dialog-assistant.test.ts
+      - name: Verify personal Telegram access inside normal AI chat
+        run: node --import tsx --test server/test/telegram-user-client-chat-integration.test.ts
       - name: Verify Telegram identity binding
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Telegram user-client cryptography and access gating
