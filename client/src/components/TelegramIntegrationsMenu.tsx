@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, ChevronDown, ChevronRight, KeyRound, Link2, Loader2, Send, Smartphone, X } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronDown, ChevronRight, KeyRound, Link2, Loader2, Send, Smartphone, X } from 'lucide-react';
+import { TelegramAiAssistantSettings } from './TelegramAiAssistantSettings';
 import { api, type TelegramIntegrationStatus } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
-type Integration = 'bot' | 'messages';
+type Integration = 'bot' | 'messages' | 'assistant';
 type Props = { onConnectBot: () => void };
 const RUNNING = ['starting', 'qr', 'password_required', 'verifying_password'];
 type MenuPlacement = { left: number; top?: number; bottom?: number; width: number; maxHeight: number };
@@ -13,6 +14,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Integration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [assistantDialogOpen, setAssistantDialogOpen] = useState(false);
   const [status, setStatus] = useState<TelegramIntegrationStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [apiId, setApiId] = useState('');
@@ -161,17 +163,18 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
             onFocus={cancelClose}>
             <h3 className="mb-2 px-1 text-sm font-bold">Интеграции</h3>
             <p className="integration-menu__muted mb-3 px-1 text-xs">Подключайте сервисы к своему аккаунту Планировыча.</p>
-            {(['bot', 'messages'] as const).map(kind => {
+            {(['bot', 'messages', 'assistant'] as const).map(kind => {
               const isBot = kind === 'bot';
-              const enabled = isBot ? botConnected : connected;
+              const isAssistant = kind === 'assistant';
+              const enabled = isBot ? botConnected : isAssistant ? Boolean(status?.connected && status.readEnabled) : connected;
               return (
                 <div key={kind} className="integration-menu__item mb-2 rounded-xl border">
                   <button type="button" className="flex w-full items-center gap-2 p-3 text-left" aria-expanded={expanded === kind}
                     onClick={() => expandIntegration(kind)}>
-                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isBot ? <Smartphone size={19}/> : <Send size={18}/>}</span>
-                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isBot ? 'Telegram-бот' : 'Отправка в Telegram'}</span>
+                    <span className="integration-menu__symbol flex h-9 w-9 shrink-0 items-center justify-center rounded-xl">{isBot ? <Smartphone size={19}/> : isAssistant ? <Bot size={19}/> : <Send size={18}/>}</span>
+                    <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{isBot ? 'Telegram-бот' : isAssistant ? 'ИИ-ассистент Telegram' : 'Отправка в Telegram'}</span>
                       <span className={`mt-1 flex items-center gap-1 text-xs ${enabled ? 'integration-menu__on' : 'integration-menu__muted'}`}>
-                        {enabled ? <CheckCircle2 size={12}/> : null}{enabled ? 'Подключено' : 'Не подключено'}
+                        {enabled ? <CheckCircle2 size={12}/> : null}{isAssistant ? (enabled ? 'Доступно для настройки' : 'Требуется подключение') : (enabled ? 'Подключено' : 'Не подключено')}
                       </span>
                     </span>
                     <ChevronRight size={16} className={`integration-menu__muted transition-transform ${expanded === kind ? 'rotate-90' : ''}`}/>
@@ -180,14 +183,17 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
                     <div className="integration-menu__details border-t px-3 pb-3 pt-2">
                       <p className="integration-menu__muted text-xs leading-relaxed">{isBot
                         ? 'Получайте уведомления, используйте Telegram Mini App и управляйте задачами через бота Планировыча.'
-                        : 'Отправляйте сообщения из ИИ-чатов Планировыча от своего имени. ИИ подготовит текст, а отправка произойдёт только по вашему подтверждению. Нужны собственные API ID и API Hash Telegram.'}</p>
+                        : isAssistant
+                          ? 'Выберите личные и групповые чаты, укажите инструкции, уровень анализа, режим работы и лимиты кредитов. На первом этапе настройки сохраняются без фонового чтения и автоответов.'
+                          : 'Отправляйте сообщения из ИИ-чатов Планировыча от своего имени. ИИ подготовит текст, а отправка произойдёт только по вашему подтверждению. Нужны собственные API ID и API Hash Telegram.'}</p>
                       <button type="button" className="integration-menu__action mt-3 w-full rounded-xl px-3 py-2 text-sm font-semibold"
                         onClick={() => {
                           setOpen(false);
                           if (isBot) onConnectBot();
+                          else if (isAssistant) setAssistantDialogOpen(true);
                           else { setDialogOpen(true); setError(''); setNotice(''); }
                         }}>
-                        {enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
+                        {isAssistant ? 'Настроить ассистента' : enabled && !isBot ? 'Управлять подключением' : isBot && enabled ? 'Открыть подключение' : 'Подключить'}
                       </button>
                     </div>
                   )}
@@ -197,6 +203,7 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
           </div>, document.body
         )}
       </div>
+      {assistantDialogOpen && <TelegramAiAssistantSettings onClose={() => setAssistantDialogOpen(false)}/>}
       {dialogOpen && createPortal(
         <div className="telegram-integrations-modal fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={closeModal}>
           <section role="dialog" aria-modal="true" aria-label="Подключить отправку в Telegram"

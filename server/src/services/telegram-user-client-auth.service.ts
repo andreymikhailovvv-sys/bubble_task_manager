@@ -292,9 +292,14 @@ export const telegramUserClientAuth = {
     });
     const encrypted = connection?.encryptedSession ?? null;
     // Disable locally first even if Telegram is unreachable.
-    await prisma.telegramUserClientConnection.updateMany({
-      where: { userId }, data: { pilotEnabled: false, encryptedApiCredentials: null, encryptedSession: null, telegramAccountId: null, connectedAt: null }
-    });
+    await prisma.$transaction([
+      prisma.telegramUserClientConnection.updateMany({
+        where: { userId }, data: { pilotEnabled: false, encryptedApiCredentials: null, encryptedSession: null, telegramAccountId: null, connectedAt: null }
+      }),
+      // Disconnect revokes persistent monitoring consent too; a later
+      // connection must configure chats again instead of silently reusing them.
+      prisma.telegramAiChatPolicy.deleteMany({ where: { userId } })
+    ]);
     if (!encrypted || !connection?.encryptedApiCredentials) return { ok: true, remoteLogout: 'not_needed' as const };
     try {
       const credentials = config(userId, connection.encryptedApiCredentials);
