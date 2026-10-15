@@ -35,6 +35,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-user-client-manual-send.test.ts
       - name: Verify Telegram AI draft isolation and approval-only flow
         run: node --import tsx --test server/test/telegram-user-client-ai-draft.test.ts
+      - name: Verify owner-only Telegram chat read security and safe serialization
+        run: node --import tsx --test server/test/telegram-user-client-read.test.ts
       - name: Verify Telegram identity binding
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Telegram user-client cryptography and access gating
