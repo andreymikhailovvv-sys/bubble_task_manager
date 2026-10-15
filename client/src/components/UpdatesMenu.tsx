@@ -78,7 +78,7 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
                 </div>
                 <div className="updates-news-telegram-feature rounded-xl p-3">
                   <div className="flex items-center gap-2"><Mic size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Попросите ИИ текстом или голосом</h4></div>
-                  <p className="mt-1.5 text-sm leading-relaxed">Например: «Собери главное из нашего обсуждения проекта и отправь Ивану Иванову в Telegram». Напишите запрос в чате с ИИ или продиктуйте его голосом через Telegram-бота. ИИ подготовит сообщение и покажет карточку с текстом и адресатом. Отправка произойдёт только после нажатия «Отправить».</p>
+                  <p className="mt-1.5 text-sm leading-relaxed">Например: «Собери главное из нашего обсуждения проекта и отправь Ивану Иванову в Telegram». Напишите запрос в чате с ИИ или продиктуйте его через голосовой ввод устройства. ИИ подготовит сообщение и покажет карточку с текстом и адресатом. Отправка произойдёт только после нажатия «Отправить».</p>
                 </div>
                 <div className="updates-news-telegram-feature rounded-xl p-3">
                   <div className="flex items-center gap-2"><Settings2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Подключение через «Интеграции»</h4></div>
