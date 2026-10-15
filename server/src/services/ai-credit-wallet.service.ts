@@ -128,6 +128,40 @@ export async function reserveAiCreditsMilli(userId: string, amountMilli: number,
   });
 }
 
+/**
+ * Atomic reservation with a caller-owned side effect (e.g. a per-chat spending
+ * cap and durable call ledger). User wallet row is always locked FIRST.
+ * An exception in work rolls back BOTH the wallet debit and caller's ledger.
+ */
+export async function reserveAiCreditsMilliWithTransaction<T>(
+  userId: string, amountMilli: number,
+  work: (tx: Prisma.TransactionClient, reservation: AiCreditReservation) => Promise<T>,
+  db: WalletDatabase = prisma
+): Promise<{ reservation: AiCreditReservation; result: T }> {
+  if (!Number.isSafeInteger(amountMilli) || amountMilli <= 0) {
+    throw new TypeError('amountMilli must be a positive safe integer');
+  }
+  return db.$transaction(async tx => {
+    const row = await selectWalletForUpdate(tx, userId);
+    if (!row) throw new Error('User not found');
+    if (isGuestAccount(row)) throw new Error('Недостаточно AI кредитов');
+    const period = currentAiCreditsPeriod();
+    const wallet = await refreshLockedWallet(tx, row, period);
+    const debit = calculateDebitBreakdown(wallet, amountMilli);
+    if (!debit) throw new Error('Недостаточно AI кредитов');
+    const id = crypto.randomUUID();
+    const reservation: AiCreditReservation = { id, userId, period, ...debit };
+    await updateWallet(tx, userId, {
+      aiIncludedCreditsMilli: wallet.aiIncludedCreditsMilli - debit.includedMilli,
+      aiBonusCreditsMilli: wallet.aiBonusCreditsMilli - debit.bonusMilli,
+      aiPurchasedCreditsMilli: wallet.aiPurchasedCreditsMilli - debit.purchasedMilli
+    }, period);
+    await tx.aiCreditReservationRecord.create({ data: { id, userId, period, ...debit } });
+    const result = await work(tx, reservation);
+    return { reservation, result };
+  });
+}
+
 export async function reserveAiCreditsMilliUpTo(userId: string, minimumMilli: number, desiredMilli: number, db: WalletDatabase = prisma): Promise<AiCreditReservation> {
   if (!Number.isSafeInteger(minimumMilli) || minimumMilli <= 0 || !Number.isSafeInteger(desiredMilli) || desiredMilli < minimumMilli) {
     throw new TypeError('Invalid AI credit reservation range');

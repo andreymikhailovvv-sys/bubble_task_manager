@@ -106,6 +106,13 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [onClose]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => {});
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const canConfigure = Boolean(capability?.connected && capability?.readEnabled);
   const selected = policies.find(policy => policy.chatId === selectedId);
   const availableSelected = available?.dialogs.find(dialog => dialog.id === selectedId);
@@ -140,6 +147,23 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось получить список чатов');
     } finally { setLoadingChats(false); }
+  };
+
+  const monitorAction = async (action: 'start' | 'stop' | 'summarize') => {
+    if (!selectedId || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      if (action === 'start') await api.telegramAssistantStart(selectedId);
+      else if (action === 'stop') await api.telegramAssistantStop(selectedId);
+      else await api.telegramAssistantSummarize(selectedId);
+      const list = await api.telegramAssistantPolicies();
+      setPolicies(list.policies);
+      setNotice(action === 'start' ? 'Мониторинг включён. Новые сообщения будут проверяться по расписанию.' :
+        action === 'stop' ? 'Мониторинг остановлен.' :
+          'Сводка поставлена в очередь. Результат появится после обработки.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось выполнить действие');
+    } finally { setBusy(false); }
   };
 
   const save = async () => {
@@ -185,8 +209,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
         <div className="integration-menu__instructions mt-4 flex items-start gap-2 rounded-2xl border p-3 text-sm">
           <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
           <div>
-            <strong>Настройки без запуска</strong>
-            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Сейчас вы задаёте правила. Мониторинг, автоответы и автосоздание задач пока выключены и потребуют отдельного включения после следующих обновлений.</p>
+            <strong>Контроль остаётся за вами</strong>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается отдельно для каждого чата. ИИ читает только новые сообщения после включения. Автоответы и автосоздание задач пока отключены.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
@@ -206,7 +230,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   aria-pressed={selectedId === policy.chatId}
                   className={`telegram-ai-profile w-full rounded-xl border p-3 text-left text-sm ${selectedId === policy.chatId ? 'telegram-ai-profile--active' : ''}`}>
                   <span className="block truncate font-semibold">{policy.chatTitle}</span>
-                  <span className="integration-menu__muted mt-1 block text-xs">{kindName(policy.chatKind)} · Не запущено</span>
+                  <span className="integration-menu__muted mt-1 block text-xs">{kindName(policy.chatKind)} · {policy.isEnabled ? 'Мониторинг включён' : 'Остановлен'}</span>
                 </button>
               ))}
               {available && <>
@@ -228,6 +252,52 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <h3 className="font-semibold">{selectedName ?? 'Выбранная переписка'}</h3>
                     <p className="integration-menu__muted mt-1 text-xs">Передвигайте бегунки. Выбранное значение показано справа.</p>
                   </div>
+                  {selected && (
+                    <div className="telegram-ai-monitor-status space-y-2 rounded-2xl border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-semibold">{selected.isEnabled ? '● Мониторинг включён' : '○ Мониторинг остановлен'}</span>
+                        <span className="integration-menu__muted text-xs">Потрачено сегодня: {(selected.spentTodayMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кр.</span>
+                      </div>
+                      <p className="integration-menu__muted text-xs">
+                        {selected.lastCheckedAt ? 'Проверено: ' + new Date(selected.lastCheckedAt).toLocaleString('ru-RU') : 'Проверок ещё не было'}
+                        {' · '}Всего израсходовано: {(selected.totalSpentMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кр.
+                      </p>
+                      {selected.lastError && <p role="status" className="telegram-integrations-modal__warning text-xs">{selected.lastError}</p>}
+                      <div className="flex flex-wrap gap-2">
+                        {selected.isEnabled ? (
+                          <button type="button" disabled={busy} onClick={() => void monitorAction('stop')}
+                            className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">Остановить мониторинг</button>
+                        ) : (
+                          <button type="button" disabled={busy || !canConfigure} onClick={() => void monitorAction('start')}
+                            className="integration-menu__action rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-50">Включить мониторинг</button>
+                        )}
+                        {selected.isEnabled && <button type="button" disabled={busy} onClick={() => void monitorAction('summarize')}
+                          className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs font-semibold">Обновить сводку</button>}
+                        <button type="button" disabled={busy} onClick={() => {
+                          void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => setError('Не удалось обновить данные'));
+                        }} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs">Обновить статус</button>
+                      </div>
+                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При включении ассистент получит постоянное разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. Старые сообщения автоматически не анализируются.</p>}
+                      {selected.lastSummary && (
+                        <details className="telegram-ai-monitor-summary rounded-xl border p-3" open>
+                          <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + new Date(selected.lastSummaryAt).toLocaleString('ru-RU') : ''}</summary>
+                          <p className="mt-3 text-sm leading-relaxed">{selected.lastSummary.summary}</p>
+                          {([
+                            ['Решения', selected.lastSummary.decisions],
+                            ['Обязательства', selected.lastSummary.obligations],
+                            ['Открытые вопросы', selected.lastSummary.openQuestions],
+                            ['Риски', selected.lastSummary.risks],
+                            ['Предложения задач', selected.lastSummary.taskSuggestions]
+                          ] as const).filter(([, items]) => items.length).map(([heading, items]) => (
+                            <div key={heading} className="mt-3">
+                              <p className="text-xs font-semibold">{heading}</p>
+                              <ul className="mt-1 list-inside list-disc space-y-1 text-xs">{items.map((item, idx) => <li key={idx}>{item}</li>)}</ul>
+                            </div>
+                          ))}
+                        </details>
+                      )}
+                    </div>
+                  )}
                   <SettingSlider title="Режим работы" description="Как ассистент реагирует на сообщения"
                     index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
                     shortLabels={['Наблюдение', 'Предлагать', 'Автоответы']}
@@ -244,7 +314,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     index={indexOfValue(DAILY_LIMITS, draft.dailyCreditLimitMilli)} options={CREDIT_NAMES}
                     onChange={i => update('dailyCreditLimitMilli', DAILY_LIMITS[i] ?? null)}/>
                   <p className="integration-menu__muted text-xs leading-relaxed">
-                    «Без ограничения» отменяет только дневной предел для этого чата. Общий баланс кредитов и ограничения безопасности сохраняются. Реальное списание и контроль расходов появятся с мониторингом.
+                    «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
                   </p>
                   {(draft.mode === 'AUTO' || draft.taskMode === 'AUTO') && (
                     <p className="telegram-integrations-modal__warning text-xs">Автоматические действия ещё недоступны. Этот выбор только сохраняет желаемый режим и не разрешает ни отправку сообщений, ни создание задач.</p>
@@ -259,6 +329,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
                   </label>
+                  {selected?.isEnabled && <p className="integration-menu__muted text-xs">Сохранение изменённых настроек остановит мониторинг. Для продолжения включите его снова.</p>}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button type="button" disabled={busy || !canConfigure}
                       onClick={() => void save()}

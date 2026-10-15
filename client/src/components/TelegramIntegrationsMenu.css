@@ -152,10 +152,23 @@ body[data-theme='light'] .telegram-integrations-modal {
   border: 3px solid #0284c7;
   box-shadow: 0 2px 5px rgba(0,0,0,.23);
 }
-.telegram-ai-slider-setting__range:focus-visible {
-  outline: 2px solid var(--integration-accent);
-  outline-offset: 4px;
-  border-radius: 6px;
+/* Keep the thumb operable by mouse and keyboard without a focus frame. */
+.telegram-ai-slider-setting__range:focus,
+.telegram-ai-slider-setting__range:focus-visible,
+.telegram-ai-slider-setting__range:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.telegram-ai-slider-setting__range {
+  -webkit-tap-highlight-color: transparent;
+}
+.telegram-ai-monitor-status,
+.telegram-ai-monitor-summary {
+  border-color: var(--integration-border);
+  background: var(--integration-surface);
+}
+.telegram-ai-monitor-summary {
+  background: var(--integration-bg);
 }
 .telegram-ai-slider-setting__marks {
   display: flex;

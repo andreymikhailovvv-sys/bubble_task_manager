@@ -19,6 +19,7 @@ const HISTORY_LIMIT = 30;
 const MAX_MESSAGE_CHARS = 4096;
 const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
 const historyLimiter = new FixedWindowRateLimiter(15, 5 * 60_000);
+const monitorLimiter = new FixedWindowRateLimiter(40, 5 * 60_000);
 const inFlight = new Set<string>();
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
 
@@ -130,9 +131,9 @@ async function loadPersonalDialogs(client: TelegramClient, accountId: string) {
   };
 }
 
-async function withReadClient<T>(userId: string, kind: 'list' | 'history', work: (client: TelegramClient, owner: ReadOwner) => Promise<T>): Promise<T> {
+async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: (client: TelegramClient, owner: ReadOwner) => Promise<T>): Promise<T> {
   if (inFlight.has(userId)) throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
-  const limiter = kind === 'list' ? listLimiter : historyLimiter;
+  const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
   if (!limiter.consume(userId).allowed) {
     throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
   }
@@ -179,7 +180,7 @@ export const telegramUserClientRead = {
       };
     });
   },
-  async aiHistory(userId: string, dialogId: unknown, count: number) {
+  async aiHistory(userId: string, dialogId: unknown, count: number, monitoring = false) {
     // This entry point is deliberately NOT an LLM tool. Invoke only from
     // the consent-consuming endpoint, after a real browser click.
     if (![10, 20, 30, 50, 100].includes(count)) {
@@ -188,7 +189,7 @@ export const telegramUserClientRead = {
     if (typeof dialogId !== 'string' || dialogId.length > 60) {
       throw new TelegramUserClientError(400, 'Неверный Telegram-чат');
     }
-    return withReadClient(userId, 'history', async (client, owner) => {
+    return withReadClient(userId, monitoring ? 'monitor' : 'history', async (client, owner) => {
       const rows = await client.getDialogs({ limit: MAX_SCANNED_DIALOGS, ignoreMigrated: true });
       const row = rows.find(dialog => telegramSendTargetFromDialog(dialog, owner.accountId)?.id === dialogId);
       if (!row) throw new TelegramUserClientError(404, 'Чат отсутствует в доступных личных и групповых диалогах');
@@ -203,6 +204,7 @@ export const telegramUserClientRead = {
         .map(message => {
           const raw = typeof message.message === 'string' ? message.message : '';
           return {
+            id: message.id,
             date: typeof message.date === 'number' ? message.date : 0,
             speaker: message.out ? 'Вы' : target.kind === 'user' ? target.name : (() => {
               const from = (message as Api.Message & { sender?: unknown; senderId?: unknown }).sender;
