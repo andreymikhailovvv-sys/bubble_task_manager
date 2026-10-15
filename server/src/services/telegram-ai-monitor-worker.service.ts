@@ -198,7 +198,7 @@ async function reconcileStaleCalls() {
 async function reserveForCall(claimed: Claimed, desired: number, dayKey: string) {
   const { policy } = claimed;
   const callId = randomUUID();
-  const { reservation } = await reserveAiCreditsMilliWithTransaction(policy.userId, desired, async (tx, reserved) => {
+  const { reservation } = await reserveAiCreditsMilliWithTransaction(policy.userId, desired, async (tx, walletReservation) => {
       const rows = await tx.$queryRaw<Array<{
         id: string; isEnabled: boolean; monitorRevision: number; leaseToken: string | null;
         creditDayKey: string | null; dailySpentMilli: number; dailyReservedMilli: number; dailyCreditLimitMilli: number | null
@@ -226,7 +226,7 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
       });
       await tx.telegramAiMonitorCall.create({
         data: { id: callId, policyId: policy.id, userId: policy.userId,
-          reservationId: reserved.id, creditDayKey: dayKey, reservedMilli: desired }
+          reservationId: walletReservation.id, creditDayKey: dayKey, reservedMilli: desired }
       });
   });
   return { reservation, callId };
