@@ -39,6 +39,7 @@ import { telegramUserClientDraft } from '../services/telegram-user-client-draft.
 import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
 import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
 import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
+import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -1412,24 +1413,6 @@ apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(a
 // No admin password or userId from the browser. All side effects continue to
 // enforce the existing per-user pilot, MTProto account binding and send limits.
 // Reject cross-site requests to these cookie-authenticated, sensitive routes.
-export function telegramChatRequestIsSameOrigin(
-  origin: string | undefined,
-  host: string | undefined,
-  fetchSite: string | undefined
-): boolean {
-  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false;
-  if (origin) {
-    try {
-      const parsed = new URL(origin);
-      return (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
-        !!host && parsed.host.toLowerCase() === host.toLowerCase() &&
-        !parsed.username && !parsed.password &&
-        parsed.pathname === '/' && !parsed.search && !parsed.hash;
-    } catch { return false; }
-  }
-  return fetchSite === 'same-origin';
-}
-
 const requireTelegramChatOrigin = (req: Request, res: Response, next: NextFunction) => {
   if (!telegramChatRequestIsSameOrigin(
     req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined
