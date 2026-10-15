@@ -161,7 +161,7 @@ export function TelegramChatAssistantPanel({ onClose }: Props) {
   const sendSupported = !!selected?.username && capability?.sendEnabled === true;
 
   return (
-    <div className="fixed inset-0 z-[190] flex justify-end bg-slate-950/65" onClick={onClose}>
+    <div className="fixed inset-0 z-[190] flex justify-end bg-slate-950/65" onClick={(event) => { event.stopPropagation(); onClose(); }}>
       <section role="dialog" aria-modal="true" aria-label="Telegram в чате с ИИ"
         onClick={(e) => e.stopPropagation()}
         className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-violet-300/30 bg-slate-950 text-slate-100 shadow-2xl">
