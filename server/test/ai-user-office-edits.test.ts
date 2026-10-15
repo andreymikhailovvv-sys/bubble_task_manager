@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { buildWordDocumentBuffer } from '../src/services/word-document.service.js';
 import { buildExcelWorkbookBuffer } from '../src/services/excel-workbook.service.js';
-import { readOoxmlArchive } from '../src/services/ooxml-archive.js';
+import { readOoxmlArchive, writeOoxmlArchive } from '../src/services/ooxml-archive.js';
 import { applyOfficeEdits, getOfficeDocumentPreview, type OfficeEdit } from '../src/services/ooxml-document-editor.js';
 import { isDocumentEditRequest, interpretEmptyOfficeEditPlan } from '../src/services/ai-user-document-edit.service.js';
 
@@ -156,4 +156,82 @@ test('Office planner accidentally receiving a plain-text request falls back to r
   const general = interpretEmptyOfficeEditPlan('');
   assert.equal(general.fallbackToText, false);
   assert.match(general.answer, /Не удалось безопасно/);
+});
+
+
+const styledWordFile = (runs: string, secondParagraph = 'Другой абзац не изменять') => {
+  const buffer = buildWordDocumentBuffer({ fileName: 'rich-text.docx', blocks: [
+    { type: 'paragraph', text: 'RUN_PLACEHOLDER' },
+    { type: 'paragraph', text: secondParagraph }
+  ] }).buffer;
+  const archive = readOoxmlArchive(buffer);
+  const word = archive.find(part => part.name === 'word/document.xml')!;
+  const xml = word.data.toString('utf8');
+  const placeholder = '<w:r><w:t xml:space="preserve">RUN_PLACEHOLDER</w:t></w:r>';
+  assert.ok(xml.includes(placeholder));
+  word.data = Buffer.from(xml.replace(placeholder, runs));
+  return writeOoxmlArchive(archive);
+};
+
+test('DOCX заменяет фразу через 4 стильных Word runs, сохраняя форматирование окружающего текста', () => {
+  const source = styledWordFile(
+    '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">До сро</w:t></w:r>' +
+    '<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">к </w:t></w:r>' +
+    '<w:r><w:t>оп</w:t></w:r>' +
+    '<w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t xml:space="preserve">латы после</w:t></w:r>'
+  );
+  const preview = getOfficeDocumentPreview(source, 'docx').text;
+  assert.match(preview, /До срок оплаты после/);
+  const updated = applyOfficeEdits(source, 'docx', [edit('replace_text', 'срок оплаты', 'дата платежа')]);
+  const result = getOfficeDocumentPreview(updated, 'docx').text;
+  assert.match(result, /До дата платежа после/);
+  assert.match(result, /Другой абзац не изменять/);
+  assert.ok(!result.includes('срок оплаты'));
+  const before = readOoxmlArchive(source);
+  const after = readOoxmlArchive(updated);
+  assert.deepEqual(before.map(x=>x.name), after.map(x=>x.name));
+  for(const part of before.filter(x=>x.name!=='word/document.xml')) {
+    assert.ok(part.data.equals(after.find(x=>x.name===part.name)!.data), part.name);
+  }
+  const xml = after.find(x=>x.name==='word/document.xml')!.data.toString('utf8');
+  assert.match(xml, /<w:b\/>/);
+  assert.match(xml, /<w:i\/>/);
+  assert.match(xml, /<w:color w:val="FF0000"\/>/);
+  assert.match(xml, /<w:t xml:space="preserve"> после<\/w:t>/);
+  assert.ok(readOoxmlArchive(source).find(x=>x.name==='word/document.xml')!.data.toString('utf8').includes('сро'), 'source unchanged');
+});
+
+test('DOCX сохраняет спецсимволы и хвост исходного стиля при замене через границы w:t', () => {
+  const source = styledWordFile(
+    '<w:r><w:t>Текст &amp; </w:t></w:r>' +
+    '<w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">по</w:t></w:r>' +
+    '<w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">сле</w:t></w:r>'
+  );
+  const updated = applyOfficeEdits(source, 'docx', [edit('replace_text', '& после', '<новый> & текст')]);
+  assert.match(getOfficeDocumentPreview(updated,'docx').text, /Текст <новый> & текст/);
+  const xml = readOoxmlArchive(updated).find(x=>x.name==='word/document.xml')!.data.toString('utf8');
+  assert.match(xml, /&lt;новый&gt; &amp; текст/);
+  assert.match(xml, /<w:i\/>/);
+});
+
+test('DOCX запрещает неоднозначную замену в пределах одного абзаца', () => {
+  const source = styledWordFile(
+    '<w:r><w:t>Дважды</w:t></w:r><w:r><w:t xml:space="preserve"> и Дважды</w:t></w:r>'
+  );
+  assert.throws(
+    () => applyOfficeEdits(source, 'docx', [edit('replace_text', 'Дважды', 'Один раз')]),
+    /ровно один раз/
+  );
+});
+
+test('DOCX не заменяет видимый текст через поля Word, разрывы и служебные метки', () => {
+  for(const marker of ['<w:br/>', '<w:fldChar w:fldCharType="begin"/>', '<w:bookmarkStart w:id="0" w:name="point"/>']) {
+    const source = styledWordFile(
+      '<w:r><w:t>Первая </w:t></w:r><w:r>' + marker + '</w:r><w:r><w:t>часть</w:t></w:r>'
+    );
+    assert.throws(
+      () => applyOfficeEdits(source, 'docx', [edit('replace_text', 'Первая часть', 'Замена')]),
+      /нетекстовый элемент/
+    );
+  }
 });
