@@ -11,7 +11,7 @@ import { wordDocumentService, type GeneratedDocumentMeta } from './word-document
 import { excelWorkbookService } from './excel-workbook.service.js';
 import { AI_IMAGE_TOOL, generateAiImage } from './ai-image-generation.service.js';
 import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, type FileToolContext } from './ai-file-operations.service.js';
-import { prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
+import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 
 export const MAX_TOOL_CALLS = 5;
 export const MAX_PROVIDER_CALLS = 6;
@@ -120,14 +120,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   AI_IMAGE_TOOL,
   AI_READ_FILE_TOOL,
   AI_EDIT_FILE_TOOL,
-  {
-    type: 'function', name: 'prepare_telegram_send', strict: true,
-    description: 'Подготовить Telegram-сообщение для отправки, но НЕ отправлять. Используй только когда пользователь явно просит отправить/переслать в Telegram конкретному человеку или в «Избранное». Сначала сформируй законченный текст на основе текущего диалога и при необходимости найденных заметок/задач. Затем передай адресата в recipient и готовый текст в text. Сервис проверит имя среди реальных личных диалогов. В ответе появится интерактивный блок с текстом и получателем, где пользователь может изменить получателя и нажать «Отправить». Не говори, что уже отправил. При неоднозначном имени не угадывай. Не вызывай инструмент для простого упоминания Telegram без просьбы отправить.',
-    parameters: { type: 'object', additionalProperties: false, required: ['recipient', 'text'], properties: {
-      recipient: { type: 'string', description: 'Имя/фамилия или @username получателя, как выразился пользователь; либо Избранное' },
-      text: { type: 'string', description: 'Полный готовый текст для отправки, до 4000 символов' }
-    } }
-  },
+  TELEGRAM_PREPARE_SEND_TOOL,
   {
     type: 'function', name: 'create_excel_workbook', strict: true,
     description: 'Создать и прикрепить к ответу настоящий Excel-файл (.xlsx). Используй при запросе электронной таблицы, Excel, XLSX или отчёта файлом. Модель передаёт только содержимое и структуру листов, сервер собирает XLSX. Не более одного файла за запрос.',
