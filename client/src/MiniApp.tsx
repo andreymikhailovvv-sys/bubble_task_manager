@@ -3041,7 +3041,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined }]
+        [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined }]
       }));
       refreshAiCredits();
       if (result.taskDataChanged) await loadData();
@@ -4259,7 +4259,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
-                    <div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={message.content} compact /></div>
+                    {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}
+                  <div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={message.content} compact /></div>
                   </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
@@ -4424,7 +4425,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
-                    <div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={message.content} compact /></div>
+                    {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}
+                  <div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
               {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
