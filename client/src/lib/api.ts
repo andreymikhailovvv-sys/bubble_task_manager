@@ -206,10 +206,26 @@ export type TelegramPrivateMessage = {
   text: string; truncated: boolean; hasMedia: boolean;
 };
 export type TelegramDialogList = { dialogs: TelegramPrivateDialog[]; limited: boolean };
+export type TelegramAnalysisMessage = {
+  id: number; date: number; speaker: 'Вы' | 'Собеседник';
+  text: string; truncated: boolean; hasMedia: boolean;
+};
+export type TelegramAnalysisSnapshot = {
+  fingerprint: string;
+  messageCount: number;
+  messages: TelegramAnalysisMessage[];
+};
 export type TelegramDialogHistory = {
   dialog: { id: string; name: string };
   messages: TelegramPrivateMessage[];
+  analysisSnapshot: TelegramAnalysisSnapshot;
   limit: number;
+};
+export type TelegramDialogAiResult = {
+  summary: string;
+  reply: string;
+  model: string;
+  analyzedMessageCount: number;
 };
 export type TelegramManualSendPreview = {
   confirmationId: string;
@@ -478,6 +494,18 @@ export const api = {
   adminTelegramPrivateDialogs: (payload: { password: string; userId: string }) =>
     request<TelegramDialogList>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/dialogs`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramAnalyzeDialog: (payload: {
+    password: string;
+    userId: string;
+    dialogId: string;
+    fingerprint: string;
+    consent: true;
+    instruction: string;
+    tone: TelegramDraftTone;
+  }) =>
+    request<TelegramDialogAiResult>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/analyze-dialog`,
       { method: 'POST', body: JSON.stringify(payload) }),
   adminTelegramPrivateHistory: (payload: { password: string; userId: string; dialogId: string }) =>
     request<TelegramDialogHistory>(
