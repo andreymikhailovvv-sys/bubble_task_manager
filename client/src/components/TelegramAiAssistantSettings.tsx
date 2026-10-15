@@ -86,6 +86,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   const [loadingChats, setLoadingChats] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [createdSuggestions, setCreatedSuggestions] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let live = true;
@@ -163,6 +164,18 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           'Сводка поставлена в очередь. Результат появится после обработки.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось выполнить действие');
+    } finally { setBusy(false); }
+  };
+
+  const createSuggestedTask = async (title: string, suggestionKey: string) => {
+    if (busy || createdSuggestions[suggestionKey]) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api.createTask({ title: title.trim().slice(0, 220) });
+      setCreatedSuggestions(current => ({ ...current, [suggestionKey]: true }));
+      setNotice('Задача добавлена в Планировыч.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось создать задачу');
     } finally { setBusy(false); }
   };
 
@@ -288,10 +301,24 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                             ['Открытые вопросы', selected.lastSummary.openQuestions],
                             ['Риски', selected.lastSummary.risks],
                             ['Предложения задач', selected.lastSummary.taskSuggestions]
-                          ] as const).filter(([, items]) => items.length).map(([heading, items]) => (
+                          ] as const).filter(([heading, items]) => items.length && (heading !== 'Предложения задач' || selected.taskMode !== 'NONE')).map(([heading, items]) => (
                             <div key={heading} className="mt-3">
                               <p className="text-xs font-semibold">{heading}</p>
-                              <ul className="mt-1 list-inside list-disc space-y-1 text-xs">{items.map((item, idx) => <li key={idx}>{item}</li>)}</ul>
+                              <ul className="mt-1 list-inside list-disc space-y-2 text-xs">
+                                {items.map((item, idx) => {
+                                  const suggestionKey = selected.chatId + ':' + (selected.lastSummaryAt ?? '') + ':' + idx;
+                                  return <li key={idx}>
+                                    {item}
+                                    {heading === 'Предложения задач' && (
+                                      <button type="button" disabled={busy || createdSuggestions[suggestionKey]}
+                                        className="telegram-integrations-modal__secondary ml-2 rounded-md border px-2 py-1 text-xs disabled:opacity-60"
+                                        onClick={() => void createSuggestedTask(item, suggestionKey)}>
+                                        {createdSuggestions[suggestionKey] ? 'Создано' : 'Создать задачу'}
+                                      </button>
+                                    )}
+                                  </li>;
+                                })}
+                              </ul>
                             </div>
                           ))}
                         </details>
