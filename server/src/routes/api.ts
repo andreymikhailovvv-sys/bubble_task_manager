@@ -39,6 +39,7 @@ import { telegramUserClientDraft } from '../services/telegram-user-client-draft.
 import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
 import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
 import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
+import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
 export const apiRouter = Router();
@@ -1426,6 +1427,30 @@ const setTelegramChatNoCache = (res: Response) => {
   res.set('Cache-Control', 'no-store, private');
   res.set('Pragma', 'no-cache');
 };
+// One-click quick sharing from any AI message. User identity is always
+// the signed-in cookie principal. No admin password and no arbitrary userId.
+apiRouter.post('/telegram-user-client/chat/quick-send', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try {
+    const result = await telegramQuickShare.enqueue(req.user!.id, {
+      recipientIds: req.body?.recipientIds, text: req.body?.text,
+      instruction: req.body?.instruction, mode: req.body?.mode, requestId: req.body?.requestId
+    });
+    res.status(202).json(result);
+  } catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.get('/telegram-user-client/chat/quick-send/:jobId', requireAuth, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramQuickShare.status(req.user!.id, req.params.jobId)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/quick-rewrite', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try {
+    res.json(await telegramQuickShare.rewritePreview(req.user!.id, req.body?.text, req.body?.instruction));
+  } catch (error) { telegramAuthError(res, error); }
+});
+
 apiRouter.get('/telegram-user-client/chat/status', requireAuth, async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramUserChatCapability(req.user!.id)); }

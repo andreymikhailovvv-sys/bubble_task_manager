@@ -62,9 +62,9 @@ function assertSendEnabled() {
   }
 }
 
-type ConnectionRecord = { encryptedSession: string; telegramAccountId: string; userId: string };
+export type ConnectionRecord = { encryptedSession: string; telegramAccountId: string; userId: string };
 
-async function connectedOwner(userId: string): Promise<ConnectionRecord> {
+export async function connectedOwner(userId: string): Promise<ConnectionRecord> {
   assertSendEnabled();
   if (!userId || userId.length > 128) throw new TelegramUserClientError(400, 'Некорректный пользователь');
   const user = await prisma.user.findUnique({
@@ -95,7 +95,7 @@ function appCredentials(): { apiId: number; apiHash: string } {
   return { apiId: Number(raw), apiHash };
 }
 
-async function openClient(owner: ConnectionRecord): Promise<TelegramClient> {
+export async function openClient(owner: ConnectionRecord): Promise<TelegramClient> {
   const credentials = appCredentials();
   const plaintext = decryptTelegramUserSession(owner.encryptedSession, owner.userId);
   const client = new TelegramClient(new StringSession(plaintext), credentials.apiId, credentials.apiHash, {

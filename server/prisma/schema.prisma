@@ -116,6 +116,7 @@ model User {
   telegramSessions TelegramSession[]
   telegramUserClientConnection TelegramUserClientConnection?
   telegramUserClientSendAudits TelegramUserClientSendAudit[]
+  telegramQuickSendJobs TelegramQuickSendJob[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -574,6 +575,29 @@ model TelegramUserClientSendAudit {
   createdAt           DateTime @default(now())
   completedAt         DateTime?
 
+  @@index([userId, createdAt])
+}
+
+// Durable quick-share queue, encrypted payload, metadata-only status.
+// A processed recipient is never retried after the outbound MTProto call begins.
+model TelegramQuickSendJob {
+  id                String   @id
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  state             String   @default("QUEUED")
+  stage             String   @default("SEND")
+  encryptedPayload  String?  @db.Text
+  recipientCount    Int
+  recipientIndex    Int      @default(0)
+  sentCount         Int      @default(0)
+  unknownCount      Int      @default(0)
+  failedCount       Int      @default(0)
+  nextRunAt         DateTime @default(now())
+  claimedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([state, nextRunAt])
   @@index([userId, createdAt])
 }
 
