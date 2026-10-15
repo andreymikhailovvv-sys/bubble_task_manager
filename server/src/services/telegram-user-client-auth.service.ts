@@ -21,6 +21,7 @@ type Attempt = {
   id: string;
   userId: string;
   expectedTelegramId: string;
+  credentialCipher: string;
   client: Client;
   controller: AbortController;
   createdAt: number;
@@ -151,7 +152,7 @@ async function runLogin(attempt: Attempt, credentials: {apiId: number; apiHash: 
     // Credential revocation must win against any in-flight QR authorization.
     const saved = await prisma.telegramUserClientConnection.updateMany({
       where: { userId: attempt.userId, pilotEnabled: true, encryptedSession: null,
-        encryptedApiCredentials: { not: null } },
+        encryptedApiCredentials: attempt.credentialCipher },
       data: { encryptedSession, telegramAccountId: telegramId, connectedAt: new Date() }
     });
     if (saved.count !== 1 || attempt.controller.signal.aborted) {
@@ -209,7 +210,8 @@ export const telegramUserClientAuth = {
     let credentials;
     try { credentials = validateTelegramAppCredentials(apiId, apiHash); }
     catch { throw new TelegramUserClientError(400, 'Введите корректные API ID и API Hash из my.telegram.org'); }
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { telegramChatId: true } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { telegramChatId: true, telegramUserClientConnection: { select: { connectedAt: true, encryptedSession: true } } } });
+    if (user?.telegramUserClientConnection?.connectedAt || user?.telegramUserClientConnection?.encryptedSession) throw new TelegramUserClientError(409, 'Сначала отключите текущее подключение в интеграциях');
     if (!user?.telegramChatId) throw new TelegramUserClientError(409, 'Сначала привяжите Telegram-бота Планировыча');
     if (['starting', 'qr', 'password_required', 'verifying_password'].includes(attempts.get(userId)?.status ?? '')) {
       throw new TelegramUserClientError(409, 'Завершите или отмените текущий вход');
@@ -242,7 +244,7 @@ export const telegramUserClientAuth = {
     if (pending.length >= MAX_PENDING_ATTEMPTS) throw new TelegramUserClientError(429, 'Слишком много одновременных подключений');
     const controller = new AbortController();
     const attempt: Attempt = {
-      id: randomUUID(), userId, expectedTelegramId: user.telegramChatId!,
+      id: randomUUID(), userId, expectedTelegramId: user.telegramChatId!, credentialCipher: user.telegramUserClientConnection!.encryptedApiCredentials!,
       controller, client: new TelegramClient(new StringSession(''), credentials.apiId, credentials.apiHash, {
         connectionRetries: 2,
         ...telegramUserClientNetworkOptions()
