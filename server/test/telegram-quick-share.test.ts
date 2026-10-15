@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib/telegram-quick-share-crypto.js';
-import { validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
+import { TELEGRAM_SAVED_MESSAGES_ID, validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
 import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateQuickInstruction } from '../src/services/telegram-quick-share-ai.service.js';
 
 test('quick send allows 1 to 3 unique personal Telegram dialog IDs, no groups, no broadcast', () => {
@@ -11,6 +11,21 @@ test('quick send allows 1 to 3 unique personal Telegram dialog IDs, no groups, n
     assert.throws(() => validateQuickRecipients(value));
   }
 });
+test('Saved Messages is an explicit single virtual target allowed in up to 3 quick-share recipients', () => {
+  assert.equal(TELEGRAM_SAVED_MESSAGES_ID, 'saved');
+  assert.deepEqual(validateQuickRecipients(['saved']), ['saved']);
+  assert.deepEqual(validateQuickRecipients(['saved', '123', '456']), ['saved', '123', '456']);
+  assert.throws(() => validateQuickRecipients(['saved', 'saved']), /разных личных получателей/);
+  assert.throws(() => validateQuickRecipients(['saved', '1', '2', '3']), /трёх получателей/);
+  assert.throws(() => validateQuickRecipients(['Saved']), /разных личных получателей/);
+  assert.throws(() => validateQuickRecipients(['-10055']), /разных личных получателей/);
+  const requestId = randomUUID();
+  const request = validateQuickSendInput({
+    requestId, recipientIds: ['saved'], text: 'Тестовое сообщение в Избранное', mode: 'DIRECT'
+  });
+  assert.equal(request.recipientIds[0], 'saved');
+});
+
 test('direct send requires a unique request id, bounded text, strictly selected recipients', () => {
   const requestId = randomUUID();
   const valid = validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'Привет', mode: 'DIRECT' });

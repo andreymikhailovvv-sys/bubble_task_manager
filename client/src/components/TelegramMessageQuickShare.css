@@ -1,0 +1,202 @@
+/* Quick Telegram share dialog. Mounted in document.body via portal, so theme
+   follows body[data-theme] both on the website and inside Telegram Mini App. */
+.telegram-quick-share {
+  --tqs-panel: #111b2e;
+  --tqs-inner: #0b1425;
+  --tqs-field: #142137;
+  --tqs-border: #34455f;
+  --tqs-text: #f1f5f9;
+  --tqs-muted: #a7b5c9;
+  --tqs-hover: #23334e;
+  --tqs-selected: #13334e;
+  --tqs-accent: #7dd3fc;
+  --tqs-highlight-border: #0ea5e9;
+  --tqs-tooltip: #25364e;
+  --tqs-error: #ffe4e6;
+  --tqs-error-bg: #511c2c;
+  --tqs-error-border: #e11d48;
+  color: var(--tqs-text);
+}
+body[data-theme='light'] .telegram-quick-share {
+  --tqs-panel: #ffffff;
+  --tqs-inner: #f1f5fa;
+  --tqs-field: #f8fafc;
+  --tqs-border: #ced9e7;
+  --tqs-text: #17253d;
+  --tqs-muted: #526379;
+  --tqs-hover: #ebf5ff;
+  --tqs-selected: #e0f2fe;
+  --tqs-accent: #0369a1;
+  --tqs-highlight-border: #0284c7;
+  --tqs-tooltip: #243b58;
+  --tqs-error: #9f1239;
+  --tqs-error-bg: #fff1f2;
+  --tqs-error-border: #fda4af;
+}
+.telegram-quick-share__dialog,
+.telegram-quick-share__toast {
+  color: var(--tqs-text) !important;
+  background: var(--tqs-panel) !important;
+  border-color: var(--tqs-border) !important;
+}
+.telegram-quick-share__header {
+  border-color: var(--tqs-border);
+}
+.telegram-quick-share__close,
+.telegram-quick-share__back {
+  color: var(--tqs-muted);
+}
+.telegram-quick-share__close:hover,
+.telegram-quick-share__back:hover {
+  color: var(--tqs-text);
+  background: var(--tqs-hover);
+}
+.telegram-quick-share__back {
+  border-color: var(--tqs-border);
+  background: var(--tqs-inner);
+}
+.telegram-quick-share__message {
+  background: var(--tqs-inner) !important;
+  color: var(--tqs-text) !important;
+  border: 1px solid var(--tqs-border);
+  scrollbar-gutter: stable;
+}
+.telegram-quick-share__muted,
+.telegram-quick-share .text-slate-300,
+.telegram-quick-share .text-slate-400 {
+  color: var(--tqs-muted) !important;
+}
+.telegram-quick-share__subtitle {
+  color: var(--tqs-accent) !important;
+}
+.telegram-quick-share__search {
+  background: var(--tqs-field) !important;
+  border-color: var(--tqs-border) !important;
+  transition: none;
+}
+.telegram-quick-share__search svg {
+  color: var(--tqs-muted) !important;
+}
+body[data-theme] .telegram-quick-share__search .telegram-quick-share__search-input,
+body[data-theme] .telegram-quick-share__search .telegram-quick-share__search-input:focus {
+  width: 100%;
+  background: transparent !important;
+  color: var(--tqs-text) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.telegram-quick-share__search:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--tqs-border) !important;
+}
+.telegram-quick-share__search-input::placeholder {
+  color: var(--tqs-muted) !important;
+  opacity: 1;
+}
+.telegram-quick-share__recipient {
+  background: var(--tqs-field) !important;
+  color: var(--tqs-text) !important;
+  border-color: var(--tqs-border) !important;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.telegram-quick-share__recipient:hover:not(:disabled) {
+  background: var(--tqs-hover) !important;
+}
+.telegram-quick-share__recipient[aria-pressed='true'] {
+  background: var(--tqs-selected) !important;
+  border-color: var(--tqs-highlight-border) !important;
+}
+.telegram-quick-share__check {
+  border-color: var(--tqs-border);
+  background: var(--tqs-inner);
+}
+.telegram-quick-share__check--selected {
+  color: #ffffff;
+  background: #0284c7;
+  border-color: #0284c7;
+}
+.telegram-quick-share__recipients {
+  scrollbar-gutter: stable;
+}
+.telegram-quick-share__saved {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .13);
+}
+body[data-theme] .telegram-quick-share__textarea,
+body[data-theme] .telegram-quick-share__textarea:focus {
+  background: var(--tqs-field) !important;
+  color: var(--tqs-text) !important;
+  border-color: var(--tqs-border) !important;
+  outline: none;
+}
+body[data-theme] .telegram-quick-share__textarea:focus {
+  border-color: var(--tqs-highlight-border) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--tqs-highlight-border) 17%, transparent);
+}
+.telegram-quick-share__primary {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+}
+.telegram-quick-share__primary:hover:not(:disabled) {
+  background: #0369a1 !important;
+}
+.telegram-quick-share__secondary {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+}
+.telegram-quick-share__secondary:hover:not(:disabled) {
+  background: #6d28d9 !important;
+}
+.telegram-quick-share__tooltip {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  width: min(234px, 65vw);
+  padding: 9px 11px;
+  background: var(--tqs-tooltip);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 9px 28px rgba(2, 6, 23, .22);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(5px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+  z-index: 5;
+}
+.telegram-quick-share__tooltip--start { left: 0; }
+.telegram-quick-share__tooltip--end { right: 0; }
+.telegram-quick-share__tooltip-anchor:hover .telegram-quick-share__tooltip,
+.telegram-quick-share__tooltip-anchor:focus-within .telegram-quick-share__tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.telegram-quick-share__error {
+  background: var(--tqs-error-bg);
+  border-color: var(--tqs-error-border);
+  color: var(--tqs-error);
+}
+.telegram-quick-share__dialog button.bg-sky-600,
+.telegram-quick-share__dialog button.bg-violet-600 {
+  color: #ffffff !important;
+}
+@media (max-width: 375px) {
+  .telegram-quick-share__tooltip {
+    max-width: 50vw;
+    font-size: 11px;
+  }
+  .telegram-quick-share__tooltip-anchor button {
+    font-size: 12px;
+    padding-inline: 8px;
+  }
+}

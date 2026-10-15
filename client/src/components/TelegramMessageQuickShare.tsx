@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import './TelegramMessageQuickShare.css';
 import { Check, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
 import { api, type TelegramPrivateDialog, type TelegramQuickSendJob } from '../lib/api';
 
+const SAVED_MESSAGES_ID = 'saved';
 type Mode = 'recipients' | 'edit' | 'preview';
 type Props = { text: string; compact?: boolean };
 
@@ -11,6 +13,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
   const [mode, setMode] = useState<Mode>('recipients');
   const [busy, setBusy] = useState(false);
   const [dialogs, setDialogs] = useState<TelegramPrivateDialog[]>([]);
+  const [dialogsLoaded, setDialogsLoaded] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -64,6 +67,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
     setModifiedText('');
     setBaseText(text);
     setDialogs([]);
+    setDialogsLoaded(false);
     setBusy(true);
     try {
       const capability = await api.telegramChatCapability();
@@ -77,7 +81,10 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
         return;
       }
       const result = await api.telegramChatDialogs();
-      if (alive.current) setDialogs(result.dialogs);
+      if (alive.current) {
+        setDialogs(result.dialogs);
+        setDialogsLoaded(true);
+      }
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось получить список чатов Telegram');
     } finally {
@@ -94,7 +101,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
   };
 
   const close = () => { if (!busy) setOpen(false); };
-  const selectedNames = dialogs.filter((dialog) => chosen.includes(dialog.id)).map((dialog) => dialog.name);
+  const selectedNames = chosen.map((id) => id === SAVED_MESSAGES_ID ? 'Избранное' : (dialogs.find((dialog) => dialog.id === id)?.name ?? 'Получатель'));
   const filter = search.trim().toLocaleLowerCase('ru-RU');
   const visible = dialogs.filter((dialog) => !filter ||
     dialog.name.toLocaleLowerCase('ru-RU').includes(filter) ||
@@ -142,46 +149,58 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
   };
 
   const modal = open ? (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm"
+    <div className="telegram-quick-share fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm"
       onClick={(e) => { e.stopPropagation(); close(); }}>
       <section role="dialog" aria-modal="true" aria-label="Отправить сообщение в Telegram"
-        className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 text-slate-100 shadow-2xl"
+        className="telegram-quick-share__dialog flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={(e) => e.stopPropagation()}>
-        <header className="flex shrink-0 items-center justify-between border-b border-slate-700 px-4 py-3">
+        <header className="telegram-quick-share__header flex shrink-0 items-center justify-between border-b px-4 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageCircle size={18} className="text-sky-400" /> Отправить в Telegram</h3>
           <button type="button" aria-label="Закрыть" disabled={busy}
-            onClick={close} className="rounded-xl p-2 text-slate-300 hover:bg-slate-700 disabled:opacity-40"><X size={17} /></button>
+            onClick={close} className="telegram-quick-share__close rounded-xl p-2 disabled:opacity-40"><X size={17} /></button>
         </header>
         <div className="min-h-0 space-y-4 overflow-y-auto p-4">
           {mode === 'recipients' ? (
             <>
-              <p className="line-clamp-4 whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-300">
+              <p tabIndex={0} aria-label="Исходное сообщение" className="telegram-quick-share__message max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-xs">
                 {text}
               </p>
-              {dialogs.length > 0 ? (
+              {dialogsLoaded ? (
                 <>
-                  <label className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3">
+                  <label className="telegram-quick-share__search flex items-center gap-2 rounded-xl border px-3">
                     <Search size={16} className="text-slate-400" />
                     <input value={search} onChange={(e) => setSearch(e.target.value)}
                       placeholder="Поиск человека" aria-label="Поиск получателя Telegram"
-                      className="w-full bg-transparent py-3 text-sm outline-none" />
+                      className="telegram-quick-share__search-input min-w-0 w-full bg-transparent py-3 text-sm outline-none" />
                   </label>
-                  <p className="text-xs text-slate-400">Выберите до трёх получателей · {chosen.length}/3</p>
-                  <div className="max-h-60 space-y-1 overflow-y-auto">
+                  <p className="telegram-quick-share__muted text-xs">Выберите до трёх получателей · {chosen.length}/3</p>
+                  <div className="telegram-quick-share__recipients max-h-60 space-y-1 overflow-y-auto">
+                    <button type="button" disabled={busy || (chosen.length === 3 && !chosen.includes(SAVED_MESSAGES_ID))}
+                      aria-pressed={chosen.includes(SAVED_MESSAGES_ID)}
+                      onClick={() => toggle(SAVED_MESSAGES_ID)}
+                      className="telegram-quick-share__recipient telegram-quick-share__saved flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-40">
+                      <span className={`telegram-quick-share__check flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${chosen.includes(SAVED_MESSAGES_ID) ? 'telegram-quick-share__check--selected' : ''}`}>
+                        {chosen.includes(SAVED_MESSAGES_ID) ? <Check size={13} /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1 font-semibold">Избранное
+                        <span className="telegram-quick-share__muted block text-[11px]">Сохранённые сообщения Telegram</span>
+                      </span>
+                    </button>
                     {visible.map((dialog) => (
                       <button type="button" key={dialog.id}
                         disabled={busy || (chosen.length === 3 && !chosen.includes(dialog.id))}
                         onClick={() => toggle(dialog.id)}
-                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-40 ${chosen.includes(dialog.id) ? 'border-sky-500/70 bg-sky-950/40' : 'border-slate-700 bg-slate-950 hover:bg-slate-800'}`}>
-                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${chosen.includes(dialog.id) ? 'border-sky-400 bg-sky-500 text-white' : 'border-slate-600'}`}>
+                        aria-pressed={chosen.includes(dialog.id)}
+                        className="telegram-quick-share__recipient flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm disabled:opacity-40">
+                        <span className={`telegram-quick-share__check flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${chosen.includes(dialog.id) ? 'telegram-quick-share__check--selected' : ''}`}>
                           {chosen.includes(dialog.id) ? <Check size={13} /> : null}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-medium">{dialog.name}
-                          {dialog.username ? <span className="block truncate text-[11px] text-slate-400">{dialog.username}</span> : null}
+                          {dialog.username ? <span className="telegram-quick-share__muted block truncate text-[11px]">{dialog.username}</span> : null}
                         </span>
                       </button>
                     ))}
-                    {visible.length === 0 && <p className="p-3 text-sm text-slate-400">Ничего не найдено.</p>}
+                    {visible.length === 0 && <p className="telegram-quick-share__muted p-3 text-sm">Других чатов не найдено.</p>}
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button type="button" disabled={busy || chosen.length === 0}
@@ -193,38 +212,54 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
                   </div>
                 </>
               ) : null}
-              {!busy && !error && dialogs.length === 0 && <p className="text-sm text-slate-400">Доступных личных чатов пока нет.</p>}
+              {!busy && !error && !dialogsLoaded && <p className="telegram-quick-share__muted text-sm">Не удалось загрузить список чатов.</p>}
             </>
           ) : mode === 'edit' ? (
             <>
-              <p className="text-xs text-slate-400">Получатели: {selectedNames.join(', ')}</p>
-              <p className="line-clamp-4 whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs text-slate-300">{baseText}</p>
+              <p className="telegram-quick-share__muted text-xs">Получатели: {selectedNames.join(', ')}</p>
+              <label className="block text-sm font-medium">
+                Текст сообщения
+                <textarea value={baseText} maxLength={4000} rows={5}
+                  onChange={(e) => setBaseText(e.target.value)}
+                  aria-label="Редактировать текст сообщения"
+                  className="telegram-quick-share__textarea mt-2 block max-h-40 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm" />
+              </label>
               <label className="block text-sm font-medium">
                 Что нужно изменить в сообщении?
                 <textarea value={instruction} maxLength={700} rows={4}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="Например: сделай формальнее и короче"
-                  className="mt-2 w-full resize-y rounded-xl border border-slate-600 bg-slate-950 p-3 text-sm text-white outline-none focus:border-violet-400" />
+                  className="telegram-quick-share__textarea mt-2 block w-full resize-y rounded-xl border p-3 text-sm" />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy || !instruction.trim()} onClick={() => void submit(baseText, 'REWRITE_AND_SEND', instruction)}
-                  className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
-                  Отправить пользователю
-                </button>
-                <button type="button" disabled={busy || !instruction.trim()} onClick={() => void acceptRewrite()}
-                  className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
-                  {busy ? 'Обрабатываем…' : 'Принять'}
-                </button>
+                <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
+                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()}
+                    onClick={() => void submit(baseText, 'REWRITE_AND_SEND', instruction)}
+                    className="telegram-quick-share__primary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
+                    Изменить и отправить
+                  </button>
+                  <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--start">
+                    ИИ изменит текст по запросу и сразу отправит выбранным получателям.
+                  </span>
+                </div>
+                <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
+                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()} onClick={() => void acceptRewrite()}
+                    className="telegram-quick-share__secondary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
+                    {busy ? 'Обрабатываем…' : 'Изменить'}
+                  </button>
+                  <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--end">
+                    ИИ изменит текст и покажет результат перед отправкой.
+                  </span>
+                </div>
               </div>
-              <p className="text-xs text-slate-400">«Отправить пользователю» запускает обработку и отправку в фоне. «Принять» сначала покажет результат ИИ.</p>
-              <button type="button" disabled={busy} onClick={() => setMode('recipients')}
-                className="text-xs text-slate-300 underline">Назад к получателям</button>
+              <button type="button" disabled={busy} onClick={() => { setMode('recipients'); setError(''); }}
+                className="telegram-quick-share__back inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-40">Назад</button>
             </>
           ) : (
             <>
-              <p className="flex items-center gap-2 text-sm font-semibold text-violet-200"><Sparkles size={16} /> Изменённое сообщение</p>
-              <p className="text-xs text-slate-400">Получатели: {selectedNames.join(', ')}</p>
-              <div className="max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-sm">{modifiedText}</div>
+              <p className="telegram-quick-share__subtitle flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} /> Изменённое сообщение</p>
+              <p className="telegram-quick-share__muted text-xs">Получатели: {selectedNames.join(', ')}</p>
+              <div className="telegram-quick-share__message max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-sm">{modifiedText}</div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" disabled={busy} onClick={() => void submit(modifiedText, 'DIRECT')}
                   className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">Отправить пользователю</button>
@@ -233,8 +268,8 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
               </div>
             </>
           )}
-          {busy && <p role="status" className="flex items-center gap-2 text-xs text-sky-300"><Loader2 className="animate-spin" size={15} /> Выполняем запрос…</p>}
-          {error && <p role="alert" className="rounded-xl border border-rose-500/50 bg-rose-950/30 p-3 text-xs text-rose-200">{error}</p>}
+          {busy && <p role="status" className="telegram-quick-share__subtitle flex items-center gap-2 text-xs"><Loader2 className="animate-spin" size={15} /> {mode === 'recipients' && !dialogsLoaded ? 'Загружаем чаты' : mode === 'preview' ? 'Отправляем сообщение…' : mode === 'edit' ? 'Изменяем сообщение…' : 'Отправляем сообщение…'}</p>}
+          {error && <p role="alert" className="telegram-quick-share__error rounded-xl border p-3 text-xs">{error}</p>}
         </div>
       </section>
     </div>
@@ -251,7 +286,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
       </button>
       {modal ? createPortal(modal, document.body) : null}
       {toast && !open ? createPortal(
-        <div role="status" className="fixed bottom-5 right-4 z-[310] max-w-sm rounded-2xl border border-sky-500/40 bg-slate-900 px-4 py-3 text-sm text-white shadow-2xl">
+        <div role="status" className="telegram-quick-share telegram-quick-share__toast fixed bottom-5 right-4 z-[310] max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl">
           <div className="flex items-start gap-2">
             <MessageCircle className="mt-0.5 shrink-0 text-sky-400" size={17} />
             <span className="flex-1">{toast}</span>
