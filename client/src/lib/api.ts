@@ -222,6 +222,8 @@ export type TelegramChatCapability = {
   sendEnabled: boolean;
 };
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
+export type TelegramSendTarget = { id: string; name: string; username: string | null; kind: 'user' | 'group' | 'supergroup' };
+export type TelegramSendTargetList = { dialogs: TelegramSendTarget[]; limited: boolean };
 export type TelegramPrivateMessage = {
   id: number; date: number; out: boolean; senderName: string;
   text: string; truncated: boolean; hasMedia: boolean;
@@ -530,6 +532,10 @@ export const api = {
     }),
   telegramChatCapability: () =>
     request<TelegramChatCapability>('/api/telegram-user-client/chat/status'),
+  telegramChatSendTargets: () =>
+    request<TelegramSendTargetList>('/api/telegram-user-client/chat/send-targets', {
+      method: 'POST', body: '{}'
+    }),
   telegramChatDialogs: () =>
     request<TelegramDialogList>('/api/telegram-user-client/chat/dialogs', {
       method: 'POST', body: '{}'
