@@ -29,5 +29,6 @@ test('all auth responses mask legacy guest balances and disclose guest status', 
   assert.match(src, /isGuest: isGuestAccount\(user\)/);
   const wallet = await readFile(new URL('../src/services/ai-credit-wallet.service.ts', import.meta.url), 'utf8');
   assert.match(wallet, /if \(isGuestAccount\(row\)\) return row/);
-  assert.equal((wallet.match(/if \(isGuestAccount\(row\)\) throw new Error\('Недостаточно AI кредитов'\)/g) ?? []).length, 2);
+  // Standard, atomic-with-ledger and up-to reservations must all reject guest wallets.
+  assert.equal((wallet.match(/if \(isGuestAccount\(row\)\) throw new Error\('Недостаточно AI кредитов'\)/g) ?? []).length, 3);
 });
