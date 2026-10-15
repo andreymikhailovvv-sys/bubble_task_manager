@@ -217,15 +217,12 @@ export type TelegramQuickSendJob = {
 };
 export type TelegramAiChatSettings = {
   mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
-  analysisLevel: 'IMPORTANT' | 'STANDARD' | 'DETAILED';
-  checkIntervalMinutes: number;
-  maxMessagesPerCheck: number;
-  summaryFrequency: 'OFF' | 'DAILY' | 'WEEKLY';
+  taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
+  checkIntervalMinutes: 5 | 30 | 180;
   instructions: string;
   notifyImportant: boolean;
-  suggestTasks: boolean;
-  dailyCreditLimitMilli: number;
-  monthlyCreditLimitMilli: number;
+  /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
+  dailyCreditLimitMilli: number | null;
 };
 export type TelegramAiChatPolicy = TelegramAiChatSettings & {
   id: string;

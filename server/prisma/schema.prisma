@@ -633,15 +633,12 @@ model TelegramAiChatPolicy {
   chatKind                String
   chatTitle               String
   mode                    String   @default("OBSERVE")
-  analysisLevel           String   @default("IMPORTANT")
-  checkIntervalMinutes    Int      @default(15)
-  maxMessagesPerCheck     Int      @default(20)
-  summaryFrequency        String   @default("DAILY")
+  taskMode                String   @default("SUGGEST")
+  checkIntervalMinutes    Int      @default(30)
   instructions            String   @default("") @db.Text
   notifyImportant         Boolean  @default(true)
-  suggestTasks            Boolean  @default(true)
-  dailyCreditLimitMilli   Int      @default(2000)
-  monthlyCreditLimitMilli Int      @default(20000)
+  // NULL means no per-chat DAILY cap. Global wallet balance always applies.
+  dailyCreditLimitMilli   Int?     @default(50000)
   isEnabled               Boolean  @default(false)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
