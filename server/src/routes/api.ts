@@ -38,6 +38,7 @@ import { telegramUserClientSend } from '../services/telegram-user-client-send.se
 import { telegramUserClientDraft } from '../services/telegram-user-client-draft.service.js';
 import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
 import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
+import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
 
 export const apiRouter = Router();
 apiRouter.use('/payments/yookassa', yookassaPaymentsRouter);
@@ -1406,6 +1407,79 @@ apiRouter.get('/task-attachments/download', taskAttachmentController.downloadWit
 apiRouter.post('/tasks/:id/attachments', requireAuth, taskAttachmentController.create);
 apiRouter.delete('/tasks/:id/attachments/:attachmentId', requireAuth, taskAttachmentController.remove);
 apiRouter.get('/dashboard/insights', requireAuth, async (req, res) => res.json(await insightService.list(req.user!.id)));
+
+// PR7: the normal AI chat is available to a signed-in Telegram account owner.
+// No admin password or userId from the browser. All side effects continue to
+// enforce the existing per-user pilot, MTProto account binding and send limits.
+// Reject cross-site requests to these cookie-authenticated, sensitive routes.
+export function telegramChatRequestIsSameOrigin(
+  origin: string | undefined,
+  host: string | undefined,
+  fetchSite: string | undefined
+): boolean {
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') return false;
+  if (origin) {
+    try {
+      const parsed = new URL(origin);
+      return (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+        !!host && parsed.host.toLowerCase() === host.toLowerCase() &&
+        !parsed.username && !parsed.password &&
+        parsed.pathname === '/' && !parsed.search && !parsed.hash;
+    } catch { return false; }
+  }
+  return fetchSite === 'same-origin';
+}
+
+const requireTelegramChatOrigin = (req: Request, res: Response, next: NextFunction) => {
+  if (!telegramChatRequestIsSameOrigin(
+    req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined
+  )) {
+    res.status(403).json({ error: 'Запрос Telegram разрешён только из самого Планировыча' });
+    return;
+  }
+  next();
+};
+const setTelegramChatNoCache = (res: Response) => {
+  res.set('Cache-Control', 'no-store, private');
+  res.set('Pragma', 'no-cache');
+};
+apiRouter.get('/telegram-user-client/chat/status', requireAuth, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserChatCapability(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/dialogs', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientRead.list(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/history', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientRead.history(req.user!.id, req.body?.dialogId)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/analyze', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try {
+    res.json(await telegramUserClientDialogAssistant.analyze(req.user!.id, {
+      dialogId: req.body?.dialogId, fingerprint: req.body?.fingerprint,
+      consent: req.body?.consent, instruction: req.body?.instruction, tone: req.body?.tone
+    }));
+  } catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/send-preview', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try {
+    res.json(await telegramUserClientSend.preview(
+      req.user!.id, req.body?.recipientKind, req.body?.username, req.body?.text
+    ));
+  } catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/chat/send-confirm', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientSend.confirm(req.user!.id, req.body?.confirmationId)); }
+  catch (error) { telegramAuthError(res, error); }
+});
 
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({
