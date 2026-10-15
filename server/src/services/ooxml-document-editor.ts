@@ -39,15 +39,54 @@ function replaceWordParagraph(xml: string, edit: OfficeEdit) {
   if(matches.length!==1)throw new TypeError('Фрагмент Word должен встречаться ровно в одном абзаце: '+edit.target.slice(0,60));
   const original=matches[0][0];
   if(edit.kind==='delete_paragraph')return xml.replace(original,'');
-  // Keep paragraph, runs and styles untouched except one text node containing
-  // the exact snippet. Multi-run replacements would corrupt mixed formatting.
-  const nodes=[...original.matchAll(/<w:t(\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];
-  const compatible=nodes.filter(m=>unesc(m[2]).includes(edit.target));
-  if(compatible.length!==1)throw new TypeError('Word: текст разбит на несколько фрагментов оформления; автоматическое изменение небезопасно.');
-  const m=compatible[0];
-  const replacement=unesc(m[2]).replace(edit.target,edit.value);
-  const newNode='<w:t xml:space="preserve">'+esc(replacement)+'</w:t>';
-  return xml.replace(original,original.replace(m[0],newNode));
+  const nodes=[...original.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)];
+  const texts=nodes.map(node=>unesc(node[1]));
+  const paragraphText=texts.join('');
+  const start=paragraphText.indexOf(edit.target);
+  if(start<0 || paragraphText.indexOf(edit.target,start+1)!==-1)
+    throw new TypeError('Точный фрагмент Word должен встречаться ровно один раз в абзаце.');
+  const end=start+edit.target.length;
+
+  let offset=0;
+  const affected: Array<{ nodeIndex: number; start: number; end: number }>=[];
+  for(let index=0;index<nodes.length;index++){
+    const from=offset;
+    const to=from+texts[index].length;
+    if(from<end && to>start)affected.push({nodeIndex:index,start:from,end:to});
+    offset=to;
+  }
+  if(!affected.length)throw new TypeError('Не удалось найти текстовые элементы Word.');
+  // A visible phrase may cross style runs, but must not cross a field, image,
+  // hyperlink boundary, tracked change, bookmark or other non-text marker.
+  // Keeping those structures in place while changing the text could silently
+  // change the meaning of the document, so refuse instead.
+  if(affected.length>1){
+    const first=nodes[affected[0].nodeIndex];
+    const last=nodes[affected[affected.length-1].nodeIndex];
+    const between=original.slice((first.index??0)+first[0].length,last.index??0);
+    if(/<w:(?:fldChar|instrText|tab|br|cr|drawing|pict|object|delText|sym|footnoteReference|endnoteReference|bookmarkStart|bookmarkEnd|commentReference|lastRenderedPageBreak)\b|<\/?w:(?:hyperlink|ins|del|sdt|fldSimple)\b/i.test(between))
+      throw new TypeError('Фрагмент Word пересекает поле или другой нетекстовый элемент; точечная правка небезопасна.');
+  }
+
+  // A DOCX paragraph is often a sequence of <w:r> style runs and its visible
+  // text does not exist as one <w:t>. Keep ALL run and paragraph markup. Place
+  // replacement text into the first affected run (its style wins), clear only
+  // the replaced portions of intermediate runs, retain untouched trailing text
+  // in its original run and with its original formatting.
+  let result=original;
+  for(let i=affected.length-1;i>=0;i--){
+    const part=affected[i];
+    const node=nodes[part.nodeIndex];
+    const text=texts[part.nodeIndex];
+    const prefix=text.slice(0,Math.max(0,start-part.start));
+    const suffix=text.slice(Math.max(0,end-part.start));
+    const nextText=(i===0 ? prefix+edit.value : '')+suffix;
+    const updated='<w:t xml:space="preserve">'+esc(nextText)+'</w:t>';
+    const index=node.index??-1;
+    if(index<0)throw new TypeError('Некорректная структура текста Word.');
+    result=result.slice(0,index)+updated+result.slice(index+node[0].length);
+  }
+  return xml.replace(original,result);
 }
 
 function editWord(files: OoxmlEntry[], edits: OfficeEdit[]) {
