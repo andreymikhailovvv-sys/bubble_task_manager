@@ -10,35 +10,29 @@ import { TelegramUserClientError } from './telegram-user-client-auth.service.js'
 const MAX_CHATS = 25;
 const saveLimiter = new FixedWindowRateLimiter(20, 60_000);
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
-const LEVELS = ['IMPORTANT', 'STANDARD', 'DETAILED'] as const;
-const FREQUENCIES = ['OFF', 'DAILY', 'WEEKLY'] as const;
-const INTERVALS = [5, 15, 30, 60] as const;
-const MESSAGE_LIMITS = [10, 20, 30, 50, 100] as const;
+const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
+const INTERVALS = [5, 30, 180] as const;
+// Exact values exposed by the fixed-step budget slider. NULL = no daily cap.
+export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
+  50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null
+] as const;
 
 export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
-  analysisLevel: typeof LEVELS[number];
-  checkIntervalMinutes: number;
-  maxMessagesPerCheck: number;
-  summaryFrequency: typeof FREQUENCIES[number];
+  taskMode: typeof TASK_MODES[number];
+  checkIntervalMinutes: typeof INTERVALS[number];
   instructions: string;
   notifyImportant: boolean;
-  suggestTasks: boolean;
-  dailyCreditLimitMilli: number;
-  monthlyCreditLimitMilli: number;
+  dailyCreditLimitMilli: number | null;
 };
 
 export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
-  analysisLevel: 'IMPORTANT',
-  checkIntervalMinutes: 15,
-  maxMessagesPerCheck: 20,
-  summaryFrequency: 'DAILY',
+  taskMode: 'SUGGEST',
+  checkIntervalMinutes: 30,
   instructions: '',
   notifyImportant: true,
-  suggestTasks: true,
-  dailyCreditLimitMilli: 2000,
-  monthlyCreditLimitMilli: 20000
+  dailyCreditLimitMilli: 50_000
 };
 
 const oneOf = <T extends string | number>(value: unknown, choices: readonly T[], field: string): T => {
@@ -47,12 +41,6 @@ const oneOf = <T extends string | number>(value: unknown, choices: readonly T[],
   }
   return value as T;
 };
-const boundedCredits = (value: unknown, max: number, field: string): number => {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > max || value % 1000 !== 0) {
-    throw new TelegramUserClientError(400, 'Некорректный лимит кредитов: ' + field);
-  }
-  return value;
-};
 
 /** Strict full payload: no hidden flags and no client-supplied identity or activation. */
 export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChatSettings {
@@ -60,30 +48,23 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     throw new TelegramUserClientError(400, 'Укажите настройки Telegram-ассистента');
   }
   const p = payload as Record<string, unknown>;
-  const instructions = p.instructions;
-  if (typeof instructions !== 'string' || instructions.length > 3000 ||
-      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(instructions)) {
+  if (typeof p.instructions !== 'string' || p.instructions.length > 3000 ||
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(p.instructions)) {
     throw new TelegramUserClientError(400, 'Инструкции должны быть текстом до 3000 символов');
   }
-  if (typeof p.notifyImportant !== 'boolean' || typeof p.suggestTasks !== 'boolean') {
-    throw new TelegramUserClientError(400, 'Настройки уведомлений должны быть логическими значениями');
+  if (typeof p.notifyImportant !== 'boolean') {
+    throw new TelegramUserClientError(400, 'Настройка уведомлений должна быть логическим значением');
   }
-  const dailyCreditLimitMilli = boundedCredits(p.dailyCreditLimitMilli, 200_000, 'дневной');
-  const monthlyCreditLimitMilli = boundedCredits(p.monthlyCreditLimitMilli, 1_000_000, 'месячный');
-  if (dailyCreditLimitMilli > monthlyCreditLimitMilli) {
-    throw new TelegramUserClientError(400, 'Дневной лимит не может превышать месячный');
+  if (!TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI.some(tier => tier === p.dailyCreditLimitMilli)) {
+    throw new TelegramUserClientError(400, 'Выберите дневной лимит из предложенных значений');
   }
   return {
     mode: oneOf(p.mode, MODES, 'режим работы'),
-    analysisLevel: oneOf(p.analysisLevel, LEVELS, 'детализация'),
-    checkIntervalMinutes: oneOf(p.checkIntervalMinutes, INTERVALS, 'интервал проверки'),
-    maxMessagesPerCheck: oneOf(p.maxMessagesPerCheck, MESSAGE_LIMITS, 'число сообщений'),
-    summaryFrequency: oneOf(p.summaryFrequency, FREQUENCIES, 'частота сводок'),
-    instructions: instructions.trim(),
+    taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
+    checkIntervalMinutes: oneOf(p.checkIntervalMinutes, INTERVALS, 'интенсивность проверки'),
+    instructions: p.instructions.trim(),
     notifyImportant: p.notifyImportant,
-    suggestTasks: p.suggestTasks,
-    dailyCreditLimitMilli,
-    monthlyCreditLimitMilli
+    dailyCreditLimitMilli: p.dailyCreditLimitMilli as number | null
   };
 }
 
