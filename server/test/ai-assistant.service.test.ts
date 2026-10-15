@@ -31,6 +31,14 @@ test('task assistant не обещает изменение без action', () =
   assert.equal(normalizeTaskAssistantActionAnswer('Обновляю описание.', 1), 'Обновляю описание.');
 });
 
+test('ошибка редактирования файла не подменяется ошибкой task_action', () => {
+  const failure = 'Не получилось автоматически править файл: Word разделил текст на несколько частей. Могу предложить другой способ.';
+  assert.equal(normalizeTaskAssistantActionAnswer(failure, 0), failure);
+  const editorError = 'Документ содержит защищённые поля Word.';
+  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0, editorError), 'Файл не изменён. ' + editorError);
+  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0), 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.');
+});
+
 test('task assistant сохраняет длинный полезный текст вместо обрезания до 6000 символов', () => {
   const longText = 'А'.repeat(10_200);
   const payload = JSON.stringify({ answer: longText, actions: [], document: null });
