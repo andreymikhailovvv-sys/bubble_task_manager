@@ -235,6 +235,7 @@ export async function recordAiCreditCharge(
     feature: string;
     model: string;
     creditsSpentMilli: number;
+    eventId?: string;
   },
   repository: UsageEventRepository = prisma.aiUsageEvent
 ): Promise<void> {
@@ -242,6 +243,7 @@ export async function recordAiCreditCharge(
   try {
     await repository.create({
       data: {
+        ...(input.eventId ? { id: input.eventId } : {}),
         userId: input.userId,
         actionId: input.actionId ?? null,
         requestId: input.requestId,
@@ -262,6 +264,7 @@ export async function recordAiCreditCharge(
       }
     });
   } catch (error) {
+    if (input.eventId && (error as { code?: string }).code === 'P2002') return;
     console.warn('[AI credit charge] recording failed', {
       userId: input.userId,
       actionId: input.actionId ?? null,
