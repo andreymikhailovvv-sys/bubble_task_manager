@@ -39,6 +39,7 @@ import { telegramUserClientDraft } from '../services/telegram-user-client-draft.
 import { telegramUserClientRead } from '../services/telegram-user-client-read.service.js';
 import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
 import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
+import { telegramAiChatPolicyService } from '../services/telegram-ai-chat-policy.service.js';
 import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
@@ -1302,6 +1303,23 @@ apiRouter.post('/telegram-user-client/integrations/cancel', requireAuth, require
 apiRouter.post('/telegram-user-client/integrations/disconnect', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramUserClientAuth.disconnect(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
+// Chat-specific assistant settings. In PR1 no endpoint can activate polling or sending.
+apiRouter.get('/telegram-user-client/assistant/chats', requireAuth, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramAiChatPolicyService.list(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.put('/telegram-user-client/assistant/chats/:chatId', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramAiChatPolicyService.save(req.user!.id, req.params.chatId, req.body)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.delete('/telegram-user-client/assistant/chats/:chatId', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramAiChatPolicyService.remove(req.user!.id, req.params.chatId)); }
   catch (error) { telegramAuthError(res, error); }
 });
 
