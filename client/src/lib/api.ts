@@ -185,8 +185,6 @@ export type AdminUser = {
   aiCreditsPeriod: string;
   subscriptionPlan: AdminSubscriptionPlan;
   telegramLinked: boolean;
-  telegramUserClientPilotEnabled: boolean;
-  telegramUserClientConnected: boolean;
   createdAt: string;
 };
 export type TelegramIntegrationStatus = TelegramUserClientAuthStatus & {
@@ -552,47 +550,6 @@ export const api = {
     request<{ ok: boolean; auditId: string }>('/api/telegram-user-client/chat/send-confirm', {
       method: 'POST', body: JSON.stringify({ confirmationId })
     }),
-  adminTelegramPrivateDialogs: (payload: { password: string; userId: string }) =>
-    request<TelegramDialogList>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/dialogs`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramAnalyzeDialog: (payload: {
-    password: string;
-    userId: string;
-    dialogId: string;
-    fingerprint: string;
-    consent: true;
-    instruction: string;
-    tone: TelegramDraftTone;
-  }) =>
-    request<TelegramDialogAiResult>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/analyze-dialog`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramPrivateHistory: (payload: { password: string; userId: string; dialogId: string }) =>
-    request<TelegramDialogHistory>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/history`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramManualSendStatus: (payload: { password: string; userId: string }) =>
-    request<TelegramManualSendStatus>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-status`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramAiDraft: (payload: { password: string; userId: string; instructions: string; tone: TelegramDraftTone }) =>
-    request<{ text: string; model: string }>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/ai-draft`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramManualSendPreview: (payload: { password: string; userId: string; recipientKind: 'saved' | 'username'; username?: string; text: string }) =>
-    request<TelegramManualSendPreview>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-preview`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminTelegramManualSendConfirm: (payload: { password: string; userId: string; confirmationId: string }) =>
-    request<{ ok: boolean; auditId: string }>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/send-confirm`,
-      { method: 'POST', body: JSON.stringify(payload) }),
-  adminSetTelegramUserClientPilot: (payload: { password: string; userId: string; pilotEnabled: boolean }) =>
-    request<{ userId: string; telegramUserClientPilotEnabled: boolean; telegramUserClientConnected: boolean }>(
-      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client-pilot`,
-      { method: 'POST', body: JSON.stringify({ password: payload.password, pilotEnabled: payload.pilotEnabled }) }
-    ),
   adminSaveSubscriptionLinks: (payload: { password: string; links: SubscriptionLinks }) =>
     request<{ links: SubscriptionLinks }>('/api/admin/subscription-links', {
       method: 'POST',
