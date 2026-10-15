@@ -70,7 +70,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
   }
   const dailyCreditLimitMilli = boundedCredits(p.dailyCreditLimitMilli, 200_000, 'дневной');
   const monthlyCreditLimitMilli = boundedCredits(p.monthlyCreditLimitMilli, 1_000_000, 'месячный');
-  if (monthlyCreditLimitMilli > 0 && dailyCreditLimitMilli > monthlyCreditLimitMilli) {
+  if (dailyCreditLimitMilli > monthlyCreditLimitMilli) {
     throw new TelegramUserClientError(400, 'Дневной лимит не может превышать месячный');
   }
   return {
