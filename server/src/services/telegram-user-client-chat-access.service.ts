@@ -13,14 +13,14 @@ export async function telegramUserChatCapability(userId: string) {
     select: {
       telegramChatId: true,
       telegramUserClientConnection: {
-        select: { pilotEnabled: true, encryptedSession: true, telegramAccountId: true, connectedAt: true }
+        select: { pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, telegramAccountId: true, connectedAt: true }
       }
     }
   });
   const c = user?.telegramUserClientConnection;
   const connected = Boolean(
     c?.pilotEnabled && canUseTelegramUserClient(c.pilotEnabled) &&
-    c.connectedAt && c.encryptedSession && c.telegramAccountId &&
+    c.connectedAt && c.encryptedSession && c.encryptedApiCredentials && c.telegramAccountId &&
     c.telegramAccountId === user?.telegramChatId
   );
   return {

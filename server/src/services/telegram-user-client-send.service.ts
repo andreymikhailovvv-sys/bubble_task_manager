@@ -4,6 +4,7 @@ import { Api, TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions';
 import { prisma } from '../db/prisma.js';
 import { canUseTelegramUserClient } from '../lib/telegram-user-client-access.js';
+import { decryptTelegramAppCredentials } from '../lib/telegram-user-app-credentials.js';
 import { decryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
 import { telegramUserClientNetworkOptions } from '../lib/telegram-user-client-network.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
@@ -62,7 +63,7 @@ function assertSendEnabled() {
   }
 }
 
-export type ConnectionRecord = { encryptedSession: string; telegramAccountId: string; userId: string };
+export type ConnectionRecord = { encryptedSession: string; encryptedApiCredentials: string; telegramAccountId: string; userId: string };
 
 export async function connectedOwner(userId: string): Promise<ConnectionRecord> {
   assertSendEnabled();
@@ -72,31 +73,26 @@ export async function connectedOwner(userId: string): Promise<ConnectionRecord> 
     select: {
       telegramChatId: true,
       telegramUserClientConnection: {
-        select: { pilotEnabled: true, encryptedSession: true, telegramAccountId: true, connectedAt: true }
+        select: { pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, telegramAccountId: true, connectedAt: true }
       }
     }
   });
   if (!user) throw new TelegramUserClientError(404, 'Пользователь не найден');
   const connection = user.telegramUserClientConnection;
   if (!canUseTelegramUserClient(connection?.pilotEnabled === true) ||
-      !connection?.encryptedSession || !connection.telegramAccountId || !connection.connectedAt ||
+      !connection?.encryptedSession || !connection.encryptedApiCredentials || !connection.telegramAccountId || !connection.connectedAt ||
       user.telegramChatId !== connection.telegramAccountId) {
     throw new TelegramUserClientError(403, 'Сессия или разрешение Telegram недействительны');
   }
-  return { userId, encryptedSession: connection.encryptedSession, telegramAccountId: connection.telegramAccountId };
+  return { userId, encryptedSession: connection.encryptedSession, encryptedApiCredentials: connection.encryptedApiCredentials, telegramAccountId: connection.telegramAccountId };
 }
 
-function appCredentials(): { apiId: number; apiHash: string } {
-  const raw = process.env.TELEGRAM_USER_API_ID?.trim() ?? '';
-  const apiHash = process.env.TELEGRAM_USER_API_HASH?.trim() ?? '';
-  if (!/^\d{1,10}$/.test(raw) || Number(raw) < 1 || !/^[a-f0-9]{32}$/i.test(apiHash)) {
-    throw new TelegramUserClientError(503, 'Неверная конфигурация Telegram API');
-  }
-  return { apiId: Number(raw), apiHash };
+function appCredentials(owner: ConnectionRecord): { apiId: number; apiHash: string } {
+  return decryptTelegramAppCredentials(owner.userId, owner.encryptedApiCredentials);
 }
 
 export async function openClient(owner: ConnectionRecord): Promise<TelegramClient> {
-  const credentials = appCredentials();
+  const credentials = appCredentials(owner);
   const plaintext = decryptTelegramUserSession(owner.encryptedSession, owner.userId);
   const client = new TelegramClient(new StringSession(plaintext), credentials.apiId, credentials.apiHash, {
     connectionRetries: 1,

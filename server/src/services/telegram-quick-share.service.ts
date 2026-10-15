@@ -102,13 +102,13 @@ async function claimAudit(userId: string, recipientId: string, auditId: string, 
     const owner = await tx.user.findUnique({
       where: { id: userId }, select: {
         telegramChatId: true, telegramUserClientConnection: {
-          select: { pilotEnabled: true, encryptedSession: true, telegramAccountId: true, connectedAt: true }
+          select: { pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, telegramAccountId: true, connectedAt: true }
         }
       }
     });
     const c = owner?.telegramUserClientConnection;
     if (!isManualTelegramSendingEnabled() || !isTelegramUserReadEnabled() ||
-      !c?.pilotEnabled || !c.encryptedSession || !c.connectedAt ||
+      !c?.pilotEnabled || !c.encryptedSession || !c.encryptedApiCredentials || !c.connectedAt ||
       c.telegramAccountId !== accountId || owner?.telegramChatId !== accountId) {
       throw new TelegramUserClientError(403, 'Доступ Telegram отозван');
     }

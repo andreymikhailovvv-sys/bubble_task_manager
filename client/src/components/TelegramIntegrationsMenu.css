@@ -1,0 +1,66 @@
+/* Main navigation integrations menu and owner-only MTProto setup.
+   Uses existing website body[data-theme] contract; no theme-specific JS. */
+.integration-menu,
+.telegram-integrations-modal {
+  --integration-bg: #101c2f;
+  --integration-surface: #16263d;
+  --integration-hover: #253957;
+  --integration-border: #344860;
+  --integration-text: #f0f5fc;
+  --integration-muted: #a6b7cb;
+  --integration-accent: #7dd3fc;
+  --integration-green: #86efac;
+  --integration-warning: #fda4af;
+  color: var(--integration-text);
+}
+body[data-theme='light'] .integration-menu,
+body[data-theme='light'] .telegram-integrations-modal {
+  --integration-bg: #fff;
+  --integration-surface: #f5f8fc;
+  --integration-hover: #e9f2ff;
+  --integration-border: #cfdbeb;
+  --integration-text: #1b2d46;
+  --integration-muted: #5f7187;
+  --integration-accent: #0369a1;
+  --integration-green: #15803d;
+  --integration-warning: #be123c;
+}
+.integration-menu__trigger { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: inherit; }
+.integration-menu__popup, .telegram-integrations-modal__panel {
+  background: var(--integration-bg) !important;
+  color: var(--integration-text) !important;
+  border-color: var(--integration-border) !important;
+}
+.integration-menu__popup { max-height: 75vh; overflow-y: auto; }
+.integration-menu__muted { color: var(--integration-muted); }
+.integration-menu__on, .telegram-integrations-modal__success { color: var(--integration-green); }
+.integration-menu__item, .integration-menu__instructions {
+  background: var(--integration-surface); border-color: var(--integration-border);
+}
+.integration-menu__symbol { color: var(--integration-accent); background: var(--integration-hover); }
+.integration-menu__details { border-color: var(--integration-border); }
+.integration-menu__icon-button:hover { background: var(--integration-hover); }
+.integration-menu__action {
+  background: #0284c7 !important; color: #fff !important;
+}
+.integration-menu__action:hover:not(:disabled) { background: #0369a1 !important; }
+.telegram-integrations-modal__input {
+  background: var(--integration-surface) !important;
+  color: var(--integration-text) !important;
+  border-color: var(--integration-border) !important;
+}
+.telegram-integrations-modal__input:focus { outline: none; border-color: #0284c7 !important; box-shadow: 0 0 0 2px rgba(2,132,199,.16); }
+.telegram-integrations-modal__input::placeholder { color: var(--integration-muted); opacity: 1; }
+.telegram-integrations-modal__accent { color: var(--integration-accent); }
+.telegram-integrations-modal__secondary {
+  border-color: var(--integration-border); color: var(--integration-text);
+  background: var(--integration-surface);
+}
+.telegram-integrations-modal__secondary:hover:not(:disabled) { background: var(--integration-hover); }
+.telegram-integrations-modal__danger { border-color: #e11d48; color: var(--integration-warning); background: transparent; }
+.telegram-integrations-modal__danger:hover:not(:disabled) { background: rgba(225,29,72,.1); }
+.telegram-integrations-modal__warning { color: var(--integration-warning); }
+@media (max-width: 480px) {
+  .integration-menu__popup { position: fixed; left: 12px; right: 12px; top: 72px; width: auto; max-height: 72vh; }
+  .telegram-integrations-modal__panel { padding: 16px; }
+}

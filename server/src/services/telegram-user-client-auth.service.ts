@@ -4,6 +4,8 @@ import { TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions';
 import { prisma } from '../db/prisma.js';
 import { canUseTelegramUserClient } from '../lib/telegram-user-client-access.js';
+import { encryptTelegramAppCredentials, decryptTelegramAppCredentials, validateTelegramAppCredentials } from '../lib/telegram-user-app-credentials.js';
+import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { decryptTelegramUserSession, encryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
 import { matchesBotLinkedTelegramAccount } from '../lib/telegram-user-client-binding.js';
 import { classifyTelegramUserNetworkError, telegramUserClientNetworkOptions } from '../lib/telegram-user-client-network.js';
@@ -19,6 +21,7 @@ type Attempt = {
   id: string;
   userId: string;
   expectedTelegramId: string;
+  credentialCipher: string;
   client: Client;
   controller: AbortController;
   createdAt: number;
@@ -34,22 +37,17 @@ type Attempt = {
   timer: ReturnType<typeof setTimeout>;
 };
 const attempts = new Map<string, Attempt>();
+const credentialUpdates = new FixedWindowRateLimiter(5, 60 * 60_000);
 
 export class TelegramUserClientError extends Error {
   constructor(public statusCode: number, message: string) { super(message); }
 }
 
-function config(): { apiId: number; apiHash: string } {
-  const rawId = process.env.TELEGRAM_USER_API_ID?.trim() ?? '';
-  const apiHash = process.env.TELEGRAM_USER_API_HASH?.trim() ?? '';
-  const apiId = Number(rawId);
-  if (!/^\d{1,10}$/.test(rawId) || !Number.isSafeInteger(apiId) || apiId < 1 || !/^[a-f0-9]{32}$/i.test(apiHash)) {
-    throw new TelegramUserClientError(503, 'Не настроены TELEGRAM_USER_API_ID и TELEGRAM_USER_API_HASH на сервере');
-  }
+function config(userId: string, encrypted: string): { apiId: number; apiHash: string } {
   if (!/^[a-f0-9]{64}$/i.test(process.env.TELEGRAM_USER_SESSION_KEY ?? '')) {
-    throw new TelegramUserClientError(503, 'Не задан TELEGRAM_USER_SESSION_KEY на сервере');
+    throw new TelegramUserClientError(503, 'Шифрование Telegram на сервере недоступно');
   }
-  return { apiId, apiHash };
+  return decryptTelegramAppCredentials(userId, encrypted);
 }
 
 async function eligible(userId: string, requireBotLink = true) {
@@ -58,11 +56,11 @@ async function eligible(userId: string, requireBotLink = true) {
   }
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, telegramChatId: true, telegramUserClientConnection: { select: { pilotEnabled: true, encryptedSession: true, connectedAt: true } } }
+    select: { id: true, telegramChatId: true, telegramUserClientConnection: { select: { pilotEnabled: true, encryptedSession: true, encryptedApiCredentials: true, connectedAt: true } } }
   });
   if (!user) throw new TelegramUserClientError(404, 'Пользователь не найден');
-  if (!canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true)) {
-    throw new TelegramUserClientError(403, 'Пилот не разрешён этому пользователю');
+  if (!canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true) || !user.telegramUserClientConnection?.encryptedApiCredentials) {
+    throw new TelegramUserClientError(403, 'Сначала укажите Telegram API ID и API Hash в Интеграциях');
   }
   if (requireBotLink && (!user.telegramChatId || !/^\d+$/.test(user.telegramChatId))) {
     throw new TelegramUserClientError(409, 'Сначала привяжите Telegram-бота Планировыча к этому аккаунту');
@@ -151,9 +149,10 @@ async function runLogin(attempt: Attempt, credentials: {apiId: number; apiHash: 
     }
     const session = String((attempt.client.session as StringSession).save());
     const encryptedSession = encryptTelegramUserSession(session, attempt.userId);
-    // Recheck pilot flag atomically: revocation must win against an in-flight QR scan.
+    // Credential revocation must win against any in-flight QR authorization.
     const saved = await prisma.telegramUserClientConnection.updateMany({
-      where: { userId: attempt.userId, pilotEnabled: true, encryptedSession: null },
+      where: { userId: attempt.userId, pilotEnabled: true, encryptedSession: null,
+        encryptedApiCredentials: attempt.credentialCipher },
       data: { encryptedSession, telegramAccountId: telegramId, connectedAt: new Date() }
     });
     if (saved.count !== 1 || attempt.controller.signal.aborted) {
@@ -193,16 +192,37 @@ export const telegramUserClientAuth = {
   async getStatus(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { telegramUserClientConnection: { select: { pilotEnabled: true, connectedAt: true } } }
+      select: { telegramUserClientConnection: { select: { pilotEnabled: true, connectedAt: true, encryptedApiCredentials: true } } }
     });
     if (!user) throw new TelegramUserClientError(404, 'Пользователь не найден');
     return {
-      enabled: canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true),
-      readEnabled: canUseTelegramUserClient(user.telegramUserClientConnection?.pilotEnabled === true) &&
+      enabled: process.env.TELEGRAM_USER_CLIENT_ENABLED === 'true',
+      credentialsSet: Boolean(user.telegramUserClientConnection?.encryptedApiCredentials),
+      readEnabled: process.env.TELEGRAM_USER_CLIENT_ENABLED === 'true' &&
         process.env.TELEGRAM_USER_READ_ENABLED === 'true',
-      connected: Boolean(user.telegramUserClientConnection?.connectedAt),
+      connected: Boolean(user.telegramUserClientConnection?.connectedAt && user.telegramUserClientConnection?.encryptedApiCredentials),
       ...safeState(attempts.get(userId))
     };
+  },
+  async configure(userId: string, apiId: unknown, apiHash: unknown) {
+    if (process.env.TELEGRAM_USER_CLIENT_ENABLED !== 'true') throw new TelegramUserClientError(403, 'Интеграция Telegram отключена на сервере');
+    if (!credentialUpdates.consume(userId).allowed) throw new TelegramUserClientError(429, 'Слишком много попыток настройки. Повторите позже');
+    let credentials;
+    try { credentials = validateTelegramAppCredentials(apiId, apiHash); }
+    catch { throw new TelegramUserClientError(400, 'Введите корректные API ID и API Hash из my.telegram.org'); }
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { telegramChatId: true, telegramUserClientConnection: { select: { connectedAt: true, encryptedSession: true } } } });
+    if (user?.telegramUserClientConnection?.connectedAt || user?.telegramUserClientConnection?.encryptedSession) throw new TelegramUserClientError(409, 'Сначала отключите текущее подключение в интеграциях');
+    if (!user?.telegramChatId) throw new TelegramUserClientError(409, 'Сначала привяжите Telegram-бота Планировыча');
+    if (['starting', 'qr', 'password_required', 'verifying_password'].includes(attempts.get(userId)?.status ?? '')) {
+      throw new TelegramUserClientError(409, 'Завершите или отмените текущий вход');
+    }
+    const encryptedApiCredentials = encryptTelegramAppCredentials(userId, credentials);
+    await prisma.telegramUserClientConnection.upsert({
+      where: { userId },
+      create: { userId, pilotEnabled: true, encryptedApiCredentials },
+      update: { pilotEnabled: true, encryptedApiCredentials, encryptedSession: null, connectedAt: null, telegramAccountId: null }
+    });
+    return { ok: true, credentialsSet: true };
   },
   async begin(userId: string) {
     // Release long-completed outcomes to avoid unbounded admin-session memory growth.
@@ -212,7 +232,7 @@ export const telegramUserClientAuth = {
       }
     }
     const user = await eligible(userId);
-    const credentials = config();
+    const credentials = config(userId, user.telegramUserClientConnection!.encryptedApiCredentials!);
     if (user.telegramUserClientConnection?.encryptedSession) {
       throw new TelegramUserClientError(409, 'Telegram уже подключён; сначала отключите прежнюю сессию');
     }
@@ -224,7 +244,7 @@ export const telegramUserClientAuth = {
     if (pending.length >= MAX_PENDING_ATTEMPTS) throw new TelegramUserClientError(429, 'Слишком много одновременных подключений');
     const controller = new AbortController();
     const attempt: Attempt = {
-      id: randomUUID(), userId, expectedTelegramId: user.telegramChatId!,
+      id: randomUUID(), userId, expectedTelegramId: user.telegramChatId!, credentialCipher: user.telegramUserClientConnection!.encryptedApiCredentials!,
       controller, client: new TelegramClient(new StringSession(''), credentials.apiId, credentials.apiHash, {
         connectionRetries: 2,
         ...telegramUserClientNetworkOptions()
@@ -268,16 +288,16 @@ export const telegramUserClientAuth = {
     if (attempt) release(attempt, 'cancelled', 'Доступ отключён администратором');
     const connection = await prisma.telegramUserClientConnection.findUnique({
       where: { userId },
-      select: { encryptedSession: true }
+      select: { encryptedSession: true, encryptedApiCredentials: true }
     });
     const encrypted = connection?.encryptedSession ?? null;
     // Disable locally first even if Telegram is unreachable.
     await prisma.telegramUserClientConnection.updateMany({
-      where: { userId }, data: { encryptedSession: null, telegramAccountId: null, connectedAt: null }
+      where: { userId }, data: { pilotEnabled: false, encryptedApiCredentials: null, encryptedSession: null, telegramAccountId: null, connectedAt: null }
     });
-    if (!encrypted) return { ok: true, remoteLogout: 'not_needed' as const };
+    if (!encrypted || !connection?.encryptedApiCredentials) return { ok: true, remoteLogout: 'not_needed' as const };
     try {
-      const credentials = config();
+      const credentials = config(userId, connection.encryptedApiCredentials);
       const plaintext = decryptTelegramUserSession(encrypted, userId);
       const client = new TelegramClient(new StringSession(plaintext), credentials.apiId, credentials.apiHash, {
         connectionRetries: 1,
