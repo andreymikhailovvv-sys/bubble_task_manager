@@ -557,6 +557,7 @@ model TelegramUserClientConnection {
   userId            String   @id
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pilotEnabled      Boolean  @default(false)
+  encryptedApiCredentials String? @db.Text
   encryptedSession  String?  @db.Text
   telegramAccountId String?
   connectedAt       DateTime?
