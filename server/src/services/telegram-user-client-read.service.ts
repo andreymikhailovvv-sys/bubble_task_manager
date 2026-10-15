@@ -196,6 +196,7 @@ export const telegramUserClientRead = {
       if (!target) throw new TelegramUserClientError(404, 'Этот чат недоступен для чтения');
       // No markAsRead, no downloads, no files, no logging of message bodies.
       const messages = await client.getMessages(row.inputEntity, { limit: count });
+      const participants = new Map<string, number>();
       const items = messages
         .filter((message): message is Api.Message => message instanceof Api.Message)
         .reverse()
@@ -203,7 +204,16 @@ export const telegramUserClientRead = {
           const raw = typeof message.message === 'string' ? message.message : '';
           return {
             date: typeof message.date === 'number' ? message.date : 0,
-            speaker: message.out ? 'Вы' : target.kind === 'user' ? target.name : 'Участник группы',
+            speaker: message.out ? 'Вы' : target.kind === 'user' ? target.name : (() => {
+              const from = (message as Api.Message & { sender?: unknown; senderId?: unknown }).sender;
+              if (from instanceof Api.User) {
+                const name = [from.firstName, from.lastName].filter(Boolean).join(' ').trim();
+                if (name) return name.slice(0, 100);
+              }
+              const peer = String((message as Api.Message & { senderId?: unknown }).senderId ?? 'unknown');
+              if (!participants.has(peer)) participants.set(peer, participants.size + 1);
+              return 'Участник ' + participants.get(peer);
+            })(),
             text: raw.slice(0, 1200),
             truncated: raw.length > 1200,
             hasMedia: Boolean(message.media)
