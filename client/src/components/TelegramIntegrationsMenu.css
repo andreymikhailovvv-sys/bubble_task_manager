@@ -72,3 +72,17 @@ body[data-theme='light'] .telegram-integrations-modal {
   .integration-menu__popup { max-height: 72vh; }
   .telegram-integrations-modal__panel { padding: 16px; }
 }
+
+/* Copyable Telegram API app settings example, matching both themes. */
+.telegram-integrations-modal__app-example {
+  list-style: none;
+  background: var(--integration-bg);
+  border: 1px solid var(--integration-border);
+}
+.telegram-integrations-modal__app-example dt { color: var(--integration-muted); }
+.telegram-integrations-modal__app-example dd {
+  color: var(--integration-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
