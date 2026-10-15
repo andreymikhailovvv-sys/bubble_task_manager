@@ -1,4 +1,4 @@
-ALTER TABLE "TaskAiMessage" ADD COLUMN "telegramReadDraft" JSONB;
+ALTER TABLE "TaskAiMessage" ADD COLUMN "telegramReadDraft" JSONB, ADD COLUMN "telegramReadOwnerId" TEXT;
 CREATE TABLE "TelegramAiReadRequest" (
  "id" TEXT NOT NULL,
  "userId" TEXT NOT NULL,
