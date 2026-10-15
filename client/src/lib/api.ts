@@ -200,6 +200,17 @@ export type TelegramUserClientAuthStatus = {
   passwordHint: string | null;
   error: string | null;
 };
+export type TelegramQuickSendJob = {
+  id: string;
+  state: 'QUEUED' | 'PROCESSING' | 'DONE' | 'FAILED';
+  stage: 'REWRITE' | 'SEND';
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  unknownCount: number;
+  createdAt: string;
+  completedAt: string | null;
+};
 export type TelegramChatCapability = {
   connected: boolean;
   readEnabled: boolean;
@@ -497,6 +508,16 @@ export const api = {
     request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
       { method: 'POST', body: JSON.stringify(payload) }),
+  telegramQuickSend: (payload: { requestId: string; recipientIds: string[]; text: string; mode: 'DIRECT' | 'REWRITE_AND_SEND'; instruction?: string }) =>
+    request<TelegramQuickSendJob>('/api/telegram-user-client/chat/quick-send', {
+      method: 'POST', body: JSON.stringify(payload)
+    }),
+  telegramQuickSendStatus: (jobId: string) =>
+    request<TelegramQuickSendJob>(`/api/telegram-user-client/chat/quick-send/${encodeURIComponent(jobId)}`),
+  telegramQuickRewrite: (payload: { text: string; instruction: string }) =>
+    request<{ text: string }>('/api/telegram-user-client/chat/quick-rewrite', {
+      method: 'POST', body: JSON.stringify(payload)
+    }),
   telegramChatCapability: () =>
     request<TelegramChatCapability>('/api/telegram-user-client/chat/status'),
   telegramChatDialogs: () =>
