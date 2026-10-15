@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type TelegramAiChatPolicy, type TelegramAiMonitorCall } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { refundAiCreditReservation, reserveAiCreditsMilliWithTransaction, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { recordAiCreditCharge } from './ai-usage-metering.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
@@ -10,7 +11,8 @@ import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, T
 
 const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
-const MAX_JOBS_PER_TICK = 2;
+const MAX_JOBS_PER_TICK = 3;
+const requestedSummaries = new FixedWindowRateLimiter(4, 15 * 60_000);
 const MAX_INPUT_MESSAGES = 40;
 
 export function monitorDayKey(now: Date, timeZone: string | null | undefined): string {
@@ -66,6 +68,7 @@ export const telegramAiMonitorControl = {
     return { ok: true, enabled: false };
   },
   async requestSummary(userId: string, chatId: string) {
+    if (!requestedSummaries.consume(userId).allowed) throw new TelegramUserClientError(429, 'Слишком много запросов сводки');
     const result = await prisma.telegramAiChatPolicy.updateMany({
       where: { userId, chatId, isEnabled: true },
       data: { summaryRequested: true, nextCheckAt: new Date() }
@@ -152,6 +155,22 @@ async function completeCall(call: TelegramAiMonitorCall, chargedMilli: number) {
   });
 }
 
+async function ensureChargeRecorded(call: TelegramAiMonitorCall, amountMilli: number) {
+  if (amountMilli <= 0) return;
+  const eventId = 'telegram-monitor-charge:' + call.id;
+  await recordAiCreditCharge({
+    eventId, userId: call.userId, requestId: call.id + ':charge',
+    actionId: call.id, providerCallIndex: 1,
+    feature: TELEGRAM_MONITOR_FEATURE, model: TELEGRAM_MONITOR_MODEL,
+    creditsSpentMilli: amountMilli
+  });
+  // The shared recorder deliberately swallows transient event-write failures.
+  // Verify the durable event before closing the billing ledger, so reconciliation
+  // can retry without double-counting spend.
+  const saved = await prisma.aiUsageEvent.findUnique({ where: { id: eventId }, select: { id: true } });
+  if (!saved) throw new Error('Could not persist Telegram AI credit charge');
+}
+
 async function reconcileStaleCalls() {
   const calls = await prisma.telegramAiMonitorCall.findMany({
     where: { state: { in: ['RESERVED', 'STARTED'] }, createdAt: { lt: new Date(Date.now() - STALE_CALL_MS) } },
@@ -167,7 +186,9 @@ async function reconcileStaleCalls() {
         await refundAiCreditReservation(reservationFromRecord(row));
       }
       const saved = await prisma.aiCreditReservationRecord.findUnique({ where: { id: call.reservationId } });
-      await completeCall(call, saved?.status === 'SETTLED' ? saved.chargedMilli : 0);
+      const charged = saved?.status === 'SETTLED' ? saved.chargedMilli : 0;
+      await ensureChargeRecorded(call, charged);
+      await completeCall(call, charged);
     } catch {
       console.warn('[TelegramMonitor] stale billing reconciliation failed', { callId: call.id });
     }
@@ -275,13 +296,9 @@ async function processClaim(claimed: Claimed) {
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
     const call = await prisma.telegramAiMonitorCall.findUnique({ where: { id: callId } });
-    if (call) await completeCall(call, settlement.chargedMilli);
-    if (settlement.chargedMilli > 0) {
-      await recordAiCreditCharge({
-        userId: policy.userId, requestId: callId + ':charge', actionId: callId,
-        providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: TELEGRAM_MONITOR_MODEL,
-        creditsSpentMilli: settlement.chargedMilli
-      });
+    if (call) {
+      await ensureChargeRecorded(call, settlement.chargedMilli);
+      await completeCall(call, settlement.chargedMilli);
     }
     const updated = await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: claimed.token },
