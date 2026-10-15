@@ -1,0 +1,47 @@
+/* Telegram send proposal lives *inside* the AI assistant bubble.
+   Reuse the quick-share theme variables, never a hard-coded dark surface. */
+.telegram-ai-send-card {
+  background: var(--tqs-panel);
+  color: var(--tqs-text);
+  border-color: var(--tqs-border);
+  min-width: min(100%, 230px);
+  max-width: 100%;
+  isolation: isolate;
+}
+.telegram-ai-send-card__logo {
+  background: var(--tqs-selected);
+  color: var(--tqs-accent);
+}
+.telegram-ai-send-card__muted { color: var(--tqs-muted); }
+.telegram-ai-send-card__recipient,
+.telegram-ai-send-card__message,
+.telegram-ai-send-card__menu,
+.telegram-ai-send-card__search {
+  background: var(--tqs-inner);
+  color: var(--tqs-text);
+  border-color: var(--tqs-border);
+}
+.telegram-ai-send-card__recipient:hover:enabled,
+.telegram-ai-send-card__option:hover { background: var(--tqs-hover); }
+.telegram-ai-send-card__message { scrollbar-gutter: stable; }
+.telegram-ai-send-card__menu { z-index: 100; }
+.telegram-ai-send-card__option { color: var(--tqs-text); }
+body[data-theme] .telegram-ai-send-card__search .telegram-ai-send-card__search-input,
+body[data-theme] .telegram-ai-send-card__search .telegram-ai-send-card__search-input:focus {
+  color: var(--tqs-text) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.telegram-ai-send-card__search-input::placeholder { color: var(--tqs-muted); }
+.telegram-ai-send-card__send {
+  background: #0284c7;
+  color: #fff !important;
+}
+.telegram-ai-send-card__send:hover:not(:disabled) { background: #0369a1; }
+.telegram-ai-send-card__error { color: #f43f5e; }
+body[data-theme='light'] .telegram-ai-send-card__error { color: #be123c; }
+/* Do not inherit focus rings/backgrounds from generic AI-chat button rules. */
+.telegram-ai-send-card button:focus-visible { outline: 2px solid var(--tqs-highlight-border); outline-offset: 2px; }
+.telegram-ai-send-card__menu { box-shadow: 0 16px 38px rgba(2,6,23,.18); }

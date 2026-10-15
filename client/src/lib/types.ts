@@ -72,6 +72,15 @@ export type GeneratedDocument = {
   size: number;
 };
 
+export type TelegramInlineSendDraft = {
+  requestId: string;
+  text: string;
+  requestedRecipient: string;
+  recipientId: string | null;
+  recipientName: string | null;
+  match: 'exact' | 'unique' | 'ambiguous' | 'not_found';
+};
+
 export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -85,6 +94,7 @@ export type ChatMessage = {
   recipientUserId?: string;
   recipientName?: string;
   generatedDocument?: GeneratedDocument;
+  telegramSendDraft?: TelegramInlineSendDraft;
 };
 
 export type WebSource = { title: string; url: string };
