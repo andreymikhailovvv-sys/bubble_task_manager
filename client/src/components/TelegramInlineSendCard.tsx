@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, Search, Send, X } from 'lucide-react';
-import { api, type TelegramPrivateDialog, type TelegramQuickSendJob } from '../lib/api';
+import { api, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
 import type { TelegramInlineSendDraft } from '../lib/types';
 import './TelegramMessageQuickShare.css';
 import './TelegramInlineSendCard.css';
@@ -12,7 +12,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
   const [recipientId, setRecipientId] = useState<string | null>(draft.recipientId);
   const [recipientName, setRecipientName] = useState(draft.recipientName);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [recipients, setRecipients] = useState<TelegramPrivateDialog[]>([]);
+  const [recipients, setRecipients] = useState<TelegramSendTarget[]>([]);
   const [search, setSearch] = useState('');
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [sending, setSending] = useState(false);
@@ -49,7 +49,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
     setLoadingContacts(true);
     setError('');
     try {
-      const list = await api.telegramChatDialogs();
+      const list = await api.telegramChatSendTargets();
       if (mounted.current) setRecipients(list.dialogs);
     } catch (cause) {
       if (mounted.current) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить контакты');
@@ -86,7 +86,7 @@ export function TelegramInlineSendCard({ draft }: Props) {
     }
   };
 
-  const all = [{ id: 'saved', name: 'Избранное', username: null }, ...recipients];
+  const all: TelegramSendTarget[] = [{ id: 'saved', name: 'Избранное', username: null, kind: 'user' }, ...recipients];
   const needle = search.trim().toLocaleLowerCase('ru-RU');
   const filtered = all.filter((person) => person.id === 'saved' ||
     person.name.toLocaleLowerCase('ru-RU').includes(needle) ||
@@ -120,8 +120,8 @@ export function TelegramInlineSendCard({ draft }: Props) {
           <div className="telegram-ai-send-card__menu absolute inset-x-0 top-full z-30 mt-1 rounded-xl border p-2 shadow-xl">
             <div className="telegram-ai-send-card__search flex items-center gap-2 rounded-lg border px-3">
               <Search size={14}/>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск человека"
-                aria-label="Поиск получателя Telegram"
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск человека или беседы"
+                aria-label="Поиск человека или беседы Telegram"
                 className="telegram-ai-send-card__search-input min-w-0 w-full py-2.5 text-sm" />
               <button type="button" aria-label="Закрыть список" onClick={() => setPickerOpen(false)}><X size={14}/></button>
             </div>
@@ -130,7 +130,10 @@ export function TelegramInlineSendCard({ draft }: Props) {
                 <button type="button" key={person.id} className="telegram-ai-send-card__option block w-full rounded-lg px-3 py-2 text-left"
                   onClick={() => { setRecipientId(person.id); setRecipientName(person.name); setPickerOpen(false); setError(''); }}>
                   <span className="block truncate">{person.name}</span>
-                  {person.username && <span className="telegram-ai-send-card__muted block truncate text-xs">{person.username}</span>}
+                  <span className="telegram-ai-send-card__muted block truncate text-xs">
+                    {person.id === 'saved' ? 'Сохранённые сообщения' : person.kind === 'user' ? 'Личный чат' : person.kind === 'group' ? 'Группа' : 'Супергруппа'}
+                    {person.username ? ` · ${person.username}` : ''}
+                  </span>
                 </button>
               ))}
               {!recipients.length && loadingContacts && <p className="telegram-ai-send-card__muted p-2 text-xs"><Loader2 className="mr-1 inline animate-spin" size={13}/> Загружаем чаты…</p>}
