@@ -12,6 +12,7 @@ import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { aiAssistantService } from './services/ai-assistant.service.js';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
+import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -191,3 +192,11 @@ telegramUpdateQueue.recoverStaleJobs()
   })
   .catch((error) => console.error('[TelegramWorker] recovery failed', error));
 setInterval(runTelegramWorker, Number(process.env.TELEGRAM_WORKER_POLL_INTERVAL_MS ?? 1_000)).unref();
+
+// Durable personal-Telegram quick-share worker. Jobs survive closing the web
+// window and container restarts; per-recipient audit makes delivery at-most-once.
+const runTelegramQuickShare = () => telegramQuickShare.drain().catch(() => {
+  console.warn('[TelegramQuickShare] queue poll failed');
+});
+setTimeout(runTelegramQuickShare, 3_000).unref();
+setInterval(runTelegramQuickShare, 2_500).unref();
