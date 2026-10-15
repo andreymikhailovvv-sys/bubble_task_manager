@@ -3,6 +3,21 @@ import { telegramUserClientRead, type TelegramPrivateDialog } from './telegram-u
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { validateQuickText } from './telegram-quick-share-ai.service.js';
 
+export const TELEGRAM_PREPARE_SEND_TOOL = {
+  type: 'function',
+  name: 'prepare_telegram_send',
+  strict: true,
+  description: 'Подготовить Telegram-сообщение, но НЕ отправлять. Вызывай только по явному запросу пользователя отправить или переслать сообщение в Telegram определённому человеку либо в «Избранное». Передай готовый текст на основе текущего разговора/задачи, recipient как назвал человек и text. Сервер создаст встроенную карточку с адресатом и текстом, пользователь сможет изменить получателя и нажать «Отправить». Не сообщай об отправке до подтверждения. Если не указан получатель, уточни у пользователя. Нельзя выбирать произвольный Telegram ID.',
+  parameters: {
+    type: 'object', additionalProperties: false,
+    required: ['recipient', 'text'],
+    properties: {
+      recipient: { type: 'string', description: 'Имя собеседника или @username либо Избранное' },
+      text: { type: 'string', description: 'Готовый текст отправки, максимум 4000 символов' }
+    }
+  }
+} as const;
+
 export type TelegramInlineSendDraft = {
   requestId: string;
   text: string;
