@@ -263,18 +263,17 @@ async function processClaim(claimed: Claimed) {
   const payload = buildMonitorPayload(bounded, instructions, current.taskMode);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
-  // Once an input batch is claimed, its cursor advances before provider I/O:
-  // interrupted provider requests are NEVER silently replayed.
-  const advance = await prisma.telegramAiChatPolicy.updateMany({
-    where: { id: policy.id, isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: claimed.token },
-    data: { lastSeenMessageId: maxId, summaryRequested: false }
-  });
-  if (!advance.count) return;
-
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
   let billed = false;
   try {
     await ownedLease(claimed);
+    // Mark the batch as consumed before any provider I/O. Crashes must never
+    // result in an automatic second LLM request for the same message IDs.
+    const advance = await prisma.telegramAiChatPolicy.updateMany({
+      where: { id: policy.id, isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: claimed.token },
+      data: { lastSeenMessageId: maxId, summaryRequested: false }
+    });
+    if (!advance.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
       userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode
