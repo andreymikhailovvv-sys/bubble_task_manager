@@ -20,6 +20,7 @@ test('Telegram assistant settings reject invalid credit budgets, modes, interval
     { ...valid, dailyCreditLimitMilli: 1.5 },
     { ...valid, dailyCreditLimitMilli: 1 },
     { ...valid, monthlyCreditLimitMilli: 1000 },
+    { ...valid, monthlyCreditLimitMilli: 0 },
     { ...valid, mode: 'SUPER_AUTO' },
     { ...valid, checkIntervalMinutes: 1 },
     { ...valid, maxMessagesPerCheck: 1000 },
