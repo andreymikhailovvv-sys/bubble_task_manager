@@ -1332,6 +1332,13 @@ apiRouter.get('/telegram-user-client/chat/status', requireAuth, async (req, res)
   try { res.json(await telegramUserChatCapability(req.user!.id)); }
   catch (error) { telegramAuthError(res, error); }
 });
+// Send recipients are broader than private history: DMs + groups/supergroups.
+// Never re-use this list for read/history or expose conversation previews.
+apiRouter.post('/telegram-user-client/chat/send-targets', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientRead.listSendTargets(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
 apiRouter.post('/telegram-user-client/chat/dialogs', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramUserClientRead.list(req.user!.id)); }
