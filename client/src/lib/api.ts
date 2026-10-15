@@ -191,6 +191,7 @@ export type AdminUser = {
 };
 export type TelegramUserClientAuthStatus = {
   enabled: boolean;
+  readEnabled: boolean;
   connected: boolean;
   status: 'idle' | 'starting' | 'qr' | 'password_required' | 'verifying_password' | 'connected' | 'failed' | 'cancelled';
   attemptId: string | null;
@@ -198,6 +199,17 @@ export type TelegramUserClientAuthStatus = {
   qrExpiresAt: number | null;
   passwordHint: string | null;
   error: string | null;
+};
+export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
+export type TelegramPrivateMessage = {
+  id: number; date: number; out: boolean; senderName: string;
+  text: string; truncated: boolean; hasMedia: boolean;
+};
+export type TelegramDialogList = { dialogs: TelegramPrivateDialog[]; limited: boolean };
+export type TelegramDialogHistory = {
+  dialog: { id: string; name: string };
+  messages: TelegramPrivateMessage[];
+  limit: number;
 };
 export type TelegramManualSendPreview = {
   confirmationId: string;
@@ -462,6 +474,14 @@ export const api = {
   adminTelegramUserClientDisconnect: (payload: { password: string; userId: string }) =>
     request<{ ok: boolean; remoteLogout: 'ok' | 'failed' | 'not_needed' }>(
       `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/disconnect`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramPrivateDialogs: (payload: { password: string; userId: string }) =>
+    request<TelegramDialogList>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/dialogs`,
+      { method: 'POST', body: JSON.stringify(payload) }),
+  adminTelegramPrivateHistory: (payload: { password: string; userId: string; dialogId: string }) =>
+    request<TelegramDialogHistory>(
+      `/api/admin/users/${encodeURIComponent(payload.userId)}/telegram-user-client/history`,
       { method: 'POST', body: JSON.stringify(payload) }),
   adminTelegramManualSendStatus: (payload: { password: string; userId: string }) =>
     request<TelegramManualSendStatus>(
