@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib/telegram-quick-share-crypto.js';
+import { validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
+import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateQuickInstruction } from '../src/services/telegram-quick-share-ai.service.js';
+
+test('quick send allows 1 to 3 unique personal Telegram dialog IDs, no groups, no broadcast', () => {
+  assert.deepEqual(validateQuickRecipients(['123', '987', '42']), ['123', '987', '42']);
+  for(const value of [[], ['123','123'], ['1','2','3','4'], ['-100222'], ['123','@username'], '123', ['0'], [123]]) {
+    assert.throws(() => validateQuickRecipients(value));
+  }
+});
+test('direct send requires a unique request id, bounded text, strictly selected recipients', () => {
+  const requestId = randomUUID();
+  const valid = validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'Привет', mode: 'DIRECT' });
+  assert.equal(valid.requestId, requestId);
+  assert.equal(valid.instruction, null);
+  assert.equal(valid.mode, 'DIRECT');
+  assert.throws(() => validateQuickSendInput({ requestId: 'anything', recipientIds: ['123'], text: 'Привет', mode: 'DIRECT' }));
+  assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: '', mode: 'DIRECT' }));
+  assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'text', mode: 'UNKNOWN' }));
+  assert.throws(() => validateQuickText('X'.repeat(4001)));
+  assert.throws(() => validateQuickText('a\u0000b'));
+});
+test('auto-rewrite mode cannot enqueue without explicit editing instructions', () => {
+  const requestId = randomUUID();
+  assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'Source', mode: 'REWRITE_AND_SEND' }));
+  const value = validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'Source', instruction: '  Сделай короче  ', mode: 'REWRITE_AND_SEND' });
+  assert.equal(value.instruction, 'Сделай короче');
+  assert.throws(() => validateQuickInstruction('x'.repeat(701)));
+  assert.throws(() => validateQuickInstruction('\u0000'));
+});
+test('background payload is encrypted and authenticated to both owner and job ID with existing key', () => {
+  const key = 'a'.repeat(64);
+  const jobId = randomUUID();
+  const text = 'Засекреченное сообщение: личный номер 777';
+  const previous = process.env.TELEGRAM_USER_SESSION_KEY;
+  process.env.TELEGRAM_USER_SESSION_KEY = key;
+  try {
+    const ciphertext = encryptTelegramQuickShare(text, 'user-test-id-1234', jobId);
+    assert.ok(!ciphertext.includes(text));
+    assert.equal(decryptTelegramQuickShare(ciphertext, 'user-test-id-1234', jobId), text);
+    assert.throws(() => decryptTelegramQuickShare(ciphertext, 'someone-else-1234', jobId));
+    assert.throws(() => decryptTelegramQuickShare(ciphertext, 'user-test-id-1234', randomUUID()));
+    assert.throws(() => decryptTelegramQuickShare(ciphertext.slice(0,-3)+'xyz', 'user-test-id-1234', jobId));
+  } finally {
+    if (previous === undefined) delete process.env.TELEGRAM_USER_SESSION_KEY;
+    else process.env.TELEGRAM_USER_SESSION_KEY = previous;
+  }
+});
+test('AI rewrite is text-only, excludes Telegram sessions, peers and all callable tools', () => {
+  const payload = buildQuickRewritePayload('Первоначальный текст', 'Сделай короче', 'test-model');
+  assert.equal(payload.model, 'test-model');
+  assert.equal(payload.store, false);
+  assert.equal(payload.tool_choice, 'none');
+  const serial = JSON.stringify(payload);
+  assert.ok(serial.includes('Первоначальный текст'));
+  assert.ok(serial.includes('Сделай короче'));
+  assert.ok(!serial.includes('encryptedSession'));
+  assert.ok(!serial.includes('recipientIds'));
+  assert.ok(!serial.includes('sendMessage'));
+  assert.equal(parseQuickRewriteOutput({ output_text: 'Переработанный текст' }), 'Переработанный текст');
+  assert.throws(() => parseQuickRewriteOutput({ output_text: 'a'.repeat(4001) }));
+});
