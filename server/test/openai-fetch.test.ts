@@ -53,3 +53,15 @@ test('нормализатор не копирует произвольные с
   assert.equal('authorization' in normalized, false);
   assert.equal('payload' in normalized, false);
 });
+
+test('monitoring opts out of retries after ambiguous network or provider errors', async () => {
+  let networkCalls = 0;
+  const network = createOpenAiFetch(async () => { networkCalls++; throw networkError('ECONNRESET'); }, async () => {});
+  await assert.rejects(network('https://api.openai.com', undefined, { maxAttempts: 1 }), /fetch failed/);
+  assert.equal(networkCalls, 1);
+
+  let httpCalls = 0;
+  const http = createOpenAiFetch(async () => { httpCalls++; return new Response('', { status: 503 }); }, async () => {});
+  assert.equal((await http('https://api.openai.com', undefined, { maxAttempts: 1 })).status, 503);
+  assert.equal(httpCalls, 1);
+});
