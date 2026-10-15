@@ -25,6 +25,7 @@ test('recipient resolution accepts only unique matches and never guesses ambiguo
   assert.deepEqual(matchTelegramRecipient('Иван Иванов', people), { match: 'exact', recipient: people[0] });
   assert.deepEqual(matchTelegramRecipient('@vanya_ivanov', people), { match: 'exact', recipient: people[0] });
   assert.deepEqual(matchTelegramRecipient('Сидоров', people), { match: 'unique', recipient: people[1] });
+  assert.deepEqual(matchTelegramRecipient('Ване Иванову', people), { match: 'unique', recipient: people[0] });
   assert.deepEqual(matchTelegramRecipient('Иван', people), { match: 'ambiguous', recipient: null });
   assert.deepEqual(matchTelegramRecipient('Пётр Петров', people), { match: 'not_found', recipient: null });
 });
