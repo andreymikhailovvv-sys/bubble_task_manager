@@ -7500,6 +7500,30 @@ body[data-theme='dark'] .updates-news-latest {
 
 /* New habit-tracker announcement follows the existing news-card layout,
    with a calm cyan/emerald accent in both themes. */
+/* Telegram sending announcement mirrors the layered news cards and theme tokens. */
+.updates-news-telegram {
+  background: linear-gradient(145deg, #eff6ff 0%, #ecfeff 48%, #f5f3ff 100%);
+  border-color: #93c5fd;
+}
+.updates-news-telegram-feature {
+  min-width: 0;
+  background: rgba(255,255,255,.86);
+  border: 1px solid #bae6fd;
+  color: var(--text-primary);
+}
+.updates-news-telegram-feature svg { color: #0369a1; }
+.updates-news-telegram-feature p { color: var(--text-muted); }
+body[data-theme='dark'] .updates-news-telegram {
+  background: linear-gradient(145deg, rgba(3,105,161,.24), rgba(8,88,104,.20) 56%, rgba(76,29,149,.20));
+  border-color: rgba(125,211,252,.38);
+}
+body[data-theme='dark'] .updates-news-telegram-feature {
+  background: rgba(15,23,42,.43);
+  border-color: rgba(125,211,252,.22);
+  color: var(--text-primary);
+}
+body[data-theme='dark'] .updates-news-telegram-feature svg { color: #7dd3fc; }
+
 .updates-news-habits {
   background: linear-gradient(145deg, #ecfeff, #f0fdf4 53%, #f5f3ff);
   border-color: #99e6eb;
