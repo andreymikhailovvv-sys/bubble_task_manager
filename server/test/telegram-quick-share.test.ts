@@ -5,7 +5,7 @@ import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib
 import { TELEGRAM_SAVED_MESSAGES_ID, validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
 import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateQuickInstruction } from '../src/services/telegram-quick-share-ai.service.js';
 
-test('quick send allows 1 to 3 unique personal Telegram dialog IDs, no groups, no broadcast', () => {
+test('quick send allows 1 to 3 people or groups, not raw channel/group peer IDs', () => {
   assert.deepEqual(validateQuickRecipients(['123', '987', '42']), ['123', '987', '42']);
   for(const value of [[], ['123','123'], ['1','2','3','4'], ['-100222'], ['123','@username'], '123', ['0'], [123]]) {
     assert.throws(() => validateQuickRecipients(value));
@@ -15,10 +15,10 @@ test('Saved Messages is an explicit single virtual target allowed in up to 3 qui
   assert.equal(TELEGRAM_SAVED_MESSAGES_ID, 'saved');
   assert.deepEqual(validateQuickRecipients(['saved']), ['saved']);
   assert.deepEqual(validateQuickRecipients(['saved', '123', '456']), ['saved', '123', '456']);
-  assert.throws(() => validateQuickRecipients(['saved', 'saved']), /разных личных получателей/);
+  assert.throws(() => validateQuickRecipients(['saved', 'saved']), /разных людей или беседы/);
   assert.throws(() => validateQuickRecipients(['saved', '1', '2', '3']), /трёх получателей/);
-  assert.throws(() => validateQuickRecipients(['Saved']), /разных личных получателей/);
-  assert.throws(() => validateQuickRecipients(['-10055']), /разных личных получателей/);
+  assert.throws(() => validateQuickRecipients(['Saved']), /разных людей или беседы/);
+  assert.throws(() => validateQuickRecipients(['-10055']), /разных людей или беседы/);
   const requestId = randomUUID();
   const request = validateQuickSendInput({
     requestId, recipientIds: ['saved'], text: 'Тестовое сообщение в Избранное', mode: 'DIRECT'

@@ -8,11 +8,13 @@ import { telegramUserClientNetworkOptions } from '../lib/telegram-user-client-ne
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { buildTelegramAnalysisSnapshot } from '../lib/telegram-user-client-analysis-snapshot.js';
+import { telegramSendTargetFromDialog } from './telegram-send-targets.service.js';
 
 // Closed, owner-only reader for PR5. This module is never exported as an AI tool.
 // No dialogs, message texts, attachments, or peer-access data are persisted.
 const MAX_SCANNED_DIALOGS = 150;
 const MAX_VISIBLE_DIALOGS = 60;
+const MAX_SEND_TARGETS = 120;
 const HISTORY_LIMIT = 30;
 const MAX_MESSAGE_CHARS = 4096;
 const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
@@ -161,6 +163,20 @@ export const telegramUserClientRead = {
     return withReadClient(userId, 'list', async (client, owner) => {
       const { dialogs, limited } = await loadPersonalDialogs(client, owner.accountId);
       return { dialogs, limited };
+    });
+  },
+  async listSendTargets(userId: string) {
+    // Only peer metadata: no group message history and no automatic AI access.
+    // The existing history() method remains private-user-only.
+    return withReadClient(userId, 'list', async (client, owner) => {
+      const rows = await client.getDialogs({ limit: MAX_SCANNED_DIALOGS, ignoreMigrated: true });
+      const all = rows
+        .map(row => telegramSendTargetFromDialog(row, owner.accountId))
+        .filter((target): target is NonNullable<typeof target> => target !== null);
+      return {
+        dialogs: all.slice(0, MAX_SEND_TARGETS),
+        limited: all.length > MAX_SEND_TARGETS || rows.length >= MAX_SCANNED_DIALOGS
+      };
     });
   },
   async history(userId: string, dialogId: unknown) {

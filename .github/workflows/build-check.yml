@@ -53,6 +53,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-integrations-overlay-ui.test.ts
       - name: Verify owner-only Telegram integration setup and encrypted application keys
         run: node --import tsx --test server/test/telegram-integrations-self-service.test.ts
+      - name: Verify Telegram group send targets, broadcast exclusion and private history isolation
+        run: node --import tsx --test server/test/telegram-send-group-targets.test.ts
       - name: Verify Telegram identity binding
         run: node --import tsx --test server/test/telegram-user-client-binding.test.ts
       - name: Verify Telegram user-client cryptography and access gating

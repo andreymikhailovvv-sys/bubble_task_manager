@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './TelegramMessageQuickShare.css';
 import { Check, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
-import { api, type TelegramPrivateDialog, type TelegramQuickSendJob } from '../lib/api';
+import { api, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
 
 const SAVED_MESSAGES_ID = 'saved';
 type Mode = 'recipients' | 'edit' | 'preview';
@@ -12,7 +12,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('recipients');
   const [busy, setBusy] = useState(false);
-  const [dialogs, setDialogs] = useState<TelegramPrivateDialog[]>([]);
+  const [dialogs, setDialogs] = useState<TelegramSendTarget[]>([]);
   const [dialogsLoaded, setDialogsLoaded] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [search, setSearch] = useState('');
@@ -80,7 +80,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
         setError('Telegram подключён, но отправка пока не разрешена для этого аккаунта.');
         return;
       }
-      const result = await api.telegramChatDialogs();
+      const result = await api.telegramChatSendTargets();
       if (alive.current) {
         setDialogs(result.dialogs);
         setDialogsLoaded(true);
@@ -170,7 +170,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
                   <label className="telegram-quick-share__search flex items-center gap-2 rounded-xl border px-3">
                     <Search size={16} className="text-slate-400" />
                     <input value={search} onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Поиск человека" aria-label="Поиск получателя Telegram"
+                      placeholder="Поиск человека или беседы" aria-label="Поиск человека или беседы Telegram"
                       className="telegram-quick-share__search-input min-w-0 w-full bg-transparent py-3 text-sm outline-none" />
                   </label>
                   <p className="telegram-quick-share__muted text-xs">Выберите до трёх получателей · {chosen.length}/3</p>
@@ -196,11 +196,14 @@ export function TelegramMessageQuickShare({ text }: Props) {
                           {chosen.includes(dialog.id) ? <Check size={13} /> : null}
                         </span>
                         <span className="min-w-0 flex-1 truncate font-medium">{dialog.name}
-                          {dialog.username ? <span className="telegram-quick-share__muted block truncate text-[11px]">{dialog.username}</span> : null}
+                          <span className="telegram-quick-share__muted block truncate text-[11px]">
+                            {dialog.kind === 'user' ? 'Личный чат' : dialog.kind === 'group' ? 'Группа' : 'Супергруппа'}
+                            {dialog.username ? ` · ${dialog.username}` : ''}
+                          </span>
                         </span>
                       </button>
                     ))}
-                    {visible.length === 0 && <p className="telegram-quick-share__muted p-3 text-sm">Других чатов не найдено.</p>}
+                    {visible.length === 0 && <p className="telegram-quick-share__muted p-3 text-sm">Других людей или бесед не найдено.</p>}
                   </div>
                   <div className="flex flex-wrap gap-2 pt-2">
                     <button type="button" disabled={busy || chosen.length === 0}
