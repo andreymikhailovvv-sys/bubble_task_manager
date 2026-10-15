@@ -1,5 +1,3 @@
-import { randomUUID, createHash } from 'node:crypto';
-import { Api } from 'teleproto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../lib/telegram-quick-share-crypto.js';
