@@ -8,7 +8,7 @@ const SAVED_MESSAGES_ID = 'saved';
 type Mode = 'recipients' | 'edit' | 'preview';
 type Props = { text: string; compact?: boolean };
 
-export function TelegramMessageQuickShare({ text, compact = false }: Props) {
+export function TelegramMessageQuickShare({ text }: Props) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>('recipients');
   const [busy, setBusy] = useState(false);
@@ -279,8 +279,9 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
     <>
       <button type="button" onClick={() => void show()} title="Отправить это сообщение в Telegram"
         aria-label="Отправить сообщение в Telegram"
-        className={`inline-flex items-center justify-center rounded-full text-sky-500 transition hover:bg-sky-500/10 hover:text-sky-400 ${compact ? 'h-5 w-5' : 'h-6 w-6'}`}>
-        <svg width={compact ? 14 : 16} height={compact ? 14 : 16} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        className="telegram-quick-share__trigger"
+        data-telegram-share-trigger="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M21.6 2.5a1.2 1.2 0 0 0-1.24-.15L2.5 9.85a1.15 1.15 0 0 0 .15 2.17l4.42 1.47 1.72 5.26a1.16 1.16 0 0 0 1.88.5l2.6-2.35 4.66 3.43a1.2 1.2 0 0 0 1.9-.76l2.15-15.94a1.2 1.2 0 0 0-.38-1.13ZM9.3 12.93l8.38-6.3-6.75 8.26-.28 2.04-1.35-4Z" />
         </svg>
       </button>
