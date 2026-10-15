@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import './TelegramMessageQuickShare.css';
 import { Check, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
 import { api, type TelegramPrivateDialog, type TelegramQuickSendJob } from '../lib/api';
 
@@ -285,7 +286,7 @@ export function TelegramMessageQuickShare({ text, compact = false }: Props) {
       </button>
       {modal ? createPortal(modal, document.body) : null}
       {toast && !open ? createPortal(
-        <div role="status" className="fixed bottom-5 right-4 z-[310] max-w-sm rounded-2xl border border-sky-500/40 bg-slate-900 px-4 py-3 text-sm text-white shadow-2xl">
+        <div role="status" className="telegram-quick-share telegram-quick-share__toast fixed bottom-5 right-4 z-[310] max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl">
           <div className="flex items-start gap-2">
             <MessageCircle className="mt-0.5 shrink-0 text-sky-400" size={17} />
             <span className="flex-1">{toast}</span>
