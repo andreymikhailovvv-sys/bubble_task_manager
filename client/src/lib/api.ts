@@ -224,6 +224,15 @@ export type TelegramAiChatSettings = {
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
 };
+export type TelegramMonitorSummary = {
+  summary: string;
+  decisions: string[];
+  obligations: string[];
+  openQuestions: string[];
+  risks: string[];
+  taskSuggestions: string[];
+  important: boolean;
+};
 export type TelegramAiChatPolicy = TelegramAiChatSettings & {
   id: string;
   userId: string;
@@ -231,6 +240,14 @@ export type TelegramAiChatPolicy = TelegramAiChatSettings & {
   chatKind: 'user' | 'group' | 'supergroup';
   chatTitle: string;
   isEnabled: boolean;
+  spentTodayMilli: number;
+  reservedTodayMilli: number;
+  totalSpentMilli: number;
+  lastCheckedAt: string | null;
+  lastSummaryAt: string | null;
+  lastSummary: TelegramMonitorSummary | null;
+  lastError: string | null;
+  nextCheckAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -541,8 +558,14 @@ export const api = {
     }),
   telegramAssistantPolicies: () =>
     request<{ policies: TelegramAiChatPolicy[]; activationAvailable: boolean; maximumChats: number }>('/api/telegram-user-client/assistant/chats'),
+  telegramAssistantStart: (chatId: string) =>
+    request<{ ok: true; enabled: boolean }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}/start`, { method: 'POST', body: '{}' }),
+  telegramAssistantStop: (chatId: string) =>
+    request<{ ok: true; enabled: boolean }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}/stop`, { method: 'POST', body: '{}' }),
+  telegramAssistantSummarize: (chatId: string) =>
+    request<{ ok: true; queued: boolean }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}/summarize`, { method: 'POST', body: '{}' }),
   telegramAssistantSavePolicy: (chatId: string, policy: TelegramAiChatSettings) =>
-    request<{ policy: TelegramAiChatPolicy; activationAvailable: false }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}`, {
+    request<{ policy: TelegramAiChatPolicy; activationAvailable: boolean }>(`/api/telegram-user-client/assistant/chats/${encodeURIComponent(chatId)}`, {
       method: 'PUT', body: JSON.stringify(policy)
     }),
   telegramAssistantDeletePolicy: (chatId: string) =>
