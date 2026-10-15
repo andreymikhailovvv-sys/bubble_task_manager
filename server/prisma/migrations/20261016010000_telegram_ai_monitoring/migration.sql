@@ -18,7 +18,7 @@ CREATE INDEX "TelegramAiChatPolicy_due_idx" ON "TelegramAiChatPolicy"("isEnabled
 
 CREATE TABLE "TelegramAiMonitorCall" (
   "id" TEXT NOT NULL,
-  "policyId" TEXT NOT NULL,
+  "policyId" TEXT,
   "userId" TEXT NOT NULL,
   "reservationId" TEXT NOT NULL,
   "creditDayKey" TEXT NOT NULL,
@@ -32,5 +32,5 @@ CREATE TABLE "TelegramAiMonitorCall" (
 CREATE UNIQUE INDEX "TelegramAiMonitorCall_reservationId_key" ON "TelegramAiMonitorCall"("reservationId");
 CREATE INDEX "TelegramAiMonitorCall_state_createdAt_idx" ON "TelegramAiMonitorCall"("state","createdAt");
 CREATE INDEX "TelegramAiMonitorCall_policyId_creditDayKey_idx" ON "TelegramAiMonitorCall"("policyId","creditDayKey");
-ALTER TABLE "TelegramAiMonitorCall" ADD CONSTRAINT "TelegramAiMonitorCall_policyId_fkey" FOREIGN KEY ("policyId") REFERENCES "TelegramAiChatPolicy"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "TelegramAiMonitorCall" ADD CONSTRAINT "TelegramAiMonitorCall_policyId_fkey" FOREIGN KEY ("policyId") REFERENCES "TelegramAiChatPolicy"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "TelegramAiMonitorCall" ADD CONSTRAINT "TelegramAiMonitorCall_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
