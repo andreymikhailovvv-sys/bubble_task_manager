@@ -36,7 +36,7 @@ import { telegramUserClientAuth, TelegramUserClientError } from '../services/tel
 import { TelegramUserProxyConfigurationError } from '../lib/telegram-user-client-network.js';
 import { telegramUserClientSend } from '../services/telegram-user-client-send.service.js';
 import { telegramUserClientDraft } from '../services/telegram-user-client-draft.service.js';
-import { telegramUserClientRead, requireTelegramReadOwner } from '../services/telegram-user-client-read.service.js';
+import { telegramUserClientRead } from '../services/telegram-user-client-read.service.js';
 import { telegramUserClientDialogAssistant } from '../services/telegram-user-client-dialog-assistant.service.js';
 import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
 import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
@@ -636,43 +636,6 @@ apiRouter.post('/admin/users', async (req, res) => {
 });
 
 
-// Admin-only pilot allowlist. This route cannot create a Telegram authorization.
-apiRouter.post('/admin/users/:userId/telegram-user-client-pilot', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store');
-  const userId = String(req.params.userId ?? '').trim();
-  const pilotEnabled = req.body?.pilotEnabled;
-  if (!userId || userId.length > 128 || typeof pilotEnabled !== 'boolean') {
-    res.status(400).json({ error: 'Некорректные параметры доступа к Telegram' });
-    return;
-  }
-  const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-  if (!exists) {
-    res.status(404).json({ error: 'Пользователь не найден' });
-    return;
-  }
-
-  // Revoke the permission before cleaning up any in-flight authorization.
-  if (!pilotEnabled) {
-    await prisma.telegramUserClientConnection.updateMany({ where: { userId }, data: { pilotEnabled: false } });
-    await telegramUserClientAuth.revoke(userId);
-  }
-  // Upsert additionally clears credentials as defense in depth.
-  const connection = await prisma.telegramUserClientConnection.upsert({
-    where: { userId },
-    create: { userId, pilotEnabled },
-    update: pilotEnabled
-      ? { pilotEnabled: true }
-      : { pilotEnabled: false, encryptedSession: null, telegramAccountId: null, connectedAt: null },
-    select: { pilotEnabled: true, connectedAt: true }
-  });
-  res.json({
-    userId,
-    telegramUserClientPilotEnabled: connection.pilotEnabled,
-    telegramUserClientConnected: connection.connectedAt != null
-  });
-});
-
 const telegramAuthError = (res: Response, error: unknown) => {
   if (error instanceof TelegramUserClientError) {
     res.status(error.statusCode).json({ error: error.message });
@@ -683,128 +646,6 @@ const telegramAuthError = (res: Response, error: unknown) => {
     res.status(503).json({ error: 'Не удалось выполнить операцию с Telegram. Повторите позже' });
   }
 };
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/status', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try { res.json(await telegramUserClientAuth.getStatus(String(req.params.userId ?? ''))); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/start', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try { res.json(await telegramUserClientAuth.begin(String(req.params.userId ?? ''))); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/password', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  const telegramPassword = req.body?.telegramPassword;
-  if (typeof telegramPassword !== 'string' || !telegramPassword || telegramPassword.length > 256) {
-    res.status(400).json({ error: 'Введите пароль двухэтапной аутентификации Telegram' });
-    return;
-  }
-  try { res.json(await telegramUserClientAuth.submitPassword(String(req.params.userId ?? ''), String(req.body?.attemptId ?? ''), telegramPassword)); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/cancel', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try { res.json(await telegramUserClientAuth.cancel(String(req.params.userId ?? ''), String(req.body?.attemptId ?? ''))); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/disconnect', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try { res.json(await telegramUserClientAuth.disconnect(String(req.params.userId ?? ''))); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-// PR3 is admin-only and uses the same password protection as the QR connection.
-// These routes must never be registered as AI tools or Telegram bot commands.
-apiRouter.post('/admin/users/:userId/telegram-user-client/send-status', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try { res.json(await telegramUserClientSend.status(String(req.params.userId ?? ''))); }
-  catch (error) { telegramAuthError(res, error); }
-});
-
-// AI produces editable text only. It cannot invoke send-confirm or send-preview.
-apiRouter.post('/admin/users/:userId/telegram-user-client/ai-draft', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try {
-    res.json(await telegramUserClientDraft.generate(
-      String(req.params.userId ?? ''), req.body?.instructions, req.body?.tone
-    ));
-  } catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/send-preview', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try {
-    res.json(await telegramUserClientSend.preview(
-      String(req.params.userId ?? ''), req.body?.recipientKind, req.body?.username, req.body?.text
-    ));
-  } catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/send-confirm', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  try {
-    res.json(await telegramUserClientSend.confirm(String(req.params.userId ?? ''), req.body?.confirmationId));
-  } catch (error) { telegramAuthError(res, error); }
-});
-
-// PR5: reading another person's messages is more sensitive than manual send.
-// Both admin password AND the signed-in *owner* of the connected Telegram
-// account are required. An admin cannot inspect any other pilot user's chats.
-apiRouter.post('/admin/users/:userId/telegram-user-client/dialogs', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  res.set('Pragma', 'no-cache');
-  try {
-    const userId = String(req.params.userId ?? '');
-    requireTelegramReadOwner(req.user?.id, userId);
-    res.json(await telegramUserClientRead.list(userId));
-  } catch (error) { telegramAuthError(res, error); }
-});
-
-// PR6: human-triggered consent to share precisely the selected bounded
-// history snapshot with OpenAI. No AI tools and no Telegram sending here.
-apiRouter.post('/admin/users/:userId/telegram-user-client/analyze-dialog', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  res.set('Pragma', 'no-cache');
-  try {
-    const userId = String(req.params.userId ?? '');
-    requireTelegramReadOwner(req.user?.id, userId);
-    res.json(await telegramUserClientDialogAssistant.analyze(userId, {
-      dialogId: req.body?.dialogId,
-      fingerprint: req.body?.fingerprint,
-      consent: req.body?.consent,
-      instruction: req.body?.instruction,
-      tone: req.body?.tone
-    }));
-  } catch (error) { telegramAuthError(res, error); }
-});
-
-apiRouter.post('/admin/users/:userId/telegram-user-client/history', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  res.set('Cache-Control', 'no-store, private');
-  res.set('Pragma', 'no-cache');
-  try {
-    const userId = String(req.params.userId ?? '');
-    requireTelegramReadOwner(req.user?.id, userId);
-    res.json(await telegramUserClientRead.history(userId, req.body?.dialogId));
-  } catch (error) { telegramAuthError(res, error); }
-});
 
 apiRouter.post('/admin/subscription-links', async (req, res) => {
   if (!requireAdminPassword(req, res)) return;
@@ -1429,6 +1270,44 @@ const setTelegramChatNoCache = (res: Response) => {
 };
 // One-click quick sharing from any AI message. User identity is always
 // the signed-in cookie principal. No admin password and no arbitrary userId.
+apiRouter.get('/telegram-user-client/integrations/status', requireAuth, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try {
+    const [owner, status, capability] = await Promise.all([
+      prisma.user.findUnique({ where: { id: req.user!.id }, select: { telegramChatId: true } }),
+      telegramUserClientAuth.getStatus(req.user!.id),
+      telegramUserChatCapability(req.user!.id)
+    ]);
+    res.json({ botConnected: Boolean(owner?.telegramChatId), ...status,
+      connected: capability.connected, sendEnabled: capability.sendEnabled });
+  } catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/integrations/configure', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientAuth.configure(req.user!.id, req.body?.apiId, req.body?.apiHash)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/integrations/start', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientAuth.begin(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/integrations/password', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientAuth.submitPassword(req.user!.id, req.body?.attemptId, req.body?.telegramPassword)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/integrations/cancel', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientAuth.cancel(req.user!.id, req.body?.attemptId)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/integrations/disconnect', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramUserClientAuth.disconnect(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+
 apiRouter.post('/telegram-user-client/chat/quick-send', requireAuth, requireTelegramChatOrigin, async (req, res) => {
   setTelegramChatNoCache(res);
   try {
