@@ -123,11 +123,9 @@ body[data-theme] .telegram-quick-share__search .telegram-quick-share__search-inp
 .telegram-quick-share__recipients {
   scrollbar-gutter: stable;
 }
+/* Saved Messages keeps the first position but scrolls with everyone else. */
 .telegram-quick-share__saved {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, .13);
+  position: static;
 }
 body[data-theme] .telegram-quick-share__textarea,
 body[data-theme] .telegram-quick-share__textarea:focus {
@@ -199,4 +197,47 @@ body[data-theme] .telegram-quick-share__textarea:focus {
     font-size: 12px;
     padding-inline: 8px;
   }
+}
+
+/* Shared web/Mini App message action: same bordered circular Telegram button.
+   Scope specificity prevents generic Mini App button rules from overriding it. */
+body[data-theme] button.telegram-quick-share__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0 !important;
+  border: 1px solid rgba(2, 132, 199, .42) !important;
+  border-radius: 9999px !important;
+  background: rgba(2, 132, 199, .07) !important;
+  color: #0284c7 !important;
+  box-shadow: none !important;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+body[data-theme] button.telegram-quick-share__trigger:hover {
+  background: rgba(2, 132, 199, .16) !important;
+  border-color: #0284c7 !important;
+}
+body[data-theme='dark'] button.telegram-quick-share__trigger {
+  color: #7dd3fc !important;
+  border-color: rgba(125, 211, 252, .55) !important;
+  background: rgba(14, 165, 233, .10) !important;
+}
+body[data-theme='dark'] button.telegram-quick-share__trigger:hover {
+  background: rgba(14, 165, 233, .22) !important;
+}
+body[data-theme] button.telegram-quick-share__trigger:focus-visible {
+  outline: 2px solid #0284c7 !important;
+  outline-offset: 2px;
+}
+body[data-theme] button.telegram-quick-share__trigger svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
 }

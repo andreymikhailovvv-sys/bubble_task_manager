@@ -45,6 +45,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-quick-share.test.ts
       - name: Verify AI-created Telegram inline send proposals and contact ambiguity
         run: node --import tsx --test server/test/telegram-ai-inline-send.test.ts
+      - name: Verify Telegram integration guide, quick-share icon and release announcement
+        run: node --import tsx --test server/test/telegram-integration-release-ui.test.ts
       - name: Verify integrations popover and modal remain above workspace
         run: node --import tsx --test server/test/telegram-integrations-overlay-ui.test.ts
       - name: Verify owner-only Telegram integration setup and encrypted application keys

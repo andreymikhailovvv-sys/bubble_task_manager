@@ -221,9 +221,19 @@ export function TelegramIntegrationsMenu({ onConnectBot }: Props) {
                     <li>Сначала подключите Telegram-бота Планировыча, если ещё не сделали этого.</li>
                     <li>Откройте <a href="https://my.telegram.org/apps" target="_blank" rel="noopener noreferrer" className="telegram-integrations-modal__accent underline">my.telegram.org/apps</a>. Удобнее открыть страницу в <strong>режиме инкогнито</strong>, чтобы избежать проблем с сохранённой авторизацией.</li>
                     <li>Войдите по номеру телефона Telegram, введите код, который пришлёт Telegram. Никому не передавайте этот код.</li>
-                    <li>В разделе <strong>API development tools</strong> создайте приложение, если его ещё нет. Название можно указать «Планировыч», тип приложения выбрать Desktop.</li>
+                    <li>
+                      В разделе <strong>API development tools</strong> создайте приложение, если его ещё нет. Заполните поля по образцу:
+                      <dl className="telegram-integrations-modal__app-example mt-2 space-y-1.5 rounded-xl p-3 text-xs">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt>App title</dt><dd>Planinrovych</dd></div>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt>Short name</dt><dd>planirovychapp</dd></div>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt>URL</dt><dd>https://planirovych.ru</dd></div>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt>Platform</dt><dd>Web</dd></div>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><dt>Description</dt><dd>Personal productivity assistant</dd></div>
+                      </dl>
+                      <span className="integration-menu__muted mt-1 block text-xs">Если Short name уже занят, укажите другой уникальный вариант. Если приложение создано ранее, повторно создавать его не нужно.</span>
+                    </li>
                     <li>Скопируйте <strong>App api_id</strong> и <strong>App api_hash</strong> в поля ниже. Не публикуйте их.</li>
-                    <li>После продолжения откройте Telegram на телефоне: <strong>Настройки → Устройства → Подключить устройство</strong>, отсканируйте QR и подтвердите вход.</li>
+                    <li>После того как введёте API ID и API Hash и нажмёте <strong>«Сохранить ключи и подключить»</strong>, в этом окне появится <strong>QR-код</strong>. Откройте Telegram на телефоне: <strong>Настройки → Устройства → Подключить устройство</strong>, отсканируйте QR-код и подтвердите вход.</li>
                   </ol>
                 </div>
                 {!botConnected && <p role="status" className="telegram-integrations-modal__warning mt-3 text-xs">Сначала привяжите Telegram-бота в разделе «Интеграции → Telegram-бот». Аккаунты Telegram должны совпадать.</p>}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, CalendarCheck2, Coins, FileSpreadsheet, FileText, Flame, ImagePlus, MessageCircle, Mic, Newspaper, Search, SendHorizontal, Settings2, Sparkles, StickyNote, Tags, TrendingUp, WandSparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker';
+export const LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -59,7 +59,37 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
-            <article className="updates-lesson updates-news-latest updates-news-habits rounded-2xl border p-4">
+            <article className="updates-lesson updates-news-latest updates-news-telegram rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="updates-news-date updates-news-date--cyan text-[11px] font-semibold uppercase tracking-[0.14em]">15 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Отправляйте сообщения в Telegram прямо из Планировыча</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><SendHorizontal size={18} /></span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                Теперь ИИ помогает не только подготовить информацию, но и передать её нужному человеку в Telegram.
+                Отправляйте готовые сообщения, краткие итоги обсуждений и новости по задачам без переключения между приложениями.
+              </p>
+              <div className="mt-3 space-y-2">
+                <div className="updates-news-telegram-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><SendHorizontal size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Пересылка в пару нажатий</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Под сообщениями в чатах с ИИ появилась круглая иконка Telegram. Нажмите на неё, выберите до трёх получателей (или «Избранное») и отправьте текст. Перед отправкой его можно изменить самостоятельно или с помощью ИИ.</p>
+                </div>
+                <div className="updates-news-telegram-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Mic size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Попросите ИИ текстом или голосом</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Например: «Собери главное из нашего обсуждения проекта и отправь Ивану Иванову в Telegram». Напишите запрос в чате с ИИ или продиктуйте его через голосовой ввод устройства. ИИ подготовит сообщение и покажет карточку с текстом и адресатом. Отправка произойдёт только после нажатия «Отправить».</p>
+                </div>
+                <div className="updates-news-telegram-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Settings2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Подключение через «Интеграции»</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Откройте на главной странице раздел «Интеграции» → «Отправка в Telegram». Там есть пошаговая инструкция по подключению личного аккаунта. Настроить отправку нужно один раз, затем функция будет доступна в чатах Планировыча.</p>
+                </div>
+              </div>
+              <span className="updates-news-tag updates-news-tag--cyan mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold">
+                <SendHorizontal size={13} className="shrink-0" /> Обсудили, подготовили, отправили
+              </span>
+            </article>
+            <article className="updates-lesson updates-news-habits rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="updates-news-date updates-news-date--cyan text-[11px] font-semibold uppercase tracking-[0.14em]">14 октября 2026</p>

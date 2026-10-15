@@ -10,7 +10,7 @@ test('новость о Word-файлах опубликована поверх 
   assert.ok(wordIndex >= 0);
   assert.ok(creditIndex > wordIndex);
   assert.ok(collaborationIndex > creditIndex);
-  assert.match(updates, /LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker'/);
+  assert.match(updates, /LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending'/);
   assert.match(updates, /Сделай это Word-файлом/);
   assert.match(updates, /дополнительный расход AI-кредитов минимален/);
   assert.match(updates, /hasUnreadNews/);
