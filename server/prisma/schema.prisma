@@ -118,6 +118,7 @@ model User {
   telegramUserClientSendAudits TelegramUserClientSendAudit[]
   telegramQuickSendJobs TelegramQuickSendJob[]
   telegramAiReadRequests TelegramAiReadRequest[]
+  telegramAiChatPolicies TelegramAiChatPolicy[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -620,6 +621,33 @@ model TelegramAiReadRequest {
   createdAt       DateTime @default(now())
   claimedAt       DateTime?
   @@index([userId, createdAt])
+}
+
+// Opt-in configuration only. No Telegram message bodies or tokens in this table.
+// PR1 never sets isEnabled=true; later PRs must explicitly activate a profile.
+model TelegramAiChatPolicy {
+  id                      String   @id @default(cuid())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId                  String
+  chatKind                String
+  chatTitle               String
+  mode                    String   @default("OBSERVE")
+  analysisLevel           String   @default("IMPORTANT")
+  checkIntervalMinutes    Int      @default(15)
+  maxMessagesPerCheck     Int      @default(20)
+  summaryFrequency        String   @default("DAILY")
+  instructions            String   @default("") @db.Text
+  notifyImportant         Boolean  @default(true)
+  suggestTasks            Boolean  @default(true)
+  dailyCreditLimitMilli   Int      @default(2000)
+  monthlyCreditLimitMilli Int      @default(20000)
+  isEnabled               Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([userId, chatId])
+  @@index([userId, isEnabled])
 }
 
 model TelegramSession {
