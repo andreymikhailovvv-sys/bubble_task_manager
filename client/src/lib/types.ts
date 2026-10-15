@@ -94,7 +94,7 @@ export type ChatMessage = {
   recipientUserId?: string;
   recipientName?: string;
   generatedDocument?: GeneratedDocument;
-  telegramSendDraft?: TelegramInlineSendDraft | null;
+  telegramSendDraft?: TelegramInlineSendDraft;
 };
 
 export type WebSource = { title: string; url: string };
