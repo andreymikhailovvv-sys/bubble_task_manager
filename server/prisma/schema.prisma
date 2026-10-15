@@ -667,8 +667,8 @@ model TelegramAiChatPolicy {
 // Metadata-only provider call ledger; no Telegram text or access credentials.
 model TelegramAiMonitorCall {
   id            String   @id
-  policyId      String
-  policy        TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyId      String?
+  policy        TelegramAiChatPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   reservationId String   @unique
