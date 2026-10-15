@@ -1,30 +1,86 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { Bot, CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type TelegramChatCapability, type TelegramSendTargetList } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 
 type Props = { onClose: () => void };
-const defaults: TelegramAiChatSettings = {
+
+const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
+const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
+const CHECK_INTERVALS = [5, 30, 180] as const;
+const DAILY_LIMITS = [50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null] as const;
+
+const DEFAULTS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
-  analysisLevel: 'IMPORTANT',
-  checkIntervalMinutes: 15,
-  maxMessagesPerCheck: 20,
-  summaryFrequency: 'DAILY',
+  taskMode: 'SUGGEST',
+  checkIntervalMinutes: 30,
+  dailyCreditLimitMilli: 50_000,
   instructions: '',
-  notifyImportant: true,
-  suggestTasks: true,
-  dailyCreditLimitMilli: 2000,
-  monthlyCreditLimitMilli: 20000
+  notifyImportant: true
 };
 const kindName = (kind: string) => kind === 'user' ? 'Личный чат' : kind === 'group' ? 'Группа' : 'Супергруппа';
+
+const MODE_NAMES = ['Наблюдение и сводки', 'Предлагать ответы', 'Автоответы'] as const;
+const TASK_NAMES = ['Не добавлять задачи', 'Предлагать задачи', 'Автодобавление задач'] as const;
+const CHECK_NAMES = ['Каждые 5 минут', 'Каждые 30 минут', 'Каждые 3 часа'] as const;
+const CREDIT_NAMES = ['50', '100', '250', '500', '1 000', '2 500', '5 000', 'Без ограничения'] as const;
+
+function indexOfValue<T>(options: readonly T[], value: T): number {
+  const found = options.indexOf(value);
+  return found < 0 ? 0 : found;
+}
+
+type SliderProps = {
+  title: string;
+  description: string;
+  index: number;
+  options: readonly string[];
+  shortLabels?: readonly string[];
+  onChange: (index: number) => void;
+};
+
+function SettingSlider({ title, description, index, options, shortLabels, onChange }: SliderProps) {
+  const id = useId();
+  const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
+  return (
+    <div className="telegram-ai-slider-setting">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <label htmlFor={id} className="text-sm font-semibold">{title}</label>
+        <span className="telegram-ai-slider-setting__value" aria-live="polite">{options[index]}</span>
+      </div>
+      <p className="integration-menu__muted mt-1 text-xs">{description}</p>
+      <input
+        id={id} type="range" min={0} max={options.length - 1} step={1} value={index}
+        className="telegram-ai-slider-setting__range"
+        style={{ '--slider-progress': `${progress}%` } as CSSProperties}
+        aria-valuetext={options[index]}
+        onChange={event => onChange(Number(event.currentTarget.value))}
+      />
+      <div className="telegram-ai-slider-setting__marks" aria-hidden="true">
+        {options.map((option, i) => (
+          <span key={option} className={i <= index ? 'telegram-ai-slider-setting__mark--active' : ''}/>
+        ))}
+      </div>
+      {shortLabels ? (
+        <div className="telegram-ai-slider-setting__labels" aria-hidden="true">
+          {shortLabels.map(label => <span key={label}>{label}</span>)}
+        </div>
+      ) : (
+        <div className="telegram-ai-slider-setting__ends" aria-hidden="true">
+          <span>50 кредитов</span><span>∞ без лимита</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TelegramAiAssistantSettings({ onClose }: Props) {
   const [policies, setPolicies] = useState<TelegramAiChatPolicy[]>([]);
   const [capability, setCapability] = useState<TelegramChatCapability | null>(null);
   const [available, setAvailable] = useState<TelegramSendTargetList | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<TelegramAiChatSettings>({ ...defaults });
+  const [draft, setDraft] = useState<TelegramAiChatSettings>({ ...DEFAULTS });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
@@ -60,21 +116,18 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     const existing = policies.find(policy => policy.chatId === id);
     setDraft(existing ? {
       mode: existing.mode,
-      analysisLevel: existing.analysisLevel,
+      taskMode: existing.taskMode,
       checkIntervalMinutes: existing.checkIntervalMinutes,
-      maxMessagesPerCheck: existing.maxMessagesPerCheck,
-      summaryFrequency: existing.summaryFrequency,
-      instructions: existing.instructions,
-      notifyImportant: existing.notifyImportant,
-      suggestTasks: existing.suggestTasks,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
-      monthlyCreditLimitMilli: existing.monthlyCreditLimitMilli
-    } : { ...defaults });
+      instructions: existing.instructions,
+      notifyImportant: existing.notifyImportant
+    } : { ...DEFAULTS });
     setError('');
     setNotice('');
   };
   const update = <K extends keyof TelegramAiChatSettings>(key: K, value: TelegramAiChatSettings[K]) =>
     setDraft(current => ({ ...current, [key]: value }));
+
   const loadChats = async () => {
     setLoadingChats(true); setError(''); setNotice('');
     try {
@@ -88,6 +141,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       setError(err instanceof Error ? err.message : 'Не удалось получить список чатов');
     } finally { setLoadingChats(false); }
   };
+
   const save = async () => {
     if (!selectedId || busy) return;
     setBusy(true); setError(''); setNotice('');
@@ -95,30 +149,25 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       await api.telegramAssistantSavePolicy(selectedId, draft);
       const updated = await api.telegramAssistantPolicies();
       setPolicies(updated.policies);
-      setNotice('Профиль сохранён. Фоновый мониторинг пока не активирован.');
+      setNotice('Настройки сохранены. Мониторинг ещё не запущен.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить настройки');
     } finally { setBusy(false); }
   };
+
   const remove = async () => {
     if (!selectedId || !selected || busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
       await api.telegramAssistantDeletePolicy(selectedId);
-      setPolicies(policies.filter(item => item.chatId !== selectedId));
+      setPolicies(current => current.filter(item => item.chatId !== selectedId));
       setSelectedId(null);
-      setDraft({ ...defaults });
+      setDraft({ ...DEFAULTS });
       setNotice('Переписка удалена из настроек ассистента.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить профиль');
     } finally { setBusy(false); }
   };
-  const creditInput = (key: 'dailyCreditLimitMilli' | 'monthlyCreditLimitMilli', max: number) => (
-    <input className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2 text-sm"
-      type="number" min="0" max={max} step="1"
-      value={draft[key] / 1000}
-      onChange={event => update(key, Math.round(Number(event.target.value) || 0) * 1000)} />
-  );
 
   return createPortal(
     <div className="telegram-integrations-modal fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={onClose}>
@@ -129,25 +178,23 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <div>
             <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Bot size={15}/> Интеграции</p>
             <h2 className="mt-1 text-xl font-bold">ИИ-ассистент в Telegram</h2>
-            <p className="integration-menu__muted mt-1 text-sm">Индивидуальные правила для клиентов, коллег и рабочих групп.</p>
+            <p className="integration-menu__muted mt-1 text-sm">Настройки отдельно для каждого чата или группы.</p>
           </div>
           <button aria-label="Закрыть" type="button" className="integration-menu__icon-button rounded-xl p-2" onClick={onClose}><X size={18}/></button>
         </div>
-        <div className="integration-menu__instructions mt-4 rounded-2xl border p-3 text-sm">
-          <div className="flex items-start gap-2"><ShieldCheck size={18} className="mt-0.5 shrink-0"/>
-            <div><strong>Этап 1: настройка без запуска.</strong>
-              <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Сохранение профиля не даёт ИИ доступ к сообщениям. Мониторинг и сводки появятся на следующем этапе, автоответы на третьем. Для их включения потребуется отдельное действие. Сейчас кредиты за фоновую работу не списываются.</p>
-            </div>
+        <div className="integration-menu__instructions mt-4 flex items-start gap-2 rounded-2xl border p-3 text-sm">
+          <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
+          <div>
+            <strong>Настройки без запуска</strong>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Сейчас вы задаёте правила. Мониторинг, автоответы и автосоздание задач пока выключены и потребуют отдельного включения после следующих обновлений.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
         {!loading && <>
-          {!canConfigure && <p role="status" className="telegram-integrations-modal__warning mt-4 text-sm">Сначала подключите личный Telegram в разделе «Интеграции → Отправка в Telegram». Для выбора переписок на сервере должно быть разрешено чтение.</p>}
+          {!canConfigure && <p role="status" className="telegram-integrations-modal__warning mt-4 text-sm">Для выбора чатов сначала подключите личный Telegram в «Интеграции → Отправка в Telegram» и разрешите чтение на сервере.</p>}
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
             <aside className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold">Переписки ({policies.length}/25)</p>
-              </div>
+              <p className="text-sm font-semibold">Переписки ({policies.length}/25)</p>
               <button type="button" disabled={!canConfigure || loadingChats}
                 className="integration-menu__action flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50"
                 onClick={() => void loadChats()}>
@@ -169,81 +216,50 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   <option value="" disabled>Выберите переписку</option>
                   {available.dialogs.map(dialog => <option key={dialog.id} value={dialog.id}>{dialog.name} · {kindName(dialog.kind)}</option>)}
                 </select>
-                {available.limited && <p className="integration-menu__muted text-xs">Telegram вернул ограниченный список последних чатов.</p>}
+                {available.limited && <p className="integration-menu__muted text-xs">Telegram вернул ограниченный список чатов.</p>}
               </>}
             </aside>
-            <div>
+            <div className="min-w-0">
               {!selectedId ? (
-                <div className="integration-menu__instructions rounded-2xl border p-5 text-sm">
-                  Выберите переписку. ИИ не получит её историю только от открытия списка.
-                </div>
+                <div className="integration-menu__instructions rounded-2xl border p-5 text-sm">Выберите переписку. Открытие списка не передаёт её сообщения ИИ.</div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
                     <h3 className="font-semibold">{selectedName ?? 'Выбранная переписка'}</h3>
-                    <p className="integration-menu__muted mt-1 text-xs">Режим и ограничения задаются отдельно для этого чата.</p>
+                    <p className="integration-menu__muted mt-1 text-xs">Передвигайте бегунки. Выбранное значение показано справа.</p>
                   </div>
-                  <label className="block text-sm font-medium">Режим работы
-                    <select value={draft.mode} onChange={e => update('mode', e.target.value as TelegramAiChatSettings['mode'])}
-                      className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2">
-                      <option value="OBSERVE">Наблюдение и сводки</option>
-                      <option value="SUGGEST">Предлагать ответы для подтверждения</option>
-                      <option value="AUTO">Автоответы по правилам (этап 3)</option>
-                    </select>
-                  </label>
-                  {draft.mode === 'AUTO' && <p className="telegram-integrations-modal__warning text-xs">Выбор режима не разрешает автоматические отправки. Отдельное подтверждение и лимиты автоответов появятся на этапе 3.</p>}
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label className="block text-sm">Глубина анализа
-                      <select value={draft.analysisLevel} onChange={e => update('analysisLevel', e.target.value as TelegramAiChatSettings['analysisLevel'])}
-                        className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2">
-                        <option value="IMPORTANT">Только важное · экономно</option>
-                        <option value="STANDARD">Стандартный анализ</option>
-                        <option value="DETAILED">Подробный анализ</option>
-                      </select>
-                    </label>
-                    <label className="block text-sm">Проверять каждые
-                      <select value={draft.checkIntervalMinutes} onChange={e => update('checkIntervalMinutes', Number(e.target.value))}
-                        className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2">
-                        {[5, 15, 30, 60].map(value => <option key={value} value={value}>{value} минут</option>)}
-                      </select>
-                    </label>
-                    <label className="block text-sm">Сообщений за проверку
-                      <select value={draft.maxMessagesPerCheck} onChange={e => update('maxMessagesPerCheck', Number(e.target.value))}
-                        className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2">
-                        {[10, 20, 30, 50, 100].map(value => <option key={value} value={value}>{value}</option>)}
-                      </select>
-                    </label>
-                    <label className="block text-sm">Автоматические сводки
-                      <select value={draft.summaryFrequency} onChange={e => update('summaryFrequency', e.target.value as TelegramAiChatSettings['summaryFrequency'])}
-                        className="telegram-integrations-modal__input mt-1 w-full rounded-xl border px-3 py-2">
-                        <option value="OFF">Только по запросу</option>
-                        <option value="DAILY">Ежедневно</option>
-                        <option value="WEEKLY">Еженедельно</option>
-                      </select>
-                    </label>
-                    <label className="block text-sm">Дневной предел · кредиты
-                      {creditInput('dailyCreditLimitMilli', 200)}
-                    </label>
-                    <label className="block text-sm">Месячный предел · кредиты
-                      {creditInput('monthlyCreditLimitMilli', 1000)}
-                    </label>
-                  </div>
-                  <p className="integration-menu__muted text-xs">Это жёсткие лимиты для будущей фоновой ИИ-обработки этого чата, не пополнение баланса. Значение 0 запрещает расход. Расходы и остановка при достижении лимита будут реализованы вместе с мониторингом.</p>
-                  <label className="block text-sm font-medium">Инструкции ассистенту
+                  <SettingSlider title="Режим работы" description="Как ассистент реагирует на сообщения"
+                    index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
+                    shortLabels={['Наблюдение', 'Предлагать', 'Автоответы']}
+                    onChange={i => update('mode', MODES[i] ?? MODES[0])}/>
+                  <SettingSlider title="Добавление задач" description="Что делать с договорённостями и поручениями"
+                    index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
+                    shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
+                    onChange={i => update('taskMode', TASK_MODES[i] ?? TASK_MODES[0])}/>
+                  <SettingSlider title="Интенсивность проверки" description="Как часто проверять новые сообщения"
+                    index={indexOfValue(CHECK_INTERVALS, draft.checkIntervalMinutes)} options={CHECK_NAMES}
+                    shortLabels={['5 минут', '30 минут', '3 часа']}
+                    onChange={i => update('checkIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                  <SettingSlider title="Дневной предел кредитов" description="Максимальный расход ИИ по этой переписке за день"
+                    index={indexOfValue(DAILY_LIMITS, draft.dailyCreditLimitMilli)} options={CREDIT_NAMES}
+                    onChange={i => update('dailyCreditLimitMilli', DAILY_LIMITS[i] ?? null)}/>
+                  <p className="integration-menu__muted text-xs leading-relaxed">
+                    «Без ограничения» отменяет только дневной предел для этого чата. Общий баланс кредитов и ограничения безопасности сохраняются. Реальное списание и контроль расходов появятся с мониторингом.
+                  </p>
+                  {(draft.mode === 'AUTO' || draft.taskMode === 'AUTO') && (
+                    <p className="telegram-integrations-modal__warning text-xs">Автоматические действия ещё недоступны. Этот выбор только сохраняет желаемый режим и не разрешает ни отправку сообщений, ни создание задач.</p>
+                  )}
+                  <label className="block text-sm font-semibold">Инструкции ассистенту
                     <textarea rows={3} maxLength={3000} value={draft.instructions}
                       onChange={e => update('instructions', e.target.value)}
-                      placeholder="Например: выделяй запросы клиента, договорённости и сроки; не обещай скидок."
-                      className="telegram-integrations-modal__input mt-1 w-full resize-y rounded-xl border px-3 py-2 text-sm"/>
+                      placeholder="Например: выделяй договорённости и сроки, не обещай скидки без моего разрешения."
+                      className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                   </label>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
                   </label>
-                  <label className="flex items-start gap-2 text-sm">
-                    <input type="checkbox" checked={draft.suggestTasks} onChange={e => update('suggestTasks', e.target.checked)} className="mt-1"/>
-                    Предлагать создание задач из договорённостей
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button type="button" disabled={busy || !canConfigure}
                       onClick={() => void save()}
                       className="integration-menu__action rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
