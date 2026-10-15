@@ -1,4 +1,4 @@
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource } from './types';
+import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft } from './types';
 
 export type ApiError = Error & { status?: number; code?: string };
 type UnauthorizedHandler = () => void;
@@ -119,7 +119,7 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   }
 }
 
-export type AiChatResult = { answer: string; model: string; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AiChatResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
