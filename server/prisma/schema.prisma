@@ -117,6 +117,7 @@ model User {
   telegramUserClientConnection TelegramUserClientConnection?
   telegramUserClientSendAudits TelegramUserClientSendAudit[]
   telegramQuickSendJobs TelegramQuickSendJob[]
+  telegramAiReadRequests TelegramAiReadRequest[]
   habits       Habit[]
   systemNotifications SystemNotification[]
   habitCompletions HabitCompletion[]
@@ -377,6 +378,7 @@ model TaskAiMessage {
   messageKind String      @default("AI")
   recipientUserId String?
   telegramSendDraft Json?
+  telegramReadDraft Json?
   generatedDocumentId String? @unique
   generatedDocument AiGeneratedDocument? @relation(fields: [generatedDocumentId], references: [id], onDelete: SetNull)
   createdAt DateTime      @default(now())
@@ -600,6 +602,22 @@ model TelegramQuickSendJob {
   createdAt         DateTime @default(now())
 
   @@index([state, nextRunAt])
+  @@index([userId, createdAt])
+}
+
+// Consent state only. Telegram texts never enter database, audit or client
+// history; one-time consent is scoped to owner, chat, message count and TTL.
+model TelegramAiReadRequest {
+  id              String   @id
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId          String?
+  requestedName   String
+  suggestedId     String?
+  suggestedName   String?
+  state           String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  claimedAt       DateTime?
   @@index([userId, createdAt])
 }
 
