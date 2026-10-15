@@ -25,15 +25,19 @@ const color = (declarations: string) => {
   return rgb(hex);
 };
 
-test('new habit tracker news is first, while notes and previous releases remain available', async () => {
+test('Telegram sending is newest, while habit tracker, notes and earlier releases remain visible', async () => {
   const menu = await readFile(menuPath, 'utf8');
-  assert.match(menu, /LATEST_NEWS_ID = '2026-10-14-miniapp-habit-tracker'/);
-  const dates = ['14 октября 2026', '12 октября 2026', '11 октября 2026', '8 октября 2026'];
+  assert.match(menu, /LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending'/);
+  const dates = ['15 октября 2026', '14 октября 2026', '12 октября 2026', '11 октября 2026', '8 октября 2026'];
   for (const date of dates) assert.ok(menu.includes(date), 'Missing date: ' + date);
   for (let i = 1; i < dates.length; i++) {
     assert.ok(menu.indexOf(dates[i - 1]) < menu.indexOf(dates[i]), 'News not in newest-first order');
   }
   for (const phrase of [
+    'Отправляйте сообщения в Telegram прямо из Планировыча',
+    'Пересылка в пару нажатий',
+    'Попросите ИИ текстом или голосом',
+    'Подключение через «Интеграции»',
     'Привычки в Mini App: теперь с календарём и статистикой',
     'Календарь привычки по месяцам',
     'Ваш прогресс в цифрах',
@@ -51,7 +55,7 @@ test('new habit tracker news is first, while notes and previous releases remain 
 
 test('habit tracker announcement uses distinct backgrounds in both themes and shared news tags', async () => {
   const [menu, css] = await Promise.all([readFile(menuPath, 'utf8'), readFile(cssPath, 'utf8')]);
-  assert.match(menu, /updates-lesson updates-news-latest updates-news-habits/);
+  assert.match(menu, /updates-lesson updates-news-habits/);
   assert.match(menu, /updates-news-habits-feature/);
   assert.match(menu, /updates-news-tag--cyan/);
   for (const selector of [
@@ -85,5 +89,23 @@ test('all news badges have accessible light and dark text contrast', async () =>
   for (const name of ['image', 'office']) {
     assert.match(rule(css, '.updates-news-feature--' + name), /color:/);
     assert.match(rule(css, "body[data-theme='dark'] .updates-news-feature--" + name), /color:/);
+  }
+});
+
+test('Telegram announcement follows existing themed release card patterns and one-click sending rules', async () => {
+  const [menu, css] = await Promise.all([readFile(menuPath, 'utf8'), readFile(cssPath, 'utf8')]);
+  assert.match(menu, /updates-lesson updates-news-latest updates-news-telegram/);
+  assert.match(menu, /updates-news-telegram-feature/);
+  assert.match(menu, /Обсудили, подготовили, отправили/);
+  assert.match(menu, /голосовой ввод устройства/);
+  assert.match(menu, /только после нажатия «Отправить»/);
+  for (const selector of [
+    '.updates-news-telegram',
+    '.updates-news-telegram-feature',
+    "body[data-theme='dark'] .updates-news-telegram",
+    "body[data-theme='dark'] .updates-news-telegram-feature"
+  ]) {
+    assert.match(rule(css, selector), /background:/);
+    assert.match(rule(css, selector), /border-color:|border:/);
   }
 });
