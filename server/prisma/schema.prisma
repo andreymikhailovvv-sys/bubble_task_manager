@@ -120,6 +120,7 @@ model User {
   telegramAiReadRequests TelegramAiReadRequest[]
   telegramAiChatPolicies TelegramAiChatPolicy[]
   telegramAiInboxEvents TelegramAiInboxEvent[]
+  telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   habits       Habit[]
   systemNotifications SystemNotification[]
@@ -701,11 +702,26 @@ model TelegramAiInboxEvent {
   botStatus        String   @default("PENDING")
   botClaimedAt     DateTime?
   botDeliveredAt   DateTime?
+  taskApprovals    TelegramAiTaskApproval[]
   createdAt        DateTime @default(now())
 
   @@unique([policyId, messageId])
   @@index([userId, createdAt])
   @@index([botStatus, createdAt])
+}
+
+model TelegramAiTaskApproval {
+  id          String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId     String
+  event       TelegramAiInboxEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  itemIndex   Int
+  taskId      String
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, itemIndex])
+  @@index([userId, createdAt])
 }
 
 model TelegramSession {
