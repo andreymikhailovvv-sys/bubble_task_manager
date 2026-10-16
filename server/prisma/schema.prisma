@@ -119,6 +119,8 @@ model User {
   telegramQuickSendJobs TelegramQuickSendJob[]
   telegramAiReadRequests TelegramAiReadRequest[]
   telegramAiChatPolicies TelegramAiChatPolicy[]
+  telegramAiInboxEvents TelegramAiInboxEvent[]
+  telegramAiTaskApprovals TelegramAiTaskApproval[]
   telegramAiMonitorCalls TelegramAiMonitorCall[]
   habits       Habit[]
   systemNotifications SystemNotification[]
@@ -636,6 +638,7 @@ model TelegramAiChatPolicy {
   mode                    String   @default("OBSERVE")
   taskMode                String   @default("SUGGEST")
   checkIntervalMinutes    Int      @default(30)
+  monitorModel            String   @default("gpt-6-luna")
   instructions            String   @default("") @db.Text
   notifyImportant         Boolean  @default(true)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
@@ -656,6 +659,7 @@ model TelegramAiChatPolicy {
   dailyReservedMilli      Int      @default(0)
   totalSpentMilli         Int      @default(0)
   monitorCalls            TelegramAiMonitorCall[]
+  inboxEvents             TelegramAiInboxEvent[]
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -681,6 +685,43 @@ model TelegramAiMonitorCall {
 
   @@index([state, createdAt])
   @@index([policyId, creditDayKey])
+}
+
+// Durable model-generated inbox messages, separate from browser-managed chat JSON.
+// No raw Telegram messages or authentication material.
+model TelegramAiInboxEvent {
+  id               String   @id
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policyId         String
+  policy           TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  messageId        Int
+  content          String   @db.Text
+  summary          Json
+  model            String
+  botStatus        String   @default("PENDING")
+  botClaimedAt     DateTime?
+  botDeliveredAt   DateTime?
+  taskApprovals    TelegramAiTaskApproval[]
+  createdAt        DateTime @default(now())
+
+  @@index([policyId, messageId])
+  @@index([userId, createdAt])
+  @@index([botStatus, createdAt])
+}
+
+model TelegramAiTaskApproval {
+  id          String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId     String
+  event       TelegramAiInboxEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  itemIndex   Int
+  taskId      String
+  createdAt   DateTime @default(now())
+
+  @@unique([eventId, itemIndex])
+  @@index([userId, createdAt])
 }
 
 model TelegramSession {

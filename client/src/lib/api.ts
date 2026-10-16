@@ -219,10 +219,18 @@ export type TelegramAiChatSettings = {
   mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
   taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
   checkIntervalMinutes: 5 | 30 | 180;
+  monitorModel: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
   instructions: string;
   notifyImportant: boolean;
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
+};
+export type TelegramAiAssistantInbox = {
+  projectId: string;
+  projectTitle: string;
+  projectIcon: string;
+  chats: Array<{ id: string; policyId: string; telegramChatId: string; title: string; kind: 'user' | 'group' | 'supergroup' }>;
+  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; approvedSuggestionIndices: number[] }>;
 };
 export type TelegramMonitorSummary = {
   summary: string;
@@ -330,7 +338,7 @@ export const api = {
   getAiGeneratedDocumentDownloadUrl: (id: string) => `/api/ai-documents/${encodeURIComponent(id)}/download`,
   createAiGeneratedDocumentDownloadLink: (id: string) =>
     request<{ url: string; fileName: string }>(`/api/ai-documents/${encodeURIComponent(id)}/download-link`, { method: 'POST' }),
-  getSystemNotifications: () => request<{ notifications: Array<{ id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
+  getSystemNotifications: () => request<{ notifications: Array<{ id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
   markSystemNotificationsRead: () => request<{ ok: true }>('/api/system-notifications/read', { method: 'POST' }),
   saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
     method: 'PUT',
@@ -556,6 +564,11 @@ export const api = {
     request<{ ok: true; remoteLogout: 'ok' | 'failed' | 'not_needed' }>('/api/telegram-user-client/integrations/disconnect', {
       method: 'POST', body: '{}'
     }),
+  telegramAssistantInbox: () => request<TelegramAiAssistantInbox>('/api/telegram-user-client/assistant/inbox'),
+  telegramAssistantApproveTask: (eventId: string, index: number) => request<{ ok: true; taskId: string; alreadyCreated: boolean }>(
+    `/api/telegram-user-client/assistant/inbox/${encodeURIComponent(eventId)}/tasks/${index}`,
+    { method: 'POST', body: '{}' }
+  ),
   telegramAssistantPolicies: () =>
     request<{ policies: TelegramAiChatPolicy[]; activationAvailable: boolean; maximumChats: number }>('/api/telegram-user-client/assistant/chats'),
   telegramAssistantStart: (chatId: string) =>

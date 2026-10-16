@@ -41,6 +41,7 @@ import { telegramUserClientDialogAssistant } from '../services/telegram-user-cli
 import { telegramUserChatCapability } from '../services/telegram-user-client-chat-access.service.js';
 import { telegramAiChatPolicyService } from '../services/telegram-ai-chat-policy.service.js';
 import { telegramAiMonitorControl } from '../services/telegram-ai-monitor-worker.service.js';
+import { telegramAiInboxFeed, approveTelegramAiSuggestedTask } from '../services/telegram-ai-inbox.service.js';
 import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
@@ -1307,7 +1308,17 @@ apiRouter.post('/telegram-user-client/integrations/disconnect', requireAuth, req
   catch (error) { telegramAuthError(res, error); }
 });
 
-// Owner-scoped chat settings and explicit, revocable monitoring consent.
+// Owner-scoped chat settings, inbox and explicit, revocable monitoring consent.
+apiRouter.get('/telegram-user-client/assistant/inbox', requireAuth, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await telegramAiInboxFeed(req.user!.id)); }
+  catch (error) { telegramAuthError(res, error); }
+});
+apiRouter.post('/telegram-user-client/assistant/inbox/:eventId/tasks/:index', requireAuth, requireTelegramChatOrigin, async (req, res) => {
+  setTelegramChatNoCache(res);
+  try { res.json(await approveTelegramAiSuggestedTask(req.user!.id, req.params.eventId, Number(req.params.index))); }
+  catch (error) { telegramAuthError(res, error); }
+});
 apiRouter.get('/telegram-user-client/assistant/chats', requireAuth, async (req, res) => {
   setTelegramChatNoCache(res);
   try { res.json(await telegramAiChatPolicyService.list(req.user!.id)); }

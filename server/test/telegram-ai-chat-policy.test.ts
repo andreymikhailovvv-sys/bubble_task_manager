@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   DEFAULT_TELEGRAM_AI_CHAT_SETTINGS,
   TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI,
+  TELEGRAM_AI_MONITOR_MODELS,
   validateTelegramAiChatSettings
 } from '../src/services/telegram-ai-chat-policy.service.js';
 
@@ -12,6 +13,8 @@ test('Telegram assistant has three-level modes, three intervals and a safe defau
   assert.equal(v.mode, 'OBSERVE');
   assert.equal(v.taskMode, 'SUGGEST');
   assert.equal(v.checkIntervalMinutes, 30);
+  assert.equal(v.monitorModel, 'gpt-6-luna');
+  assert.deepEqual(TELEGRAM_AI_MONITOR_MODELS, ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
   assert.equal(v.dailyCreditLimitMilli, 50_000);
   assert.deepEqual(TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI, [
     50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null
@@ -34,6 +37,9 @@ test('all valid slider positions and nullable unlimited budget round-trip', () =
       }
     }
   }
+  for (const model of TELEGRAM_AI_MONITOR_MODELS) {
+    assert.equal(validateTelegramAiChatSettings({ ...v, monitorModel: model }).monitorModel, model);
+  }
   for (const tier of TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI) {
     assert.equal(validateTelegramAiChatSettings({ ...v, dailyCreditLimitMilli: tier }).dailyCreditLimitMilli, tier);
   }
@@ -48,6 +54,8 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, dailyCreditLimitMilli: 'unlimited' },
     { ...valid, dailyCreditLimitMilli: Number.POSITIVE_INFINITY },
     { ...valid, mode: 'SUPER_AUTO' },
+    { ...valid, monitorModel: 'gpt-999-nonexistent' },
+    { ...valid, monitorModel: null },
     { ...valid, taskMode: 'CREATE_EVERYTHING' },
     { ...valid, checkIntervalMinutes: 15 },
     { ...valid, checkIntervalMinutes: 60 },

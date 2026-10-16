@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -334,10 +334,39 @@ type GeneralAiUndoOperation = {
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
 };
 type GeneralAiMessage = ChatMessage & { id: string };
-type AiChatMessage = ChatMessage & { id: string; createdAt?: string };
-type SystemNotification = { id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
+type AiChatMessage = ChatMessage & { id: string; createdAt?: string; taskSuggestions?: string[]; approvedSuggestionIndices?: number[] };
+type SystemNotification = { id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
 type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
+const TELEGRAM_AI_MANAGED_PROJECT_ID = 'telegram-ai-assistant-project';
+const TELEGRAM_AI_MANAGED_CHAT_PREFIX = 'telegram-ai-assistant:';
+
+export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAiAssistantInbox): AiChatProject[] {
+  const ownedProjects = projects.filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
+  if (!feed.chats.length) return ownedProjects.length === projects.length ? projects : ownedProjects;
+  const previous = projects.find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const chats = feed.chats.map(dialog => {
+    const old = previous?.chats.find(thread => thread.id === dialog.id);
+    const messageMap = new Map<string, AiChatMessage>();
+    for (const message of old?.messages ?? []) messageMap.set(message.id, message);
+    for (const message of feed.messages) if (message.chatId === dialog.id) {
+      messageMap.set(message.id, { ...message, role: 'assistant', content: message.content });
+    }
+    const messages = [...messageMap.values()]
+      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id))
+      .slice(-300);
+    return { id: dialog.id, title: dialog.title, messages };
+  });
+  const nextProject: AiChatProject = {
+    id: TELEGRAM_AI_MANAGED_PROJECT_ID,
+    title: 'Телеграм ассистент',
+    color: '#229ED9',
+    icon: 'telegram',
+    chats
+  };
+  if (previous && JSON.stringify(previous) === JSON.stringify(nextProject)) return projects;
+  return [...ownedProjects, nextProject];
+}
 type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
 type TaskAiMessage = ChatMessage & { id: string };
@@ -1425,9 +1454,10 @@ export default function App() {
     }
     const loadGeneralAiHistory = async () => {
       try {
-        const [result, syncedProjects] = await Promise.all([
+        const [result, syncedProjects, telegramInbox] = await Promise.all([
           api.getGeneralAssistantHistory(),
-          api.getAiChatProjects<Partial<AiChatProject>>()
+          api.getAiChatProjects<Partial<AiChatProject>>(),
+          api.telegramAssistantInbox().catch(() => null)
         ]);
         if (isCancelled) return;
         const normalized = result.messages
@@ -1436,7 +1466,8 @@ export default function App() {
         setGeneralAiMessages(normalized);
         setAiChatProjects((prev) => {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
-          const next = normalizeAiChatProjects(source, normalized);
+          const base = normalizeAiChatProjects(source, normalized);
+          const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
           if (!syncedProjects.projects?.length) void api.saveAiChatProjects(next).catch(() => undefined);
           return next;
         });
@@ -2637,6 +2668,24 @@ ${allContext}`,
     ...systemNotifications.map((notification) => ({ kind: 'notification' as const, timestamp: new Date(notification.createdAt).getTime(), notification }))
   ].sort((left, right) => left.timestamp - right.timestamp), [quickAiChatMessages, systemNotifications]);
 
+  const openSystemNotification = (notification: SystemNotification) => {
+    const eventKey = notification.eventKey ?? '';
+    if (eventKey.startsWith('telegram-ai-summary:')) {
+      const remainder = eventKey.slice('telegram-ai-summary:'.length);
+      const separator = remainder.lastIndexOf(':');
+      if (separator > 0) {
+        const policyId = remainder.slice(0, separator);
+        setActiveAiChatProjectId(TELEGRAM_AI_MANAGED_PROJECT_ID);
+        setActiveAiChatId(TELEGRAM_AI_MANAGED_CHAT_PREFIX + policyId);
+        setIsAiChatOpen(true);
+        return;
+      }
+    }
+    setActiveAiChatProjectId(aiChatProjects[0]?.id ?? '');
+    setActiveAiChatId(QUICK_AI_CHAT_ID);
+    setIsAiChatOpen(true);
+  };
+
   const markSystemNotificationsRead = () => {
     if (unreadSystemNotificationCount === 0) return;
     setUnreadSystemNotificationCount(0);
@@ -2658,7 +2707,7 @@ ${allContext}`,
   };
 
   useEffect(() => {
-    if (!isAiChatOpen || activeAiChat?.id !== QUICK_AI_CHAT_ID) return;
+    if (!isAiChatOpen || (activeAiChat?.id !== QUICK_AI_CHAT_ID && !activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX))) return;
     markSystemNotificationsRead();
   }, [isAiChatOpen, activeAiChat?.id, unreadSystemNotificationCount]);
 
@@ -2690,6 +2739,27 @@ ${allContext}`,
       window.clearInterval(interval);
       if (toastTimer !== null) window.clearTimeout(toastTimer);
       knownSystemNotificationIdsRef.current.clear();
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const feed = await api.telegramAssistantInbox();
+        if (alive) setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
+      } catch (error) {
+        console.warn('[Telegram AI inbox] sync unavailable', error);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    window.addEventListener('telegram-ai-assistant-updated', refresh);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('telegram-ai-assistant-updated', refresh);
     };
   }, [currentUser?.id]);
 
@@ -2800,7 +2870,7 @@ ${allContext}`,
 
   const openAiChatProjectSettings = (projectId: string) => {
     const project = aiChatProjects.find((item) => item.id === projectId);
-    if (!project) return;
+    if (!project || project.id === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     setAiChatProjectDraft({ mode: 'edit', projectId, title: project.title, color: project.color, icon: project.icon });
     setIsAiChatProjectDialogOpen(true);
     setAiChatContextMenu(null);
@@ -2823,7 +2893,7 @@ ${allContext}`,
   };
 
   const openAiChatRenameDialog = (chatId: string) => {
-    if (chatId === QUICK_AI_CHAT_ID) return;
+    if (chatId === QUICK_AI_CHAT_ID || chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX)) return;
     const chat = activeAiChatProject?.chats.find((item) => item.id === chatId);
     if (!chat) return;
     setRenamingAiChatId(chatId);
@@ -2845,6 +2915,7 @@ ${allContext}`,
   };
 
   const deleteAiChatProject = (projectId: string) => {
+    if (projectId === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     setAiChatProjects((prev) => {
       if (prev.length <= 1) return prev;
       const next = prev.filter((project) => project.id !== projectId);
@@ -2857,20 +2928,32 @@ ${allContext}`,
   };
 
   const createAiChatThread = () => {
-    if (!activeAiChatProject) return;
+    if (!activeAiChatProject || activeAiChatProject.id === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     const chat = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length}`, messages: [] };
     setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: [chat, ...project.chats] } : project));
     setActiveAiChatId(chat.id);
   };
 
   const deleteAiChatThread = (chatId: string) => {
-    if (chatId === QUICK_AI_CHAT_ID || !activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
+    if (chatId === QUICK_AI_CHAT_ID || chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) || !activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
     setAiChatProjects((prev) => prev.map((project) => {
       if (project.id !== activeAiChatProject.id) return project;
       const nextChats = project.chats.filter((chat) => chat.id !== chatId);
       if (activeAiChatId === chatId) setActiveAiChatId(nextChats[0]?.id ?? '');
       return { ...project, chats: nextChats };
     }));
+  };
+
+  const approveTelegramTask = async (eventId: string, index: number) => {
+    try {
+      const result = await api.telegramAssistantApproveTask(eventId, index);
+      const feed = await api.telegramAssistantInbox();
+      setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
+      if (result.ok) await load();
+      setAiChatError(null);
+    } catch (error) {
+      setAiChatError(error instanceof Error ? error.message : 'Не удалось создать задачу');
+    }
   };
 
   const sendGeneralAiQuestion = async () => {
@@ -7797,7 +7880,7 @@ ${allContext}`,
       ) : null}
 
       {systemNotificationToast ? createPortal((
-        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>
+        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>
           <span className="system-notification-label mb-1 block text-[10px] font-bold uppercase tracking-[0.16em]">⚙️ Системное уведомление</span>
           <span className="leading-snug">{systemNotificationToast.content}</span>
         </button>
@@ -7842,7 +7925,18 @@ ${allContext}`,
           onAddFiles={addAiChatFiles}
           onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
           onSend={(draft) => void sendAiChatQuestion(false, draft)}
-          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[86%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}<div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
+          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[86%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.message.taskSuggestions.map((suggestion, index) => (
+                <button key={index} type="button" title={suggestion}
+                  disabled={item.message.approvedSuggestionIndices?.includes(index)}
+                  className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-500 disabled:opacity-50"
+                  onClick={() => void approveTelegramTask(item.message.id, index)}>
+                  {item.message.approvedSuggestionIndices?.includes(index) ? '✓ Задача создана' : '＋ Создать задачу ' + (index + 1)}
+                </button>
+              ))}
+            </div>
+          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}<div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
           status={<>{aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}
