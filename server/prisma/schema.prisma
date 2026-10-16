@@ -722,6 +722,7 @@ model TelegramAiInboxEvent {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   policyId         String
   policy           TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  taskModeAtPublish String @default("SUGGEST")
   messageId        Int
   content          String   @db.Text
   summary          Json
