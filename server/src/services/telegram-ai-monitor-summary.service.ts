@@ -38,13 +38,13 @@ const TEXT_FORMAT = {
   }
 };
 
-export function buildMonitorPayload(messages: MonitorMessage[], instructions: string, taskMode: string) {
+export function buildMonitorPayload(messages: MonitorMessage[], instructions: string, taskMode: string, model = TELEGRAM_MONITOR_MODEL) {
   const source = messages.map(m => ({
     date: m.date, speaker: m.speaker.slice(0, 80),
     text: m.text.slice(0, 1200), truncated: m.truncated, hasMedia: m.hasMedia
   }));
   return {
-    model: TELEGRAM_MONITOR_MODEL,
+    model,
     store: false,
     tool_choice: 'none' as const,
     max_output_tokens: TELEGRAM_MONITOR_OUTPUT_TOKENS,
@@ -111,16 +111,16 @@ export async function countMonitorInputTokens(payload: ReturnType<typeof buildMo
     throw new Error('OpenAI monitor token count missing');
   }
   return calculateMaximumRequestCreditsMilli({
-    model: TELEGRAM_MONITOR_MODEL, inputTokens: result.input_tokens, maxOutputTokens: TELEGRAM_MONITOR_OUTPUT_TOKENS
+    model: payload.model, inputTokens: result.input_tokens, maxOutputTokens: TELEGRAM_MONITOR_OUTPUT_TOKENS
   }).totalCreditsMilli;
 }
 
 export async function analyzeMonitorMessages(input: {
-  userId: string; requestId: string; messages: MonitorMessage[]; instructions: string; taskMode: string;
+  userId: string; requestId: string; messages: MonitorMessage[]; instructions: string; taskMode: string; model: string;
 }) {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) throw new Error('OpenAI API недоступен');
-  const payload = buildMonitorPayload(input.messages, input.instructions, input.taskMode);
+  const payload = buildMonitorPayload(input.messages, input.instructions, input.taskMode, input.model);
   const response = await openAiFetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -130,17 +130,17 @@ export async function analyzeMonitorMessages(input: {
     },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(65_000)
-  }, { requestId: input.requestId, model: TELEGRAM_MONITOR_MODEL });
+  }, { requestId: input.requestId, model: input.model });
   if (!response.ok) throw new Error('OpenAI monitor request failed: ' + response.status);
   const output = await response.json() as Record<string, unknown> & { usage?: OpenAiUsage; id?: unknown };
   if (!output.usage || typeof output.usage.input_tokens !== 'number' || typeof output.usage.output_tokens !== 'number') {
     throw new Error('OpenAI monitor usage missing: refuse unknown billing');
   }
-  const actualMilli = calculateOpenAiUsageCost(TELEGRAM_MONITOR_MODEL, output.usage).estimatedCreditsMilli;
+  const actualMilli = calculateOpenAiUsageCost(input.model, output.usage).estimatedCreditsMilli;
   if (actualMilli === null) throw new Error('Unknown monitor model pricing');
   await recordOpenAiUsageShadow({
     userId: input.userId, requestId: input.requestId, actionId: input.requestId, providerCallIndex: 1,
-    feature: TELEGRAM_MONITOR_FEATURE, model: TELEGRAM_MONITOR_MODEL, usage: output.usage,
+    feature: TELEGRAM_MONITOR_FEATURE, model: input.model, usage: output.usage,
     openAiResponseId: typeof output.id === 'string' ? output.id : null, billingMode: 'DYNAMIC'
   });
   return { summary: parseMonitorSummary(output), actualMilli };
