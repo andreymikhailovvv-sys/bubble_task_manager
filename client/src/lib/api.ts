@@ -230,7 +230,7 @@ export type TelegramAiAssistantInbox = {
   projectTitle: string;
   projectIcon: string;
   chats: Array<{ id: string; policyId: string; telegramChatId: string; title: string; kind: 'user' | 'group' | 'supergroup' }>;
-  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[] }>;
+  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; approvedSuggestionIndices: number[] }>;
 };
 export type TelegramMonitorSummary = {
   summary: string;
@@ -565,6 +565,10 @@ export const api = {
       method: 'POST', body: '{}'
     }),
   telegramAssistantInbox: () => request<TelegramAiAssistantInbox>('/api/telegram-user-client/assistant/inbox'),
+  telegramAssistantApproveTask: (eventId: string, index: number) => request<{ ok: true; taskId: string; alreadyCreated: boolean }>(
+    `/api/telegram-user-client/assistant/inbox/${encodeURIComponent(eventId)}/tasks/${index}`,
+    { method: 'POST', body: '{}' }
+  ),
   telegramAssistantPolicies: () =>
     request<{ policies: TelegramAiChatPolicy[]; activationAvailable: boolean; maximumChats: number }>('/api/telegram-user-client/assistant/chats'),
   telegramAssistantStart: (chatId: string) =>
