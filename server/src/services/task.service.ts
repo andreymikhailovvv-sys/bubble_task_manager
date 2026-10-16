@@ -21,7 +21,7 @@ interface TaskInput {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | Date | null;
   aiNotificationsEnabled?: boolean;
-  taskType?: 'TASK' | 'EVENT';
+  taskType?: 'TASK' | 'EVENT' | 'REMINDER';
   location?: string | null;
   collaborationScope?: 'me' | 'all';
 }
@@ -230,6 +230,9 @@ export const taskService = {
   },
   create: async (userId: string, input: CreateTaskInput) => {
     const isEvent = input.taskType === 'EVENT';
+    const isReminder = input.taskType === 'REMINDER';
+    if (isReminder && (!input.dueDate || !Number.isFinite(new Date(input.dueDate).getTime()))) throw new TypeError('Для напоминания нужны дата и время.');
+    if (isReminder && input.parentTaskId) throw new TypeError('Напоминание не может быть подзадачей.');
     const isSubtask = Boolean(input.parentTaskId);
     const importance = toNumber(input.importance ?? 3, 'importance');
     const urgency = toNumber(input.urgency ?? 3, 'urgency');
@@ -264,8 +267,8 @@ export const taskService = {
         user: { connect: { id: userId } },
         description: input.description,
         sphere: input.sphereId ? { connect: { id: input.sphereId } } : undefined,
-        parentTask: !isEvent && input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
-        taskType: isEvent ? 'EVENT' : 'TASK',
+        parentTask: !isEvent && !isReminder && input.parentTaskId ? { connect: { id: input.parentTaskId } } : undefined,
+        taskType: isReminder ? 'REMINDER' : isEvent ? 'EVENT' : 'TASK',
         location: isEvent ? (input.location ?? null) : null,
         importance,
         urgency,
@@ -279,7 +282,7 @@ export const taskService = {
         recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
-        aiNotificationsEnabled: isEvent ? false : (input.aiNotificationsEnabled ?? true)
+        aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true)
         ,
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
@@ -401,7 +404,7 @@ export const taskService = {
     if (shouldResetTelegramNotification && !isCollaborativeRoot) {
       patch.telegramNotifiedAt = null;
     }
-    if (currentTask.taskType === 'EVENT') {
+    if (currentTask.taskType === 'EVENT' || currentTask.taskType === 'REMINDER') {
       if (!isCollaborativeRoot) patch.aiNotificationsEnabled = false;
       patch.parentTask = { disconnect: true };
     } else if (!isCollaborativeRoot && input.aiNotificationsEnabled !== undefined) {
