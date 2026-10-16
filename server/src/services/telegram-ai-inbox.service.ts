@@ -1,3 +1,4 @@
+import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
 import { Prisma, type TelegramAiChatPolicy } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { telegramService } from './telegram.service.js';
@@ -26,7 +27,7 @@ export function formatTelegramAiSummary(chatTitle: string, summary: MonitorSumma
     listPart('📌 Обязательства', summary.obligations),
     listPart('❓ Открытые вопросы', summary.openQuestions),
     listPart('⚠️ Риски', summary.risks),
-    taskMode === 'NONE' ? '' : listPart('📝 Предложения задач', summary.taskSuggestions)
+    '' // Task proposals are rendered as interactive cards, not duplicated in text.
   ].join('\n').trim();
   return text.slice(0, 3500);
 }
@@ -50,6 +51,28 @@ export async function telegramAiInboxFeed(userId: string) {
   for (const approval of approvals) {
     approvedByEvent.set(approval.eventId, [...(approvedByEvent.get(approval.eventId) ?? []), approval.itemIndex]);
   }
+  // Upgrade old published summaries lazily as well as those created by the monitor.
+  // Stable event ID means a retry never creates a second task proposal.
+  for (const event of events) {
+    const policy = await prisma.telegramAiChatPolicy.findFirst({
+      where: { id: event.policyId, userId }, select: { taskMode: true }
+    });
+    if (!policy || policy.taskMode === 'NONE') continue;
+    const summary = event.summary as { taskSuggestions?: unknown };
+    const titles = Array.isArray(summary?.taskSuggestions) ? summary.taskSuggestions.slice(0, 4) : [];
+    const actions = titles.map((title, index) => ({
+      type: 'telegram_suggestion', title: typeof title === 'string' ? title.trim().slice(0, 180) : '',
+      eventId: event.id, index
+    })).filter(action => action.title);
+    if (actions.length) {
+      await prepareTaskProposal({ userId, source: 'telegram_assistant', requestId: event.id,
+        actions, autoApply: policy.taskMode === 'AUTO' });
+    }
+  }
+  const pendingProposals = events.length ? await prisma.aiTaskProposal.findMany({
+    where: { userId, source: 'telegram_assistant', requestId: { in: events.map(e => e.id) } }
+  }) : [];
+  const proposalByEvent = new Map(pendingProposals.map(p => [p.requestId, proposalView(p)]));
   return {
     projectId: TELEGRAM_AI_PROJECT_ID, projectTitle: TELEGRAM_AI_PROJECT_TITLE,
     projectIcon: TELEGRAM_AI_PROJECT_ICON,
@@ -62,6 +85,7 @@ export async function telegramAiInboxFeed(userId: string) {
       approvedSuggestionIndices: approvedByEvent.get(event.id) ?? [],
       role: 'assistant' as const, content: event.content,
       createdAt: event.createdAt.toISOString(),
+      taskProposal: proposalByEvent.get(event.id) ?? null,
       taskSuggestions: typeof event.summary === 'object' && event.summary && 'taskSuggestions' in event.summary
         ? (event.summary as { taskSuggestions?: unknown }).taskSuggestions : []
     }))
