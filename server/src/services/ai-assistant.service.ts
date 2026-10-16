@@ -1460,7 +1460,7 @@ export const aiAssistantService = {
       try {
         call = await runDynamicResponsesCall({
           userId: input.userId, actionId: requestId, providerCallIndex: attempt,
-          feature: 'recurrence', model, apiKey,
+          feature: 'recurrence', apiKey,
           payload, maxOutputTokensCap: attempt === 1 ? 4096 : 6144
         });
         const raw = extractOutputText(call.responseJson);
@@ -1474,11 +1474,11 @@ export const aiAssistantService = {
         };
         if (rule.until && !Number.isFinite(new Date(rule.until).getTime())) throw new TypeError('Модель указала некорректную дату окончания.');
         // Common rules become local-time slots; otherwise UTC offset shifted deadlines.
-        const parts = Object.fromEntries(rrule.split(';').map((entry) => entry.split('=').map((value) => value.trim().toUpperCase())));
+        const parts = Object.fromEntries(rrule.split(';').map((entry) => entry.split('=').map((value) => value.trim().toUpperCase()))) as Record<string, string>;
         const hours = (parts.BYHOUR ?? '').split(',').map(Number);
         const minutes = (parts.BYMINUTE ?? '0').split(',').map(Number);
         const freq = /^FREQ=(DAILY|WEEKLY|MONTHLY)/i.exec(rrule)?.[1] as 'DAILY' | 'WEEKLY' | 'MONTHLY';
-        const days = freq === 'WEEKLY'
+        const days: number[] = freq === 'WEEKLY'
           ? (parts.BYDAY ?? '').split(',').map((name) => ({ MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 7 })[name as 'MO'] ?? 0)
           : freq === 'MONTHLY' ? (parts.BYMONTHDAY ?? '').split(',').map(Number) : [0];
         const interval = Number(parts.INTERVAL ?? 1);
@@ -1495,7 +1495,8 @@ export const aiAssistantService = {
         if (!computeNextRecurringDueDate(rule, new Date())) throw new TypeError('Расписание не содержит ближайшего будущего повторения.');
         const settlement = await settleDynamicResponsesCall(call);
         call = null;
-        await grantAiProductActionRating(input.userId, 'parse_recurrence');
+        try { await grantAiProductActionRating(input.userId, 'parse_recurrence'); }
+        catch (ratingError) { console.warn('[AI recurrence] rating update failed after successful billing', { requestId, error: ratingError instanceof Error ? ratingError.message : 'unknown' }); }
         return { summary: typeof parsed.summary === 'string' && parsed.summary.trim() ? parsed.summary.slice(0, 280) : 'Повторение настроено.',
           schedule: rule, model, billing: { mode: 'dynamic' as const, creditsSpentMilli: settlement.chargedMilli } };
       } catch (error) {
