@@ -142,7 +142,7 @@ export async function deliverTelegramAiBotNotifications() {
         const owner = await prisma.user.findUnique({
           where: { id: candidate.userId }, select: { telegramChatId: true }
         });
-        if (!owner?.telegramChatId) {
+        if (!owner?.telegramChatId || !process.env.TELEGRAM_BOT_TOKEN?.trim()) {
           await prisma.telegramAiInboxEvent.update({
             where: { id: candidate.id }, data: { botStatus: 'SKIPPED' }
           });
