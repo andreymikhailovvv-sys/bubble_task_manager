@@ -338,7 +338,7 @@ export const api = {
   getAiGeneratedDocumentDownloadUrl: (id: string) => `/api/ai-documents/${encodeURIComponent(id)}/download`,
   createAiGeneratedDocumentDownloadLink: (id: string) =>
     request<{ url: string; fileName: string }>(`/api/ai-documents/${encodeURIComponent(id)}/download-link`, { method: 'POST' }),
-  getSystemNotifications: () => request<{ notifications: Array<{ id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
+  getSystemNotifications: () => request<{ notifications: Array<{ id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
   markSystemNotificationsRead: () => request<{ ok: true }>('/api/system-notifications/read', { method: 'POST' }),
   saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
     method: 'PUT',
