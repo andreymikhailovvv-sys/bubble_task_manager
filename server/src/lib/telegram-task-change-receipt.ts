@@ -38,6 +38,7 @@ export function formatTelegramTaskChanges(proposal: TaskReceipt, timeZone?: stri
     const name = '«' + action.title + '»';
     const date = formattedDate(action.dueDate, timeZone);
     switch (action.type) {
+      case 'create_reminder': return 'Создал напоминание ' + name + (date ? ', на ' + date : '');
       case 'create_task': return 'Создал задачу ' + name + (date ? ', срок ' + date : '');
       case 'create_event': return 'Создал событие ' + name + (date ? ', начало ' + date : '');
       case 'create_subtask': return 'Добавил подзадачу ' + name + (date ? ', срок ' + date : '');
