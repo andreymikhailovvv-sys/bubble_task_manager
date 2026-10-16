@@ -16,6 +16,7 @@ enum TaskStatus {
 enum TaskType {
   TASK
   EVENT
+  REMINDER
 }
 
 enum AiMessageRole {
