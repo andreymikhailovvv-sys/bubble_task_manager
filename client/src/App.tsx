@@ -421,7 +421,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const defaultProject = normalized[0] ?? fallback[0];
   const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
-  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: existingQuickChat?.messages?.length ? existingQuickChat.messages : quickChat.messages };
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.length ? quickMessages.slice(-100) : (existingQuickChat?.messages ?? []) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
   return normalized;
 }
@@ -1464,7 +1464,9 @@ export default function App() {
         if (isCancelled) return;
         const normalized = result.messages
           .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-          .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
+          .map((message) => ({
+            ...message, id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content
+          }));
         setGeneralAiMessages(normalized);
         setAiChatProjects((prev) => {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
