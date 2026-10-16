@@ -19,12 +19,13 @@ type Props = {
   groups: StandaloneNoteGroup[];
   startNew: boolean;
   onClose: () => void;
-  onCreate: (data: { name: string; color: string }) => Promise<void>;
+  onCreate: (data: { name: string; color: string }) => Promise<StandaloneNoteGroup>;
+  onCreated?: (group: StandaloneNoteGroup) => void;
   onUpdate: (id: string, data: { name: string; color: string }) => Promise<void>;
   onDelete: (group: StandaloneNoteGroup) => Promise<void>;
 };
 
-export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate, onUpdate, onDelete }: Props) {
+export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate, onCreated, onUpdate, onDelete }: Props) {
   const [editedId, setEditedId] = useState<string | null>(null);
   const [formVisible, setFormVisible] = useState(startNew);
   const [name, setName] = useState('');
@@ -54,7 +55,10 @@ export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate
     try {
       const data = { name: name.trim(), color };
       if (editedId) await onUpdate(editedId, data);
-      else await onCreate(data);
+      else {
+        const created = await onCreate(data);
+        onCreated?.(created);
+      }
       setFormVisible(false);
       setEditedId(null);
     } catch (cause) {
@@ -78,7 +82,7 @@ export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate
   };
 
   return createPortal(
-    <div className="standalone-group-manager-backdrop fixed inset-0 z-[280] flex items-center justify-center p-4"
+    <div className="standalone-group-manager-backdrop fixed inset-0 z-[2147483647] flex items-center justify-center p-4"
       onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
       <section className="standalone-group-manager flex max-h-[min(85dvh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         role="dialog" aria-modal="true" aria-label="Управление группами заметок"
