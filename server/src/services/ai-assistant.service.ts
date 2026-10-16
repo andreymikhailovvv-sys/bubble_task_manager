@@ -904,6 +904,7 @@ type GeneralAssistantAction =
   | { type: 'reschedule_subtask'; subtaskId: string; dueDate: string }
   | { type: 'complete_task'; taskId: string }
   | { type: 'reopen_task'; taskId: string }
+  | { type: 'create_reminder'; title: string; description?: string; dueDate: string }
   | { type: 'rebalance_today'; taskIds?: string[] }
   | {
     type: 'create_task';
@@ -1109,6 +1110,13 @@ export function parseGeneralAssistantPayload(rawAnswer: string): { answer: strin
           ? value.taskIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
           : undefined;
         return { type, taskIds };
+      }
+      if (type === 'create_reminder') {
+        const title = typeof value.title === 'string' ? value.title.trim() : '';
+        const dueDate = typeof value.dueDate === 'string' ? value.dueDate.trim() : '';
+        if (!title || !dueDate || Number.isNaN(new Date(dueDate).getTime())) return null;
+        return { type, title, dueDate,
+          description: typeof value.description === 'string' ? value.description.trim() : '' };
       }
       if (type === 'create_task') {
         const title = typeof value.title === 'string' ? value.title.trim() : '';
@@ -1380,7 +1388,7 @@ export const aiAssistantService = {
 Если пользователь просит распределить несколько задач по временному интервалу, получи полный набор, назначь каждой конкретный dueDate внутри интервала и выполни reschedule одним или несколькими task_actions без отдельного provider round на задачу. Без точного алгоритма распределяй разумно, равномерно/последовательно, сохраняя логичный исходный порядок.
 Слова «остальные», «все ещё просроченные», «которые не перенёс» требуют снова получить актуальный список через task tools и обработать оставшиеся подходящие объекты. История и сжатая память не являются источником актуального состояния задач.`,
             'Перед изменением существующего объекта сначала найди его. Никогда не придумывай ID. При неоднозначном поиске уточни объект и ничего не меняй.',
-            'Если пользователь просит «напомни», «сделай напоминание» или «создай напоминание», это просьба создать объект в Планировыче, а не обещать сообщение от ИИ в будущем. Выбери тип по смыслу: если пользователь должен что-то сделать (позвонить, оплатить, отправить, купить, проверить, выполнить действие) — создай ЗАДАЧУ через task_action operation=create_task; если это событие или факт без действия пользователя (встреча, начало мероприятия, чей-то день рождения, наступление даты) — СОБЫТИЕ через operation=create_event. Передай ясные title, description, dueDate в часовом поясе пользователя и notifyBeforeMinutes=0 для уведомления к сроку. Учитывай явно выбранный пользователем тип при отсутствии противоречия контексту. Если дата или время неясны, уточни их до создания. Не говори об успешном создании, пока инструмент не подтвердил результат.',
+            'Если пользователь просит «напомни», «напомнить», «сделай напоминание» или «создай напоминание», СОЗДАЙ отдельный объект НАПОМИНАНИЕ через task_action operation=create_reminder, независимо от того, о каком действии говорится. Это не задача и не событие. Название должно быть понятным текстом напоминания без префикса «Напоминание:». Укажи dueDate в часовом поясе пользователя, notifyBeforeMinutes=0. Если дата или время неясны, уточни до создания. Для прямой просьбы «создай задачу» по-прежнему используй create_task; для «создай событие» используй create_event. Не сообщай об успехе до ответа инструмента.',
             'Если данные удобно сравнивать по строкам и столбцам, представляй их как корректную Markdown-таблицу с шапкой, строкой разделителей | --- | и строками данных. Не обрамляй таблицу блоком кода. Используй таблицы только там, где они действительно полезны.',
             'Сжатая память содержит контекст предыдущих сообщений этого диалога. Используй её для целей, решений, предпочтений и продолжения разговора. Она не является актуальным источником состояния задач Планировыча. Если ответ зависит от текущих статуса, срока, описания, сектора, наличия или списка задач, используй инструменты.',
             'Веб-поиск — дорогой внешний инструмент. Используй web_search только тогда, когда без актуальной внешней информации нельзя надёжно выполнить запрос пользователя. ОБЯЗАТЕЛЬНО используй web_search, если инструмент доступен и пользователь явно просит «поищи в интернете», «найди в сети», «проверь в интернете», «посмотри актуальную информацию», «найди свежие данные» или формулирует эквивалентный запрос; также используй его, если ответ существенно зависит от информации, которая могла измениться после обучения модели: текущих новостей и сегодняшних событий, актуальных цен и тарифов, наличия товаров или услуг, текущих версий программ, расписаний и характеристик продуктов, действующих правил и условий сервисов, актуальных публичных данных, законодательства и правил, которые могли измениться.',
@@ -2064,8 +2072,8 @@ export const aiAssistantService = {
       'Если тема сложная — только ключевые шаги и конкретные действия.',
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Если ответ содержит сравнение или табличные данные, оформляй их как корректную Markdown-таблицу с заголовками, строкой разделителей | --- | и строками значений. Не заключай таблицу в блок кода.',
-      'Ты можешь менять только текущую задачу и её подзадачи через actions.',
-      'Когда пользователь просит «напомни», «сделай напоминание» или «поставь напоминание» в чате текущей задачи, создай подзадачу этой задачи через create_subtask с ясным названием, описанием того, о чём нужно напомнить, и dueDate в локальном времени пользователя. Это запрос на создание подзадачи, а не на обещание личного напоминания от ИИ. При недостаточно ясных дате или времени уточни их до создания, не создавай подзадачу без срока и не обещай сообщение вне Планировыча.',
+      'Через actions можно менять только текущую задачу и её подзадачи, а также создавать самостоятельные напоминания create_reminder.',
+      'Когда пользователь просит «напомни», «сделай напоминание» или «поставь напоминание», создай самостоятельный объект типа НАПОМИНАНИЕ через action.type=create_reminder с title, description и dueDate в локальном часовом поясе пользователя. НЕ создавай подзадачу и не меняй текущую задачу. Если дата или время неясны, уточни их до создания.',
       'Прямой приказ пользователя изменить данные задачи уже является явным подтверждением. Команды вроде «сделай», «добавь», «создай», «измени», «обнови/обновляй», «перенеси», «переименуй», «скопируй», «удали» нужно выполнять в этом же ответе без дополнительного вопроса-подтверждения.',
       'Отдельное подтверждение нужно только когда ты сам предложил изменение, которого пользователь ещё явно не просил выполнить. Короткие ответы «да», «делай», «обновляй», «выполняй», «подтверждаю» после твоего предложения считаются подтверждением.',
       'Если пользователь явно просит изменение и данных достаточно, верни соответствующий action сразу. Не пиши «сделаю», «обновляю», «выполняю», «добавлю» или «сделал», если в этом же ответе actions пустой.',
@@ -2660,9 +2668,9 @@ export const aiAssistantService = {
       'В actions все dueDate формируй в локальном времени пользователя с часовым смещением (ISO-8601 с offset, например +03:00), не в UTC.',
       'Если пользователь просит summary или список задач, отвечай на русском.',
       'Названия задач в списках и summary указывай на русском (при необходимости переводи естественно, без технических идентификаторов).',
-      'Также можно управлять задачами через actions.',
+      'Также можно управлять задачами и создавать напоминания через actions. Если пользователь просит «напомни» или «создай напоминание», используй create_reminder, не create_task и не create_subtask; обязательно укажи срок.',
       'Верни строго JSON без markdown: {"answer":"...","actions":[...]}',
-      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, sphereId?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_task (taskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
+      'action.type поддерживаются: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), complete_task (taskId), reopen_task (taskId), rebalance_today (taskIds опционально), create_reminder (title, dueDate ISO, description?), create_task (title, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?, sphereId?, subtasks?), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, dueDate?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), delete_task (taskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       'Если действий не нужно — actions: [].',
       'Если в answer пишешь, что задача/подзадача создана, перенесена, обновлена, удалена или отмечена, обязательно добавь соответствующий action. Если action не сформирован, честно напиши, что изменение не применялось.',
       'Текст для пользователя клади только в answer на русском.'
@@ -3304,6 +3312,25 @@ export async function applyTaskChatProposalActions(input: {
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
               continue;
             }
+            if (action.type === 'create_reminder') {
+              const when = new Date(action.dueDate);
+              if (Number.isNaN(when.getTime())) {
+                actionReports.push('Напоминание не создано: неверный срок.');
+                continue;
+              }
+              const reminder = await prisma.task.create({
+                data: {
+                  userId: input.userId, taskType: 'REMINDER',
+                  title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 4000),
+                  dueDate: when, status: 'TODO', importance: 3, urgency: 3, priorityScore: 3,
+                  notifyBeforeMinutes: 0, aiNotificationsEnabled: false
+                }
+              });
+              createdIds.push(reminder.id);
+              actionReports.push(`Создано напоминание «${reminder.title}».`);
+              appliedActionsCount += 1;
+              continue;
+            }
             if (action.type === 'create_subtask') {
               if (action.parentTaskId !== task.id) {
                 actionReports.push('Создание подзадачи пропущено: parentTaskId не совпадает с текущей задачей.');
@@ -3434,6 +3461,26 @@ export async function applyLegacyGeneralProposalActions(input: {
           continue;
         }
   
+        if (action.type === 'create_reminder') {
+          const when = new Date(action.dueDate);
+          if (Number.isNaN(when.getTime())) {
+            actionReports.push('Напоминание не создано: некорректная дата.');
+            continue;
+          }
+          const reminder = await prisma.task.create({
+            data: {
+              userId: input.userId, taskType: 'REMINDER', title: action.title.slice(0, 180),
+              description: (action.description ?? '').slice(0, 4000),
+              dueDate: when, status: 'TODO',
+              importance: 3, urgency: 3, priorityScore: 3,
+              notifyBeforeMinutes: 0, aiNotificationsEnabled: false
+            }
+          });
+          createdIds.push(reminder.id);
+          actionReports.push(`Создано напоминание «${reminder.title}».`);
+          appliedActionsCount += 1;
+          continue;
+        }
         if (action.type === 'create_task') {
           if (action.sphereId) {
             const allowedSphere = await prisma.sphere.findFirst({

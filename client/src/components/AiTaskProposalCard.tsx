@@ -15,7 +15,7 @@ const STATUS: Record<AiTaskProposal['status'], string> = {
   UNDONE: 'Изменения отменены'
 };
 const LABELS: Record<string, string> = {
-  create_task: 'Новая задача', create_event: 'Новое событие', create_subtask: 'Новая подзадача',
+  create_task: 'Новая задача', create_event: 'Новое событие', create_reminder: 'Новое напоминание', create_subtask: 'Новая подзадача',
   telegram_suggestion: 'Предложение задачи', rename: 'Переименование', rename_task: 'Переименование',
   rename_subtask: 'Переименование', reschedule: 'Перенос', reschedule_task: 'Перенос',
   reschedule_subtask: 'Перенос', complete: 'Завершение', complete_task: 'Завершение',
@@ -54,7 +54,7 @@ function humanDescription(item: ProposalItem): string | null {
       ? (previousDate ? `${formatHumanDate(previousDate)} → ${formatHumanDate(currentDate)}` : `Новый срок: ${formatHumanDate(currentDate)}`)
       : 'Срок изменён';
   }
-  if (['create_task', 'create_event', 'create_subtask', 'telegram_suggestion'].includes(type)) {
+  if (['create_task', 'create_event', 'create_reminder', 'create_subtask', 'telegram_suggestion'].includes(type)) {
     return currentDate ? `Срок: ${formatHumanDate(currentDate)}` : null;
   }
   if (['complete', 'complete_task', 'complete_subtask'].includes(type)) return 'Отмечено выполненным';

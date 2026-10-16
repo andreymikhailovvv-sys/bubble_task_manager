@@ -9046,3 +9046,38 @@ body[data-theme='dark'] .focused-task-editor-shell .task-create-save-footer {
   background: #151a2b;
   border-top-color: #4d4569;
 }
+
+
+/* Timeline-only reminders. Distinct blue surfaces, no separate reminder modal. */
+.timeline-reminder-chip {
+  border-style: solid;
+  border-left: 4px solid #0284c7 !important;
+  color: #075985;
+  background-image: linear-gradient(125deg, rgba(14,165,233,0.18), rgba(125,211,252,0.1));
+  box-shadow: inset 0 0 0 1px rgba(14,165,233,0.08);
+}
+body[data-theme='dark'] .timeline-reminder-chip,
+.theme-dark .timeline-reminder-chip {
+  color: #e0f2fe;
+  background-image: linear-gradient(125deg, rgba(2,132,199,0.28), rgba(14,165,233,0.08));
+  box-shadow: inset 0 0 0 1px rgba(125,211,252,0.1);
+}
+.miniapp-timeline-reminder-card,
+.miniapp-calendar-reminder-entry {
+  border-left: 4px solid #0284c7 !important;
+  border-color: rgba(14,165,233,0.7) !important;
+  color: #e0f2fe;
+  background: linear-gradient(120deg, rgba(3,105,161,0.43), rgba(15,23,42,0.85)) !important;
+  box-shadow: 0 5px 14px rgba(2,132,199,0.16) !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card,
+body[data-theme='light'] .miniapp-shell .miniapp-calendar-reminder-entry {
+  color: #075985;
+  background: linear-gradient(125deg, rgba(224,242,254,0.98), rgba(240,249,255,0.96)) !important;
+  border-color: rgba(2,132,199,0.68) !important;
+  border-left-color: #0284c7 !important;
+  box-shadow: 0 4px 10px rgba(14,165,233,0.12) !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card p {
+  color: #075985;
+}

@@ -12,7 +12,7 @@ export type Task = {
   description?: string | null;
   sphereId?: string | null;
   parentTaskId?: string | null;
-  taskType?: 'TASK' | 'EVENT';
+  taskType?: 'TASK' | 'EVENT' | 'REMINDER';
   location?: string | null;
   notifyBeforeMinutes?: number | null;
   isRecurring?: boolean;
