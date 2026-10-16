@@ -5,6 +5,9 @@ import type { TelegramReadDraft, TelegramReadApproval } from '../lib/types';
 import './TelegramMessageQuickShare.css';
 import './TelegramInlineSendCard.css';
 
+// Keep accepted state on remount even when the embedded WebView storage is full.
+const approvedReadRequestsInThisSession = new Set<string>();
+
 type Props = {
   draft: TelegramReadDraft;
   onContinue: (permission: TelegramReadApproval) => Promise<void>;
@@ -23,6 +26,7 @@ export function TelegramReadConsentCard({ draft, onContinue }: Props) {
   // component instance. Polling/remounting must never enable the used button.
   const approvalStorageKey = `btm:telegram-read-approved:${draft.requestId}`;
   const [accepted, setAccepted] = useState(() => {
+    if (approvedReadRequestsInThisSession.has(draft.requestId)) return true;
     try { return window.localStorage.getItem(approvalStorageKey) === '1'; }
     catch { return false; }
   });
@@ -46,6 +50,7 @@ export function TelegramReadConsentCard({ draft, onContinue }: Props) {
     setError('');
     try {
       await onContinue({ requestId: draft.requestId, chatId, count });
+      approvedReadRequestsInThisSession.add(draft.requestId);
       try { window.localStorage.setItem(approvalStorageKey, '1'); } catch { /* storage may be full */ }
       setAccepted(true);
       setMenu(false);

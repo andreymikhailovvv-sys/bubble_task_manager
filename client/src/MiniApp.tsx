@@ -945,8 +945,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           const incoming = telegramInbox.messages.filter(m => m.chatId === chat.id).map(m => ({
             id: m.id, role: 'assistant' as const, content: m.content, taskProposal: m.taskProposal ?? undefined
           }));
-          const inbound = new Set(incoming.map(message => message.id));
-          return { id: chat.id, title: chat.title, messages: [...stored.filter(m => !inbound.has(m.id)), ...incoming] };
+          return { id: chat.id, title: chat.title,
+            messages: mergeTelegramManagedMessages(stored, incoming) };
         });
         const idx = nextAiChatProjects.findIndex(p => p.id === telegramInbox.projectId);
         const telegramProject: MiniAiChatProject = { id: telegramInbox.projectId, title: telegramInbox.projectTitle, color: '#229ed9', icon: 'telegram', chats: telegramChats };
@@ -958,8 +958,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         void api.saveAiChatProjects(nextAiChatProjects).catch(error => console.warn('[MiniApp AI chat] initial project sync failed', error));
       }
       setAiChatProjects(nextAiChatProjects);
-      setActiveAiChatProjectId(nextAiChatProjects[0]?.id ?? '');
-      setActiveAiChatId(QUICK_AI_CHAT_ID);
+      // Ordinary refreshes must never switch away from a Telegram consent card.
+      setActiveAiChatProjectId(previous =>
+        nextAiChatProjects.some(project => project.id === previous)
+          ? previous : (nextAiChatProjects[0]?.id ?? ''));
+      setActiveAiChatId(previous =>
+        nextAiChatProjects.some(project => project.chats.some(chat => chat.id === previous))
+          ? previous : QUICK_AI_CHAT_ID);
       aiChatProjectsSyncReadyRef.current = true;
       setSpheres(sphereList);
       setTasks(taskList);

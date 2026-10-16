@@ -356,9 +356,9 @@ export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAi
     for (const message of feed.messages) if (message.chatId === dialog.id) {
       messageMap.set(message.id, { ...message, role: 'assistant', content: message.content });
     }
-    const messages = [...messageMap.values()]
-      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id))
-      .slice(-300);
+    // Keep existing consent cards in their original position; newly published
+    // summaries append without re-sorting existing messages.
+    const messages = [...messageMap.values()].slice(-300);
     return { id: dialog.id, title: dialog.title, messages };
   });
   const nextProject: AiChatProject = {
