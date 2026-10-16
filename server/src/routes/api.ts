@@ -1426,13 +1426,25 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
   res.set('Cache-Control', 'no-store, private');
   const userId = req.user!.id;
   const { projectId, chatId } = req.params;
-  if (chatId === 'quick-ai-requests') {
-    const messages = await aiAssistantService.listGeneralDialog({ userId });
-    res.json({ messages });
-    return;
-  }
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiChatProjects: true } });
   const projects = Array.isArray(user?.aiChatProjects) ? user.aiChatProjects : [];
+  const outline = projects.filter((entry): entry is Prisma.JsonObject =>
+    entry != null && typeof entry === 'object' && !Array.isArray(entry) &&
+    typeof (entry as { id?: unknown }).id === 'string')
+    .map(entry => ({
+      id: String(entry.id), title: String(entry.title ?? ''), color: String(entry.color ?? '#8b5cf6'),
+      icon: String(entry.icon ?? '✨'),
+      chats: (Array.isArray(entry.chats) ? entry.chats : [])
+        .filter((item): item is Prisma.JsonObject =>
+          item != null && typeof item === 'object' && !Array.isArray(item) &&
+          typeof (item as { id?: unknown }).id === 'string')
+        .map(item => ({ id: String(item.id), title: String(item.title ?? '') }))
+    }));
+  if (chatId === 'quick-ai-requests') {
+    const messages = await aiAssistantService.listGeneralDialog({ userId });
+    res.json({ messages, projectsOutline: outline });
+    return;
+  }
   const project = projects.find((entry: unknown) =>
     entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
     (entry as { id?: unknown }).id === projectId) as { chats?: unknown } | undefined;
@@ -1444,7 +1456,7 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     res.status(404).json({ error: 'Диалог не найден' });
     return;
   }
-  res.json({ messages: chat.messages.slice(-300) });
+  res.json({ messages: chat.messages.slice(-300), projectsOutline: outline });
 }));
 
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
