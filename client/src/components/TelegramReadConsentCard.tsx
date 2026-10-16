@@ -19,7 +19,13 @@ export function TelegramReadConsentCard({ draft, onContinue }: Props) {
   const [chats, setChats] = useState<TelegramSendTarget[]>([]);
   const [fetching, setFetching] = useState(false);
   const [working, setWorking] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  // A successful one-time approval belongs to the request, not the React
+  // component instance. Polling/remounting must never enable the used button.
+  const approvalStorageKey = `btm:telegram-read-approved:${draft.requestId}`;
+  const [accepted, setAccepted] = useState(() => {
+    try { return window.localStorage.getItem(approvalStorageKey) === '1'; }
+    catch { return false; }
+  });
   const [error, setError] = useState('');
   const options = [10, 20, 30, 50, 100] as const;
 
@@ -40,6 +46,7 @@ export function TelegramReadConsentCard({ draft, onContinue }: Props) {
     setError('');
     try {
       await onContinue({ requestId: draft.requestId, chatId, count });
+      try { window.localStorage.setItem(approvalStorageKey, '1'); } catch { /* storage may be full */ }
       setAccepted(true);
       setMenu(false);
     } catch (err) {

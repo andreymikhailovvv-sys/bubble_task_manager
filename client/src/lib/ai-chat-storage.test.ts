@@ -1,7 +1,7 @@
 import type { ChatMessage } from './types';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeTelegramManagedMessages } from './ai-chat-reconciliation';
+import { mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, reconcileActiveAiChatMessages } from './ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './ai-chat-storage';
 
 test('Telegram summary polling leaves pending read-consent card and user replies intact', () => {
@@ -53,4 +53,49 @@ test('quota error falls back to metadata-only cache without an exception', () =>
   assert.doesNotThrow(() => persistAiChatProjectsCache({ setItem() {
     throw new Error('Storage disabled');
   } }, 'ai', projects));
+});
+
+test('quick chat polling preserves an approved consent chip when server history lacks metadata', () => {
+  const chip = { requestId: 'approval-1', requestedChat: 'Работа', chatName: 'Работа',
+    chatId: 'group:chat:1', match: 'exact' as const };
+  const original: Array<ChatMessage & { id: string }> = [
+    { id: 'client-user', role: 'user', content: 'Прочитай мой чат' },
+    { id: 'client-ai', role: 'assistant', content: 'Разрешите чтение',
+      telegramReadDraft: chip },
+    { id: 'client-new', role: 'assistant', content: 'Вот итог чтения' }
+  ];
+  // GeneralAiMessage rows have different IDs and no telegramReadDraft.
+  const fromServer: Array<ChatMessage & { id: string }> = [
+    { id: 'db-user', role: 'user', content: 'Прочитай мой чат' },
+    { id: 'db-ai', role: 'assistant', content: 'Разрешите чтение' },
+    { id: 'db-continuation', role: 'assistant', content: 'Вот итог чтения' }
+  ];
+  const merged = reconcileAiChatMessagesWithChips(original, fromServer);
+  assert.strictEqual(merged, original);
+  assert.strictEqual(merged[1], original[1]);
+  assert.strictEqual(merged[1].telegramReadDraft, chip);
+  assert.deepEqual(merged.map(m => m.id), ['client-user', 'client-ai', 'client-new']);
+  assert.strictEqual(reconcileActiveAiChatMessages(original, merged, false), original);
+  assert.strictEqual(reconcileAiChatMessagesWithChips(merged, fromServer), merged);
+});
+
+test('new remote messages append after old interactive cards without moving them', () => {
+  const draft = { requestId: 'approval-2', requestedChat: 'Семья', chatName: null, chatId: null,
+    match: 'not_found' as const };
+  const initial: Array<ChatMessage & { id: string }> = [
+    { id: 'a', role: 'assistant', content: 'Сначала подтвердите доступ', telegramReadDraft: draft },
+    { id: 'b', role: 'assistant', content: 'Документ готов',
+      generatedDocument: { id: 'document-1', fileName: 'result.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 10 } }
+  ];
+  const remote: Array<ChatMessage & { id: string }> = [
+    { id: 'remote-old', role: 'assistant', content: 'Сначала подтвердите доступ' },
+    { id: 'remote-document', role: 'assistant', content: 'Документ готов' },
+    { id: 'new-answer', role: 'assistant', content: 'Проверил переписку' }
+  ];
+  const merged = reconcileAiChatMessagesWithChips(initial, remote);
+  assert.deepEqual(merged.map(m => m.id), ['a', 'b', 'new-answer']);
+  assert.strictEqual(merged[0], initial[0]);
+  assert.strictEqual(merged[1], initial[1]);
+  assert.strictEqual(merged[0].telegramReadDraft, draft);
+  assert.strictEqual(merged[1].generatedDocument, initial[1].generatedDocument);
 });
