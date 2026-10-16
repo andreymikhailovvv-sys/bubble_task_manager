@@ -17,7 +17,8 @@ import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextD
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
-import { taskService } from './task.service.js';
+import { taskService, computeNextRecurringDueDate } from './task.service.js';
+import { makeManualRecurrenceSchedule, type RecurrenceSchedule as StoredRecurrenceSchedule } from './recurrence-slots.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { loadAiFileCatalog, formatAiFileCatalog, type AiFileHistoryReference } from './ai-file-catalog.service.js';
 import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool } from './ai-file-operations.service.js';
@@ -1430,23 +1431,80 @@ export const aiAssistantService = {
   async parseRecurrence(input: { userId: string; text: string; userTimeZone?: string }) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
-    const model = OTHER_AI_MODEL || RECURRENCE_MODEL;
     const requestId = randomUUID();
     const userTimeZone = input.userTimeZone || MOSCOW_TIMEZONE;
     const localNowFormatted = new Intl.DateTimeFormat('sv-SE', { timeZone: userTimeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
-    const payload = { model, input: [
-      { role: 'system', content: 'Верни строго JSON без markdown: {"summary":"...","schedule":{"rrule":"...","timezone":"...","until":"ISO|null"}}. Если срок не указан, until=null.' },
-      { role: 'user', content: `Сейчас локальное время пользователя: ${localNowFormatted}. Таймзона пользователя: ${userTimeZone}. Текст повторения: ${input.text}` }
-    ] };
-    const result = await runTextWorkflow({ userId: input.userId, actionId: requestId, feature: 'recurrence', model, apiKey, payload, legacyCharge: () => chargeAiCredits(input.userId, model, { tracking: { actionId: requestId, feature: 'recurrence', model } }), complete: (responseJson) => {
-      const raw = extractOutputText(responseJson);
-      if (!raw) throw new Error('Empty AI response');
-      const parsed = JSON.parse(raw) as { summary?: string; schedule?: { rrule?: string; timezone?: string; until?: string | null } };
-      if (!parsed.schedule?.rrule || typeof parsed.schedule.rrule !== 'string') throw new Error('Invalid recurrence schedule');
-      return { summary: parsed.summary ?? 'Повторение настроено.', schedule: { rrule: parsed.schedule.rrule, timezone: parsed.schedule.timezone ?? userTimeZone, until: parsed.schedule.until ?? null }, model };
-    } });
-    await grantAiProductActionRating(input.userId, 'parse_recurrence');
-    return result;
+    const schema = {
+      type: 'object', additionalProperties: false, required: ['summary', 'schedule'],
+      properties: {
+        summary: { type: 'string' },
+        schedule: { type: 'object', additionalProperties: false, required: ['rrule', 'timezone', 'until'],
+          properties: { rrule: { type: 'string' }, timezone: { type: 'string' }, until: { type: ['string', 'null'] } }
+        }
+      }
+    };
+    // The former 1024-token budget was entirely consumed by nano reasoning,
+    // yielding HTTP 200 with no output. Failed attempts are refunded.
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const model = attempt === 1 ? (RECURRENCE_MODEL || 'gpt-5-nano') : 'gpt-5.4-mini';
+      const payload = {
+        model,
+        ...(supportsReasoningEffort(model) ? { reasoning: { effort: 'low' } } : {}),
+        input: [
+          { role: 'system', content: 'Создай календарное правило повторения в формате RRULE. Ответ только по заданной JSON-схеме. Частота: FREQ=DAILY, WEEKLY или MONTHLY. Для дней недели используй BYDAY=MO,TU,WE,TH,FR,SA,SU; для месяца BYMONTHDAY=1..31. Укажи BYHOUR и BYMINUTE для времени в часовом поясе пользователя, а не UTC. Если срок не указан, until=null. summary на русском, коротко. Не добавляй пояснений вне JSON.' },
+          { role: 'user', content: 'Локальное время: ' + localNowFormatted + '. Временная зона: ' + userTimeZone + '. Правило: ' + input.text.slice(0, 2000) }
+        ],
+        text: { format: { type: 'json_schema', name: 'recurrence_schedule', strict: true, schema } }
+      };
+      let call: Awaited<ReturnType<typeof runDynamicResponsesCall>> | null = null;
+      try {
+        call = await runDynamicResponsesCall({
+          userId: input.userId, actionId: requestId, providerCallIndex: attempt,
+          feature: 'recurrence', model, apiKey,
+          payload, maxOutputTokensCap: attempt === 1 ? 4096 : 6144
+        });
+        const raw = extractOutputText(call.responseJson);
+        if (!raw) throw new TypeError('Модель не вернула расписание.');
+        const parsed = JSON.parse(raw) as { summary?: unknown; schedule?: { rrule?: unknown; timezone?: unknown; until?: unknown } };
+        const rrule = parsed.schedule?.rrule;
+        if (typeof rrule !== 'string' || !/^FREQ=(DAILY|WEEKLY|MONTHLY)(?:;|$)/i.test(rrule) || rrule.length > 350) throw new TypeError('Модель вернула неподдерживаемое правило повторения.');
+        const rule: StoredRecurrenceSchedule = {
+          rrule, timezone: userTimeZone,
+          until: typeof parsed.schedule?.until === 'string' ? parsed.schedule.until : null
+        };
+        if (rule.until && !Number.isFinite(new Date(rule.until).getTime())) throw new TypeError('Модель указала некорректную дату окончания.');
+        // Common rules become local-time slots; otherwise UTC offset shifted deadlines.
+        const parts = Object.fromEntries(rrule.split(';').map((entry) => entry.split('=').map((value) => value.trim().toUpperCase())));
+        const hours = (parts.BYHOUR ?? '').split(',').map(Number);
+        const minutes = (parts.BYMINUTE ?? '0').split(',').map(Number);
+        const freq = /^FREQ=(DAILY|WEEKLY|MONTHLY)/i.exec(rrule)?.[1] as 'DAILY' | 'WEEKLY' | 'MONTHLY';
+        const days = freq === 'WEEKLY'
+          ? (parts.BYDAY ?? '').split(',').map((name) => ({ MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 7 })[name as 'MO'] ?? 0)
+          : freq === 'MONTHLY' ? (parts.BYMONTHDAY ?? '').split(',').map(Number) : [0];
+        const interval = Number(parts.INTERVAL ?? 1);
+        if (interval === 1 && days.length && days.every((day) => freq === 'DAILY' || (day >= 1 && day <= (freq === 'WEEKLY' ? 7 : 31))) &&
+          hours.length && minutes.length && hours.every((hour) => Number.isInteger(hour) && hour >= 0 && hour <= 23) &&
+          minutes.every((minute) => Number.isInteger(minute) && minute >= 0 && minute <= 59) &&
+          days.length * hours.length * minutes.length <= 31) {
+          const slots = days.flatMap((day) => hours.flatMap((hour) => minutes.map((minute) => ({
+            time: String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0'),
+            ...(freq === 'WEEKLY' ? { weekday: day } : freq === 'MONTHLY' ? { monthDay: day } : {})
+          }))));
+          rule.slots = makeManualRecurrenceSchedule(freq, slots, userTimeZone).slots;
+        }
+        if (!computeNextRecurringDueDate(rule, new Date())) throw new TypeError('Расписание не содержит ближайшего будущего повторения.');
+        const settlement = await settleDynamicResponsesCall(call);
+        call = null;
+        await grantAiProductActionRating(input.userId, 'parse_recurrence');
+        return { summary: typeof parsed.summary === 'string' && parsed.summary.trim() ? parsed.summary.slice(0, 280) : 'Повторение настроено.',
+          schedule: rule, model, billing: { mode: 'dynamic' as const, creditsSpentMilli: settlement.chargedMilli } };
+      } catch (error) {
+        if (call) await refundDynamicResponsesCall(call);
+        const message = error instanceof Error ? error.message : 'Не удалось сформировать расписание.';
+        console.warn('[AI recurrence] invalid planning attempt', { requestId, attempt, model, reason: message.slice(0, 150) });
+      }
+    }
+    throw new TypeError('ИИ не смог подготовить расписание с двух попыток. Кредиты за неудачные попытки возвращены. Попробуйте описать дни и время точнее.');
   },
   async generateDailyCheckup(input: { userId: string }) {
     const user = await prisma.user.findUnique({ where: { id: input.userId }, select: { timeZone: true } });
