@@ -28,6 +28,7 @@ import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
 import { api } from "../lib/api";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
+import { ResizableDescriptionSurface } from "./ResizableDescriptionSurface";
 import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
@@ -927,9 +928,9 @@ export function TaskEditor({
                   buttonClassName="focused-task-icon-button"
                 />
               </div>
-              <div className="focused-task-description-surface mt-3 flex h-32 min-h-32 items-start rounded-2xl bg-slate-50/70 p-3">
+              <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl bg-slate-50/70 p-3">
                 {isEditing && !isSubtask && !isEventEditor ? (
-                  <p className="focus-task-description task-edit-description min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-muted">
+                  <p className="focus-task-description task-edit-description h-full min-h-0 min-w-0 w-full overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-muted">
                     <LinkifiedText text={descriptionValue} fallback="Описание не заполнено." stopPropagationOnLinkClick />
                   </p>
                 ) : (
@@ -940,7 +941,7 @@ export function TaskEditor({
                     onChange={updateDescription}
                   />
                 )}
-              </div>
+              </ResizableDescriptionSurface>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
