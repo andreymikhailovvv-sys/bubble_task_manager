@@ -99,3 +99,33 @@ test('new remote messages append after old interactive cards without moving them
   assert.strictEqual(merged[0].telegramReadDraft, draft);
   assert.strictEqual(merged[1].generatedDocument, initial[1].generatedDocument);
 });
+
+test('duplicate remote rows match local messages by occurrence without losing chips', () => {
+  const chip = { requestId: 'keep-me', requestedChat: 'Чат', chatId: null, chatName: null, match: 'not_found' as const };
+  const local: Array<ChatMessage & { id: string }> = [
+    { id: 'a', role: 'assistant', content: 'Повтор', telegramReadDraft: chip },
+    { id: 'b', role: 'assistant', content: 'Повтор' },
+    { id: 'c', role: 'user', content: 'Повтор' }
+  ];
+  const remote: Array<ChatMessage & { id: string }> = [
+    { id: 'server-one', role: 'assistant', content: 'Повтор' },
+    { id: 'server-two', role: 'assistant', content: 'Повтор' },
+    { id: 'server-three', role: 'user', content: 'Повтор' }
+  ];
+  assert.strictEqual(reconcileAiChatMessagesWithChips(local, remote), local);
+  const next = reconcileAiChatMessagesWithChips(local, [...remote,
+    { id: 'server-four', role: 'assistant', content: 'Новый ответ' }]);
+  assert.deepEqual(next.map(message => message.id), ['a', 'b', 'c', 'server-four']);
+  assert.strictEqual(next[0], local[0]);
+  assert.strictEqual(next[0].telegramReadDraft, chip);
+});
+
+test('large unchanged chat reconciliation keeps original array and message references', () => {
+  const local: Array<ChatMessage & { id: string }> = Array.from({ length: 600 }, (_, i) => ({
+    id: `local-${i}`, role: i % 2 ? 'assistant' : 'user', content: `Сообщение ${i}`
+  }));
+  const remote = local.map((message, i) => ({ ...message, id: `remote-${i}` }));
+  const next = reconcileAiChatMessagesWithChips(local, remote);
+  assert.strictEqual(next, local);
+  assert.strictEqual(next[300], local[300]);
+});
