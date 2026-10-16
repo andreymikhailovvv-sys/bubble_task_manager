@@ -90,6 +90,16 @@ export type TelegramInlineSendDraft = {
   match: 'exact' | 'unique' | 'ambiguous' | 'not_found';
 };
 
+export type AiTaskProposal = {
+  id: string;
+  status: 'PENDING' | 'APPLYING' | 'APPLIED' | 'REJECTED' | 'FAILED' | 'CONFLICT';
+  source: 'planner' | 'task_chat' | 'telegram_assistant';
+  autoApplied: boolean;
+  operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string }>;
+  result: { reports?: string[]; createdIds?: string[] } | null;
+  error: string | null;
+};
+
 export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
@@ -103,6 +113,7 @@ export type ChatMessage = {
   recipientUserId?: string;
   recipientName?: string;
   generatedDocument?: GeneratedDocument;
+  taskProposal?: AiTaskProposal | null;
   telegramSendDraft?: TelegramInlineSendDraft;
   telegramReadDraft?: TelegramReadDraft;
 };

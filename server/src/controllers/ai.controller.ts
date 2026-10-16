@@ -142,7 +142,7 @@ export const aiController = {
       traceResult = result;
       if (chatId === 'quick-ai-requests' || (!chatId && projectTitle === 'Личный проект' && chatTitle === 'Быстрые запросы')) {
         if (!telegramContinuation) await aiAssistantService.appendGeneralDialogMessages({ userId: req.user!.id, messages: [{ role: 'user', content: question }] });
-        await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
+        await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
       }
       const { diagnostics: _diagnostics, workflowDiagnostics: _workflowDiagnostics, ...publicResult } = result;
       await completeAiChatRequest(requestClaim ?? { kind: 'untracked' }, publicResult);
@@ -215,7 +215,7 @@ export const aiController = {
         userId: req.user!.id,
         messages: [{ role: 'user', content: question.trim() }]
       });
-      await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
+      await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
@@ -366,6 +366,7 @@ export const aiController = {
         content: result.answer,
         creditsSpentMilli: result.billing.creditsSpentMilli,
         generatedDocumentId: result.generatedDocument?.id ?? null,
+        taskProposalId: result.taskProposal?.id ?? null,
         telegramSendDraft: result.telegramSendDraft ?? null,
         telegramReadDraft: result.telegramReadDraft ?? null,
         telegramReadOwnerId: req.body?.telegramRead != null ? req.user!.id : null

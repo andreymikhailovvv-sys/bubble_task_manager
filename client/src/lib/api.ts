@@ -5,7 +5,7 @@ type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_workspace' | 'searching_notes' | 'reading_note' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
 export type TaskAiProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_subtasks' | 'analyzing_subtasks' | 'reading_subtask' | 'searching_files' | 'reading_file' | 'analyzing_retrieved_context' | 'forming_answer' | 'applying_changes' | 'generating_image' | 'editing_image' | 'editing_document';
-export type TaskAssistantResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; billing?: AiBilling };
+export type TaskAssistantResult = { taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; billing?: AiBilling };
 type TaskAiStreamEvent = { type: 'status'; status: TaskAiProgressStatus } | { type: 'result'; result: TaskAssistantResult } | { type: 'error'; message: string } | { type: 'ping' };
 
 let unauthorizedHandler: UnauthorizedHandler | null = null;
@@ -119,7 +119,7 @@ async function askTaskAssistantStreaming(taskId: string, payload: { clientReques
   }
 }
 
-export type AiChatResult = { answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
+export type AiChatResult = { taskProposal?: import('./types').AiTaskProposal | null; answer: string; model: string; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; taskDataChanged: boolean; actionReports?: string[]; generatedDocument?: GeneratedDocument | null; undoOperations?: Array<{ taskId: string; previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' } }>; webSearchUsed: boolean; webSources?: WebSource[]; webCitations?: WebCitation[]; billing?: AiBilling };
 export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onStatus?: (status: AiChatProgressStatus) => void): Promise<AiChatResult> {
   const reader = stream.getReader(); const decoder = new TextDecoder(); let buffer = ''; let result: AiChatResult | null = null;
   const consume = (line: string) => { if (!line.trim()) return; const event = JSON.parse(line) as { type: string; status?: AiChatProgressStatus; result?: AiChatResult; message?: string }; if (event.type === 'status' && event.status) onStatus?.(event.status); else if (event.type === 'result' && event.result) result = event.result; else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ'); };
@@ -230,7 +230,7 @@ export type TelegramAiAssistantInbox = {
   projectTitle: string;
   projectIcon: string;
   chats: Array<{ id: string; policyId: string; telegramChatId: string; title: string; kind: 'user' | 'group' | 'supergroup' }>;
-  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; approvedSuggestionIndices: number[] }>;
+  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; taskProposal?: import('./types').AiTaskProposal | null; approvedSuggestionIndices: number[] }>;
 };
 export type TelegramMonitorSummary = {
   summary: string;
@@ -482,6 +482,7 @@ export const api = {
     request<{ messages: ChatMessage[] }>(`/api/ai-general-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askGeneralAssistant: (payload: { question: string }) =>
     request<{
+      taskProposal?: import('./types').AiTaskProposal | null;
       answer: string;
       model: string;
       actionReports: string[];
@@ -564,6 +565,11 @@ export const api = {
     request<{ ok: true; remoteLogout: 'ok' | 'failed' | 'not_needed' }>('/api/telegram-user-client/integrations/disconnect', {
       method: 'POST', body: '{}'
     }),
+  aiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}`),
+  approveAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: '{}' }),
+  rejectAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/reject`, { method: 'POST', body: '{}' }),
+  aiTaskProposalPreference: () => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences'),
+  setAiTaskProposalPreference: (autoApply: boolean) => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences', { method: 'PATCH', body: JSON.stringify({ autoApply }) }),
   telegramAssistantInbox: () => request<TelegramAiAssistantInbox>('/api/telegram-user-client/assistant/inbox'),
   telegramAssistantApproveTask: (eventId: string, index: number) => request<{ ok: true; taskId: string; alreadyCreated: boolean }>(
     `/api/telegram-user-client/assistant/inbox/${encodeURIComponent(eventId)}/tasks/${index}`,

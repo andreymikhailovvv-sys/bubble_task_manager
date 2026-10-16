@@ -5,6 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools } from './ai-chat-tools.service.js';
+import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { requiresNoteCreation } from './ai-create-note.service.js';
@@ -43,6 +44,7 @@ export type ChatMessage = {
   content: string;
   creditsSpentMilli?: number;
   generatedDocument?: GeneratedDocumentMeta;
+  taskProposal?: TaskProposalView | null;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -1829,11 +1831,17 @@ export const aiAssistantService = {
         messageKind: true,
         recipientUserId: true,
         telegramSendDraft: true,
+        aiTaskProposalId: true,
         telegramReadDraft: true,
         generatedDocument: { select: { id: true, fileName: true, mimeType: true, size: true } },
         user: { select: { name: true, username: true } }
       }
     });
+    const proposalIds = [...new Set(messages.map(m => m.aiTaskProposalId).filter((id): id is string => Boolean(id)))];
+    const taskProposalRows = proposalIds.length
+      ? await prisma.aiTaskProposal.findMany({ where: { id: { in: proposalIds }, userId: input.userId } })
+      : [];
+    const taskProposalMap = new Map(taskProposalRows.map(p => [p.id, proposalView(p)]));
     const recipientIds = Array.from(new Set(messages.map((message) => message.recipientUserId).filter((value): value is string => Boolean(value))));
     const recipients = recipientIds.length > 0
       ? await prisma.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, name: true, username: true } })
@@ -1855,6 +1863,9 @@ export const aiAssistantService = {
         : {}),
       ...(message.role === 'assistant' && message.generatedDocument
         ? { generatedDocument: message.generatedDocument }
+        : {}),
+      ...(message.role === 'assistant' && message.userId === input.userId && message.aiTaskProposalId
+        ? { taskProposal: taskProposalMap.get(message.aiTaskProposalId) }
         : {}),
       ...(message.role === 'assistant' && message.userId === input.userId && message.telegramReadDraft
         ? { telegramReadDraft: message.telegramReadDraft as TelegramReadDraft }
@@ -1901,7 +1912,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1918,6 +1929,7 @@ export const aiAssistantService = {
         content,
         creditsSpentMilli: input.creditsSpentMilli,
         generatedDocumentId: input.generatedDocumentId ?? null,
+        aiTaskProposalId: input.taskProposalId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
         ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}),
         ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
@@ -1932,12 +1944,18 @@ export const aiAssistantService = {
         ...(input.since ? { createdAt: { gte: input.since } } : {})
       },
       orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true, creditsSpentMilli: true }
+      select: { role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true }
     });
 
+    const proposalIds = messages.map(m => m.aiTaskProposalId).filter((id): id is string => Boolean(id));
+    const proposals = proposalIds.length ? await prisma.aiTaskProposal.findMany({
+      where: { id: { in: proposalIds }, userId: input.userId }
+    }) : [];
+    const byId = new Map(proposals.map(p => [p.id, proposalView(p)]));
     return messages.map((message) => ({
       role: message.role,
       content: message.content,
+      ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));
   },
@@ -1957,10 +1975,10 @@ export const aiAssistantService = {
     });
   },
 
-  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number }) => {
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli } });
+    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
@@ -2461,165 +2479,22 @@ export const aiAssistantService = {
           answerLength: parsed.answer.length,
           actions: parsed.actions
         });
+        const taskProposal = parsed.actions.length
+          ? await prepareTaskProposal({
+              userId: input.userId, requestId: input.currentMessageId ?? requestId,
+              source: 'task_chat', taskId: input.taskId,
+              actions: parsed.actions as unknown as Record<string, unknown>[],
+              userTimeZone: input.userTimeZone
+            })
+          : null;
         const actionReports: string[] = [];
-        let appliedActionsCount = 0;
-        if (parsed.actions.length > 0) input.onProgress?.('applying_changes');
-        for (const action of parsed.actions) {
-          console.info('[AI] Applying task action', {
-            requestId,
-            mode: input.mode ?? 'fast',
-            model,
-            taskId: input.taskId,
-            userId: input.userId,
-            action
-          });
-          if (action.type === 'reschedule_task') {
-            if (action.taskId !== task.id) {
-              actionReports.push('Перенос задачи пропущен: action.taskId не совпадает с текущей задачей.');
-              continue;
-            }
-            const nextDueDate = new Date(action.dueDate);
-            if (Number.isNaN(nextDueDate.getTime())) {
-              actionReports.push('Перенос задачи пропущен: неверный формат даты.');
-              continue;
-            }
-            await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
-            actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
-            appliedActionsCount += 1;
-            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
-            continue;
-          }
-          if (action.type === 'rename_task') {
-            if (action.taskId !== task.id) {
-              actionReports.push('Переименование задачи пропущено: action.taskId не совпадает с текущей задачей.');
-              continue;
-            }
-            await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
-            actionReports.push(`Переименовал задачу "${task.title}".`);
-            appliedActionsCount += 1;
-            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
-            continue;
-          }
-          if (action.type === 'update_task') {
-            if (action.taskId !== task.id) {
-              actionReports.push('Обновление задачи пропущено: action.taskId не совпадает с текущей задачей.');
-              continue;
-            }
-            const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
-            if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
-              actionReports.push('Обновление задачи пропущено: неверный формат dueDate.');
-              continue;
-            }
-            const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
-            const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
-            const importance = nextImportance ?? task.importance;
-            const urgency = nextUrgency ?? task.urgency;
-            const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
-            await prisma.task.update({
-              where: { id: task.id },
-              data: {
-                ...(action.title !== undefined ? { title: action.title.slice(0, 180) } : {}),
-                ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
-                ...(dueDate === undefined ? {} : { dueDate }),
-                ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
-                ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
-                ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
-                ...(action.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) } : {})
-              }
-            });
-            actionReports.push(`Обновил параметры задачи "${task.title}".`);
-            appliedActionsCount += 1;
-            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
-            continue;
-          }
-          if (action.type === 'change_task_sphere') {
-            if (action.taskId !== task.id) {
-              actionReports.push('Смена сектора пропущена: action.taskId не совпадает с текущей задачей.');
-              continue;
-            }
-            if (action.sphereId) {
-              const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId: input.userId }, select: { id: true } });
-              if (!sphere) {
-                actionReports.push('Смена сектора пропущена: сектор не найден.');
-                continue;
-              }
-            }
-            await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
-            actionReports.push(`Изменил сектор задачи "${task.title}".`);
-            appliedActionsCount += 1;
-            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
-            continue;
-          }
-          if (action.type === 'create_subtask') {
-            if (action.parentTaskId !== task.id) {
-              actionReports.push('Создание подзадачи пропущено: parentTaskId не совпадает с текущей задачей.');
-              continue;
-            }
-            const dueDate = action.dueDate ? new Date(action.dueDate) : null;
-            const subtask = await prisma.task.create({
-              data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
-            });
-            actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
-            appliedActionsCount += 1;
-            console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            continue;
-          }
-          if ('subtaskId' in action) {
-            const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, parentTaskId: task.id }, select: { id: true, title: true } });
-            if (!subtask) {
-              actionReports.push('Действие с подзадачей пропущено: подзадача не найдена в текущей задаче.');
-              continue;
-            }
-            if (action.type === 'reschedule_subtask') {
-              const dueDate = new Date(action.dueDate);
-              if (Number.isNaN(dueDate.getTime())) {
-                actionReports.push(`Перенос подзадачи "${subtask.title}" пропущен: неверная дата.`);
-                continue;
-              }
-              await taskService.update(subtask.id, input.userId, { dueDate });
-              actionReports.push(`Перенёс подзадачу "${subtask.title}".`);
-              appliedActionsCount += 1;
-              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            }
-            if (action.type === 'rename_subtask') {
-              await taskService.update(subtask.id, input.userId, { title: action.title.slice(0, 180) });
-              actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
-              appliedActionsCount += 1;
-              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            }
-            if (action.type === 'update_subtask') {
-              const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
-              if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
-                actionReports.push(`Обновление подзадачи "${subtask.title}" пропущено: неверный формат dueDate.`);
-                continue;
-              }
-              await taskService.update(subtask.id, input.userId, { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) });
-              actionReports.push(`Обновил подзадачу "${subtask.title}".`);
-              appliedActionsCount += 1;
-              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            }
-            if (action.type === 'delete_subtask') {
-              await taskService.remove(subtask.id, input.userId);
-              actionReports.push(`Удалил подзадачу "${subtask.title}".`);
-              appliedActionsCount += 1;
-              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            }
-            if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
-              await taskService.update(subtask.id, input.userId, { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' });
-              actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
-              appliedActionsCount += 1;
-              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
-            }
-            continue;
-          }
-          actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
-        }
+        const appliedActionsCount = taskProposal?.status === 'APPLIED' ? parsed.actions.length : 0;
 
         const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0), failedFileEditReason);
-        const answer = parsed.actions.length > 0 && appliedActionsCount === 0
-          ? `Не удалось применить изменения по запросу. Проверьте формулировку и попробуйте ещё раз.
-
-${actionAwareAnswer}`
+        const answer = taskProposal
+          ? (taskProposal.status === 'APPLIED'
+              ? 'Изменения автоматически применены. Подробности в карточке.'
+              : 'Подготовил изменения. Проверьте карточку ниже и нажмите «Принять», чтобы применить их.')
           : actionAwareAnswer;
 
         console.info('[AI] Task assistant request completed', {
@@ -2653,7 +2528,7 @@ ${actionAwareAnswer}`
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, generatedDocument, telegramSendDraft, telegramReadDraft, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
@@ -2830,329 +2705,16 @@ ${actionAwareAnswer}`
       actionTypes: parsed.actions.map((action) => action.type),
       model: GENERAL_CHAT_MODEL
     });
+    const taskProposal = parsed.actions.length
+      ? await prepareTaskProposal({
+          userId: input.userId, requestId: 'legacy-general:' + randomUUID(),
+          source: 'legacy_general', actions: parsed.actions as unknown as Record<string, unknown>[],
+          userTimeZone: input.userTimeZone
+        })
+      : null;
     const actionReports: string[] = [];
     const undoOperations: GeneralAssistantUndoOperation[] = [];
-    let appliedActionsCount = 0;
-
-    for (const action of parsed.actions) {
-      if (action.type === 'rebalance_today') {
-        const now = new Date();
-        const start = new Date(now);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(start);
-        end.setDate(end.getDate() + 1);
-        const candidates = await prisma.task.findMany({
-          where: {
-            userId: input.userId,
-            AND: [taskAccessWhere(input.userId)],
-            parentTaskId: null,
-            status: { not: 'DONE' },
-            ...(action.taskIds && action.taskIds.length > 0 ? { id: { in: action.taskIds } } : {}),
-            dueDate: { gte: start, lt: end }
-          },
-          orderBy: { dueDate: 'asc' },
-          select: { id: true, title: true, dueDate: true, status: true }
-        });
-        if (candidates.length < 2) {
-          actionReports.push('Равномерное распределение не применено: на сегодня меньше двух активных задач.');
-          continue;
-        }
-        const stepMinutes = Math.max(45, Math.floor((12 * 60) / candidates.length));
-        for (let index = 0; index < candidates.length; index += 1) {
-          const task = candidates[index];
-          const nextDue = new Date(start);
-          nextDue.setHours(9, 0, 0, 0);
-          nextDue.setMinutes(nextDue.getMinutes() + (stepMinutes * index));
-          undoOperations.push({
-            taskId: task.id,
-            previous: {
-              dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-              status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
-            }
-          });
-          await prisma.task.updateMany({
-            where: { id: task.id, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
-            data: { dueDate: nextDue }
-          });
-        }
-        actionReports.push(`Распределил задачи на сегодня более равномерно (${candidates.length} шт.).`);
-        appliedActionsCount += 1;
-        continue;
-      }
-
-      if (action.type === 'create_task') {
-        if (action.sphereId) {
-          const allowedSphere = await prisma.sphere.findFirst({
-            where: { id: action.sphereId, userId: input.userId },
-            select: { id: true }
-          });
-          if (!allowedSphere) {
-            actionReports.push('Создание задачи пропущено: сектор недоступен этому пользователю.');
-            continue;
-          }
-        }
-        const rawImportance = action.importance;
-        const rawUrgency = action.urgency;
-        const importance = typeof rawImportance === 'number' && Number.isFinite(rawImportance)
-          ? Math.max(1, Math.min(5, Math.round(rawImportance)))
-          : 3;
-        const urgency = typeof rawUrgency === 'number' && Number.isFinite(rawUrgency)
-          ? Math.max(1, Math.min(5, Math.round(rawUrgency)))
-          : 3;
-        const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
-        const dueDate = action.dueDate ? new Date(action.dueDate) : null;
-        const notifyBeforeMinutes = action.notifyBeforeMinutes === null || action.notifyBeforeMinutes === undefined
-          ? 0
-          : Math.max(0, Math.round(action.notifyBeforeMinutes));
-        const createdTask = await prisma.task.create({
-          data: {
-            title: action.title.slice(0, 180),
-            description: action.description?.slice(0, 4000) || '',
-            userId: input.userId,
-            sphereId: action.sphereId ?? null,
-            importance,
-            urgency,
-            priorityScore,
-            status: 'TODO',
-            dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
-            notifyBeforeMinutes
-          }
-        });
-
-        const subtasks = Array.isArray(action.subtasks) ? action.subtasks : [];
-        if (subtasks.length > 0) {
-          await prisma.$transaction(subtasks.map((subtask) => {
-            const subtaskDueDate = subtask.dueDate ? new Date(subtask.dueDate) : null;
-            return prisma.task.create({
-              data: {
-                title: subtask.title.slice(0, 180),
-                description: (subtask.description ?? '').slice(0, 2000),
-                userId: input.userId,
-                parentTaskId: createdTask.id,
-                sphereId: null,
-                importance: 3,
-                urgency: 3,
-                priorityScore: 3,
-                status: 'TODO',
-                dueDate: subtaskDueDate && !Number.isNaN(subtaskDueDate.getTime()) ? subtaskDueDate : null,
-                notifyBeforeMinutes: 0
-              }
-            });
-          }));
-        }
-
-        actionReports.push(`Создал новую задачу "${createdTask.title}"${subtasks.length > 0 ? ` и ${subtasks.length} подзадач(и)` : ''}.`);
-        appliedActionsCount += 1;
-        continue;
-      }
-
-      if (action.type === 'create_subtask') {
-        const parentTask = await prisma.task.findFirst({
-          where: { id: action.parentTaskId, userId: input.userId, parentTaskId: null, AND: [taskAccessWhere(input.userId)] },
-          select: { id: true, title: true }
-        });
-        if (!parentTask) {
-          actionReports.push('Добавление подзадачи пропущено: родительская задача не найдена.');
-          continue;
-        }
-        const dueDate = action.dueDate ? new Date(action.dueDate) : null;
-        const subtask = await prisma.task.create({
-          data: {
-            title: action.title.slice(0, 180),
-            description: (action.description ?? '').slice(0, 2000),
-            userId: input.userId,
-            parentTaskId: parentTask.id,
-            sphereId: null,
-            importance: 3,
-            urgency: 3,
-            priorityScore: 3,
-            status: 'TODO',
-            dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
-            notifyBeforeMinutes: 0
-          }
-        });
-        actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'delete_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
-        if (!subtask) {
-          actionReports.push('Удаление подзадачи пропущено: подзадача не найдена.');
-          continue;
-        }
-        await prisma.task.delete({ where: { id: subtask.id } });
-        actionReports.push(`Удалил подзадачу "${subtask.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'rename_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
-        if (!subtask) {
-          actionReports.push('Переименование подзадачи пропущено: подзадача не найдена.');
-          continue;
-        }
-        await prisma.task.update({ where: { id: subtask.id }, data: { title: action.title.slice(0, 180) } });
-        actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'update_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
-        if (!subtask) {
-          actionReports.push('Изменение подзадачи пропущено: подзадача не найдена.');
-          continue;
-        }
-        const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
-        await prisma.task.update({
-          where: { id: subtask.id },
-          data: {
-            ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}),
-            ...(dueDate === undefined ? {} : { dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null })
-          }
-        });
-        actionReports.push(`Обновил подзадачу "${subtask.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'reschedule_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
-        if (!subtask) {
-          actionReports.push('Перенос подзадачи пропущен: подзадача не найдена.');
-          continue;
-        }
-        const dueDate = new Date(action.dueDate);
-        if (Number.isNaN(dueDate.getTime())) {
-          actionReports.push(`Не удалось перенести подзадачу "${subtask.title}": неверная дата.`);
-          continue;
-        }
-        await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
-        actionReports.push(`Перенёс подзадачу "${subtask.title}" на ${dueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
-        const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
-        if (!subtask) {
-          actionReports.push('Изменение статуса подзадачи пропущено: подзадача не найдена.');
-          continue;
-        }
-        await prisma.task.update({
-          where: { id: subtask.id },
-          data: { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' }
-        });
-        actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (!('taskId' in action)) {
-        actionReports.push('Действие пропущено: нет taskId.');
-        continue;
-      }
-
-      const task = await prisma.task.findFirst({
-        where: { id: action.taskId, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
-        select: { id: true, title: true, dueDate: true, status: true, importance: true, urgency: true }
-      });
-      if (!task) {
-        actionReports.push(`Действие "${action.type}" пропущено: задача не найдена.`);
-        continue;
-      }
-      undoOperations.push({
-        taskId: task.id,
-        previous: {
-          dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-          status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
-        }
-      });
-
-      if (action.type === 'reschedule_task') {
-        const nextDueDate = new Date(action.dueDate);
-        if (Number.isNaN(nextDueDate.getTime())) {
-          actionReports.push(`Не удалось перенести "${task.title}": неверная дата.`);
-          continue;
-        }
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { dueDate: nextDueDate }
-        });
-        actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
-        appliedActionsCount += 1;
-        continue;
-      }
-
-      if (action.type === 'complete_task') {
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { status: 'DONE' }
-        });
-        actionReports.push(`Отметил задачу "${task.title}" выполненной.`);
-        appliedActionsCount += 1;
-        continue;
-      }
-
-      if (action.type === 'reopen_task') {
-        await prisma.task.update({
-          where: { id: task.id },
-          data: { status: 'TODO' }
-        });
-        actionReports.push(`Вернул задачу "${task.title}" в активные.`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'rename_task') {
-        await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
-        actionReports.push(`Переименовал задачу "${task.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'update_task') {
-        const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
-        if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
-          actionReports.push(`Обновление задачи "${task.title}" пропущено: неверный формат dueDate.`);
-          continue;
-        }
-        const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
-        const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
-        const importance = nextImportance ?? task.importance;
-        const urgency = nextUrgency ?? task.urgency;
-        const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
-        await prisma.task.update({
-          where: { id: task.id },
-          data: {
-            ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
-            ...(dueDate === undefined ? {} : { dueDate }),
-            ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
-            ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
-            ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
-            ...(action.notifyBeforeMinutes !== undefined
-              ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) }
-              : {})
-          }
-        });
-        actionReports.push(`Обновил параметры задачи "${task.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'delete_task') {
-        await prisma.task.delete({ where: { id: task.id } });
-        actionReports.push(`Удалил задачу "${task.title}".`);
-        appliedActionsCount += 1;
-        continue;
-      }
-      if (action.type === 'change_task_sphere') {
-        if (action.sphereId) {
-          const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId: input.userId }, select: { id: true } });
-          if (!sphere) {
-            actionReports.push(`Не удалось сменить сектор для "${task.title}": сектор не найден.`);
-            continue;
-          }
-        }
-        await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
-        actionReports.push(`Изменил сектор задачи "${task.title}".`);
-        appliedActionsCount += 1;
-      }
-    }
+    const appliedActionsCount = taskProposal?.status === 'APPLIED' ? parsed.actions.length : 0;
 
     console.info('[AI] general assistant actions applied', {
       userId: input.userId,
@@ -3161,13 +2723,14 @@ ${actionAwareAnswer}`
       actionReports
     });
 
-    const answer = parsed.actions.length > 0 && appliedActionsCount === 0
-      ? `Не удалось применить изменения по запросу. Проверьте названия задач/подзадач и попробуйте ещё раз.\n\n${parsed.answer}`
+    const answer = taskProposal
+      ? (taskProposal.status === 'APPLIED' ? 'Изменения применены автоматически. Подробности в карточке.' : 'Подготовлены изменения задач. Подтвердите их в карточке.')
       : parsed.answer;
 
     return {
       answer,
       model: GENERAL_CHAT_MODEL,
+      taskProposal,
       actionReports,
       undoOperations
     };
@@ -3630,4 +3193,512 @@ function sanitizeUpstreamErrorText(payload: string): string {
     return 'upstream returned HTML error page';
   }
   return trimmed.replace(/\s+/g, ' ').slice(0, 500);
+}
+
+/** Reuses the existing task-chat mutation semantics only after durable approval. */
+export async function applyTaskChatProposalActions(input: {
+  userId: string; taskId: string; actions: Record<string, unknown>[]; userTimeZone: string;
+  mode?: 'fast' | 'smart'; onProgress?: (status: TaskAiProgressStatus) => void;
+}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+  const task = await prisma.task.findFirstOrThrow({
+    where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
+    select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true }
+  });
+  const parsed = { actions: input.actions as GeneralAssistantAction[] };
+  const requestId = 'approved-task-proposal';
+  const model = 'stored-proposal';
+  const actionReports: string[] = [];
+          let appliedActionsCount = 0;
+          if (parsed.actions.length > 0) input.onProgress?.('applying_changes');
+          for (const action of parsed.actions) {
+            console.info('[AI] Applying task action', {
+              requestId,
+              mode: input.mode ?? 'fast',
+              model,
+              taskId: input.taskId,
+              userId: input.userId,
+              action
+            });
+            if (action.type === 'reschedule_task') {
+              if (action.taskId !== task.id) {
+                actionReports.push('Перенос задачи пропущен: action.taskId не совпадает с текущей задачей.');
+                continue;
+              }
+              const nextDueDate = new Date(action.dueDate);
+              if (Number.isNaN(nextDueDate.getTime())) {
+                actionReports.push('Перенос задачи пропущен: неверный формат даты.');
+                continue;
+              }
+              await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
+              actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
+              continue;
+            }
+            if (action.type === 'rename_task') {
+              if (action.taskId !== task.id) {
+                actionReports.push('Переименование задачи пропущено: action.taskId не совпадает с текущей задачей.');
+                continue;
+              }
+              await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
+              actionReports.push(`Переименовал задачу "${task.title}".`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
+              continue;
+            }
+            if (action.type === 'update_task') {
+              if (action.taskId !== task.id) {
+                actionReports.push('Обновление задачи пропущено: action.taskId не совпадает с текущей задачей.');
+                continue;
+              }
+              const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+              if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+                actionReports.push('Обновление задачи пропущено: неверный формат dueDate.');
+                continue;
+              }
+              const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
+              const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
+              const importance = nextImportance ?? task.importance;
+              const urgency = nextUrgency ?? task.urgency;
+              const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
+              await prisma.task.update({
+                where: { id: task.id },
+                data: {
+                  ...(action.title !== undefined ? { title: action.title.slice(0, 180) } : {}),
+                  ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+                  ...(dueDate === undefined ? {} : { dueDate }),
+                  ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
+                  ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
+                  ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
+                  ...(action.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) } : {})
+                }
+              });
+              actionReports.push(`Обновил параметры задачи "${task.title}".`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
+              continue;
+            }
+            if (action.type === 'change_task_sphere') {
+              if (action.taskId !== task.id) {
+                actionReports.push('Смена сектора пропущена: action.taskId не совпадает с текущей задачей.');
+                continue;
+              }
+              if (action.sphereId) {
+                const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId: input.userId }, select: { id: true } });
+                if (!sphere) {
+                  actionReports.push('Смена сектора пропущена: сектор не найден.');
+                  continue;
+                }
+              }
+              await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
+              actionReports.push(`Изменил сектор задачи "${task.title}".`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
+              continue;
+            }
+            if (action.type === 'create_subtask') {
+              if (action.parentTaskId !== task.id) {
+                actionReports.push('Создание подзадачи пропущено: parentTaskId не совпадает с текущей задачей.');
+                continue;
+              }
+              const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+              const subtask = await prisma.task.create({
+                data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
+              });
+              actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
+              appliedActionsCount += 1;
+              console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              continue;
+            }
+            if ('subtaskId' in action) {
+              const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, parentTaskId: task.id }, select: { id: true, title: true } });
+              if (!subtask) {
+                actionReports.push('Действие с подзадачей пропущено: подзадача не найдена в текущей задаче.');
+                continue;
+              }
+              if (action.type === 'reschedule_subtask') {
+                const dueDate = new Date(action.dueDate);
+                if (Number.isNaN(dueDate.getTime())) {
+                  actionReports.push(`Перенос подзадачи "${subtask.title}" пропущен: неверная дата.`);
+                  continue;
+                }
+                await taskService.update(subtask.id, input.userId, { dueDate });
+                actionReports.push(`Перенёс подзадачу "${subtask.title}".`);
+                appliedActionsCount += 1;
+                console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              }
+              if (action.type === 'rename_subtask') {
+                await taskService.update(subtask.id, input.userId, { title: action.title.slice(0, 180) });
+                actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
+                appliedActionsCount += 1;
+                console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              }
+              if (action.type === 'update_subtask') {
+                const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+                if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+                  actionReports.push(`Обновление подзадачи "${subtask.title}" пропущено: неверный формат dueDate.`);
+                  continue;
+                }
+                await taskService.update(subtask.id, input.userId, { ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}), ...(dueDate === undefined ? {} : { dueDate }) });
+                actionReports.push(`Обновил подзадачу "${subtask.title}".`);
+                appliedActionsCount += 1;
+                console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              }
+              if (action.type === 'delete_subtask') {
+                await taskService.remove(subtask.id, input.userId);
+                actionReports.push(`Удалил подзадачу "${subtask.title}".`);
+                appliedActionsCount += 1;
+                console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              }
+              if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
+                await taskService.update(subtask.id, input.userId, { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' });
+                actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
+                appliedActionsCount += 1;
+                console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
+              }
+              continue;
+            }
+            actionReports.push(`Действие "${action.type}" не поддерживается в диалоге внутри задачи.`);
+          }
+  return {
+    ok: appliedActionsCount === parsed.actions.length,
+    reports: actionReports,
+    ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Не все изменения удалось применить.' })
+  };
+}
+
+
+/** Legacy /ai-general-chat route uses the same delayed approval gate. */
+export async function applyLegacyGeneralProposalActions(input: {
+  userId: string; actions: Record<string, unknown>[]; userTimeZone?: string;
+}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+  const parsed = { actions: input.actions as GeneralAssistantAction[] };
+  const actionReports: string[] = [];
+      const undoOperations: GeneralAssistantUndoOperation[] = [];
+      let appliedActionsCount = 0;
+  
+      for (const action of parsed.actions) {
+        if (action.type === 'rebalance_today') {
+          const now = new Date();
+          const start = new Date(now);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 1);
+          const candidates = await prisma.task.findMany({
+            where: {
+              userId: input.userId,
+              AND: [taskAccessWhere(input.userId)],
+              parentTaskId: null,
+              status: { not: 'DONE' },
+              ...(action.taskIds && action.taskIds.length > 0 ? { id: { in: action.taskIds } } : {}),
+              dueDate: { gte: start, lt: end }
+            },
+            orderBy: { dueDate: 'asc' },
+            select: { id: true, title: true, dueDate: true, status: true }
+          });
+          if (candidates.length < 2) {
+            actionReports.push('Равномерное распределение не применено: на сегодня меньше двух активных задач.');
+            continue;
+          }
+          const stepMinutes = Math.max(45, Math.floor((12 * 60) / candidates.length));
+          for (let index = 0; index < candidates.length; index += 1) {
+            const task = candidates[index];
+            const nextDue = new Date(start);
+            nextDue.setHours(9, 0, 0, 0);
+            nextDue.setMinutes(nextDue.getMinutes() + (stepMinutes * index));
+            undoOperations.push({
+              taskId: task.id,
+              previous: {
+                dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+                status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
+              }
+            });
+            await prisma.task.updateMany({
+              where: { id: task.id, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
+              data: { dueDate: nextDue }
+            });
+          }
+          actionReports.push(`Распределил задачи на сегодня более равномерно (${candidates.length} шт.).`);
+          appliedActionsCount += 1;
+          continue;
+        }
+  
+        if (action.type === 'create_task') {
+          if (action.sphereId) {
+            const allowedSphere = await prisma.sphere.findFirst({
+              where: { id: action.sphereId, userId: input.userId },
+              select: { id: true }
+            });
+            if (!allowedSphere) {
+              actionReports.push('Создание задачи пропущено: сектор недоступен этому пользователю.');
+              continue;
+            }
+          }
+          const rawImportance = action.importance;
+          const rawUrgency = action.urgency;
+          const importance = typeof rawImportance === 'number' && Number.isFinite(rawImportance)
+            ? Math.max(1, Math.min(5, Math.round(rawImportance)))
+            : 3;
+          const urgency = typeof rawUrgency === 'number' && Number.isFinite(rawUrgency)
+            ? Math.max(1, Math.min(5, Math.round(rawUrgency)))
+            : 3;
+          const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
+          const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+          const notifyBeforeMinutes = action.notifyBeforeMinutes === null || action.notifyBeforeMinutes === undefined
+            ? 0
+            : Math.max(0, Math.round(action.notifyBeforeMinutes));
+          const createdTask = await prisma.task.create({
+            data: {
+              title: action.title.slice(0, 180),
+              description: action.description?.slice(0, 4000) || '',
+              userId: input.userId,
+              sphereId: action.sphereId ?? null,
+              importance,
+              urgency,
+              priorityScore,
+              status: 'TODO',
+              dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+              notifyBeforeMinutes
+            }
+          });
+  
+          const subtasks = Array.isArray(action.subtasks) ? action.subtasks : [];
+          if (subtasks.length > 0) {
+            await prisma.$transaction(subtasks.map((subtask) => {
+              const subtaskDueDate = subtask.dueDate ? new Date(subtask.dueDate) : null;
+              return prisma.task.create({
+                data: {
+                  title: subtask.title.slice(0, 180),
+                  description: (subtask.description ?? '').slice(0, 2000),
+                  userId: input.userId,
+                  parentTaskId: createdTask.id,
+                  sphereId: null,
+                  importance: 3,
+                  urgency: 3,
+                  priorityScore: 3,
+                  status: 'TODO',
+                  dueDate: subtaskDueDate && !Number.isNaN(subtaskDueDate.getTime()) ? subtaskDueDate : null,
+                  notifyBeforeMinutes: 0
+                }
+              });
+            }));
+          }
+  
+          actionReports.push(`Создал новую задачу "${createdTask.title}"${subtasks.length > 0 ? ` и ${subtasks.length} подзадач(и)` : ''}.`);
+          appliedActionsCount += 1;
+          continue;
+        }
+  
+        if (action.type === 'create_subtask') {
+          const parentTask = await prisma.task.findFirst({
+            where: { id: action.parentTaskId, userId: input.userId, parentTaskId: null, AND: [taskAccessWhere(input.userId)] },
+            select: { id: true, title: true }
+          });
+          if (!parentTask) {
+            actionReports.push('Добавление подзадачи пропущено: родительская задача не найдена.');
+            continue;
+          }
+          const dueDate = action.dueDate ? new Date(action.dueDate) : null;
+          const subtask = await prisma.task.create({
+            data: {
+              title: action.title.slice(0, 180),
+              description: (action.description ?? '').slice(0, 2000),
+              userId: input.userId,
+              parentTaskId: parentTask.id,
+              sphereId: null,
+              importance: 3,
+              urgency: 3,
+              priorityScore: 3,
+              status: 'TODO',
+              dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+              notifyBeforeMinutes: 0
+            }
+          });
+          actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'delete_subtask') {
+          const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
+          if (!subtask) {
+            actionReports.push('Удаление подзадачи пропущено: подзадача не найдена.');
+            continue;
+          }
+          await prisma.task.delete({ where: { id: subtask.id } });
+          actionReports.push(`Удалил подзадачу "${subtask.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'rename_subtask') {
+          const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
+          if (!subtask) {
+            actionReports.push('Переименование подзадачи пропущено: подзадача не найдена.');
+            continue;
+          }
+          await prisma.task.update({ where: { id: subtask.id }, data: { title: action.title.slice(0, 180) } });
+          actionReports.push(`Переименовал подзадачу "${subtask.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'update_subtask') {
+          const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
+          if (!subtask) {
+            actionReports.push('Изменение подзадачи пропущено: подзадача не найдена.');
+            continue;
+          }
+          const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+          await prisma.task.update({
+            where: { id: subtask.id },
+            data: {
+              ...(action.description !== undefined ? { description: action.description.slice(0, 2000) } : {}),
+              ...(dueDate === undefined ? {} : { dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null })
+            }
+          });
+          actionReports.push(`Обновил подзадачу "${subtask.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'reschedule_subtask') {
+          const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
+          if (!subtask) {
+            actionReports.push('Перенос подзадачи пропущен: подзадача не найдена.');
+            continue;
+          }
+          const dueDate = new Date(action.dueDate);
+          if (Number.isNaN(dueDate.getTime())) {
+            actionReports.push(`Не удалось перенести подзадачу "${subtask.title}": неверная дата.`);
+            continue;
+          }
+          await prisma.task.update({ where: { id: subtask.id }, data: { dueDate } });
+          actionReports.push(`Перенёс подзадачу "${subtask.title}" на ${dueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'complete_subtask' || action.type === 'reopen_subtask') {
+          const subtask = await prisma.task.findFirst({ where: { id: action.subtaskId, userId: input.userId, parentTaskId: { not: null }, AND: [taskAccessWhere(input.userId)] }, select: { id: true, title: true } });
+          if (!subtask) {
+            actionReports.push('Изменение статуса подзадачи пропущено: подзадача не найдена.');
+            continue;
+          }
+          await prisma.task.update({
+            where: { id: subtask.id },
+            data: { status: action.type === 'complete_subtask' ? 'DONE' : 'TODO' }
+          });
+          actionReports.push(action.type === 'complete_subtask' ? `Отметил подзадачу "${subtask.title}" выполненной.` : `Снова открыл подзадачу "${subtask.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (!('taskId' in action)) {
+          actionReports.push('Действие пропущено: нет taskId.');
+          continue;
+        }
+  
+        const task = await prisma.task.findFirst({
+          where: { id: action.taskId, userId: input.userId, AND: [taskAccessWhere(input.userId)] },
+          select: { id: true, title: true, dueDate: true, status: true, importance: true, urgency: true }
+        });
+        if (!task) {
+          actionReports.push(`Действие "${action.type}" пропущено: задача не найдена.`);
+          continue;
+        }
+        undoOperations.push({
+          taskId: task.id,
+          previous: {
+            dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+            status: task.status as 'TODO' | 'IN_PROGRESS' | 'DONE'
+          }
+        });
+  
+        if (action.type === 'reschedule_task') {
+          const nextDueDate = new Date(action.dueDate);
+          if (Number.isNaN(nextDueDate.getTime())) {
+            actionReports.push(`Не удалось перенести "${task.title}": неверная дата.`);
+            continue;
+          }
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { dueDate: nextDueDate }
+          });
+          actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
+          appliedActionsCount += 1;
+          continue;
+        }
+  
+        if (action.type === 'complete_task') {
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { status: 'DONE' }
+          });
+          actionReports.push(`Отметил задачу "${task.title}" выполненной.`);
+          appliedActionsCount += 1;
+          continue;
+        }
+  
+        if (action.type === 'reopen_task') {
+          await prisma.task.update({
+            where: { id: task.id },
+            data: { status: 'TODO' }
+          });
+          actionReports.push(`Вернул задачу "${task.title}" в активные.`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'rename_task') {
+          await prisma.task.update({ where: { id: task.id }, data: { title: action.title.slice(0, 180) } });
+          actionReports.push(`Переименовал задачу "${task.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'update_task') {
+          const dueDate = action.dueDate === undefined ? undefined : action.dueDate === null ? null : new Date(action.dueDate);
+          if (dueDate instanceof Date && Number.isNaN(dueDate.getTime())) {
+            actionReports.push(`Обновление задачи "${task.title}" пропущено: неверный формат dueDate.`);
+            continue;
+          }
+          const nextImportance = action.importance !== undefined ? Math.max(1, Math.min(5, Math.round(action.importance))) : undefined;
+          const nextUrgency = action.urgency !== undefined ? Math.max(1, Math.min(5, Math.round(action.urgency))) : undefined;
+          const importance = nextImportance ?? task.importance;
+          const urgency = nextUrgency ?? task.urgency;
+          const priorityScore = Number((importance * 0.6 + urgency * 0.4).toFixed(2));
+          await prisma.task.update({
+            where: { id: task.id },
+            data: {
+              ...(action.description !== undefined ? { description: action.description.slice(0, 4000) } : {}),
+              ...(dueDate === undefined ? {} : { dueDate }),
+              ...(nextImportance !== undefined ? { importance: nextImportance } : {}),
+              ...(nextUrgency !== undefined ? { urgency: nextUrgency } : {}),
+              ...(nextImportance !== undefined || nextUrgency !== undefined ? { priorityScore } : {}),
+              ...(action.notifyBeforeMinutes !== undefined
+                ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) }
+                : {})
+            }
+          });
+          actionReports.push(`Обновил параметры задачи "${task.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'delete_task') {
+          await prisma.task.delete({ where: { id: task.id } });
+          actionReports.push(`Удалил задачу "${task.title}".`);
+          appliedActionsCount += 1;
+          continue;
+        }
+        if (action.type === 'change_task_sphere') {
+          if (action.sphereId) {
+            const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId: input.userId }, select: { id: true } });
+            if (!sphere) {
+              actionReports.push(`Не удалось сменить сектор для "${task.title}": сектор не найден.`);
+              continue;
+            }
+          }
+          await prisma.task.update({ where: { id: task.id }, data: { sphereId: action.sphereId } });
+          actionReports.push(`Изменил сектор задачи "${task.title}".`);
+          appliedActionsCount += 1;
+        }
+      }
+  return {
+    ok: appliedActionsCount === parsed.actions.length,
+    reports: actionReports,
+    ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Часть действий не выполнена.' })
+  };
 }

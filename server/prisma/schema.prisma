@@ -85,6 +85,8 @@ model User {
   googleSub    String?  @unique
   avatarUrl    String?
   timeZone     String?
+  aiTaskAutoApply Boolean @default(false)
+  aiTaskProposals AiTaskProposal[]
   morningAiCheckupEnabled Boolean @default(false)
   morningAiCheckupTime String @default("10:00")
   lastMorningAiCheckupDate String?
@@ -191,6 +193,29 @@ model AiUsageEvent {
 
 // Per-user request deduplication for the general AI chat. An interrupted
 // execution must not be transparently retried because actions may have run.
+model AiTaskProposal {
+  id          String @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId   String
+  source      String
+  taskId      String?
+  operations  Json
+  display     Json
+  resolvedIds Json?
+  snapshots   Json?
+  userTimeZone String @default("Europe/Moscow")
+  autoApplied Boolean @default(false)
+  status      String @default("PENDING")
+  result      Json?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, requestId])
+  @@index([userId, status, createdAt])
+}
+
 model AiChatRequest {
   id              String   @id @default(cuid())
   userId          String
@@ -382,6 +407,7 @@ model TaskAiMessage {
   messageKind String      @default("AI")
   recipientUserId String?
   telegramSendDraft Json?
+  aiTaskProposalId String?
   telegramReadDraft Json?
   telegramReadOwnerId String?
   generatedDocumentId String? @unique
@@ -415,6 +441,7 @@ model TaskAiConversationMemory {
 }
 
 model GeneralAiMessage {
+  aiTaskProposalId String?
   id        String        @id @default(cuid())
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -695,6 +722,7 @@ model TelegramAiInboxEvent {
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   policyId         String
   policy           TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  taskModeAtPublish String @default("SUGGEST")
   messageId        Int
   content          String   @db.Text
   summary          Json

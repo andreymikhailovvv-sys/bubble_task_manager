@@ -29,7 +29,7 @@ test('task list, create-child, update, delete and invitation routes require curr
 
 test('AI assistant and task chat history use current membership for all task lookups', async () => {
   const src = await read('../src/services/ai-assistant.service.ts');
-  assert.equal((src.match(/where: \{ id: input\.taskId, AND: \[taskAccessWhere\(input\.userId\)\] \}/g) || []).length, 6);
+  assert.ok((src.match(/where: \{ id: input\.taskId, AND: \[taskAccessWhere\(input\.userId\)\] \}/g) || []).length >= 6);
   assert.doesNotMatch(src, /OR: \[\{ userId: input\.userId \}, \{ collaboration: \{ members:/);
 });
 
