@@ -27,7 +27,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -920,7 +920,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         .slice(-100);
       const nextAiChatProjects = normalizeMiniAiChatProjects(syncedProjects.projects).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
-        chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
+        chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID
+          ? { ...chat, messages: reconcileAiChatMessagesWithChips(chat.messages, quickMessages) } : chat)
       } : project);
       if (telegramInbox?.chats.length) {
         const oldProject = nextAiChatProjects.find(p => p.id === telegramInbox.projectId);
@@ -2632,7 +2633,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
           }
-          const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
+          const merged = reconcileActiveAiChatMessages(
+            chat.messages, reconcileAiChatMessagesWithChips(chat.messages, remote), aiChatLoading);
           if (merged === chat.messages) {
             if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
             return outlined;
