@@ -13,8 +13,10 @@ export function AutoGrowingTextarea({ maxHeight = 180, style, value, ...props }:
     if (!textarea) return;
 
     textarea.style.height = '0px';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    // Reading scrollHeight triggers layout; do it once per draft change.
+    const contentHeight = textarea.scrollHeight;
+    textarea.style.height = `${Math.min(contentHeight, maxHeight)}px`;
+    textarea.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden';
   }, [maxHeight, value]);
 
   return <textarea {...props} ref={textareaRef} value={value} rows={1} style={{ ...style, overflowY: 'hidden' }} />;
