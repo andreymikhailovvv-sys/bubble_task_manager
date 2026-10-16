@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, Loader2, RotateCcw, X } from 'lucide-react';
 import { api } from '../lib/api';
 import type { AiTaskProposal } from '../lib/types';
 import './AiTaskProposalCard.css';
@@ -10,7 +10,9 @@ const STATUS: Record<AiTaskProposal['status'], string> = {
   APPLIED: 'Применено',
   REJECTED: 'Отклонено',
   FAILED: 'Ошибка применения',
-  CONFLICT: 'Конфликт изменений'
+  CONFLICT: 'Конфликт изменений',
+  UNDOING: 'Возвращаем изменения',
+  UNDONE: 'Изменения отменены'
 };
 const LABELS: Record<string, string> = {
   create_task: 'Новая задача', create_event: 'Новое событие', create_subtask: 'Новая подзадача',
@@ -22,6 +24,64 @@ const LABELS: Record<string, string> = {
   change_sphere: 'Сектор', change_task_sphere: 'Сектор', clear_due_date: 'Удаление срока',
   reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления'
 };
+
+type ProposalItem = AiTaskProposal['operations'][number];
+
+const formatHumanDate = (value: string): string => {
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(parsed);
+};
+const dateFromText = (text?: string | null) =>
+  text?.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/i)?.[0] ?? null;
+
+const cleanValue = (value: string) => {
+  const date = dateFromText(value);
+  if (date) return formatHumanDate(date);
+  const statuses: Record<string,string> = { TODO: 'Не начато', IN_PROGRESS: 'В работе', DONE: 'Выполнено' };
+  return statuses[value] ?? value;
+};
+
+/** Keep technical tool keys and enum values out of the user-visible card. */
+function humanDescription(item: ProposalItem): string | null {
+  const type = item.type;
+  const currentDate = item.dueDate || dateFromText(item.after);
+  const previousDate = dateFromText(item.before);
+  if (['reschedule', 'reschedule_task', 'reschedule_subtask'].includes(type)) {
+    return currentDate
+      ? (previousDate ? `${formatHumanDate(previousDate)} → ${formatHumanDate(currentDate)}` : `Новый срок: ${formatHumanDate(currentDate)}`)
+      : 'Срок изменён';
+  }
+  if (['create_task', 'create_event', 'create_subtask', 'telegram_suggestion'].includes(type)) {
+    return currentDate ? `Срок: ${formatHumanDate(currentDate)}` : null;
+  }
+  if (['complete', 'complete_task', 'complete_subtask'].includes(type)) return 'Отмечено выполненным';
+  if (['reopen', 'reopen_subtask'].includes(type)) return 'Возобновлено';
+  if (type === 'clear_due_date') return 'Срок удалён';
+  if (type.startsWith('delete')) return 'Задача удалена';
+  if (['change_sphere', 'change_task_sphere'].includes(type)) return 'Сектор изменён';
+  if (type === 'set_notification') return 'Уведомления изменены';
+  if (type === 'set_priority') return 'Приоритет изменён';
+  const raw = item.after?.trim();
+  if (!raw) return null;
+  const translations: Record<string,string> = {
+    title: 'Новое название', description: 'Описание',
+    dueDate: 'Срок', importance: 'Важность', urgency: 'Срочность',
+    notifyBeforeMinutes: 'Напоминание', status: 'Статус'
+  };
+  const parts = raw.split(' · ').map(part => {
+    const index = part.indexOf(': ');
+    if (index < 0) return cleanValue(part);
+    const key = part.slice(0, index);
+    const value = part.slice(index + 2);
+    if (key === 'sphereId') return 'Сектор изменён';
+    return (translations[key] ?? 'Изменено') + ': ' + cleanValue(value);
+  });
+  return parts.join(' · ');
+}
+
 const preferenceEvent = 'planovych-ai-task-autoapply';
 export const proposalAppliedEvent = 'planovych-ai-task-proposal-applied';
 
@@ -33,7 +93,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [busy, setBusy] = useState(false);
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
-  const telegram = proposal.source === 'telegram_assistant';
+  const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
   useEffect(() => {
     let active = true;
     void api.aiTaskProposal(initial.id).then(value => { if (active) setProposal(value); }).catch(() => {});
@@ -75,6 +135,24 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       }
     } finally { setBusy(false); }
   };
+  const undo = async () => {
+    if (busy || proposal.status !== 'APPLIED') return;
+    setBusy(true); setError('');
+    try {
+      const value = await api.undoAiTaskProposal(proposal.id);
+      setProposal(value);
+      if (value.status === 'UNDONE') {
+        window.dispatchEvent(new Event(proposalAppliedEvent));
+        onApplied?.();
+      }
+    } catch (cause) {
+      const latest = await api.aiTaskProposal(proposal.id).catch(() => null);
+      if (latest) setProposal(latest);
+      setError(cause instanceof Error ? cause.message : 'Не удалось отменить изменение');
+    } finally {
+      setBusy(false);
+    }
+  };
   const toggleAuto = async (next: boolean) => {
     setBusy(true); setError('');
     try {
@@ -105,8 +183,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
             <span className="ai-task-proposal__muted block text-[11px]">{LABELS[item.type] ?? item.type}</span>
             <span className="block break-words font-semibold">{item.title}</span>
             {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
-            {item.before && item.after ? <div className="ai-task-proposal__muted mt-1 break-words text-xs"><span>{item.before}</span> → <span>{item.after}</span></div> :
-              item.after ? <div className="ai-task-proposal__muted mt-1 break-words text-xs">{item.after}</div> : null}
+            {humanDescription(item) ? <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
           </div>
         ))}
         {proposal.operations.length > 4 && (
@@ -135,6 +212,13 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
           {proposal.status === 'APPLIED' && proposal.autoApplied ? 'Применено автоматически' : STATUS[proposal.status]}
         </p>
       )}
+      {isApplied ? (
+        <button type="button" disabled={busy} onClick={() => void undo()}
+          className="ai-task-proposal__secondary mt-2 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 font-semibold disabled:opacity-50">
+          {busy ? <Loader2 size={15} className="animate-spin" /> : <RotateCcw size={15} />}
+          Вернуть
+        </button>
+      ) : null}
       {!telegram && proposal.status !== 'PENDING' ? (
         <label className="ai-task-proposal__muted mt-2 flex cursor-pointer items-center gap-2 text-xs">
           <input type="checkbox" checked={autoApply} disabled={busy} onChange={event => void toggleAuto(event.target.checked)} />

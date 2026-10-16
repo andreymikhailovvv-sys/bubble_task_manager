@@ -261,7 +261,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
   throw new Error(`Превышен безопасный лимит обращений к модели (${MAX_PROVIDER_CALLS}).`);
 }
 
-export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
+export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: PlannerActionInput[] = [];
@@ -616,9 +616,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
-          userId: input.userId, requestId: input.actionRequestId, source: 'planner',
+          userId: input.userId, requestId: input.actionRequestId, source: input.autoApplyTaskActions ? 'telegram_bot' : 'planner',
           actions: preparedTaskActions as unknown as Record<string, unknown>[],
           resolvedItemIds: [...resolvedItemIds], resolvedSphereIds: [...resolvedSphereIds],
+          autoApply: input.autoApplyTaskActions === true ? true : undefined,
           userTimeZone: input.userTimeZone
         })
       : null;

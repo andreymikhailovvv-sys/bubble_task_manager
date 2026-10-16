@@ -258,6 +258,7 @@ type AskTaskAssistantInput = {
   model?: AiChatModel;
   attachments?: ChatAttachment[];
   currentMessageId?: string;
+  autoApplyTaskActions?: boolean;
   userTimeZone?: string;
   skipCreditsCharge?: boolean;
   skipEfficiencyBonus?: boolean;
@@ -312,6 +313,7 @@ type AskAiChatInput = AskGeneralAssistantInput & {
   attachments?: ChatAttachment[];
   fileReferences?: AiFileHistoryReference[];
   currentMessageId?: string;
+  autoApplyTaskActions?: boolean;
   onProgress?: (status: AiChatProgressStatus) => void;
   onDiagnosticsPrepared?: (diagnostics: { context: AiChatContextDiagnostics }) => void;
 };
@@ -1414,7 +1416,7 @@ export const aiAssistantService = {
       console.info('[AI file catalog] prepared', { requestId: actionRequestId, surface: 'general', count: fileCatalog.items.length, truncated: fileCatalog.truncated, sources: fileCatalog.items.reduce((acc, item) => ({ ...acc, [item.source]: (acc[item.source] ?? 0) + 1 }), {} as Record<string, number>) });
       console.info('[AI chat context] prepared', { requestId: actionRequestId, userId: input.userId, projectId: input.projectId, chatId: input.chatId, clientSurface: input.clientSurface, contextMode: context.contextMode, historyMessagesAvailable: normalizedHistory.length, historyMessagesUsed: history.length, historyEstimatedTokens: history.reduce((sum, item) => sum + estimateAiChatTokens(item.content), 0), unsummarizedMessages: context.unsummarizedMessages, unsummarizedEstimatedTokens: context.unsummarizedEstimatedTokens, memoryPresent: Boolean(memoryBlock), memoryRevision: context.memoryRevision, memoryEstimatedTokens: estimateAiChatTokens(memoryBlock), memoryCompactionTriggered: context.memoryCompactionTriggered, memoryCompactionBatches: context.memoryCompactionBatches, memoryCaughtUp: context.memoryCaughtUp, fallback: context.fallback, fallbackReason: context.fallbackReason });
       input.onDiagnosticsPrepared?.({ context });
-      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress,
+      const result = await askAiChatWithTools({ userId: input.userId, model, messages, userTimeZone, apiKey, actionRequestId, autoApplyTaskActions: input.autoApplyTaskActions === true, requiredLookupTool: requiresNoteCreation(question) ? 'create_note' : selectRequiredPersonalLookup(question) ?? undefined, dynamicBilling: isDynamicTextBillingEnabled(input.userId), onProgress: input.onProgress,
         fileTools: { userId: input.userId, projectId: input.projectId, chatId: input.chatId, catalog: fileCatalog,
           uploads: input.attachments, model, apiKey, actionId: actionRequestId, dynamicBilling: isDynamicTextBillingEnabled(input.userId) } });
       return { ...result, diagnostics: { requestId: actionRequestId, context } };
@@ -2482,8 +2484,9 @@ export const aiAssistantService = {
         const taskProposal = parsed.actions.length
           ? await prepareTaskProposal({
               userId: input.userId, requestId: input.currentMessageId ?? requestId,
-              source: 'task_chat', taskId: input.taskId,
+              source: input.autoApplyTaskActions ? 'telegram_bot_task' : 'task_chat', taskId: input.taskId,
               actions: parsed.actions as unknown as Record<string, unknown>[],
+              autoApply: input.autoApplyTaskActions === true ? true : undefined,
               userTimeZone: input.userTimeZone
             })
           : null;
@@ -3199,7 +3202,7 @@ function sanitizeUpstreamErrorText(payload: string): string {
 export async function applyTaskChatProposalActions(input: {
   userId: string; taskId: string; actions: Record<string, unknown>[]; userTimeZone: string;
   mode?: 'fast' | 'smart'; onProgress?: (status: TaskAiProgressStatus) => void;
-}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+}): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
     select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true }
@@ -3208,6 +3211,7 @@ export async function applyTaskChatProposalActions(input: {
   const requestId = 'approved-task-proposal';
   const model = 'stored-proposal';
   const actionReports: string[] = [];
+  const createdIds: string[] = [];
           let appliedActionsCount = 0;
           if (parsed.actions.length > 0) input.onProgress?.('applying_changes');
           for (const action of parsed.actions) {
@@ -3305,6 +3309,7 @@ export async function applyTaskChatProposalActions(input: {
               const subtask = await prisma.task.create({
                 data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
               });
+              createdIds.push(subtask.id);
               actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
@@ -3363,6 +3368,7 @@ export async function applyTaskChatProposalActions(input: {
   return {
     ok: appliedActionsCount === parsed.actions.length,
     reports: actionReports,
+    createdIds,
     ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Не все изменения удалось применить.' })
   };
 }
@@ -3371,9 +3377,10 @@ export async function applyTaskChatProposalActions(input: {
 /** Legacy /ai-general-chat route uses the same delayed approval gate. */
 export async function applyLegacyGeneralProposalActions(input: {
   userId: string; actions: Record<string, unknown>[]; userTimeZone?: string;
-}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+}): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const parsed = { actions: input.actions as GeneralAssistantAction[] };
   const actionReports: string[] = [];
+  const createdIds: string[] = [];
       const undoOperations: GeneralAssistantUndoOperation[] = [];
       let appliedActionsCount = 0;
   
@@ -3462,6 +3469,7 @@ export async function applyLegacyGeneralProposalActions(input: {
             }
           });
   
+          createdIds.push(createdTask.id);
           const subtasks = Array.isArray(action.subtasks) ? action.subtasks : [];
           if (subtasks.length > 0) {
             await prisma.$transaction(subtasks.map((subtask) => {
@@ -3514,6 +3522,7 @@ export async function applyLegacyGeneralProposalActions(input: {
               notifyBeforeMinutes: 0
             }
           });
+          createdIds.push(subtask.id);
           actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
           appliedActionsCount += 1;
           continue;
@@ -3699,6 +3708,7 @@ export async function applyLegacyGeneralProposalActions(input: {
   return {
     ok: appliedActionsCount === parsed.actions.length,
     reports: actionReports,
+    createdIds,
     ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Часть действий не выполнена.' })
   };
 }

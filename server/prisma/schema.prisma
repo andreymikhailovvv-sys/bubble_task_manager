@@ -204,6 +204,7 @@ model AiTaskProposal {
   display     Json
   resolvedIds Json?
   snapshots   Json?
+  undoData    Json?
   userTimeZone String @default("Europe/Moscow")
   autoApplied Boolean @default(false)
   status      String @default("PENDING")

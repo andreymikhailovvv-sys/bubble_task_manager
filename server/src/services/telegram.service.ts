@@ -5,6 +5,7 @@ import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
+import { recordAppliedTelegramBotTask } from './ai-task-proposal.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
@@ -74,6 +75,7 @@ type TelegramUpdate = {
   message?: {
     chat: { id: number };
     text?: string;
+    message_id?: number;
     caption?: string;
     document?: TelegramFile;
     photo?: TelegramFile[];
@@ -950,12 +952,39 @@ const createTaskFromPromptAndNotify = async (
   userId: string,
   prompt: string,
   attachment?: ChatAttachment,
-  transcript?: string
+  transcript?: string,
+  requestId?: string
 ) => {
+  if (requestId) {
+    const exists = await prisma.aiTaskProposal.findUnique({
+      where: { userId_requestId: { userId, requestId } }, select: { id: true }
+    });
+    if (exists) {
+      await sendMessage(chatId, '✅ Эта задача уже создана. Карточка доступна в общем чате Планировыча.', keyboardReplyMain);
+      return;
+    }
+  }
   await sendMessage(chatId, '🧠 Формирую задачу через ИИ...');
 
   try {
     const created = await createTaskFromAiPrompt(userId, prompt, attachment);
+    try {
+      const proposal = await recordAppliedTelegramBotTask({
+        userId, requestId: requestId ?? 'telegram-create:' + crypto.randomUUID(),
+        taskId: created.createdTask.id,
+        title: created.createdTask.title,
+        dueDate: created.createdTask.dueDate
+      });
+      await aiAssistantService.appendGeneralDialogMessages({
+        userId, messages: [{ role: 'user', content: prompt }]
+      });
+      await aiAssistantService.appendGeneralDialogAssistantMessage({
+        userId, content: 'Создал задачу «' + created.createdTask.title + '».',
+        creditsSpentMilli: 0, taskProposalId: proposal.id
+      });
+    } catch (recordError) {
+      console.error('[Telegram task create] task created but proposal history could not be saved', recordError);
+    }
     pendingAiAttachmentByChatId.delete(chatId);
     await resetBotMenuState(chatId);
 
@@ -1124,7 +1153,9 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         history,
         model: 'gpt-6-luna',
         projectTitle: 'Личный проект',
-        chatTitle: 'Быстрые запросы'
+        chatTitle: 'Быстрые запросы',
+        autoApplyTaskActions: true,
+        requestId: `telegram-voice:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
       });
       const nextHistory: ChatMessage[] = [
         ...history,
@@ -1133,9 +1164,12 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       ].slice(-20);
       quickAiHistoryByChatId.set(chatId, nextHistory);
       await aiAssistantService.appendGeneralDialogMessages({ userId: session.userId, messages: [
-        { role: 'user', content: transcript },
-        { role: 'assistant', content: result.answer }
+        { role: 'user', content: transcript }
       ] });
+      await aiAssistantService.appendGeneralDialogAssistantMessage({
+        userId: session.userId, content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
+        taskProposalId: result.taskProposal?.id
+      });
 
       const totalCreditsSpentMilli =
         voiceCreditsSpentMilli + (result.billing?.creditsSpentMilli ?? 0);
@@ -1182,7 +1216,9 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       history,
       model: 'gpt-6-luna',
       projectTitle: 'Личный проект',
-      chatTitle: 'Быстрые запросы'
+      chatTitle: 'Быстрые запросы',
+      autoApplyTaskActions: true,
+      requestId: `telegram-text:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
     });
     const nextHistory: ChatMessage[] = [
       ...history,
@@ -1191,9 +1227,12 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     ].slice(-20);
     quickAiHistoryByChatId.set(chatId, nextHistory);
     await aiAssistantService.appendGeneralDialogMessages({ userId: session.userId, messages: [
-      { role: 'user', content: descriptionText },
-      { role: 'assistant', content: result.answer }
+      { role: 'user', content: descriptionText }
     ] });
+    await aiAssistantService.appendGeneralDialogAssistantMessage({
+      userId: session.userId, content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
+      taskProposalId: result.taskProposal?.id
+    });
 
     const lines = [
       `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
@@ -1250,6 +1289,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файла и ответь по задаче.',
         history,
         mode: 'fast',
+        autoApplyTaskActions: true,
+        currentMessageId: `telegram-task:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`,
         attachments: attachment ? [attachment] : [],
         userTimeZone: user?.timeZone || MOSCOW_TIMEZONE
       });
@@ -1257,10 +1298,12 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       await aiAssistantService.appendTaskDialogMessages({
         userId: session.userId,
         taskId: session.activeTaskId,
-        messages: [
-          { role: 'user', content: userMessage },
-          { role: 'assistant', content: result.answer }
-        ]
+        messages: [{ role: 'user', content: userMessage }]
+      });
+      await aiAssistantService.appendTaskDialogAssistantMessage({
+        userId: session.userId, taskId: session.activeTaskId,
+        content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli ?? 0,
+        taskProposalId: result.taskProposal?.id
       });
 
       pendingAiAttachmentByChatId.delete(chatId);
@@ -1348,7 +1391,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
-    await createTaskFromPromptAndNotify(chatId, session.userId, prompt, attachment);
+    await createTaskFromPromptAndNotify(chatId, session.userId, prompt, attachment, undefined,
+      `telegram-create:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`);
     return;
   }
 
