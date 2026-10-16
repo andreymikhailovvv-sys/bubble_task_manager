@@ -198,3 +198,29 @@ export async function undoTaskProposal(userId: string, id: string): Promise<Task
   if (current.status === 'APPLIED') await undoStoredProposal(userId, id);
   return getTaskProposal(userId, id);
 }
+
+/**
+ * Dedicated Telegram "create task" command already creates the task before
+ * it returns. Record the successful operation without executing it a second time.
+ */
+export async function recordAppliedTelegramBotTask(input: {
+  userId: string; requestId: string; taskId: string; title: string; dueDate: Date | null;
+}) {
+  const existing = await prisma.aiTaskProposal.findUnique({
+    where: { userId_requestId: { userId: input.userId, requestId: input.requestId } }
+  });
+  if (existing) return proposalView(existing);
+  const undoData = await captureProposalAfter(input.userId, [], [input.taskId]);
+  const createdIds = undoData.created.map(item => item.id);
+  const row = await prisma.aiTaskProposal.create({
+    data: {
+      userId: input.userId, requestId: input.requestId, source: 'telegram_bot',
+      operations: [{ operation: 'create_task', title: input.title, dueDate: input.dueDate?.toISOString() ?? null }],
+      display: [{ type: 'create_task', title: input.title, dueDate: input.dueDate?.toISOString() ?? null }],
+      snapshots: [], userTimeZone: 'Europe/Moscow', autoApplied: true, status: 'APPLIED',
+      undoData: undoData as unknown as Prisma.InputJsonValue,
+      result: { reports: ['Создана задача «' + input.title + '».'], createdIds }
+    }
+  });
+  return proposalView(row);
+}
