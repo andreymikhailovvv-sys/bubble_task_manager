@@ -59,6 +59,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-ai-read-consent.test.ts
       - name: Verify Telegram AI assistant opt-in policies and credit settings
         run: node --import tsx --test server/test/telegram-ai-chat-policy.test.ts
+      - name: Verify Telegram bot auto-apply and task proposal undo
+        run: node --import tsx --test server/test/ai-task-proposal-undo.test.ts
       - name: Verify Telegram unified AI inbox and per-chat models
         run: node --import tsx --test server/test/telegram-ai-inbox.test.ts
       - name: Verify Telegram autonomous monitoring and credits
