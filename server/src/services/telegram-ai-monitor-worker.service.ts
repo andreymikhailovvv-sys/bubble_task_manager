@@ -270,7 +270,7 @@ async function processClaim(claimed: Claimed) {
     }
     await publishTelegramAiSummary({
       policy: { ...policy, monitorModel: current.monitorModel },
-      leaseToken: claimed.token, lastSeenMessageId: maxId, summary: result.summary
+      leaseToken: claimed.token, lastSeenMessageId: maxId, requestId: callId, summary: result.summary
     });
   } catch (error) {
     if (!billed) {
