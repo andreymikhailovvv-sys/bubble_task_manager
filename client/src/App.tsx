@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -338,6 +338,33 @@ type AiChatMessage = ChatMessage & { id: string; createdAt?: string };
 type SystemNotification = { id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
 type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
+const TELEGRAM_AI_MANAGED_PROJECT_ID = 'telegram-ai-assistant-project';
+const TELEGRAM_AI_MANAGED_CHAT_PREFIX = 'telegram-ai-assistant:';
+
+export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAiAssistantInbox): AiChatProject[] {
+  const ownedProjects = projects.filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
+  if (!feed.chats.length) return ownedProjects;
+  const previous = projects.find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const chats = feed.chats.map(dialog => {
+    const old = previous?.chats.find(thread => thread.id === dialog.id);
+    const messageMap = new Map<string, AiChatMessage>();
+    for (const message of old?.messages ?? []) messageMap.set(message.id, message);
+    for (const message of feed.messages) if (message.chatId === dialog.id) {
+      messageMap.set(message.id, { ...message, role: 'assistant', content: message.content });
+    }
+    const messages = [...messageMap.values()]
+      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id))
+      .slice(-300);
+    return { id: dialog.id, title: dialog.title, messages };
+  });
+  return [...ownedProjects, {
+    id: TELEGRAM_AI_MANAGED_PROJECT_ID,
+    title: 'Телеграм ассистент',
+    color: '#229ED9',
+    icon: 'telegram',
+    chats
+  }];
+}
 type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
 type TaskAiMessage = ChatMessage & { id: string };
@@ -1425,9 +1452,10 @@ export default function App() {
     }
     const loadGeneralAiHistory = async () => {
       try {
-        const [result, syncedProjects] = await Promise.all([
+        const [result, syncedProjects, telegramInbox] = await Promise.all([
           api.getGeneralAssistantHistory(),
-          api.getAiChatProjects<Partial<AiChatProject>>()
+          api.getAiChatProjects<Partial<AiChatProject>>(),
+          api.telegramAssistantInbox().catch(() => null)
         ]);
         if (isCancelled) return;
         const normalized = result.messages
@@ -1436,7 +1464,8 @@ export default function App() {
         setGeneralAiMessages(normalized);
         setAiChatProjects((prev) => {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
-          const next = normalizeAiChatProjects(source, normalized);
+          const base = normalizeAiChatProjects(source, normalized);
+          const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
           if (!syncedProjects.projects?.length) void api.saveAiChatProjects(next).catch(() => undefined);
           return next;
         });
@@ -2694,6 +2723,27 @@ ${allContext}`,
   }, [currentUser?.id]);
 
   useEffect(() => {
+    if (!currentUser) return;
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const feed = await api.telegramAssistantInbox();
+        if (alive) setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
+      } catch (error) {
+        console.warn('[Telegram AI inbox] sync unavailable', error);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    window.addEventListener('telegram-ai-assistant-updated', refresh);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('telegram-ai-assistant-updated', refresh);
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
@@ -2800,7 +2850,7 @@ ${allContext}`,
 
   const openAiChatProjectSettings = (projectId: string) => {
     const project = aiChatProjects.find((item) => item.id === projectId);
-    if (!project) return;
+    if (!project || project.id === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     setAiChatProjectDraft({ mode: 'edit', projectId, title: project.title, color: project.color, icon: project.icon });
     setIsAiChatProjectDialogOpen(true);
     setAiChatContextMenu(null);
@@ -2823,7 +2873,7 @@ ${allContext}`,
   };
 
   const openAiChatRenameDialog = (chatId: string) => {
-    if (chatId === QUICK_AI_CHAT_ID) return;
+    if (chatId === QUICK_AI_CHAT_ID || chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX)) return;
     const chat = activeAiChatProject?.chats.find((item) => item.id === chatId);
     if (!chat) return;
     setRenamingAiChatId(chatId);
@@ -2845,6 +2895,7 @@ ${allContext}`,
   };
 
   const deleteAiChatProject = (projectId: string) => {
+    if (projectId === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     setAiChatProjects((prev) => {
       if (prev.length <= 1) return prev;
       const next = prev.filter((project) => project.id !== projectId);
@@ -2857,14 +2908,14 @@ ${allContext}`,
   };
 
   const createAiChatThread = () => {
-    if (!activeAiChatProject) return;
+    if (!activeAiChatProject || activeAiChatProject.id === TELEGRAM_AI_MANAGED_PROJECT_ID) return;
     const chat = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length}`, messages: [] };
     setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: [chat, ...project.chats] } : project));
     setActiveAiChatId(chat.id);
   };
 
   const deleteAiChatThread = (chatId: string) => {
-    if (chatId === QUICK_AI_CHAT_ID || !activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
+    if (chatId === QUICK_AI_CHAT_ID || chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) || !activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
     setAiChatProjects((prev) => prev.map((project) => {
       if (project.id !== activeAiChatProject.id) return project;
       const nextChats = project.chats.filter((chat) => chat.id !== chatId);
