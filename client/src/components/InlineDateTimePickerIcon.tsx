@@ -5,7 +5,7 @@ type Props = {
   title?: string;
   className?: string;
   detachedPopup?: boolean;
-  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' }>;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' | 'REMINDER' }>;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
 };
