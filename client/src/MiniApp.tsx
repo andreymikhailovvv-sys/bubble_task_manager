@@ -136,7 +136,10 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
   const tgProject = (rawProjects ?? []).find(p => p.id === 'telegram-ai-assistant-project');
   const source: Array<Partial<MiniAiChatProject>> = [
     ...(userProjects.length ? userProjects : fallback),
-    ...(tgProject ? [tgProject] : [])
+    ...(tgProject ? [{ ...tgProject, chats: (tgProject.chats ?? [])
+      .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith('telegram-ai-assistant:'))
+      .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
+      .slice(0, 25) }] : [])
   ];
   const normalized: MiniAiChatProject[] = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
