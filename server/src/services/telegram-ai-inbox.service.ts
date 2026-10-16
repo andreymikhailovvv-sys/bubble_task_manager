@@ -40,7 +40,7 @@ export async function telegramAiInboxFeed(userId: string) {
     }),
     prisma.telegramAiInboxEvent.findMany({
       where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 250,
-      select: { id: true, policyId: true, content: true, createdAt: true, summary: true }
+      select: { id: true, policyId: true, taskModeAtPublish: true, content: true, createdAt: true, summary: true }
     })
   ]);
   const approvals = events.length ? await prisma.telegramAiTaskApproval.findMany({
@@ -54,10 +54,7 @@ export async function telegramAiInboxFeed(userId: string) {
   // Upgrade old published summaries lazily as well as those created by the monitor.
   // Stable event ID means a retry never creates a second task proposal.
   for (const event of events) {
-    const policy = await prisma.telegramAiChatPolicy.findFirst({
-      where: { id: event.policyId, userId }, select: { taskMode: true }
-    });
-    if (!policy || policy.taskMode === 'NONE') continue;
+    if (event.taskModeAtPublish === 'NONE') continue;
     const summary = event.summary as { taskSuggestions?: unknown };
     const titles = Array.isArray(summary?.taskSuggestions) ? summary.taskSuggestions.slice(0, 4) : [];
     const actions = titles.map((title, index) => ({
@@ -66,7 +63,7 @@ export async function telegramAiInboxFeed(userId: string) {
     })).filter(action => action.title);
     if (actions.length) {
       await prepareTaskProposal({ userId, source: 'telegram_assistant', requestId: event.id,
-        actions, autoApply: policy.taskMode === 'AUTO' });
+        actions, autoApply: event.taskModeAtPublish === 'AUTO' });
     }
   }
   const pendingProposals = events.length ? await prisma.aiTaskProposal.findMany({
@@ -117,7 +114,7 @@ export async function publishTelegramAiSummary(input: {
       where: { id: eventId },
       create: {
         id: eventId, userId: policy.userId, policyId: policy.id,
-        messageId: input.lastSeenMessageId, content,
+        messageId: input.lastSeenMessageId, taskModeAtPublish: policy.taskMode, content,
         summary: summary as unknown as Prisma.InputJsonValue,
         model: policy.monitorModel
       },
