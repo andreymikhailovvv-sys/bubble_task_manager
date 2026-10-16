@@ -2227,6 +2227,20 @@ body[data-theme='dark'] .workspace-global-search-panel {
 }
 .standalone-group-picker-option { color: var(--text-primary); }
 .standalone-group-picker-option:hover { background: var(--accent-soft); }
+.standalone-group-picker-option:disabled { opacity: .48; cursor: not-allowed; }
+.standalone-note-editor-group {
+  background: var(--field-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.standalone-note-editor-group:hover,
+.standalone-note-editor-group:focus-visible {
+  background: var(--muted-bg);
+  border-color: var(--note-group-color, var(--accent));
+  outline: none;
+}
+
 .standalone-group-manager-backdrop { background: var(--overlay-bg); backdrop-filter: blur(9px); }
 .standalone-group-manager-header,
 .standalone-group-manager-row,
@@ -8267,6 +8281,41 @@ body[data-theme='dark'] .ai-generated-document-icon,
 }
 .task-description-preview .note-checkbox-item > input {
   pointer-events: none;
+}
+
+/* Web task/focus description: formatted preview and textarea use one bounded scroll viewport. */
+.resizable-description-surface {
+  flex-shrink: 0;
+}
+.resizable-description-surface > .task-description-preview,
+.resizable-description-surface > textarea,
+.resizable-description-surface > .task-edit-description {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.resizable-description-grip {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--text-muted);
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .09);
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.resizable-description-grip:hover, .resizable-description-grip:focus-visible {
+  border-color: var(--accent);
+  background: var(--muted-bg);
+  color: var(--accent);
+  outline: none;
+}
+.resizable-description-grip:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 /* Mini App focus dialogs: retain dark buttons, icons and selects in dark theme. */
