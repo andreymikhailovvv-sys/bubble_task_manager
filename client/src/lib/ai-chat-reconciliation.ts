@@ -201,14 +201,15 @@ const TG_CHAT_ID_PREFIX = 'telegram-ai-assistant:';
 
 /** Recognize old browser-generated copies even when their UUID/icon differs. */
 export function isTelegramAssistantProjectLike(project: {
-  id: string; title?: string; icon?: string;
-  chats?: Array<{ id: string }>;
+  id?: string; title?: string; icon?: string;
+  chats?: Array<{ id?: string }>;
 }): boolean {
   if (project.id === TELEGRAM_AI_PROJECT_ID) return true;
   const title = (project.title ?? '').toLocaleLowerCase().replace(/[\\s_-]+/g, ' ').trim();
   if (title === 'телеграм ассистент' || title === 'telegram assistant') return true;
   if (project.icon === 'telegram') return true;
-  return (project.chats ?? []).some(chat => chat.id.startsWith(TG_CHAT_ID_PREFIX));
+  return (project.chats ?? []).some(chat =>
+    typeof chat?.id === 'string' && chat.id.startsWith(TG_CHAT_ID_PREFIX));
 }
 
 /**
