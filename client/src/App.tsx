@@ -15,6 +15,7 @@ import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Ta
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
+import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
@@ -6929,14 +6930,14 @@ ${allContext}`,
                       onChange={(nextValue) => setFocusedDraft((p) => ({ ...(p ?? {}), dueDate: nextValue }))}
                     />
                   </div>
-                  <div className="focused-task-description-surface mt-3 rounded-2xl p-3">
+                  <ResizableDescriptionSurface className="focused-task-description-surface mt-3 rounded-2xl p-3">
                     <TaskDescriptionInput
-                      className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-[5.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
+                      className="focused-task-description-input subtask-description-inline invisible-scrollbar h-full min-h-0 w-full resize-none overflow-y-auto border-0 bg-transparent text-sm leading-6 text-muted outline-none placeholder:text-slate-400"
                       placeholder="Введите описание"
                       value={focusedDraft.description ?? ''}
                       onChange={(description) => setFocusedDraft((p) => ({ ...(p ?? {}), description }))}
                     />
-                  </div>
+                  </ResizableDescriptionSurface>
                   <div className="mt-2 flex flex-wrap items-center justify-start gap-2">
                     <button
                       type="button"
