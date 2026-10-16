@@ -218,7 +218,10 @@ async function processClaim(claimed: Claimed) {
   const lastSeen = policy.lastSeenMessageId ?? 0;
   // Fetch media only from the monitored message range; the explicit refresh
   // can also inspect the limited existing history.
-  const latest = await telegramUserClientRead.aiHistory(policy.userId, policy.chatId, 100, true, policy.summaryRequested ? 0 : lastSeen);
+  const latest = await telegramUserClientRead.aiHistory(
+    policy.userId, policy.chatId, 100, true,
+    policy.reviewAttachments ? (policy.summaryRequested ? 0 : lastSeen) : undefined
+  );
   const all = latest.messages;
   const maxId = Math.max(lastSeen, ...all.map(m => m.id));
   const newMessages = all.filter(m => m.id > lastSeen);
@@ -226,7 +229,7 @@ async function processClaim(claimed: Claimed) {
     ? newMessages.slice(-MAX_INPUT_MESSAGES)
     : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
   // A photo or document without a caption must still trigger analysis.
-  if (!selected.length || !selected.some(m => m.text.trim() || m.hasMedia)) {
+  if (!selected.length || !selected.some(m => m.text.trim() || (policy.reviewAttachments && m.hasMedia))) {
     await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, leaseToken: claimed.token, monitorRevision: policy.monitorRevision, isEnabled: true },
       data: { lastSeenMessageId: maxId, summaryRequested: false }
@@ -235,7 +238,11 @@ async function processClaim(claimed: Claimed) {
   }
 
   // Bound the context even when 100 messages are requested from Telegram.
-  const bounded = selected.map(m => ({ ...m, text: m.text.slice(0, 500) }));
+  const bounded = selected.map(m => ({
+    ...m,
+    text: m.text.slice(0, 500),
+    ...(policy.reviewAttachments ? {} : { hasMedia: false, media: undefined, mediaNote: undefined })
+  }));
   // Do not send data to OpenAI when the owner disconnects or revokes a policy.
   const current = await ownedLease(claimed);
   const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
