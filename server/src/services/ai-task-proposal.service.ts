@@ -7,7 +7,7 @@ import type { Prisma } from '@prisma/client';
  * A proposal is a durable, owner-bound command. The model and the browser may
  * suggest actions, but only this service is allowed to commit them.
  */
-export type TaskProposalSource = 'planner' | 'task_chat' | 'telegram_assistant';
+export type TaskProposalSource = 'planner' | 'task_chat' | 'legacy_general' | 'telegram_assistant';
 export type TaskProposalAction = Record<string, unknown>;
 export type TaskProposalView = {
   id: string; status: string; source: string; autoApplied: boolean;
@@ -90,8 +90,8 @@ export async function prepareTaskProposal(input: {
     where: { userId_requestId: { userId: input.userId, requestId: input.requestId } },
     update: {}, create: {
       userId: input.userId, requestId: input.requestId, source: input.source,
-      taskId: input.taskId ?? null, operations: input.actions as Prisma.InputJsonValue,
-      display: display as Prisma.InputJsonValue,
+      taskId: input.taskId ?? null, operations: input.actions as unknown as Prisma.InputJsonValue,
+      display: JSON.parse(JSON.stringify(display)) as Prisma.InputJsonValue,
       snapshots: snapshots as Prisma.InputJsonValue,
       resolvedIds: { items: input.resolvedItemIds ?? [], spheres: input.resolvedSphereIds ?? [] },
       userTimeZone: input.userTimeZone ?? 'Europe/Moscow', autoApplied: auto
@@ -146,10 +146,17 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
           userId, action as PlannerActionInput,
           new Set(ids.items ?? []), new Set(ids.spheres ?? []), row.userTimeZone
         );
-        if (!result.ok) throw new Error(result.message || 'Не удалось применить изменение.');
-        reports.push(result.report);
-        if (result.itemId && isCreate(action)) createdIds.push(result.itemId);
+        if (!result.ok) throw new Error('message' in result ? String(result.message) : 'Не удалось применить изменение.');
+        reports.push('report' in result ? String(result.report) : 'Изменение выполнено.');
+        if ('itemId' in result && typeof result.itemId === 'string' && isCreate(action)) createdIds.push(result.itemId);
       }
+    } else if (row.source === 'legacy_general') {
+      const { applyLegacyGeneralProposalActions } = await import('./ai-assistant.service.js');
+      const result = await applyLegacyGeneralProposalActions({
+        userId, actions, userTimeZone: row.userTimeZone
+      });
+      if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
+      reports.push(...result.reports);
     } else if (row.source === 'task_chat') {
       const { applyTaskChatProposalActions } = await import('./ai-assistant.service.js');
       const result = await applyTaskChatProposalActions({
