@@ -1147,7 +1147,9 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       const transcript = transcription.text;
       voiceCreditsSpentMilli = transcription.billing.creditsSpentMilli;
 
-      const history = quickAiHistoryByChatId.get(chatId) ?? [];
+      // One conversation across Telegram, Mini App and the website.
+      // In-memory chat state is not authoritative and is lost on server restarts.
+      const history = (await aiAssistantService.listGeneralDialog({ userId: session.userId })).slice(-20);
       const result = await aiAssistantService.askAiChat({
         userId: session.userId,
         question: transcript,
@@ -1213,7 +1215,9 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       return;
     }
 
-    const history = quickAiHistoryByChatId.get(chatId) ?? [];
+    // One conversation across Telegram, Mini App and the website.
+      // In-memory chat state is not authoritative and is lost on server restarts.
+      const history = (await aiAssistantService.listGeneralDialog({ userId: session.userId })).slice(-20);
     const result = await aiAssistantService.askAiChat({
       userId: session.userId,
       question: descriptionText,
