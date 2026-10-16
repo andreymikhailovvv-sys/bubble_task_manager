@@ -36,6 +36,7 @@ import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShar
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from './lib/ai-chat-reconciliation';
+import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
@@ -2765,9 +2766,13 @@ ${allContext}`,
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
+    persistAiChatProjectsCache(localStorage, 'btm:ai-chat-projects', aiChatProjects);
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
-    localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
+    try {
+      localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
+    } catch {
+      // Full browser storage must not crash the AI chat or its consent cards.
+    }
     const snapshot = JSON.stringify(aiChatProjects);
     if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
