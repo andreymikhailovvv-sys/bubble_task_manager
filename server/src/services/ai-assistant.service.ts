@@ -2072,7 +2072,7 @@ export const aiAssistantService = {
       'Если тема сложная — только ключевые шаги и конкретные действия.',
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Если ответ содержит сравнение или табличные данные, оформляй их как корректную Markdown-таблицу с заголовками, строкой разделителей | --- | и строками значений. Не заключай таблицу в блок кода.',
-      'Ты можешь менять только текущую задачу и её подзадачи через actions.',
+      'Через actions можно менять только текущую задачу и её подзадачи, а также создавать самостоятельные напоминания create_reminder.',
       'Когда пользователь просит «напомни», «сделай напоминание» или «поставь напоминание», создай самостоятельный объект типа НАПОМИНАНИЕ через action.type=create_reminder с title, description и dueDate в локальном часовом поясе пользователя. НЕ создавай подзадачу и не меняй текущую задачу. Если дата или время неясны, уточни их до создания.',
       'Прямой приказ пользователя изменить данные задачи уже является явным подтверждением. Команды вроде «сделай», «добавь», «создай», «измени», «обнови/обновляй», «перенеси», «переименуй», «скопируй», «удали» нужно выполнять в этом же ответе без дополнительного вопроса-подтверждения.',
       'Отдельное подтверждение нужно только когда ты сам предложил изменение, которого пользователь ещё явно не просил выполнить. Короткие ответы «да», «делай», «обновляй», «выполняй», «подтверждаю» после твоего предложения считаются подтверждением.',
@@ -3310,6 +3310,25 @@ export async function applyTaskChatProposalActions(input: {
               actionReports.push(`Изменил сектор задачи "${task.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
+              continue;
+            }
+            if (action.type === 'create_reminder') {
+              const when = new Date(action.dueDate);
+              if (Number.isNaN(when.getTime())) {
+                actionReports.push('Напоминание не создано: неверный срок.');
+                continue;
+              }
+              const reminder = await prisma.task.create({
+                data: {
+                  userId: input.userId, taskType: 'REMINDER',
+                  title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 4000),
+                  dueDate: when, status: 'TODO', importance: 3, urgency: 3, priorityScore: 3,
+                  notifyBeforeMinutes: 0, aiNotificationsEnabled: false
+                }
+              });
+              createdIds.push(reminder.id);
+              actionReports.push(`Создано напоминание «${reminder.title}».`);
+              appliedActionsCount += 1;
               continue;
             }
             if (action.type === 'create_subtask') {
