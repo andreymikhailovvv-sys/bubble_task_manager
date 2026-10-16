@@ -335,7 +335,7 @@ export type StandaloneNote = {
 export const api = {
   getMe: () => request<{ user: CurrentUser }>('/api/auth/me'),
   getAiChatProjects: <T>() => request<{ projects: T[] | null }>('/api/ai-chat/projects'),
-  getAiChatThreadMessages: (projectId: string, chatId: string) => request<{ messages: ChatMessage[] }>(`/api/ai-chat/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/messages`),
+  getAiChatThreadMessages: (projectId: string, chatId: string) => request<{ messages: ChatMessage[]; projectsOutline: import('./ai-chat-reconciliation').AiChatProjectOutline[] }>(`/api/ai-chat/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/messages`),
   getAiGeneratedDocumentDownloadUrl: (id: string) => `/api/ai-documents/${encodeURIComponent(id)}/download`,
   createAiGeneratedDocumentDownloadLink: (id: string) =>
     request<{ url: string; fileName: string }>(`/api/ai-documents/${encodeURIComponent(id)}/download-link`, { method: 'POST' }),
