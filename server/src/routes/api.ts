@@ -1,4 +1,4 @@
-import { getTaskProposal, applyTaskProposal, rejectTaskProposal } from '../services/ai-task-proposal.service.js';
+import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -1502,6 +1502,10 @@ apiRouter.get('/ai/task-proposals/:id', requireAuth, asyncHandler(async (req, re
 }));
 apiRouter.post('/ai/task-proposals/:id/approve', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try { res.json(await applyTaskProposal(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+apiRouter.post('/ai/task-proposals/:id/undo', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'no-store, private').json(await undoTaskProposal(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
 }));
 apiRouter.post('/ai/task-proposals/:id/reject', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
