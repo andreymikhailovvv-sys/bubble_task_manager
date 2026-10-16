@@ -672,7 +672,8 @@ export function TaskEditor({
       }));
     } catch (error) {
       setRecurrenceError(error instanceof Error ? error.message : "Некорректное расписание.");
-      setForm((previous) => ({ ...previous, isRecurring: true, recurrenceJson: null }));
+      // Leave the last saved rule untouched; editing an invalid draft must
+      // never cause autosave to erase the persisted schedule.
     }
   };
   const addManualSlot = () => {
@@ -771,7 +772,7 @@ export function TaskEditor({
       titleInputRef.current?.focus();
       return;
     }
-    if (isRecurring && (!form.recurrenceJson || (recurrenceMethod === "ai" && !recurrenceAiReady))) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
+    if (isRecurring && (recurrenceError || !form.recurrenceJson || (recurrenceMethod === "ai" && !recurrenceAiReady))) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
     setTitleError(null);
     await onSave(form, draftSubtasks);
   };
