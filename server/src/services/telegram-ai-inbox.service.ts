@@ -2,6 +2,7 @@ import { Prisma, type TelegramAiChatPolicy } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { telegramService } from './telegram.service.js';
 import { type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
+import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 
 export const TELEGRAM_AI_PROJECT_ID = 'telegram-ai-assistant-project';
 export const TELEGRAM_AI_PROJECT_TITLE = 'Телеграм ассистент';
@@ -41,6 +42,14 @@ export async function telegramAiInboxFeed(userId: string) {
       select: { id: true, policyId: true, content: true, createdAt: true, summary: true }
     })
   ]);
+  const approvals = events.length ? await prisma.telegramAiTaskApproval.findMany({
+    where: { userId, eventId: { in: events.map(event => event.id) } },
+    select: { eventId: true, itemIndex: true }
+  }) : [];
+  const approvedByEvent = new Map<string, number[]>();
+  for (const approval of approvals) {
+    approvedByEvent.set(approval.eventId, [...(approvedByEvent.get(approval.eventId) ?? []), approval.itemIndex]);
+  }
   return {
     projectId: TELEGRAM_AI_PROJECT_ID, projectTitle: TELEGRAM_AI_PROJECT_TITLE,
     projectIcon: TELEGRAM_AI_PROJECT_ICON,
@@ -50,6 +59,7 @@ export async function telegramAiInboxFeed(userId: string) {
     })),
     messages: events.reverse().map(event => ({
       id: event.id, chatId: telegramAiThreadId(event.policyId),
+      approvedSuggestionIndices: approvedByEvent.get(event.id) ?? [],
       role: 'assistant' as const, content: event.content,
       createdAt: event.createdAt.toISOString(),
       taskSuggestions: typeof event.summary === 'object' && event.summary && 'taskSuggestions' in event.summary
@@ -157,5 +167,46 @@ export async function deliverTelegramAiBotNotifications() {
     }
   } finally {
     delivering = false;
+  }
+}
+
+/** Explicit, idempotent, owner-approved creation. Monitoring never creates
+ * Planovych tasks automatically regardless of the AUTO setting in PR2. */
+export async function approveTelegramAiSuggestedTask(userId: string, eventId: string, index: number) {
+  if (!Number.isInteger(index) || index < 0 || index > 3) {
+    throw new TelegramUserClientError(400, 'Недопустимый номер предложения задачи');
+  }
+  const event = await prisma.telegramAiInboxEvent.findFirst({
+    where: { id: eventId, userId }, include: { policy: { select: { taskMode: true, chatTitle: true } } }
+  });
+  if (!event) throw new TelegramUserClientError(404, 'Предложение не найдено');
+  if (event.policy.taskMode === 'NONE') throw new TelegramUserClientError(403, 'Предложения задач отключены');
+  const summary = event.summary as { taskSuggestions?: unknown };
+  const options = Array.isArray(summary?.taskSuggestions) ? summary.taskSuggestions : [];
+  const title = typeof options[index] === 'string' ? options[index].trim().slice(0, 220) : '';
+  if (!title) throw new TelegramUserClientError(404, 'Предложение задачи недоступно');
+  const approvalId = eventId + ':' + index;
+  try {
+    const task = await prisma.$transaction(async tx => {
+      await tx.telegramAiTaskApproval.create({
+        data: { id: approvalId, userId, eventId, itemIndex: index, taskId: '' }
+      });
+      const created = await tx.task.create({
+        data: {
+          userId, title, status: 'TODO',
+          description: 'Предложено ИИ по Telegram-переписке «' + event.policy.chatTitle.slice(0, 100) + '». Проверьте сроки и содержание перед выполнением.'
+        }
+      });
+      await tx.telegramAiTaskApproval.update({
+        where: { id: approvalId }, data: { taskId: created.id }
+      });
+      return created;
+    });
+    return { ok: true, taskId: task.id, alreadyCreated: false };
+  } catch (error) {
+    if ((error as { code?: string }).code !== 'P2002') throw error;
+    const prior = await prisma.telegramAiTaskApproval.findUnique({ where: { id: approvalId } });
+    if (!prior || prior.userId !== userId) throw error;
+    return { ok: true, taskId: prior.taskId, alreadyCreated: true };
   }
 }
