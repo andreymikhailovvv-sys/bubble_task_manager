@@ -18,13 +18,16 @@ test('weekly recurrence supports clicked days with different times', () => {
   assert.equal(computeNextRecurringDueDate(schedule, new Date('2026-10-16T16:30:00Z'))?.toISOString(), '2026-10-19T06:00:00.000Z');
 });
 
-test('monthly recurrence skips invalid calendar dates and uses all selected dates', () => {
+test('monthly recurrence uses last day in short months including February and leap years', () => {
   const schedule = makeManualRecurrenceSchedule('MONTHLY', [
     { monthDay: 31, time: '09:00' }, { monthDay: 1, time: '10:00' }
   ], 'Europe/Moscow');
   assert.equal(computeNextRecurringDueDate(schedule, new Date('2026-01-31T20:00:00Z'))?.toISOString(), '2026-02-01T07:00:00.000Z');
   const thirtyFirst = makeManualRecurrenceSchedule('MONTHLY', [{ monthDay: 31, time: '09:00' }], 'Europe/Moscow');
-  assert.equal(computeNextRecurringDueDate(thirtyFirst, new Date('2026-02-01T00:00:00Z'))?.toISOString(), '2026-03-31T06:00:00.000Z');
+  assert.equal(computeNextRecurringDueDate(thirtyFirst, new Date('2026-02-01T00:00:00Z'))?.toISOString(), '2026-02-28T06:00:00.000Z');
+  assert.equal(computeNextRecurringDueDate(thirtyFirst, new Date('2028-02-01T00:00:00Z'))?.toISOString(), '2028-02-29T06:00:00.000Z');
+  assert.equal(computeNextRecurringDueDate(thirtyFirst, new Date('2026-03-31T20:00:00Z'))?.toISOString(), '2026-04-30T06:00:00.000Z');
+  assert.equal(computeNextRecurringDueDate(thirtyFirst, new Date('2026-04-30T06:00:00Z'))?.toISOString(), '2026-05-31T06:00:00.000Z');
 });
 
 test('DST does not shift a local 09:00 repeating task', () => {
@@ -61,7 +64,34 @@ test('recurrence AI retries a fully consumed output and uses actual token billin
   assert.match(api, /parseRecurrence:/);
   assert.match(editor, /setRecurrenceError\(error instanceof Error/);
   assert.match(editor, /recurrence-manual-slots/);
-  assert.match(editor, /aria-label="Количество повторов"/);
-  assert.match(editor, /max-h-56/);
+  assert.match(editor, /aria-label="Добавить время уведомления"/);
+  assert.match(editor, /aria-label="Дни недели для повторения"/);
+  assert.match(editor, /aria-label="Календарь дней месяца"/);
+  assert.match(editor, /task-create-save-footer/);
+  assert.doesNotMatch(editor, /aria-label="Количество повторов"/);
+  assert.match(editor, /task-create-draft-subtasks/);
   assert.match(task, /validateManualRecurrenceSchedule\(recurrenceSchedule\)/);
+});
+
+
+test('task creation recurrence layout retains scrollable content and independent submit footer in all recurrence modes', async () => {
+  const [editor, styles, clientRule] = await Promise.all([
+    readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/lib/recurrenceSchedule.ts', import.meta.url), 'utf8')
+  ]);
+  assert.match(editor, /recurrenceMethod === "manual"/);
+  assert.match(editor, /recurrence-add-time-button/);
+  assert.match(editor, /recurrence-month-calendar/);
+  assert.match(editor, /recurrenceSlots\.some\(\(slot\) => slot\.weekday === day\.value\)/);
+  assert.match(editor, /recurrenceSlots\.some\(\(slot\) => slot\.monthDay === day\)/);
+  assert.match(editor, /task-editor-scroll-content invisible-scrollbar/);
+  const footerIndex = editor.indexOf('task-create-save-footer');
+  const branchEnd = editor.indexOf('          {isEditing && isSubtask ?');
+  assert.ok(footerIndex > editor.indexOf('              {isRecurring ? (') && footerIndex < branchEnd);
+  assert.match(styles, /body\[data-theme='light'\] \.focused-task-editor-shell \.recurrence-choice-button/);
+  assert.match(styles, /body\[data-theme='dark'\] \.focused-task-editor-shell \.recurrence-choice-button/);
+  assert.match(styles, /\.task-create-draft-subtasks \{\s*flex: 0 0 auto/);
+  assert.match(styles, /\.task-create-save-footer \{\s*position: relative/);
+  assert.match(clientRule, /new Set\(checked\.map/);
 });
