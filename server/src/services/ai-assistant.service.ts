@@ -5,7 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools } from './ai-chat-tools.service.js';
-import { prepareTaskProposal } from './ai-task-proposal.service.js';
+import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 import { requiresNoteCreation } from './ai-create-note.service.js';
@@ -44,6 +44,7 @@ export type ChatMessage = {
   content: string;
   creditsSpentMilli?: number;
   generatedDocument?: GeneratedDocumentMeta;
+  taskProposal?: TaskProposalView | null;
 };
 type OpenAiTextMessage = {
   role: 'system' | 'user' | 'assistant';
@@ -1830,11 +1831,17 @@ export const aiAssistantService = {
         messageKind: true,
         recipientUserId: true,
         telegramSendDraft: true,
+        aiTaskProposalId: true,
         telegramReadDraft: true,
         generatedDocument: { select: { id: true, fileName: true, mimeType: true, size: true } },
         user: { select: { name: true, username: true } }
       }
     });
+    const proposalIds = [...new Set(messages.map(m => m.aiTaskProposalId).filter((id): id is string => Boolean(id)))];
+    const taskProposalRows = proposalIds.length
+      ? await prisma.aiTaskProposal.findMany({ where: { id: { in: proposalIds }, userId: input.userId } })
+      : [];
+    const taskProposalMap = new Map(taskProposalRows.map(p => [p.id, proposalView(p)]));
     const recipientIds = Array.from(new Set(messages.map((message) => message.recipientUserId).filter((value): value is string => Boolean(value))));
     const recipients = recipientIds.length > 0
       ? await prisma.user.findMany({ where: { id: { in: recipientIds } }, select: { id: true, name: true, username: true } })
@@ -1856,6 +1863,9 @@ export const aiAssistantService = {
         : {}),
       ...(message.role === 'assistant' && message.generatedDocument
         ? { generatedDocument: message.generatedDocument }
+        : {}),
+      ...(message.role === 'assistant' && message.userId === input.userId && message.aiTaskProposalId
+        ? { taskProposal: taskProposalMap.get(message.aiTaskProposalId) }
         : {}),
       ...(message.role === 'assistant' && message.userId === input.userId && message.telegramReadDraft
         ? { telegramReadDraft: message.telegramReadDraft as TelegramReadDraft }
@@ -1902,7 +1912,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1919,6 +1929,7 @@ export const aiAssistantService = {
         content,
         creditsSpentMilli: input.creditsSpentMilli,
         generatedDocumentId: input.generatedDocumentId ?? null,
+        aiTaskProposalId: input.taskProposalId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
         ...(input.telegramReadDraft ? { telegramReadDraft: { ...input.telegramReadDraft } } : {}),
         ...(input.telegramReadOwnerId ? { telegramReadOwnerId: input.telegramReadOwnerId } : {})
@@ -1933,12 +1944,18 @@ export const aiAssistantService = {
         ...(input.since ? { createdAt: { gte: input.since } } : {})
       },
       orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true, creditsSpentMilli: true }
+      select: { role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true }
     });
 
+    const proposalIds = messages.map(m => m.aiTaskProposalId).filter((id): id is string => Boolean(id));
+    const proposals = proposalIds.length ? await prisma.aiTaskProposal.findMany({
+      where: { id: { in: proposalIds }, userId: input.userId }
+    }) : [];
+    const byId = new Map(proposals.map(p => [p.id, proposalView(p)]));
     return messages.map((message) => ({
       role: message.role,
       content: message.content,
+      ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));
   },
@@ -1958,10 +1975,10 @@ export const aiAssistantService = {
     });
   },
 
-  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number }) => {
+  appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli } });
+    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
