@@ -1478,6 +1478,9 @@ export default function App() {
           const base = normalizeAiChatProjects(source, normalized);
           const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
           aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
+          if (!syncedProjects.projects?.length) {
+            void api.saveAiChatProjects(next).catch(error => console.warn('[AI chat] initial project sync failed', error));
+          }
           return next;
         });
         aiChatProjectsSyncReadyRef.current = true;
