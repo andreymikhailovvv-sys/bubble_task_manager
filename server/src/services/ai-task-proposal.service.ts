@@ -1,3 +1,4 @@
+import { captureProposalBefore, captureProposalAfter, undoStoredProposal } from './ai-task-proposal-undo.service.js';
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { plannerToolsService, type PlannerActionInput } from './planner-tools.service.js';
@@ -137,6 +138,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
         }
       }
     }
+    const before = await captureProposalBefore(userId, actions);
     const reports: string[] = [];
     const createdIds: string[] = [];
     if (row.source === 'planner') {
@@ -157,6 +159,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       });
       if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
       reports.push(...result.reports);
+      createdIds.push(...result.createdIds);
     } else if (row.source === 'task_chat') {
       const { applyTaskChatProposalActions } = await import('./ai-assistant.service.js');
       const result = await applyTaskChatProposalActions({
@@ -164,6 +167,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       });
       if (!result.ok) throw new Error(result.error ?? 'Не удалось изменить задачу.');
       reports.push(...result.reports);
+      createdIds.push(...result.createdIds);
     } else if (row.source === 'telegram_assistant') {
       const { approveTelegramAiSuggestedTask } = await import('./telegram-ai-inbox.service.js');
       for (const action of actions) {
@@ -172,8 +176,10 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
         reports.push('Создана задача «' + String(action.title).slice(0, 180) + '».');
       }
     } else throw new Error('Неизвестный источник предложения.');
+    const undoData = await captureProposalAfter(userId, before, createdIds);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
-      status: 'APPLIED', result: { reports, createdIds } as Prisma.InputJsonValue
+      status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
+      result: { reports, createdIds } as Prisma.InputJsonValue
     } });
   } catch (error) {
     // A failed command must never be retried automatically: the network/database
@@ -182,5 +188,13 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       status: 'FAILED', error: error instanceof Error ? error.message.slice(0, 350) : 'Ошибка применения'
     } });
   }
+  return getTaskProposal(userId, id);
+}
+
+/** One-shot, owner-only reverse operation. Uncertain failures do not apply twice. */
+export async function undoTaskProposal(userId: string, id: string): Promise<TaskProposalView> {
+  const current = await prisma.aiTaskProposal.findFirst({ where: { id, userId } });
+  if (!current) throw new Error('Предложение не найдено.');
+  if (current.status === 'APPLIED') await undoStoredProposal(userId, id);
   return getTaskProposal(userId, id);
 }
