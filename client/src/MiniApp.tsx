@@ -906,8 +906,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-        .map((message) => attachChatMessageId(message, crypto.randomUUID()))
-        .slice(-20);
+        .map((message) => attachChatMessageId(message, message.id ?? crypto.randomUUID()))
+        .slice(-100);
       const nextAiChatProjects = normalizeMiniAiChatProjects(syncedProjects.projects).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
         chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
