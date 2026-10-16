@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { mergeChatProjectSnapshots } from '../src/lib/ai-chat-project-sync.js';
 import { formatTelegramTaskChanges } from '../src/lib/telegram-task-change-receipt.js';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from '../../client/src/lib/ai-chat-reconciliation.js';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from '../../client/src/lib/ai-chat-reconciliation.js';
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -103,4 +103,61 @@ test('project index reconciliation preserves every unchanged conversation and se
   assert.notStrictEqual(renamed, local);
   assert.strictEqual(renamed[0].chats[0].messages, messages);
   assert.strictEqual(renamed[0].chats[0].title, 'Новая тема');
+});
+
+test('regression: 100 repeated project outline polls never multiply Telegram assistant folders', () => {
+  const sharedMessages = [{ id: 'approved-1', role: 'assistant' as const, content: 'Разрешение на чтение' }];
+  const chat = { id: 'telegram-ai-assistant:policy-1', title: 'Рабочий чат', messages: sharedMessages };
+  const personal = { id: 'personal', title: 'Личный проект', color: '#888', icon: '✨',
+    chats: [{ id: 'quick-ai-requests', title: 'Быстрые запросы', messages: [] }] };
+  const telegram = { id: 'telegram-ai-assistant-project', title: 'Телеграм ассистент',
+    color: '#229ed9', icon: 'telegram', chats: [chat] };
+  const outline = [personal, telegram].map(project => ({
+    ...project, chats: project.chats.map(item => ({ id: item.id, title: item.title }))
+  }));
+  let state = [personal, telegram];
+  const first = reconcileAiChatProjectOutline(state, outline);
+  assert.strictEqual(first, state, 'an unchanged outline should never allocate a new project tree');
+  for (let i = 0; i < 100; i++) {
+    state = reconcileAiChatProjectOutline(state, outline);
+    assert.equal(state.length, 2);
+    assert.equal(state.filter(project => project.id === 'telegram-ai-assistant-project').length, 1);
+  }
+  assert.strictEqual(state, first);
+  assert.strictEqual(state[1].chats[0].messages, sharedMessages);
+});
+
+test('regression: inflated live Mini App state collapses to one Telegram folder during the very next poll', () => {
+  const personal = { id: 'personal', title: 'Личный проект', color: '#aaa', icon: '✨',
+    chats: [{ id: 'quick-ai-requests', title: 'Быстрые запросы', messages: [] }] };
+  const telegram = { id: 'telegram-ai-assistant-project', title: 'Телеграм ассистент',
+    color: '#229ed9', icon: 'telegram',
+    chats: [{ id: 'telegram-ai-assistant:policy-1', title: 'Работа', messages: [
+      { id: 'manual', role: 'user' as const, content: 'Моё сообщение' }
+    ] }] };
+  const ghost = { ...telegram, id: 'ghost-uuid', icon: '✨' };
+  let projects = [personal, ...Array.from({ length: 200 }, () => telegram), ghost];
+  const regularOutline = [{ id: 'personal', title: 'Личный проект', color: '#aaa', icon: '✨',
+    chats: [{ id: 'quick-ai-requests', title: 'Быстрые запросы' }] }];
+  for (let i = 0; i < 10; i++) {
+    projects = reconcileAiChatProjectOutline(projects, [...regularOutline, {
+      id: 'telegram-ai-assistant-project', title: 'Телеграм ассистент', color: '#229ed9',
+      icon: 'telegram', chats: [{ id: 'telegram-ai-assistant:policy-1', title: 'Работа' }]
+    }]);
+    assert.equal(projects.length, 2);
+    assert.equal(projects[1].chats[0].messages[0].content, 'Моё сообщение');
+  }
+  assert.equal(sanitizeCachedTelegramAssistantProjects(projects), projects);
+  assert.equal(isTelegramAssistantProjectLike(ghost), true);
+  assert.equal(isTelegramAssistantProjectLike(personal), false);
+});
+
+test('legacy duplicate folder with a generated UUID and text icon is excluded from normal projects', () => {
+  const ghost = { id: 'random', title: 'Телеграм ассистент', color: '#229ed9', icon: '✨',
+    chats: [{ id: 'telegram-ai-assistant:policy-1', title: 'Работа', messages: [] }] };
+  const fixed = sanitizeCachedTelegramAssistantProjects([ghost]);
+  assert.equal(fixed.length, 1);
+  assert.equal(fixed[0].id, 'telegram-ai-assistant-project');
+  assert.equal(fixed[0].icon, 'telegram');
+  assert.equal(sanitizeCachedTelegramAssistantProjects(fixed), fixed);
 });
