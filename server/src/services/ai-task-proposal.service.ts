@@ -8,7 +8,7 @@ import type { Prisma } from '@prisma/client';
  * A proposal is a durable, owner-bound command. The model and the browser may
  * suggest actions, but only this service is allowed to commit them.
  */
-export type TaskProposalSource = 'planner' | 'task_chat' | 'legacy_general' | 'telegram_assistant';
+export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant';
 export type TaskProposalAction = Record<string, unknown>;
 export type TaskProposalView = {
   id: string; status: string; source: string; autoApplied: boolean;
@@ -141,7 +141,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     const before = await captureProposalBefore(userId, actions);
     const reports: string[] = [];
     const createdIds: string[] = [];
-    if (row.source === 'planner') {
+    if ((row.source === 'planner' || row.source === 'telegram_bot')) {
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
         const result = await plannerToolsService.action(
@@ -160,7 +160,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       if (!result.ok) throw new Error(result.error ?? 'Не удалось применить изменения.');
       reports.push(...result.reports);
       createdIds.push(...result.createdIds);
-    } else if (row.source === 'task_chat') {
+    } else if ((row.source === 'task_chat' || row.source === 'telegram_bot_task')) {
       const { applyTaskChatProposalActions } = await import('./ai-assistant.service.js');
       const result = await applyTaskChatProposalActions({
         userId, taskId: row.taskId!, actions, userTimeZone: row.userTimeZone
