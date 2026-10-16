@@ -2484,7 +2484,7 @@ export const aiAssistantService = {
         const taskProposal = parsed.actions.length
           ? await prepareTaskProposal({
               userId: input.userId, requestId: input.currentMessageId ?? requestId,
-              source: 'task_chat', taskId: input.taskId,
+              source: input.autoApplyTaskActions ? 'telegram_bot_task' : 'task_chat', taskId: input.taskId,
               actions: parsed.actions as unknown as Record<string, unknown>[],
               autoApply: input.autoApplyTaskActions === true ? true : undefined,
               userTimeZone: input.userTimeZone
