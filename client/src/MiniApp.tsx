@@ -1,6 +1,6 @@
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, BellRing, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
