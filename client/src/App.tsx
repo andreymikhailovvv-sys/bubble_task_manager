@@ -408,13 +408,19 @@ const QUICK_AI_CHAT_ID = 'quick-ai-requests';
 function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | null | undefined, quickMessages: AiChatMessage[] = []): AiChatProject[] {
   const quickChat: AiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-20) };
   const fallback: AiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
-  const source = rawProjects?.length ? rawProjects : fallback;
+  const standard = (rawProjects ?? []).filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const managed = (rawProjects ?? []).find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const source: Array<Partial<AiChatProject>> = [
+    ...(standard.length ? standard : fallback),
+    ...(managed ? [managed] : [])
+  ];
   const normalized = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
     title: project.title ?? `Проект ${index + 1}`,
     color: project.color ?? '#8b5cf6',
     icon: project.icon ?? '✨',
-    chats: (project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
+    chats: (project.chats?.length || project.id === TELEGRAM_AI_MANAGED_PROJECT_ID
+      ? (project.chats ?? []) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
       id: chat.id ?? crypto.randomUUID(),
       title: chat.title ?? 'Новый чат',
       messages: chat.messages ?? []
