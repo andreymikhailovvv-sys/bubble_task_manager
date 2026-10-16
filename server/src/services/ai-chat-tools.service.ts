@@ -1,5 +1,6 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
-import { plannerToolsService, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
+import { prepareTaskProposal } from './ai-task-proposal.service.js';
+import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { aiPersonalNotesService } from './ai-create-note.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
@@ -80,7 +81,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
     parameters: { type: 'object', additionalProperties: false, required: [], properties: {} }
   },
   {
-    type: 'function', name: 'task_action', strict: true, description: 'Выполнить одну строго проверяемую операцию над одной задачей. Не используй последовательно для массового запроса, если доступен task_actions.',
+    type: 'function', name: 'task_action', strict: true, description: 'Подготовить одну операцию над задачей для последующего подтверждения пользователем. До подтверждения НЕ выполнено. Не используй последовательно для массового запроса, если доступен task_actions.',
     parameters: { type: 'object', additionalProperties: false, required: ['operation', 'itemId', 'parentTaskId', 'title', 'description', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes', 'sphereId', 'location'], properties: {
       operation: { type: 'string', enum: ['create_task', 'create_event', 'create_subtask', 'rename', 'set_description', 'reschedule', 'clear_due_date', 'complete', 'reopen', 'delete', 'set_priority', 'set_notification', 'change_sphere'] },
       itemId: nullable('string'), parentTaskId: nullable('string'), title: nullable('string'), description: nullable('string'), dueDate: nullable('string'),
@@ -89,7 +90,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'task_actions', strict: true,
-    description: 'Выполнить несколько проверяемых изменений над ранее найденными существующими задачами за один вызов. Используй для массовых запросов: «все», «каждый», «остальные», «весь список» и при любом изменении нескольких объектов. Не используй для создания и удаления.',
+    description: 'Подготовить несколько изменений существующих задач для подтверждения пользователем. До подтверждения НЕ выполнено. Используй для массовых запросов: «все», «каждый», «остальные», «весь список» и при любом изменении нескольких объектов. Не используй для создания и удаления.',
     parameters: { type: 'object', additionalProperties: false, required: ['actions'], properties: {
       actions: { type: 'array', minItems: 1, maxItems: MAX_BATCH_TASK_ACTIONS, items: { type: 'object', additionalProperties: false, required: ['operation', 'itemId', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes', 'sphereId'], properties: {
         operation: { type: 'string', enum: PLANNER_BATCH_OPERATIONS }, itemId: { type: 'string' }, dueDate: nullable('string'), importance: nullable('number'), urgency: nullable('number'), notifyBeforeMinutes: nullable('number'), sphereId: nullable('string')
@@ -263,6 +264,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
+  const preparedTaskActions: PlannerActionInput[] = [];
   const resolvedNoteIds = new Set<string>();
   let noteCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
@@ -509,24 +511,29 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           const spheres = await plannerToolsService.listSpheres(input.userId); spheres.forEach((sphere: { id: string }) => resolvedSphereIds.add(sphere.id)); return spheres;
         }
         if (name === 'task_action') {
-          const result = await plannerToolsService.action(input.userId, value as PlannerActionInput, resolvedItemIds, resolvedSphereIds, input.userTimeZone);
-          if (result.ok) { actionReports.push(formatPlannerActionReport(result)); if ('undoOperation' in result && result.undoOperation) undoOperations.push(result.undoOperation); }
-          console.info('[AI tools] action', { requestId, operation: (value as PlannerActionInput).operation, itemId: (value as PlannerActionInput).itemId, ok: result.ok });
-          return result;
+          const action = value as PlannerActionInput;
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) {
+            return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
+          }
+          if (!PLANNER_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_ACTION' };
+          preparedTaskActions.push(action);
+          return { ok: true, status: 'prepared', message: 'Изменение подготовлено, но ещё не применено. Его покажет карточка подтверждения.' };
         }
         if (name === 'task_actions') {
           batchToolCalls += 1;
-          const result = await executePlannerBatchActions({ value,
-            execute: (action) => plannerToolsService.action(input.userId, action, resolvedItemIds, resolvedSphereIds, input.userTimeZone),
-            onSuccess: (success) => { actionReports.push(formatPlannerActionReport(success)); if (success.undoOperation) undoOperations.push(success.undoOperation); }
-          });
-          if (typeof result.requestedCount === 'number' && typeof result.successCount === 'number' && typeof result.failureCount === 'number') {
-            batchActionsRequested += result.requestedCount; batchActionsSucceeded += result.successCount; batchActionsFailed += result.failureCount;
-            const operationCounts: Record<string, number> = {};
-            for (const action of (value as PlannerBatchActionInput).actions) operationCounts[action.operation] = (operationCounts[action.operation] ?? 0) + 1;
-            console.info('[AI tools] batch action completed', { requestId, requestedCount: result.requestedCount, successCount: result.successCount, failureCount: result.failureCount, operationCounts });
+          const batch = (value as PlannerBatchActionInput)?.actions;
+          if (!Array.isArray(batch) || !batch.length || preparedTaskActions.length + batch.length > MAX_BATCH_TASK_ACTIONS) {
+            return { ok: false, code: 'INVALID_BATCH', message: 'Некорректный или слишком большой пакет.' };
           }
-          return result;
+          for (const action of batch) {
+            if (!PLANNER_BATCH_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_BATCH_OPERATION' };
+          }
+          const actions = batch.map(action => ({
+            ...action, parentTaskId: null, title: null, description: null, location: null
+          } as PlannerActionInput));
+          preparedTaskActions.push(...actions);
+          batchActionsRequested += actions.length;
+          return { ok: true, status: 'prepared', requestedCount: actions.length, message: 'Пакет подготовлен и ожидает подтверждения.' };
         }
         if (name === 'read_file' || name === 'edit_file') {
           if (!input.fileTools) return { ok: false, code: 'NO_FILE_CONTEXT' };
@@ -607,7 +614,19 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     }
     const webSearchCallsBilled = webSearchUsed ? MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST : 0;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
-    return { answer: loop.answer, telegramSendDraft, telegramReadDraft, model: input.model, taskDataChanged: actionReports.length > 0, actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
+    const taskProposal = preparedTaskActions.length
+      ? await prepareTaskProposal({
+          userId: input.userId, requestId: input.actionRequestId, source: 'planner',
+          actions: preparedTaskActions as unknown as Record<string, unknown>[],
+          resolvedItemIds: [...resolvedItemIds], resolvedSphereIds: [...resolvedSphereIds],
+          userTimeZone: input.userTimeZone
+        })
+      : null;
+    return { answer: taskProposal
+      ? (taskProposal.status === 'APPLIED'
+        ? 'Изменения применены автоматически. Подробности в карточке.'
+        : 'Подготовил изменения задач. Просмотрите карточку и нажмите «Принять».')
+      : loop.answer, telegramSendDraft, telegramReadDraft, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
     if (webReservation) await refundAiCreditReservation(webReservation);
