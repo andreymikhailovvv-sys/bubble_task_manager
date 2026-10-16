@@ -13,6 +13,7 @@ const saveLimiter = new FixedWindowRateLimiter(20, 60_000);
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
 const INTERVALS = [5, 30, 180] as const;
+export const TELEGRAM_AI_MONITOR_MODELS = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'] as const;
 // Exact values exposed by the fixed-step budget slider. NULL = no daily cap.
 export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
   50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null
@@ -22,6 +23,7 @@ export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
   taskMode: typeof TASK_MODES[number];
   checkIntervalMinutes: typeof INTERVALS[number];
+  monitorModel: typeof TELEGRAM_AI_MONITOR_MODELS[number];
   instructions: string;
   notifyImportant: boolean;
   dailyCreditLimitMilli: number | null;
@@ -31,6 +33,7 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
   checkIntervalMinutes: 30,
+  monitorModel: 'gpt-6-luna',
   instructions: '',
   notifyImportant: true,
   dailyCreditLimitMilli: 50_000
@@ -63,6 +66,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
     checkIntervalMinutes: oneOf(p.checkIntervalMinutes, INTERVALS, 'интенсивность проверки'),
+    monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
     instructions: p.instructions.trim(),
     notifyImportant: p.notifyImportant,
     dailyCreditLimitMilli: p.dailyCreditLimitMilli as number | null
