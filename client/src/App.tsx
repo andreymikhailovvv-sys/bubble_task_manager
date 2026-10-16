@@ -335,7 +335,7 @@ type GeneralAiUndoOperation = {
 };
 type GeneralAiMessage = ChatMessage & { id: string };
 type AiChatMessage = ChatMessage & { id: string; createdAt?: string; taskSuggestions?: string[]; approvedSuggestionIndices?: number[] };
-type SystemNotification = { id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
+type SystemNotification = { id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
 type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
 const TELEGRAM_AI_MANAGED_PROJECT_ID = 'telegram-ai-assistant-project';
@@ -2668,6 +2668,24 @@ ${allContext}`,
     ...systemNotifications.map((notification) => ({ kind: 'notification' as const, timestamp: new Date(notification.createdAt).getTime(), notification }))
   ].sort((left, right) => left.timestamp - right.timestamp), [quickAiChatMessages, systemNotifications]);
 
+  const openSystemNotification = (notification: SystemNotification) => {
+    const eventKey = notification.eventKey ?? '';
+    if (eventKey.startsWith('telegram-ai-summary:')) {
+      const remainder = eventKey.slice('telegram-ai-summary:'.length);
+      const separator = remainder.lastIndexOf(':');
+      if (separator > 0) {
+        const policyId = remainder.slice(0, separator);
+        setActiveAiChatProjectId(TELEGRAM_AI_MANAGED_PROJECT_ID);
+        setActiveAiChatId(TELEGRAM_AI_MANAGED_CHAT_PREFIX + policyId);
+        setIsAiChatOpen(true);
+        return;
+      }
+    }
+    setActiveAiChatProjectId(aiChatProjects[0]?.id ?? '');
+    setActiveAiChatId(QUICK_AI_CHAT_ID);
+    setIsAiChatOpen(true);
+  };
+
   const markSystemNotificationsRead = () => {
     if (unreadSystemNotificationCount === 0) return;
     setUnreadSystemNotificationCount(0);
@@ -2689,7 +2707,7 @@ ${allContext}`,
   };
 
   useEffect(() => {
-    if (!isAiChatOpen || activeAiChat?.id !== QUICK_AI_CHAT_ID) return;
+    if (!isAiChatOpen || (activeAiChat?.id !== QUICK_AI_CHAT_ID && !activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX))) return;
     markSystemNotificationsRead();
   }, [isAiChatOpen, activeAiChat?.id, unreadSystemNotificationCount]);
 
@@ -7862,7 +7880,7 @@ ${allContext}`,
       ) : null}
 
       {systemNotificationToast ? createPortal((
-        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); setActiveAiChatProjectId(aiChatProjects[0]?.id ?? ''); setActiveAiChatId(QUICK_AI_CHAT_ID); setIsAiChatOpen(true); }}>
+        <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>
           <span className="system-notification-label mb-1 block text-[10px] font-bold uppercase tracking-[0.16em]">⚙️ Системное уведомление</span>
           <span className="leading-snug">{systemNotificationToast.content}</span>
         </button>
