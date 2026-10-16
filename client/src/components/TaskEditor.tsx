@@ -677,7 +677,7 @@ export function TaskEditor({
   };
   const addManualSlot = () => {
     if (recurrenceSlots.length >= 31) return;
-    const previous = recurrenceSlots.at(-1);
+    const previous = recurrenceSlots[recurrenceSlots.length - 1];
     const next: RecurrenceSlot = {
       time: previous?.time ?? "09:00",
       weekday: recurrencePeriod === "WEEKLY" ? ((previous?.weekday ?? 0) % 7) + 1 : 1,
