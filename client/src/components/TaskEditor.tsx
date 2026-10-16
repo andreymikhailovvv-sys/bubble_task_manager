@@ -11,6 +11,7 @@ import {
   Maximize2,
   Paperclip,
   Plus,
+  Minus,
   Trash2,
   Underline,
   X,
@@ -33,6 +34,7 @@ import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
 import { CalendarExportDialog } from "./CalendarExportDialog";
+import { buildManualRecurrence, defaultRecurrenceSlots, loadManualRecurrence, recurrenceWeekdays, type RecurrencePeriod, type RecurrenceSlot } from "../lib/recurrenceSchedule";
 
 type Props = {
   task?: Task;
@@ -321,6 +323,10 @@ export function TaskEditor({
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceText, setRecurrenceText] = useState("");
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
+  const [recurrenceMethod, setRecurrenceMethod] = useState<"manual" | "ai">("manual");
+  const [recurrencePeriod, setRecurrencePeriod] = useState<RecurrencePeriod>("DAILY");
+  const [recurrenceSlots, setRecurrenceSlots] = useState<RecurrenceSlot[]>(defaultRecurrenceSlots);
+  const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(
     null,
   );
@@ -415,6 +421,11 @@ export function TaskEditor({
     setTitleError(null);
     setIsRecurring(Boolean(nextForm.isRecurring));
     setRecurrenceText(nextForm.recurrenceText ?? "");
+    const previousRule = loadManualRecurrence(nextForm.recurrenceJson);
+    setRecurrenceMethod(nextForm.isRecurring && !previousRule ? "ai" : "manual");
+    setRecurrencePeriod(previousRule?.period ?? "DAILY");
+    setRecurrenceSlots(previousRule?.slots ?? defaultRecurrenceSlots());
+    setRecurrenceError(null);
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     setRecurrenceNextDueLabel(
       nextForm.dueDate
@@ -644,13 +655,62 @@ export function TaskEditor({
     ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}`
     : "Дедлайн не задан";
 
+  const commitManualRecurrence = (period: RecurrencePeriod, slots: RecurrenceSlot[]) => {
+    setRecurrencePeriod(period);
+    setRecurrenceSlots(slots);
+    try {
+      const { schedule, summary } = buildManualRecurrence(period, slots, timeZone);
+      setRecurrenceError(null);
+      setRecurrenceSummary(summary);
+      setRecurrenceNextDueLabel(null);
+      setForm((previous) => ({
+        ...previous, isRecurring: true, recurrenceText: summary, recurrenceJson: schedule,
+        recurrenceSummary: summary, recurrenceUntil: null, dueDate: null
+      }));
+    } catch (error) {
+      setRecurrenceError(error instanceof Error ? error.message : "Некорректное расписание.");
+      setForm((previous) => ({ ...previous, isRecurring: true, recurrenceJson: null }));
+    }
+  };
+  const addManualSlot = () => {
+    if (recurrenceSlots.length >= 31) return;
+    const previous = recurrenceSlots.at(-1);
+    const next: RecurrenceSlot = {
+      time: previous?.time ?? "09:00",
+      weekday: recurrencePeriod === "WEEKLY" ? ((previous?.weekday ?? 0) % 7) + 1 : 1,
+      monthDay: recurrencePeriod === "MONTHLY" ? ((previous?.monthDay ?? 0) % 31) + 1 : 1
+    };
+    if (recurrencePeriod === "DAILY") {
+      const used = new Set(recurrenceSlots.map((slot) => slot.time));
+      for (let hour = 7; hour <= 22; hour += 1) {
+        const proposed = String(hour).padStart(2, "0") + ":00";
+        if (!used.has(proposed)) { next.time = proposed; break; }
+      }
+    }
+    commitManualRecurrence(recurrencePeriod, [...recurrenceSlots, next]);
+  };
+  const updateManualSlot = (index: number, patch: Partial<RecurrenceSlot>) =>
+    commitManualRecurrence(recurrencePeriod, recurrenceSlots.map((slot, position) => position === index ? { ...slot, ...patch } : slot));
+  const selectRecurrenceMethod = (method: "manual" | "ai") => {
+    if (method === recurrenceMethod) return;
+    setRecurrenceMethod(method);
+    setRecurrenceError(null);
+    if (method === "manual") commitManualRecurrence(recurrencePeriod, recurrenceSlots);
+    else {
+      setRecurrenceSummary(null);
+      setRecurrenceNextDueLabel(null);
+      setForm((previous) => ({ ...previous, recurrenceJson: null, recurrenceSummary: null, dueDate: null }));
+    }
+  };
+
   const applyRecurrence = async () => {
     if (!isRecurring) return;
     const text = recurrenceText.trim();
-    if (!text) return;
+    if (!text) { setRecurrenceError("Опишите, когда должна повторяться задача."); return; }
+    setRecurrenceError(null);
     setRecurrenceLoading(true);
     try {
-      const parsed = await api.parseRecurrence({ text });
+      const parsed = await api.parseRecurrence({ text, ...(task?.id ? { taskId: task.id } : {}) });
       setRecurrenceSummary(parsed.summary);
       setRecurrenceNextDueLabel(
         parsed.nextDueDate
@@ -666,6 +726,8 @@ export function TaskEditor({
         recurrenceUntil: parsed.schedule.until,
         dueDate: parsed.nextDueDate,
       }));
+    } catch (error) {
+      setRecurrenceError(error instanceof Error ? error.message : "Не удалось настроить повторение через ИИ.");
     } finally {
       setRecurrenceLoading(false);
     }
@@ -703,6 +765,7 @@ export function TaskEditor({
       titleInputRef.current?.focus();
       return;
     }
+    if (isRecurring && !form.recurrenceJson) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
     setTitleError(null);
     await onSave(form, draftSubtasks);
   };
@@ -742,7 +805,7 @@ export function TaskEditor({
       onClick={() => void closeEditor()}
     >
       <aside
-        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
+        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1105,6 +1168,8 @@ export function TaskEditor({
                                 recurrenceUntil: null,
                               },
                         );
+                        setRecurrenceError(null);
+                        if (enabled && recurrenceMethod === "manual") commitManualRecurrence(recurrencePeriod, recurrenceSlots);
                         if (!enabled) {
                           setRecurrenceSummary(null);
                           setRecurrenceNextDueLabel(null);
