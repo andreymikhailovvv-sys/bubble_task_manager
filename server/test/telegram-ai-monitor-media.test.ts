@@ -52,7 +52,7 @@ test('media download is only enabled on owner-verified monitoring path, not manu
   assert.match(read, /monitoring && Number\.isSafeInteger\(mediaAfterId\)/);
   assert.match(read, /downloadTelegramMonitorMedia\(client, message/);
   assert.match(worker, /policy\.summaryRequested \? 0 : lastSeen/);
-  assert.match(worker, /m\.text\.trim\(\) \|\| m\.hasMedia/);
+  assert.match(worker, /m\\.text\\.trim\\(\\) \\|\\| \\(policy\\.reviewAttachments && m\\.hasMedia\\)/);
   assert.match(media, /MONITOR_MEDIA_MAX_BYTES/);
   assert.match(media, /MONITOR_MEDIA_MAX_TOTAL_BYTES/);
   assert.doesNotMatch(media, /\.writeFile\(|\.createWriteStream\(|axios\./);

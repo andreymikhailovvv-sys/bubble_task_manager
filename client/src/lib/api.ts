@@ -222,6 +222,7 @@ export type TelegramAiChatSettings = {
   monitorModel: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
   instructions: string;
   notifyImportant: boolean;
+  reviewAttachments: boolean;
   /** NULL disables the per-chat daily cap; it never bypasses the wallet balance. */
   dailyCreditLimitMilli: number | null;
 };

@@ -1,4 +1,4 @@
-import { mergeChatProjectSnapshots } from '../lib/ai-chat-project-sync.js';
+import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
@@ -1428,15 +1428,18 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
   const userId = req.user!.id;
   const { projectId, chatId } = req.params;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiChatProjects: true } });
-  const projects = Array.isArray(user?.aiChatProjects) ? user.aiChatProjects : [];
-  const outline = projects.filter((entry): entry is Prisma.JsonObject =>
+  const allowedPolicies = await prisma.telegramAiChatPolicy.findMany({
+    where: { userId }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
+  });
+  const projects = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, allowedPolicies);
+  const outline = projects.filter((entry) =>
     entry != null && typeof entry === 'object' && !Array.isArray(entry) &&
     typeof (entry as { id?: unknown }).id === 'string')
     .map(entry => ({
       id: String(entry.id), title: String(entry.title ?? ''), color: String(entry.color ?? '#8b5cf6'),
       icon: String(entry.icon ?? '✨'),
       chats: (Array.isArray(entry.chats) ? entry.chats : [])
-        .filter((item): item is Prisma.JsonObject =>
+        .filter((item) =>
           item != null && typeof item === 'object' && !Array.isArray(item) &&
           typeof (item as { id?: unknown }).id === 'string')
         .map(item => ({ id: String(item.id), title: String(item.title ?? '') }))
@@ -1465,7 +1468,30 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     where: { id: req.user!.id },
     select: { aiChatProjects: true }
   });
-  res.json({ projects: user?.aiChatProjects ?? null });
+  const policies = await prisma.telegramAiChatPolicy.findMany({
+    where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
+  });
+  let canonical = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, policies);
+  // Repair historical browser-generated ghost chats in the persisted snapshot.
+  // Lock the row and re-read to avoid overwriting messages saved concurrently.
+  if (JSON.stringify(user?.aiChatProjects ?? []) !== JSON.stringify(canonical)) {
+    canonical = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.user!.id} FOR UPDATE`;
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id: req.user!.id }, select: { aiChatProjects: true }
+      });
+      const currentPolicies = await tx.telegramAiChatPolicy.findMany({
+        where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
+      });
+      const clean = canonicalizeTelegramAssistantProjects(current.aiChatProjects, currentPolicies);
+      if (JSON.stringify(current.aiChatProjects ?? []) !== JSON.stringify(clean)) {
+        await tx.user.update({ where: { id: req.user!.id },
+          data: { aiChatProjects: clean as Prisma.InputJsonValue } });
+      }
+      return clean;
+    });
+  }
+  res.json({ projects: canonical });
 }));
 
 apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {
@@ -1506,7 +1532,14 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     const user = await tx.user.findUniqueOrThrow({
       where: { id: req.user!.id }, select: { aiChatProjects: true }
     });
-    const merged = mergeChatProjectSnapshots(user.aiChatProjects, projects);
+    const policies = await tx.telegramAiChatPolicy.findMany({
+      where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
+    });
+    const cleanPrevious = canonicalizeTelegramAssistantProjects(user.aiChatProjects, policies);
+    const cleanIncoming = canonicalizeTelegramAssistantProjects(projects, policies);
+    const merged = canonicalizeTelegramAssistantProjects(
+      mergeChatProjectSnapshots(cleanPrevious, cleanIncoming), policies
+    );
     if (Buffer.byteLength(JSON.stringify(merged), 'utf8') > 2_000_000) {
       throw new Error('История чатов слишком большая');
     }

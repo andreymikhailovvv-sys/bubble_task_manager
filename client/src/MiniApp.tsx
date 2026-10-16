@@ -28,7 +28,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -132,13 +132,21 @@ const QUICK_AI_CHAT_ID = 'quick-ai-requests';
 function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProject>> | null | undefined): MiniAiChatProject[] {
   const quickChat: MiniAiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: [] };
   const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
-  const source = rawProjects?.length ? rawProjects : fallback;
+  const userProjects = (rawProjects ?? []).filter(p => p.id !== 'telegram-ai-assistant-project');
+  const tgProject = (rawProjects ?? []).find(p => p.id === 'telegram-ai-assistant-project');
+  const source: Array<Partial<MiniAiChatProject>> = [
+    ...(userProjects.length ? userProjects : fallback),
+    ...(tgProject ? [{ ...tgProject, chats: (tgProject.chats ?? [])
+      .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith('telegram-ai-assistant:'))
+      .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
+      .slice(0, 25) }] : [])
+  ];
   const normalized: MiniAiChatProject[] = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
     title: index === 0 ? QUICK_AI_CHAT_PROJECT_TITLE : (project.title ?? `Проект ${index + 1}`),
     color: project.color ?? '#8b5cf6',
     icon: project.icon ?? '✨',
-    chats: (project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat, chatIndex) => ({
+    chats: (project.chats?.length || project.id === 'telegram-ai-assistant-project' ? (project.chats ?? []) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat, chatIndex) => ({
       id: chat.id ?? crypto.randomUUID(),
       title: chat.title ?? `Чат ${chatIndex + 1}`,
       messages: (chat.messages ?? [])
@@ -173,7 +181,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
     title: QUICK_AI_CHAT_PROJECT_TITLE,
     chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)]
   };
-  return normalized;
+  return sanitizeCachedTelegramAssistantProjects(normalized);
 }
 const AI_CHAT_MODEL_OPTIONS: Array<{ value: AiChatModel; label: string }> = [
   { value: 'gpt-6-luna', label: 'GPT-6 Luna' },
@@ -2856,6 +2864,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const openAiChatProjectDialog = (projectId?: string) => {
+    if (projectId === 'telegram-ai-assistant-project') return;
     const project = projectId ? aiChatProjects.find((item) => item.id === projectId) : null;
     setAiChatProjectDraft(project
       ? { mode: 'edit', projectId: project.id, title: project.title, color: project.color, icon: project.icon }
@@ -2882,20 +2891,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const createAiChatThread = () => {
-    if (!activeAiChatProject) return;
+    if (!activeAiChatProject || activeAiChatProject.id === 'telegram-ai-assistant-project') return;
     const chat: MiniAiChatThread = { id: crypto.randomUUID(), title: `Чат ${activeAiChatProject.chats.length + 1}`, messages: [] };
     setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: [chat, ...project.chats] } : project));
     setActiveAiChatId(chat.id);
   };
 
   const saveAiChatRename = () => {
-    if (!renamingAiChatId || !activeAiChatProject) return;
+    if (!renamingAiChatId || !activeAiChatProject || renamingAiChatId.startsWith('telegram-ai-assistant:')) return;
     const title = aiChatRenameDraft.trim() || 'Новый чат';
     setAiChatProjects((prev) => prev.map((project) => project.id === activeAiChatProject.id ? { ...project, chats: project.chats.map((chat) => chat.id === renamingAiChatId ? { ...chat, title } : chat) } : project));
     setRenamingAiChatId(null);
   };
 
   const deleteAiChatProject = (projectId: string) => {
+    if (projectId === 'telegram-ai-assistant-project') return;
     setAiChatProjects((prev) => {
       if (prev.length <= 1) return prev;
       const next = prev.filter((project) => project.id !== projectId);
@@ -2908,7 +2918,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const deleteAiChatThread = (chatId: string) => {
-    if (!activeAiChatProject || activeAiChatProject.chats.length <= 1) return;
+    if (chatId.startsWith('telegram-ai-assistant:') || !activeAiChatProject || activeAiChatProject.id === 'telegram-ai-assistant-project' || activeAiChatProject.chats.length <= 1) return;
     setAiChatProjects((prev) => prev.map((project) => {
       if (project.id !== activeAiChatProject.id) return project;
       const nextChats = project.chats.filter((chat) => chat.id !== chatId);
@@ -4701,17 +4711,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Проекты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-project rounded-2xl p-2 text-white" onClick={() => openAiChatProjectDialog()}><Plus size={16} /></button></div>
                 {aiChatProjects.map((project) => (
                   <div key={project.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${project.id === activeAiChatProject?.id ? 'miniapp-ai-chat-menu-card-active-project' : ''}`} style={{ '--project-color': project.color } as CSSProperties}>
-                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
+                    <button type="button" className="flex w-full items-center gap-2 text-left" onClick={() => { setActiveAiChatProjectId(project.id); setActiveAiChatId(project.chats[0]?.id ?? ''); }}><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-base miniapp-ai-chat-menu-project-icon" style={{ backgroundColor: project.color }}>{project.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : project.icon}</span><span className="min-w-0 flex-1 truncate text-sm font-bold miniapp-ai-chat-menu-title">{project.title}</span></button>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project'} onClick={() => openAiChatProjectDialog(project.id)}><Settings size={12} /> Настроить</button><button type="button" disabled={project.id === aiChatProjects[0]?.id || project.id === 'telegram-ai-assistant-project' || aiChatProjects.length <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatProject(project.id)}><Trash2 size={12} /> Удалить</button></div>
                   </div>
                 ))}
               </div>
               <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread}><Plus size={16} /></button></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Чаты</p><button type="button" className="miniapp-ai-chat-menu-add miniapp-ai-chat-menu-add-chat rounded-2xl p-2 text-white" onClick={createAiChatThread} disabled={activeAiChatProject?.id === 'telegram-ai-assistant-project'}><Plus size={16} /></button></div>
                 {(activeAiChatProject?.chats ?? []).map((chat) => (
                   <div key={chat.id} className={`miniapp-ai-chat-menu-card rounded-3xl border p-2.5 shadow-sm ${chat.id === activeAiChat?.id ? 'miniapp-ai-chat-menu-card-active-chat' : ''}`}>
                     <button type="button" className="w-full text-left" onClick={() => { setActiveAiChatId(chat.id); setIsAiChatMenuOpen(false); }}><span className="block truncate text-sm font-bold miniapp-ai-chat-menu-title">{chat.title}</span><span className="miniapp-ai-chat-menu-subtitle text-[11px]">{chat.messages.length} сообщ.</span></button>
-                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
+                    <div className="mt-2 flex gap-2"><button type="button" className="miniapp-ai-chat-menu-action rounded-xl border px-2.5 py-1.5 text-xs font-semibold" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:')} onClick={() => { setRenamingAiChatId(chat.id); setAiChatRenameDraft(chat.title); }}>Переименовать</button><button type="button" disabled={chat.id === QUICK_AI_CHAT_ID || chat.id.startsWith('telegram-ai-assistant:') || (activeAiChatProject?.chats.length ?? 0) <= 1} className="miniapp-ai-chat-menu-action miniapp-ai-chat-menu-action-danger rounded-xl border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40" onClick={() => deleteAiChatThread(chat.id)}>Удалить</button></div>
                   </div>
                 ))}
               </div>

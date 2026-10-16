@@ -35,7 +35,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -408,13 +408,22 @@ const QUICK_AI_CHAT_ID = 'quick-ai-requests';
 function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | null | undefined, quickMessages: AiChatMessage[] = []): AiChatProject[] {
   const quickChat: AiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-20) };
   const fallback: AiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
-  const source = rawProjects?.length ? rawProjects : fallback;
+  const standard = (rawProjects ?? []).filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const managed = (rawProjects ?? []).find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const source: Array<Partial<AiChatProject>> = [
+    ...(standard.length ? standard : fallback),
+    ...(managed ? [{ ...managed, chats: (managed.chats ?? [])
+      .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX))
+      .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
+      .slice(0, 25) }] : [])
+  ];
   const normalized = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
     title: project.title ?? `Проект ${index + 1}`,
     color: project.color ?? '#8b5cf6',
     icon: project.icon ?? '✨',
-    chats: (project.chats?.length ? project.chats : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
+    chats: (project.chats?.length || project.id === TELEGRAM_AI_MANAGED_PROJECT_ID
+      ? (project.chats ?? []) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
       id: chat.id ?? crypto.randomUUID(),
       title: chat.title ?? 'Новый чат',
       messages: chat.messages ?? []
@@ -425,7 +434,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
   const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100)) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
-  return normalized;
+  return sanitizeCachedTelegramAssistantProjects(normalized);
 }
 
 

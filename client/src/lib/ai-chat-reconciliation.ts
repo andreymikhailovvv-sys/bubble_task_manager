@@ -171,3 +171,24 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
   if (updates.size === 0 && additions.length === 0) return local;
   return [...local.map((message, index) => updates.get(index) ?? message), ...additions];
 }
+
+/**
+ * Limit stale local cached Telegram navigation before network hydration.
+ * The server later replaces the list with exact owner-scoped policy IDs.
+ * Never generate a local Telegram assistant chat from a generic "New chat".
+ */
+export function sanitizeCachedTelegramAssistantProjects<
+  TChat extends { id: string },
+  TProject extends { id: string; chats: TChat[] }
+>(projects: TProject[]): TProject[] {
+  const found = new Set<string>();
+  return projects.map(project => {
+    if (project.id !== 'telegram-ai-assistant-project') return project;
+    const chats = project.chats.filter(chat => {
+      if (!chat.id.startsWith('telegram-ai-assistant:') || found.has(chat.id) || found.size >= 25) return false;
+      found.add(chat.id);
+      return true;
+    });
+    return chats.length === project.chats.length ? project : { ...project, chats };
+  });
+}

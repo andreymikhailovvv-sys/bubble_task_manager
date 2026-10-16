@@ -670,6 +670,7 @@ model TelegramAiChatPolicy {
   monitorModel            String   @default("gpt-6-luna")
   instructions            String   @default("") @db.Text
   notifyImportant         Boolean  @default(true)
+  reviewAttachments       Boolean  @default(true)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
   dailyCreditLimitMilli   Int?     @default(50000)
   isEnabled               Boolean  @default(false)

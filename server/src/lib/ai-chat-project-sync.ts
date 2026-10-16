@@ -38,3 +38,52 @@ export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown):
     return { ...project, chats };
   });
 }
+
+/**
+ * Telegram assistant conversations are derived exclusively from the owner's
+ * active Telegram monitor policies. Browser project snapshots are not allowed
+ * to invent, duplicate or retain Telegram assistant chat IDs.
+ *
+ * Preserve messages on the correctly linked chat; do not erase interactive
+ * Telegram consent cards or the user's manual replies.
+ */
+export const TELEGRAM_ASSISTANT_MANAGED_PROJECT = 'telegram-ai-assistant-project';
+const TG_PREFIX = 'telegram-ai-assistant:';
+type ManagedPolicy = { id: string; chatTitle: string };
+export function canonicalizeTelegramAssistantProjects(
+  projects: unknown,
+  policies: readonly ManagedPolicy[]
+): JsonProject[] {
+  const source = validProjects(projects);
+  const normal = source.filter(p => p.id !== TELEGRAM_ASSISTANT_MANAGED_PROJECT &&
+    !(p.title === 'Телеграм ассистент' && p.icon === 'telegram'));
+  if (policies.length === 0) return normal;
+  const managed = source.filter(p => p.id === TELEGRAM_ASSISTANT_MANAGED_PROJECT ||
+    (p.title === 'Телеграм ассистент' && p.icon === 'telegram'));
+  const messagesById = new Map<string, JsonMessage[]>();
+  for (const project of managed) {
+    for (const chat of project.chats ?? []) {
+      if (!isRecord(chat) || typeof chat.id !== 'string' || !chat.id.startsWith(TG_PREFIX)) continue;
+      const messages = messagesById.get(chat.id) ?? [];
+      const combined = new Map(messages.map(m => [m.id, m]));
+      for (const message of validMessages(chat.messages)) {
+        const old = combined.get(message.id);
+        combined.set(message.id, old ? { ...old, ...message } : message);
+      }
+      messagesById.set(chat.id, [...combined.values()].slice(-300));
+    }
+  }
+  const uniquePolicies = new Map(policies.map(p => [p.id, p]));
+  const first = managed[0];
+  const assistantProject: JsonProject = {
+    id: TELEGRAM_ASSISTANT_MANAGED_PROJECT, title: 'Телеграм ассистент',
+    icon: 'telegram', color: '#229ed9',
+    chats: [...uniquePolicies.values()].map(policy => {
+      const id = TG_PREFIX + policy.id;
+      return { id, title: policy.chatTitle, messages: messagesById.get(id) ?? [] };
+    })
+  };
+  // Return canonical managed project last, keeping the default personal
+  // project at index zero so quick requests never attach to Telegram chats.
+  return [...normal, assistantProject];
+}
