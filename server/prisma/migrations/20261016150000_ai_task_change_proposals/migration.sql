@@ -1,3 +1,4 @@
+ALTER TABLE "TelegramAiInboxEvent" ADD COLUMN "taskModeAtPublish" TEXT NOT NULL DEFAULT 'SUGGEST';
 ALTER TABLE "User" ADD COLUMN "aiTaskAutoApply" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "TaskAiMessage" ADD COLUMN "aiTaskProposalId" TEXT;
 ALTER TABLE "GeneralAiMessage" ADD COLUMN "aiTaskProposalId" TEXT;
