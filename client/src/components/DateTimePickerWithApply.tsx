@@ -15,7 +15,7 @@ type Props = {
   detachedOffset?: number;
   onChange: (value: string | null) => void | Promise<void>;
   onOpenChange?: (isOpen: boolean) => void;
-  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' }>;
+  timelineTasks?: Array<{ id: string; title: string; dueDate?: string | null; isSubtask?: boolean; sphereColor?: string | null; taskType?: 'TASK' | 'EVENT' | 'REMINDER' }>;
   openTimelinePreviewSignal?: number;
 };
 
