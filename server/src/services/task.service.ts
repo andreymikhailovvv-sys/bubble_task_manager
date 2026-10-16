@@ -3,6 +3,7 @@ import { createCollaborationInviteToken } from '../lib/collaboration-security.js
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { notifyCollaborativeSubtaskCompleted } from './collaboration-subtask-notification.service.js';
+import { computeNextSlotRecurrenceDueDate, validateManualRecurrenceSchedule } from './recurrence-slots.service.js';
 
 interface TaskInput {
   title?: string;
@@ -66,7 +67,7 @@ const toNotifyBeforeMinutes = (value: number | string | null): number | null => 
   return Math.round(numericValue);
 };
 
-type RecurrenceSchedule = { rrule?: string; timezone?: string; until?: string | null };
+type RecurrenceSchedule = import('./recurrence-slots.service.js').RecurrenceSchedule;
 const parseRRuleParts = (rrule: string): Record<string, string> => Object.fromEntries(
   rrule
     .split(';')
@@ -89,6 +90,7 @@ const WEEKDAY_TO_UTC_DAY: Record<string, number> = {
 
 export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseline: Date): Date | null => {
   if (!schedule.rrule) return null;
+  if (schedule.slots !== undefined) return computeNextSlotRecurrenceDueDate(schedule, baseline);
   const parts = parseRRuleParts(schedule.rrule);
   const freq = parts.FREQ?.toUpperCase();
   const hour = Number(parts.BYHOUR ?? baseline.getUTCHours());
@@ -234,6 +236,7 @@ export const taskService = {
     const recurrenceSchedule = (!isSubtask && input.recurrenceJson && typeof input.recurrenceJson === 'object'
       ? input.recurrenceJson as unknown as RecurrenceSchedule
       : null);
+    if (recurrenceSchedule?.slots !== undefined) validateManualRecurrenceSchedule(recurrenceSchedule);
     const resolvedDueDate = (input.dueDate !== undefined && input.dueDate !== null)
       ? toDueDate(input.dueDate)
       : input.isRecurring && recurrenceSchedule
@@ -279,6 +282,9 @@ export const taskService = {
     return created;
   },
   update: async (id: string, userId: string, input: TaskInput) => {
+    if (input.recurrenceJson && typeof input.recurrenceJson === 'object' && 'slots' in input.recurrenceJson) {
+      validateManualRecurrenceSchedule(input.recurrenceJson as unknown as RecurrenceSchedule);
+    }
     const currentTask = await prisma.task.findFirstOrThrow({
       where: { id, AND: [taskAccessWhere(userId)] }
     });
