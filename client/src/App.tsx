@@ -412,7 +412,10 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const managed = (rawProjects ?? []).find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
   const source: Array<Partial<AiChatProject>> = [
     ...(standard.length ? standard : fallback),
-    ...(managed ? [managed] : [])
+    ...(managed ? [{ ...managed, chats: (managed.chats ?? [])
+      .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX))
+      .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
+      .slice(0, 25) }] : [])
   ];
   const normalized = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
