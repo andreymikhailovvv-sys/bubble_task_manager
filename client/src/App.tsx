@@ -1,6 +1,6 @@
 import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, Trash2, UserRound, X } from 'lucide-react';
+import { ArrowUpRight, Bot, BriefcaseBusiness, CalendarDays, CalendarPlus, Check, CheckCheck, ChevronDown, ChevronRight, ChevronUp, Circle as CircleIcon, Coins, Copy, Eye, EyeOff, FileText, LayoutGrid, List, Edit3, Maximize2, Menu, MessageCircle, Minimize2, Gauge, Loader2, Pause, Paperclip, PieChart, Play, Smartphone, Plus, Repeat, RotateCcw, Search, SendHorizontal, Settings, Sparkles, Square, Ticket, BellRing, Trash2, UserRound, X } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 import { BubbleField } from './components/BubbleField';
 import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon';
@@ -1788,7 +1788,7 @@ export default function App() {
     const authorUserId = subtaskAuthorFilterByTaskId[taskId] ?? null;
     return authorUserId ? items.filter((task) => task.creatorUserId === authorUserId) : items;
   };
-  const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT'), [rootTasks]);
+  const activeTasks = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE' && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER'), [rootTasks]);
   const activeTimelineItems = useMemo(() => rootTasks.filter((task) => task.status !== 'DONE'), [rootTasks]);
   const focusCandidateTasks = useMemo(
     () => [...activeTasks].sort((a, b) => getTaskCoefficient(b) - getTaskCoefficient(a)),
@@ -2524,6 +2524,7 @@ export default function App() {
   };
 
   const openTaskWithFocusGuard = (task: Task) => {
+    if (task.taskType === 'REMINDER') return;
     if (shouldWarnAboutFocusDistraction(task)) {
       setFocusDistractionTaskId(task.id);
       return;
@@ -2533,6 +2534,7 @@ export default function App() {
   };
 
   const openTaskReferenceFromAi = (task: Task) => {
+    if (task.taskType === 'REMINDER') return;
     if (task.parentTaskId) {
       setEditorState({ task });
       return;
@@ -4206,6 +4208,7 @@ ${allContext}`,
   const renderTimelineTaskChip = (task: Task, options?: { showTime?: boolean; isSubtask?: boolean; disableHoverCard?: boolean; parentTaskTitle?: string; disableEffects?: boolean; disableOpenOnClick?: boolean; forceDraggable?: boolean; onDragStart?: () => void }) => {
     const { taskSubtasks, hasOverdueState, sphereColor } = getTimelineTaskViewModel(task);
     const isEventChip = task.taskType === 'EVENT';
+    const isReminderChip = task.taskType === 'REMINDER';
     const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
     const parentSphere = parentTask?.sphereId ? (sphereById.get(parentTask.sphereId) ?? null) : null;
     const parentSphereColor = parentSphere?.color ?? '#64748b';
@@ -4232,13 +4235,15 @@ ${allContext}`,
         type="button"
         draggable={canDragTask}
         transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
+        className={`timeline-task-chip ${isEventChip ? 'timeline-event-chip' : ''} ${isReminderChip ? 'timeline-reminder-chip' : ''} relative flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1 text-left text-xs transition-all duration-200 hover:brightness-110 ${
           canDragTask ? 'cursor-grab active:cursor-grabbing' : ''
         } ${draggedTimelineTaskId === task.id ? 'opacity-60' : ''} ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'ring-1 ring-emerald-300/70' : ''}`}
         data-timeline-task-id={task.id}
         style={{
-          borderColor: isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
-          backgroundColor: isEventChip
+          borderColor: isReminderChip ? '#0284c7' : isEventChip ? '#f59e0b' : isSubtaskChip ? 'rgba(148,163,184,0.75)' : (hasOverdueState ? 'rgba(251,113,133,0.85)' : sphereColor),
+          backgroundColor: isReminderChip
+            ? (effectiveThemeMode === 'light' ? 'rgba(224,242,254,0.97)' : 'rgba(3,105,161,0.32)')
+            : isEventChip
             ? (effectiveThemeMode === 'light' ? 'rgba(254,243,199,0.95)' : 'rgba(146,64,14,0.38)')
             : isSubtaskChip
               ? (effectiveThemeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(71,85,105,0.5)')
@@ -4247,7 +4252,7 @@ ${allContext}`,
               : hexToRgba(sphereColor, effectiveThemeMode === 'light' ? 0.16 : 0.34) ?? (effectiveThemeMode === 'light' ? 'rgba(241,245,249,0.92)' : 'rgba(100,116,139,0.34)'),
           boxShadow: disableEffects
             ? undefined
-            : (!isEventChip && hasOverdueState)
+            : (!isEventChip && !isReminderChip && hasOverdueState)
               ? '0 0 8px rgba(239,68,68,0.32), inset 0 0 6px rgba(239,68,68,0.14)'
               : undefined,
         }}
@@ -4264,7 +4269,7 @@ ${allContext}`,
           setIsTimelineOverdueModalCollapsedForDrag(false);
         }}
         onMouseEnter={(event) => {
-          if (draggedTimelineTaskId !== null || options?.disableHoverCard) return;
+          if (draggedTimelineTaskId !== null || options?.disableHoverCard || isReminderChip) return;
           const rect = event.currentTarget.getBoundingClientRect();
           const cardWidth = 288;
           const cardHeight = 250;
@@ -4281,10 +4286,11 @@ ${allContext}`,
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
         }}
         onClick={() => {
-          if (options?.disableOpenOnClick) return;
+          if (options?.disableOpenOnClick || isReminderChip) return;
           openTaskWithFocusGuard(task);
         }}
         onContextMenu={(event) => {
+          if (isReminderChip) { event.preventDefault(); return; }
           event.preventDefault();
           event.stopPropagation();
           setTimelineHoverCard((prev) => (prev?.taskId === task.id ? null : prev));
@@ -4298,12 +4304,13 @@ ${allContext}`,
           ) : null}
           {timelinePostponeLoadingTaskId === task.id ? <Loader2 size={12} className="timeline-task-chip-accent shrink-0 animate-spin" /> : null}
           {isEventChip ? <Ticket size={12} className="shrink-0 text-amber-600" /> : null}
+          {isReminderChip ? <BellRing size={12} className="shrink-0 text-sky-500" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
             <LinkifiedText text={task.title} stopPropagationOnLinkClick />
           </span>
-          {!isEventChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
-          {!isEventChip ? renderWorkspaceCommentIndicator(task, true) : null}
+          {!isEventChip && !isReminderChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
+          {!isEventChip && !isReminderChip ? renderWorkspaceCommentIndicator(task, true) : null}
           {options?.showTime && task.dueDate ? (
             <span className="timeline-task-chip-meta ml-1">
               ({new Date(task.dueDate).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})
@@ -4312,7 +4319,7 @@ ${allContext}`,
           {task.isRecurring ? <span title="Повторяющееся событие/задача"><Repeat size={12} className="timeline-task-chip-accent shrink-0" /></span> : null}
           {isEventChip && task.location ? <span className="timeline-task-chip-meta ml-1 truncate">· {task.location}</span> : null}
         </span>
-        {!isEventChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
+        {!isEventChip && !isReminderChip && !isSubtaskChip ? <div className="flex items-center gap-1"><span className="timeline-task-count-badge rounded-full border px-1.5 py-0.5 text-[10px]">{taskSubtasks.length}</span></div> : null}
         {isCompletingInTimeline || isCompletingOutsideTimeline ? (
           <motion.span
             initial={{ scaleX: 0 }}
@@ -4321,7 +4328,7 @@ ${allContext}`,
             className="pointer-events-none absolute left-2 right-2 top-1/2 h-[2px] origin-left rounded bg-emerald-300/90"
           />
         ) : null}
-        {isHoverCardVisible ? createPortal((
+        {isHoverCardVisible && !isReminderChip ? createPortal((
         <div
           className="timeline-hover-card pointer-events-none fixed z-[2147483647] w-72 rounded-lg border p-2.5 text-[11px]"
           style={{ left: `${timelineHoverCard.left}px`, top: `${timelineHoverCard.top}px` }}
