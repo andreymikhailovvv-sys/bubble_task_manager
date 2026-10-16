@@ -50,13 +50,20 @@ export function reconcileAiChatProjectOutline<
   TChat extends { id: string; title: string; messages: TMessage[] },
   TProject extends { id: string; title: string; color: string; icon: string; chats: TChat[] }
 >(local: TProject[], outline: AiChatProjectOutline[]): TProject[] {
-  if (!outline.length) return local;
-  const managed = local.filter(p => p.id === 'telegram-ai-assistant-project');
-  let changed = false;
-  const result = outline.map(data => {
-    const previous = local.find(p => p.id === data.id);
+  // The server's outline now INCLUDES the managed Telegram project. Never
+  // append the local copy after mapping the same server project. Previously
+  // each 2.5-second poll doubled/accumulated the Telegram folder and then
+  // auto-saved an exponentially growing JSON snapshot.
+  const cleanLocal = sanitizeCachedTelegramAssistantProjects(local);
+  if (!outline.length) return cleanLocal;
+  const regularOutline = outline.filter(project => !isTelegramAssistantProjectLike(project));
+  const telegramOutline = outline.find(project => isTelegramAssistantProjectLike(project));
+  const managed = cleanLocal.find(project => project.id === TELEGRAM_AI_PROJECT_ID);
+  let changed = cleanLocal !== local;
+  const regular = regularOutline.map(data => {
+    const previous = cleanLocal.find(project => project.id === data.id);
     const chats = data.chats.map(thread => {
-      const existing = previous?.chats.find(c => c.id === thread.id);
+      const existing = previous?.chats.find(chat => chat.id === thread.id);
       if (!existing) { changed = true; return { ...thread, messages: [] } as unknown as TChat; }
       if (existing.title === thread.title) return existing;
       changed = true;
@@ -72,10 +79,22 @@ export function reconcileAiChatProjectOutline<
     changed = true;
     return { ...previous, title: data.title, color: data.color, icon: data.icon, chats };
   });
-  if (local.filter(p => p.id !== 'telegram-ai-assistant-project').length !== outline.length) changed = true;
+  if (cleanLocal.filter(project => project.id !== TELEGRAM_AI_PROJECT_ID).length !== regularOutline.length) changed = true;
+
+  // Telegram's authoritative chat list is hydrated separately from its inbox.
+  // Keep the existing live transcript and approval chips when the outline is
+  // refreshed for a regular project. If it has not been hydrated yet, use the
+  // authenticated server outline just once.
+  const telegram = managed ?? (telegramOutline ? {
+    ...telegramOutline, id: TELEGRAM_AI_PROJECT_ID,
+    chats: telegramOutline.chats.map(chat => ({ ...chat, messages: [] }))
+  } as unknown as TProject : null);
+  if (!managed && telegram) changed = true;
+  if (!telegram && cleanLocal.some(project => project.id === TELEGRAM_AI_PROJECT_ID)) changed = true;
   if (!changed) return local;
-  return [...result, ...managed];
+  return [...regular, ...(telegram ? [telegram] : [])];
 }
+
 
 /**
  * Telegram inbox polling contains published monitor summaries, not every
@@ -177,18 +196,63 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
  * The server later replaces the list with exact owner-scoped policy IDs.
  * Never generate a local Telegram assistant chat from a generic "New chat".
  */
+export const TELEGRAM_AI_PROJECT_ID = 'telegram-ai-assistant-project';
+const TG_CHAT_ID_PREFIX = 'telegram-ai-assistant:';
+
+/** Recognize old browser-generated copies even when their UUID/icon differs. */
+export function isTelegramAssistantProjectLike(project: {
+  id?: string; title?: string; icon?: string;
+  chats?: Array<{ id?: string }>;
+}): boolean {
+  if (project.id === TELEGRAM_AI_PROJECT_ID) return true;
+  const title = (project.title ?? '').toLocaleLowerCase().replace(/[\\s_-]+/g, ' ').trim();
+  if (title === 'телеграм ассистент' || title === 'telegram assistant') return true;
+  if (project.icon === 'telegram') return true;
+  return (project.chats ?? []).some(chat =>
+    typeof chat?.id === 'string' && chat.id.startsWith(TG_CHAT_ID_PREFIX));
+}
+
+/**
+ * Make a historically corrupted project tree safe BEFORE rendering or writing
+ * it to localStorage. Preserve the canonical Telegram project (and its most
+ * complete chat transcript), but do not keep copies created by polling.
+ * Calling this repeatedly on a healthy tree must be referentially stable.
+ */
 export function sanitizeCachedTelegramAssistantProjects<
-  TChat extends { id: string },
-  TProject extends { id: string; chats: TChat[] }
+  TChat extends { id: string; title: string; messages?: unknown[] },
+  TProject extends { id: string; title: string; color: string; icon: string; chats: TChat[] }
 >(projects: TProject[]): TProject[] {
-  const found = new Set<string>();
-  return projects.map(project => {
-    if (project.id !== 'telegram-ai-assistant-project') return project;
-    const chats = project.chats.filter(chat => {
-      if (!chat.id.startsWith('telegram-ai-assistant:') || found.has(chat.id) || found.size >= 25) return false;
-      found.add(chat.id);
-      return true;
-    });
-    return chats.length === project.chats.length ? project : { ...project, chats };
-  });
+  const normals: TProject[] = [];
+  const duplicates: TProject[] = [];
+  for (const project of projects) {
+    if (isTelegramAssistantProjectLike(project)) duplicates.push(project);
+    else normals.push(project);
+  }
+  if (!duplicates.length) return projects;
+
+  const primary = duplicates.find(project => project.id === TELEGRAM_AI_PROJECT_ID) ?? duplicates[0];
+  const chats = new Map<string, TChat>();
+  for (const project of [primary, ...duplicates.filter(candidate => candidate !== primary)]) {
+    for (const chat of project.chats) {
+      if (!chat.id.startsWith(TG_CHAT_ID_PREFIX)) continue;
+      const previous = chats.get(chat.id);
+      if (!previous) {
+        if (chats.size < 25) chats.set(chat.id, chat);
+      } else if ((chat.messages?.length ?? 0) > (previous.messages?.length ?? 0)) {
+        chats.set(chat.id, chat);
+      }
+    }
+  }
+  const uniqueChats = [...chats.values()];
+  if (duplicates.length === 1 && primary.id === TELEGRAM_AI_PROJECT_ID &&
+    primary.title === 'Телеграм ассистент' && primary.icon === 'telegram' &&
+    primary.chats.length === uniqueChats.length &&
+    primary.chats.every((chat, index) => chat === uniqueChats[index]) &&
+    projects[projects.length - 1] === primary) return projects;
+
+  const clean = {
+    ...primary, id: TELEGRAM_AI_PROJECT_ID, title: 'Телеграм ассистент',
+    color: '#229ed9', icon: 'telegram', chats: uniqueChats
+  } as TProject;
+  return [...normals, clean];
 }

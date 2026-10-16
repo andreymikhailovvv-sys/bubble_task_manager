@@ -21,7 +21,13 @@ test('server canonicalizes Telegram project to exactly the authorized policy lis
       { id: 'telegram-ai-assistant:deleted-policy', title: 'Удалённый', messages: [] },
       { id: 'telegram-ai-assistant:policy-1', title: 'Дубликат', messages: oldMessages }
     ] },
-    { id: 'other-duplicate', title: 'Телеграм ассистент', icon: 'telegram', chats: fake }
+    { id: 'other-duplicate', title: 'Телеграм ассистент', icon: 'telegram', chats: fake },
+    { id: 'legacy-app-copy', title: 'Телеграм ассистент', icon: '✨', chats: [
+      { id: 'telegram-ai-assistant:policy-2', title: 'Старое', messages: [{ id: 'second', role: 'user', content: 'История второго чата' }] }
+    ] },
+    ...Array.from({ length: 100 }, (_, index) => ({
+      id: 'ghost-project-' + index, title: 'Телеграм ассистент', icon: '✨', chats: fake
+    }))
   ];
   const canonical = canonicalizeTelegramAssistantProjects(projects, policies);
   assert.equal(canonical.length, 2);
@@ -32,6 +38,7 @@ test('server canonicalizes Telegram project to exactly the authorized policy lis
   ]);
   assert.equal(canonical[1].chats?.[0].title, 'Работа');
   assert.deepEqual(canonical[1].chats?.[0].messages, oldMessages);
+  assert.equal(canonical[1].chats?.[1].messages?.[0].content, 'История второго чата');
   assert.equal(canonicalizeTelegramAssistantProjects(canonical, policies)[1].chats?.length, 2);
   assert.equal(canonicalizeTelegramAssistantProjects(canonical, [policies[0]])[1].chats?.length, 1);
   assert.equal(canonicalizeTelegramAssistantProjects(canonical, []).length, 1);

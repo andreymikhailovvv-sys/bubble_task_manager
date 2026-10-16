@@ -55,11 +55,20 @@ export function canonicalizeTelegramAssistantProjects(
   policies: readonly ManagedPolicy[]
 ): JsonProject[] {
   const source = validProjects(projects);
-  const normal = source.filter(p => p.id !== TELEGRAM_ASSISTANT_MANAGED_PROJECT &&
-    !(p.title === 'Телеграм ассистент' && p.icon === 'telegram'));
+  // Legacy project-outline polling duplicated the folder with the same ID
+  // every 2.5s, and older clients sometimes saved ghost UUIDs or a default
+  // emoji icon. Recognize these copies by identity/title/managed child IDs.
+  const looksManaged = (project: JsonProject): boolean => {
+    if (project.id === TELEGRAM_ASSISTANT_MANAGED_PROJECT) return true;
+    const title = (typeof project.title === 'string' ? project.title : '')
+      .toLocaleLowerCase().replace(/[\\s_-]+/g, ' ').trim();
+    return title === 'телеграм ассистент' || title === 'telegram assistant' ||
+      project.icon === 'telegram' ||
+      (project.chats ?? []).some(chat => typeof chat?.id === 'string' && chat.id.startsWith(TG_PREFIX));
+  };
+  const normal = source.filter(project => !looksManaged(project));
   if (policies.length === 0) return normal;
-  const managed = source.filter(p => p.id === TELEGRAM_ASSISTANT_MANAGED_PROJECT ||
-    (p.title === 'Телеграм ассистент' && p.icon === 'telegram'));
+  const managed = source.filter(looksManaged);
   const messagesById = new Map<string, JsonMessage[]>();
   for (const project of managed) {
     for (const chat of project.chats ?? []) {
@@ -74,7 +83,6 @@ export function canonicalizeTelegramAssistantProjects(
     }
   }
   const uniquePolicies = new Map(policies.map(p => [p.id, p]));
-  const first = managed[0];
   const assistantProject: JsonProject = {
     id: TELEGRAM_ASSISTANT_MANAGED_PROJECT, title: 'Телеграм ассистент',
     icon: 'telegram', color: '#229ed9',

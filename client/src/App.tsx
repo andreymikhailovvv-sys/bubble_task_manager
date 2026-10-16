@@ -35,7 +35,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -346,7 +346,9 @@ const TELEGRAM_AI_MANAGED_PROJECT_ID = 'telegram-ai-assistant-project';
 const TELEGRAM_AI_MANAGED_CHAT_PREFIX = 'telegram-ai-assistant:';
 
 export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAiAssistantInbox): AiChatProject[] {
-  const ownedProjects = projects.filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
+  // Old app versions may have copied the managed project with random UUIDs.
+  // Do not reappend those copies when reconciling the authoritative inbox.
+  const ownedProjects = projects.filter(project => !isTelegramAssistantProjectLike(project));
   if (!feed.chats.length) return ownedProjects.length === projects.length ? projects : ownedProjects;
   const previous = projects.find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
   const chats = feed.chats.map(dialog => {
@@ -408,11 +410,12 @@ const QUICK_AI_CHAT_ID = 'quick-ai-requests';
 function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | null | undefined, quickMessages: AiChatMessage[] = []): AiChatProject[] {
   const quickChat: AiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-20) };
   const fallback: AiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
-  const standard = (rawProjects ?? []).filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
-  const managed = (rawProjects ?? []).find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
+  const standard = (rawProjects ?? []).filter(project => !isTelegramAssistantProjectLike(project));
+  const managed = (rawProjects ?? []).find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID) ??
+    (rawProjects ?? []).find(project => isTelegramAssistantProjectLike(project));
   const source: Array<Partial<AiChatProject>> = [
     ...(standard.length ? standard : fallback),
-    ...(managed ? [{ ...managed, chats: (managed.chats ?? [])
+    ...(managed ? [{ ...managed, id: TELEGRAM_AI_MANAGED_PROJECT_ID, title: 'Телеграм ассистент', icon: 'telegram', chats: (managed.chats ?? [])
       .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX))
       .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
       .slice(0, 25) }] : [])
