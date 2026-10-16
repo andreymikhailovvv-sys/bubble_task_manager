@@ -20,7 +20,7 @@ type Stored = Omit<Row, 'dueDate' | 'recurrenceUntil' | 'createdAt' | 'updatedAt
 type Reversal = {
   before: Stored[];
   after: Array<{ id: string; updatedAt: string }>;
-  created: Array<{ id: string; updatedAt: string }>;
+  created: Array<{ id: string; updatedAt: string; attachments: string[]; comments: string[]; aiMessages: string[] }>;
 };
 
 async function loadTasks(userId: string, ids: string[]) {
@@ -60,18 +60,23 @@ export async function captureProposalAfter(userId: string, before: Stored[], cre
   });
   const created = createdIds.length ? await prisma.task.findMany({
     where: { id: { in: createdIds }, userId, AND: [taskAccessWhere(userId)] },
-    select: { id: true, updatedAt: true }
+    select: { id: true, updatedAt: true, attachments: { select: { id: true } }, comments: { select: { id: true } }, aiMessages: { select: { id: true } } }
   }) : [];
   // A created parent also owns its freshly created children.
   const createdChildren = createdIds.length ? await prisma.task.findMany({
     where: { parentTaskId: { in: createdIds }, userId, AND: [taskAccessWhere(userId)] },
-    select: { id: true, updatedAt: true }
+    select: { id: true, updatedAt: true, attachments: { select: { id: true } }, comments: { select: { id: true } }, aiMessages: { select: { id: true } } }
   }) : [];
   return {
     before,
     after: after.map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() })),
     created: [...new Map([...created, ...createdChildren].map(item => [item.id, item])).values()]
-      .map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() }))
+       .map(item => ({
+        id: item.id, updatedAt: item.updatedAt.toISOString(),
+        attachments: item.attachments.map(entry => entry.id).sort(),
+        comments: item.comments.map(entry => entry.id).sort(),
+        aiMessages: item.aiMessages.map(entry => entry.id).sort()
+      }))
   };
 }
 
@@ -117,14 +122,23 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
       const createdState = await tx.task.findMany({
         where: { id: { in: [...createdIds] }, userId },
         select: {
-          id: true, collaborationId: true, _count: {
-            select: { attachments: true, aiMessages: true, comments: true }
-          }
+          id: true, collaborationId: true,
+          attachments: { select: { id: true } },
+          aiMessages: { select: { id: true } },
+          comments: { select: { id: true } }
         }
       });
       for (const task of createdState) {
-        if (task.collaborationId || task._count.attachments || task._count.aiMessages || task._count.comments) {
-          throw new Error('К созданной задаче добавлены данные. Для их защиты автоматическая отмена заблокирована.');
+        const original = saved.created.find(item => item.id === task.id);
+        if (!original || task.collaborationId) {
+          throw new Error('Задача изменилась или стала совместной. Отмена заблокирована.');
+        }
+        const same = (actual: { id: string }[], previous: string[]) =>
+          JSON.stringify(actual.map(x => x.id).sort()) === JSON.stringify([...previous].sort());
+        if (!same(task.attachments, original.attachments ?? []) ||
+            !same(task.comments, original.comments ?? []) ||
+            !same(task.aiMessages, original.aiMessages ?? [])) {
+          throw new Error('К созданной задаче добавлены файлы, сообщения или комментарии. Отмена заблокирована.');
         }
       }
       const untrackedChildren = await tx.task.count({
