@@ -70,7 +70,8 @@ export async function captureProposalAfter(userId: string, before: Stored[], cre
   return {
     before,
     after: after.map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() })),
-    created: [...created, ...createdChildren].map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() }))
+    created: [...new Map([...created, ...createdChildren].map(item => [item.id, item])).values()]
+      .map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() }))
   };
 }
 
@@ -109,6 +110,24 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
         }
         if (item.userId !== userId) throw new Error('Недостаточно прав для восстановления чужой задачи.');
       }
+      const createdIds = new Set(saved.created.map(item => item.id));
+      const createdState = await tx.task.findMany({
+        where: { id: { in: [...createdIds] }, userId },
+        select: {
+          id: true, collaborationId: true, _count: {
+            select: { attachments: true, aiMessages: true, comments: true }
+          }
+        }
+      });
+      for (const task of createdState) {
+        if (task.collaborationId || task._count.attachments || task._count.aiMessages || task._count.comments) {
+          throw new Error('К созданной задаче добавлены данные. Для их защиты автоматическая отмена заблокирована.');
+        }
+      }
+      const untrackedChildren = await tx.task.count({
+        where: { parentTaskId: { in: [...createdIds] }, id: { notIn: [...createdIds] } }
+      });
+      if (untrackedChildren) throw new Error('В созданную задачу добавлены подзадачи. Отмена заблокирована для защиты данных.');
       // Revert only explicitly tracked changes; first remove newly created children.
       for (const item of [...saved.created].reverse()) {
         const updated = await tx.task.deleteMany({
