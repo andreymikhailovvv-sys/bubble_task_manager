@@ -83,7 +83,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   {
     type: 'function', name: 'task_action', strict: true, description: 'Подготовить одну операцию над задачей для последующего подтверждения пользователем. До подтверждения НЕ выполнено. Не используй последовательно для массового запроса, если доступен task_actions.',
     parameters: { type: 'object', additionalProperties: false, required: ['operation', 'itemId', 'parentTaskId', 'title', 'description', 'dueDate', 'importance', 'urgency', 'notifyBeforeMinutes', 'sphereId', 'location'], properties: {
-      operation: { type: 'string', enum: ['create_task', 'create_event', 'create_subtask', 'rename', 'set_description', 'reschedule', 'clear_due_date', 'complete', 'reopen', 'delete', 'set_priority', 'set_notification', 'change_sphere'] },
+      operation: { type: 'string', enum: ['create_task', 'create_event', 'create_reminder', 'create_subtask', 'rename', 'set_description', 'reschedule', 'clear_due_date', 'complete', 'reopen', 'delete', 'set_priority', 'set_notification', 'change_sphere'] },
       itemId: nullable('string'), parentTaskId: nullable('string'), title: nullable('string'), description: nullable('string'), dueDate: nullable('string'),
       importance: nullable('number'), urgency: nullable('number'), notifyBeforeMinutes: nullable('number'), sphereId: nullable('string'), location: nullable('string')
     } }
@@ -208,7 +208,7 @@ export async function executePlannerBatchActions(options: {
 /** Add a link only after planner tools successfully create an item. */
 export function formatPlannerActionReport(result: { operation?: string; itemId?: string; report?: string }): string {
   const report = result.report ?? '';
-  if (!['create_task', 'create_event', 'create_subtask'].includes(result.operation ?? '') || !result.itemId) return report;
+  if (!['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(result.operation ?? '') || !result.itemId) return report;
   return `${report} [[task_ref=${result.itemId}]]`;
 }
 
