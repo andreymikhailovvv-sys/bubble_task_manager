@@ -2758,27 +2758,6 @@ ${allContext}`,
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
-    let alive = true;
-    const refresh = async () => {
-      try {
-        const feed = await api.telegramAssistantInbox();
-        if (alive) setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
-      } catch (error) {
-        console.warn('[Telegram AI inbox] sync unavailable', error);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 15_000);
-    window.addEventListener('telegram-ai-assistant-updated', refresh);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-      window.removeEventListener('telegram-ai-assistant-updated', refresh);
-    };
-  }, [currentUser?.id]);
-
-  useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
@@ -2837,11 +2816,13 @@ ${allContext}`,
     const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener('focus', focus);
     document.addEventListener('visibilitychange', focus);
+    window.addEventListener('telegram-ai-assistant-updated', focus);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener('focus', focus);
       document.removeEventListener('visibilitychange', focus);
+      window.removeEventListener('telegram-ai-assistant-updated', focus);
     };
   }, [currentUser?.id, aiChatLoading]);
 
