@@ -27,6 +27,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
+import { reconcileActiveAiChatMessages } from './lib/ai-chat-reconciliation';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
@@ -811,6 +812,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
+  const generalAiChatNearBottomRef = useRef(true);
+  const previousGeneralAiChatIdRef = useRef('');
   const [isGeneralAiChatHeaderHidden, setIsGeneralAiChatHeaderHidden] = useState(false);
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -2563,79 +2566,88 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
 
 
-  // Keep all AI project threads and the bot-backed quick chat aligned
-  // with the same server history used on the website.
+  // Mirror task-chat sync: only the open conversation is read. Never replace
+  // the whole project/chat tree on a timer or reset active selection.
   useEffect(() => {
-    if (!currentUser?.id) return;
-    let active = true;
+    if (!currentUser?.id || !isAiChatOpen) return;
+    const projectId = activeAiChatProject?.id;
+    const chatId = activeAiChat?.id;
+    if (!projectId || !chatId) return;
+    let alive = true;
     const refresh = async () => {
-      if (!active || !aiChatProjectsSyncReadyRef.current || aiChatLoading ||
+      if (!alive || aiChatLoading || aiChatProjectsPollingRef.current ||
           aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
-          aiChatProjectsPollingRef.current || document.visibilityState === 'hidden') return;
+          document.visibilityState === 'hidden') return;
       aiChatProjectsPollingRef.current = true;
       try {
-        const [history, response, inbox] = await Promise.all([
-          api.getGeneralAssistantHistory(),
-          api.getAiChatProjects<Partial<MiniAiChatProject>>(),
-          api.telegramAssistantInbox().catch(() => null)
-        ]);
-        if (!active || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
-            aiChatProjectsSaveInFlightRef.current) return;
-        const quickMessages: MiniAiChatMessage[] = history.messages
-          .filter(message => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-          .map(message => attachChatMessageId(message, message.id ?? crypto.randomUUID()))
-          .slice(-100);
-        setAiChatProjects(previous => {
-          const base = normalizeMiniAiChatProjects(response.projects?.length ? response.projects : previous);
-          const updated = base.map((project, index) => index === 0 ? {
-            ...project, chats: project.chats.map(chat =>
-              chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
-          } : project);
-          if (inbox?.chats.length) {
-            const old = updated.find(p => p.id === inbox.projectId);
-            const chats: MiniAiChatThread[] = inbox.chats.map(chat => {
-              const messages = new Map((old?.chats.find(c => c.id === chat.id)?.messages ?? []).map(m => [m.id, m]));
-              for (const entry of inbox.messages.filter(m => m.chatId === chat.id)) {
-                messages.set(entry.id, { id: entry.id, role: 'assistant', content: entry.content,
-                  taskProposal: entry.taskProposal ?? undefined });
-              }
-              return { id: chat.id, title: chat.title, messages: [...messages.values()] };
+        if (chatId.startsWith('telegram-ai-assistant:')) {
+          const feed = await api.telegramAssistantInbox();
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const project = previous.find(p => p.id === feed.projectId);
+            const thread = project?.chats.find(c => c.id === chatId);
+            if (!thread) return previous;
+            const remote = feed.messages.filter(m => m.chatId === chatId)
+              .map(m => ({ id: m.id, role: 'assistant' as const, content: m.content,
+                taskProposal: m.taskProposal ?? undefined }));
+            const merged = reconcileActiveAiChatMessages(thread.messages, remote, aiChatLoading);
+            if (merged === thread.messages) return previous;
+            const updated = previous.map(p => p.id !== feed.projectId ? p : {
+              ...p, chats: p.chats.map(c => c.id !== chatId ? c : { ...c, messages: merged })
             });
-            const idx = updated.findIndex(p => p.id === inbox.projectId);
-            const project: MiniAiChatProject = {
-              id: inbox.projectId, title: inbox.projectTitle, color: '#229ed9', icon: 'telegram', chats
-            };
-            if (idx >= 0) updated[idx] = project;
-            else updated.push(project);
-          }
-          const nextHash = JSON.stringify(updated);
-          aiChatProjectsRemoteSnapshotRef.current = nextHash;
-          return JSON.stringify(previous) === nextHash ? previous : updated;
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+            return updated;
+          });
+          return;
+        }
+        const { messages } = await api.getAiChatThreadMessages(projectId, chatId);
+        if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+            aiChatProjectsSaveInFlightRef.current) return;
+        const remote: MiniAiChatMessage[] = messages
+          .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map((message, index) => attachChatMessageId(message,
+            message.id ?? `${index}-${message.role}-${message.content}`));
+        setAiChatProjects(previous => {
+          const chat = previous.find(p => p.id === projectId)?.chats.find(c => c.id === chatId);
+          if (!chat) return previous;
+          const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
+          if (merged === chat.messages) return previous;
+          const updated = previous.map(p => p.id !== projectId ? p : {
+            ...p, chats: p.chats.map(c => c.id === chatId ? { ...c, messages: merged } : c)
+          });
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+          return updated;
         });
       } catch (error) {
-        console.warn('[MiniApp AI chat] refreshing shared history failed', error);
+        console.warn('[MiniApp AI chat] active thread sync failed', error);
       } finally {
         aiChatProjectsPollingRef.current = false;
       }
     };
-    const interval = window.setInterval(() => void refresh(), 12_000);
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2500);
     const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener('focus', focus);
     document.addEventListener('visibilitychange', focus);
     return () => {
-      active = false;
-      window.clearInterval(interval);
+      alive = false;
+      window.clearInterval(timer);
       window.removeEventListener('focus', focus);
       document.removeEventListener('visibilitychange', focus);
     };
-  }, [currentUser?.id, aiChatLoading]);
+  }, [currentUser?.id, isAiChatOpen, activeAiChatProject?.id, activeAiChat?.id, aiChatLoading]);
 
   useEffect(() => {
     const container = aiChatDialogContainerRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    generalAiChatScrollTopRef.current = container.scrollHeight;
-  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen]);
+    if (!container || !isAiChatOpen) return;
+    if (previousGeneralAiChatIdRef.current !== activeAiChatId) {
+      previousGeneralAiChatIdRef.current = activeAiChatId;
+      generalAiChatNearBottomRef.current = true;
+    }
+    if (!generalAiChatNearBottomRef.current) return;
+    container.scrollTop = container.scrollHeight;
+    generalAiChatScrollTopRef.current = container.scrollTop;
+  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
 
   useEffect(() => {
     if (!isAiChatOpen) return;
@@ -4577,7 +4589,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </select>
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
-              <div ref={aiChatDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              <div ref={aiChatDialogContainerRef} onScroll={(event) => {
+                const container = event.currentTarget;
+                generalAiChatNearBottomRef.current =
+                  container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+                updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
+              }} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {(activeAiChat?.messages ?? []).length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
