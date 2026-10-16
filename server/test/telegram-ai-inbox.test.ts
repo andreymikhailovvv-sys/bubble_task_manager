@@ -37,8 +37,11 @@ test('every monitored Telegram conversation gets stable project and thread ident
 test('model-generated summary is rendered with explicit task proposals', () => {
   const result = formatTelegramAiSummary('Рабочая группа', sample, 'SUGGEST');
   assert.match(result, /Рабочая группа/);
-  assert.match(result, /Предложения задач/);
-  assert.match(result, /Подготовить документы/);
+  assert.doesNotMatch(result, /Предложения задач/);
+  assert.doesNotMatch(result, /• Подготовить документы/);
+  const source = src('../src/services/telegram-ai-inbox.service.ts');
+  assert.match(source, /prepareTaskProposal/);
+  assert.match(source, /taskProposal: proposalByEvent.get/);
   const denied = formatTelegramAiSummary('Рабочая группа', sample, 'NONE');
   assert.doesNotMatch(denied, /Предложения задач/);
 });
