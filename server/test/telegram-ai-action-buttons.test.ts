@@ -6,8 +6,8 @@ const code = (relative: string) => readFileSync(new URL(relative, import.meta.ur
 
 test('Telegram AI action replies include exact undo and Mini App quick chat buttons', () => {
   const bot = code('../src/services/telegram.service.ts');
-  assert.match(bot, /text: 'Отменить', callback_data: `aiundo:\$\{proposalId\}`/);
-  assert.match(bot, /text: 'Открыть в приложении', web_app: \{ url: openUrl \}/);
+  assert.match(bot, /text: '↩️ Отменить', callback_data: `aiundo:\$\{proposalId\}`/);
+  assert.match(bot, /text: '📱 Открыть в приложении', web_app: \{ url: openUrl \}/);
   assert.match(bot, /url\.searchParams\.set\('openQuickAi', '1'\)/);
   assert.match(bot, /proposal\?\.status === 'APPLIED'/);
   assert.ok((bot.match(/keyboardForAppliedAiProposal\(result\.taskProposal/g) ?? []).length >= 3);
