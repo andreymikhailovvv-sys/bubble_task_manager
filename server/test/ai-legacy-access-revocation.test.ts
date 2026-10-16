@@ -8,7 +8,7 @@ const readSource = () => readFile(new URL('../src/services/ai-assistant.service.
 test('legacy AI checks active membership before accessing tasks it created', async () => {
   assert.deepEqual(taskAccessWhere('owner').OR?.[0], { userId: 'owner', collaborationId: null });
   const src = await readSource();
-  const method = src.slice(src.indexOf('askGeneralAssistant: async'), src.indexOf('undoGeneralAssistantActions: async'));
+  const method = src.slice(src.indexOf('export async function applyLegacyGeneralProposalActions'));
   assert.match(method, /userId: input\.userId,\s*AND: \[taskAccessWhere\(input\.userId\)\],\s*parentTaskId: null/);
   assert.match(method, /id: action\.parentTaskId, userId: input\.userId, parentTaskId: null, AND: \[taskAccessWhere\(input\.userId\)\]/);
   assert.equal((method.match(/id: action\.subtaskId, userId: input\.userId, parentTaskId: \{ not: null \}, AND: \[taskAccessWhere\(input\.userId\)\]/g)||[]).length,5);
