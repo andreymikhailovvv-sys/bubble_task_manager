@@ -567,6 +567,7 @@ export const api = {
     }),
   aiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}`),
   approveAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: '{}' }),
+  undoAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/undo`, { method: 'POST', body: '{}' }),
   rejectAiTaskProposal: (id: string) => request<import('./types').AiTaskProposal>(`/api/ai/task-proposals/${encodeURIComponent(id)}/reject`, { method: 'POST', body: '{}' }),
   aiTaskProposalPreference: () => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences'),
   setAiTaskProposalPreference: (autoApply: boolean) => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences', { method: 'PATCH', body: JSON.stringify({ autoApply }) }),
