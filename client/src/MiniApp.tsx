@@ -130,7 +130,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
   const quickChat: MiniAiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: [] };
   const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
   const source = rawProjects?.length ? rawProjects : fallback;
-  const normalized = source.map((project, index) => ({
+  const normalized: MiniAiChatProject[] = source.map((project, index) => ({
     id: project.id ?? crypto.randomUUID(),
     title: index === 0 ? QUICK_AI_CHAT_PROJECT_TITLE : (project.title ?? `Проект ${index + 1}`),
     color: project.color ?? '#8b5cf6',
