@@ -88,7 +88,7 @@ export function reconcileAiChatProjectOutline<
   const telegram = managed ?? (telegramOutline ? {
     ...telegramOutline, id: TELEGRAM_AI_PROJECT_ID,
     chats: telegramOutline.chats.map(chat => ({ ...chat, messages: [] }))
-  } as TProject : null);
+  } as unknown as TProject : null);
   if (!managed && telegram) changed = true;
   if (!telegram && cleanLocal.some(project => project.id === TELEGRAM_AI_PROJECT_ID)) changed = true;
   if (!changed) return local;
@@ -219,7 +219,7 @@ export function isTelegramAssistantProjectLike(project: {
  * Calling this repeatedly on a healthy tree must be referentially stable.
  */
 export function sanitizeCachedTelegramAssistantProjects<
-  TChat extends { id: string; messages?: Array<{ id: string }> },
+  TChat extends { id: string; title: string; messages?: unknown[] },
   TProject extends { id: string; title: string; color: string; icon: string; chats: TChat[] }
 >(projects: TProject[]): TProject[] {
   const normals: TProject[] = [];
