@@ -709,7 +709,7 @@ export function TaskEditor({
     const selected = recurrenceSlots.some((slot) => slot[key] === day);
     if (selected && recurrenceSlots.length === 1) return;
     const time = recurrenceSlots[0]?.time ?? "09:00";
-    const slots = selected
+    const slots: RecurrenceSlot[] = selected
       ? recurrenceSlots.filter((slot) => slot[key] !== day)
       : [...recurrenceSlots, { time, [key]: day }];
     commitManualRecurrence(recurrencePeriod, slots.sort((a, b) => (a[key] ?? 0) - (b[key] ?? 0)));
