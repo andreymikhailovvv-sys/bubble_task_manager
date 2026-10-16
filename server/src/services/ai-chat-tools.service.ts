@@ -616,7 +616,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     const webSearchCreditsMilliBilled = webSearchCallsBilled * WEB_SEARCH_CALL_CREDITS_MILLI;
     const taskProposal = preparedTaskActions.length
       ? await prepareTaskProposal({
-          userId: input.userId, requestId: input.actionRequestId, source: 'planner',
+          userId: input.userId, requestId: input.actionRequestId, source: input.autoApplyTaskActions ? 'telegram_bot' : 'planner',
           actions: preparedTaskActions as unknown as Record<string, unknown>[],
           resolvedItemIds: [...resolvedItemIds], resolvedSphereIds: [...resolvedSphereIds],
           autoApply: input.autoApplyTaskActions === true ? true : undefined,
