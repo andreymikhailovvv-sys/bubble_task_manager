@@ -32,6 +32,6 @@ test('updating sphere and parent references scopes IDs before side effects', asy
 test('valid private and shared relation writes still use unchanged Prisma connect semantics', async () => {
   const source = await taskServiceSource();
   assert.match(source, /sphere: input\.sphereId \? \{ connect: \{ id: input\.sphereId \} \}/);
-  assert.match(source, /parentTask: !isEvent && input\.parentTaskId \? \{ connect: \{ id: input\.parentTaskId \} \}/);
+  assert.match(source, /parentTask: !isEvent && !isReminder && input\.parentTaskId \? \{ connect: \{ id: input\.parentTaskId \} \}/);
   assert.match(source, /patch\.sphere = input\.sphereId \? \{ connect: \{ id: input\.sphereId \} \} : \{ disconnect: true \}/);
 });
