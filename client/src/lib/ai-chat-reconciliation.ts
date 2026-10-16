@@ -28,8 +28,8 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
       message.creditsSpentMilli === other.creditsSpentMilli &&
       message.taskProposal?.id === other.taskProposal?.id &&
       message.taskProposal?.status === other.taskProposal?.status &&
-      message.telegramSendDraft?.id === other.telegramSendDraft?.id &&
-      message.telegramReadDraft?.id === other.telegramReadDraft?.id;
+      JSON.stringify(message.telegramSendDraft ?? null) === JSON.stringify(other.telegramSendDraft ?? null) &&
+      JSON.stringify(message.telegramReadDraft ?? null) === JSON.stringify(other.telegramReadDraft ?? null);
   })) return local;
 
   return remote;
