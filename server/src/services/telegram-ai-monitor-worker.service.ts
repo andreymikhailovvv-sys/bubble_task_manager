@@ -215,15 +215,18 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
 async function processClaim(claimed: Claimed) {
   const { policy } = claimed;
   await ownedLease(claimed);
-  const latest = await telegramUserClientRead.aiHistory(policy.userId, policy.chatId, 100, true);
   const lastSeen = policy.lastSeenMessageId ?? 0;
+  // Fetch media only from the monitored message range; the explicit refresh
+  // can also inspect the limited existing history.
+  const latest = await telegramUserClientRead.aiHistory(policy.userId, policy.chatId, 100, true, policy.summaryRequested ? 0 : lastSeen);
   const all = latest.messages;
   const maxId = Math.max(lastSeen, ...all.map(m => m.id));
   const newMessages = all.filter(m => m.id > lastSeen);
   const selected = newMessages.length
     ? newMessages.slice(-MAX_INPUT_MESSAGES)
     : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
-  if (!selected.length || !selected.some(m => m.text.trim())) {
+  // A photo or document without a caption must still trigger analysis.
+  if (!selected.length || !selected.some(m => m.text.trim() || m.hasMedia)) {
     await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, leaseToken: claimed.token, monitorRevision: policy.monitorRevision, isEnabled: true },
       data: { lastSeenMessageId: maxId, summaryRequested: false }

@@ -214,7 +214,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
           <div>
             <strong>Контроль остаётся за вами</strong>
-            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается отдельно для каждого чата. ИИ читает только новые сообщения после включения. Автоответы и автосоздание задач пока отключены.</p>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается отдельно для каждого чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. Автоответы и автосоздание задач пока отключены.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
@@ -281,7 +281,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => setError('Не удалось обновить данные'));
                         }} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs">Обновить статус</button>
                       </div>
-                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При включении ассистент получит постоянное разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. Старые сообщения автоматически не анализируются.</p>}
+                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При включении ассистент получит постоянное разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. При обычной проверке старые сообщения автоматически не анализируются; кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
                       {selected.lastSummary && (
                         <details className="telegram-ai-monitor-summary rounded-xl border p-3" open>
                           <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + new Date(selected.lastSummaryAt).toLocaleString('ru-RU') : ''}</summary>
