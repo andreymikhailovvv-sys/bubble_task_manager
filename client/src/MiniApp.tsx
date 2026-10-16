@@ -4639,7 +4639,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <div className="mt-2 flex min-w-0 items-center gap-2">
                   <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">{activeAiChat?.title ?? 'Новый чат'}</h2>
                   <div className="miniapp-ai-chat-project-chip inline-flex max-w-[46%] shrink-0 items-center gap-1.5 rounded-2xl border px-2 py-1 text-[11px] font-semibold shadow-sm" style={{ '--project-color': activeAiChatProject?.color ?? '#8b5cf6' } as CSSProperties}>
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon}</span>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-white/20 text-sm">{activeAiChatProject?.icon === 'telegram' ? <svg role="img" aria-label="Telegram" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M21.94 4.17a1.46 1.46 0 0 0-1.7-.23L2.1 11.1a1.18 1.18 0 0 0 .12 2.24l4.68 1.45 1.77 5.3a1.15 1.15 0 0 0 1.9.47l2.9-2.88 4.68 3.46a1.3 1.3 0 0 0 2.03-.76l2.18-14.6a1.52 1.52 0 0 0-.42-1.61Zm-3.88 3.9-8.2 7.47-.32 2.63-1.28-3.83 9.8-6.27Z"/></svg> : activeAiChatProject?.icon}</span>
                     <span className="truncate">{activeAiChatProject?.title ?? 'Проект'}</span>
                   </div>
                 </div>
