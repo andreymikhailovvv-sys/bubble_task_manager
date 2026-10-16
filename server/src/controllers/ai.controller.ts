@@ -215,7 +215,7 @@ export const aiController = {
         userId: req.user!.id,
         messages: [{ role: 'user', content: question.trim() }]
       });
-      await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli });
+      await aiAssistantService.appendGeneralDialogAssistantMessage({ userId: req.user!.id, content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli, taskProposalId: result.taskProposal?.id });
       res.json(result);
     } catch (error) {
       sendAiError(res, error);
