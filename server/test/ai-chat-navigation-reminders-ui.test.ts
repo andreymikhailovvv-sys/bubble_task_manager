@@ -38,12 +38,12 @@ test('quick desktop and mini general chat default to Luna, other web chats keep 
   assert.ok(mini.includes("selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna')"));
 });
 
-test('general chat chooses task or event for reminders; task chat keeps subtasks', async () => {
+test('general and task AI chats create a dedicated reminder instead of tasks or subtasks', async () => {
   const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
-  assert.ok(source.includes('operation=create_task'));
-  assert.ok(source.includes('operation=create_event'));
-  assert.ok(source.includes('пользователь должен что-то сделать'));
+  assert.ok(source.includes('operation=create_reminder'));
+  assert.ok(source.includes('action.type=create_reminder'));
+  assert.ok(source.includes("taskType: 'REMINDER'"));
   assert.ok(source.includes('notifyBeforeMinutes=0'));
-  assert.ok(source.includes('создай подзадачу этой задачи через create_subtask'));
-  assert.ok(source.includes('dueDate в локальном времени пользователя'));
+  assert.ok(source.includes('НЕ создавай подзадачу'));
+  assert.ok(source.includes('создай самостоятельный объект'));
 });
