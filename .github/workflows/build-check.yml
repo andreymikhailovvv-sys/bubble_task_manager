@@ -63,6 +63,8 @@ jobs:
         run: node --import tsx --test server/test/ai-task-proposal-undo.test.ts
       - name: Verify Telegram unified AI inbox and per-chat models
         run: node --import tsx --test server/test/telegram-ai-inbox.test.ts
+      - name: Verify Telegram monitor attachment handling
+        run: node --import tsx --test server/test/telegram-ai-monitor-media.test.ts
       - name: Verify Telegram autonomous monitoring and credits
         run: node --import tsx --test server/test/telegram-ai-monitoring.test.ts
       - name: Verify Telegram identity binding
