@@ -482,6 +482,7 @@ export const api = {
     request<{ messages: ChatMessage[] }>(`/api/ai-general-chat?userTimeZone=${encodeURIComponent(resolveUserTimeZone())}`),
   askGeneralAssistant: (payload: { question: string }) =>
     request<{
+      taskProposal?: import('./types').AiTaskProposal | null;
       answer: string;
       model: string;
       actionReports: string[];
