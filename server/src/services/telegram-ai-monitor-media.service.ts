@@ -100,12 +100,14 @@ export async function downloadTelegramMonitorMedia(
   if (category.expectedBytes > remainingBytes) {
     return { mediaNote: 'Превышен лимит медиа одного цикла; вложение не прочитано', bytesDownloaded: 0 };
   }
+  let timeout: NodeJS.Timeout | undefined;
   try {
     const response = await Promise.race([
       client.downloadMedia(message, category.kind === 'photo' ? { thumb: category.photoThumb } : {}),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Telegram media download timeout')), MONITOR_MEDIA_DOWNLOAD_TIMEOUT_MS)
-      )
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Telegram media download timeout')), MONITOR_MEDIA_DOWNLOAD_TIMEOUT_MS);
+        timeout.unref();
+      })
     ]);
     if (!Buffer.isBuffer(response) || !response.length || response.length > MONITOR_MEDIA_MAX_BYTES ||
         response.length > remainingBytes || !telegramMonitorFileSignature(category.mimeType, response)) {
@@ -129,5 +131,7 @@ export async function downloadTelegramMonitorMedia(
   } catch {
     // A failed or slow download must not disclose media or fail the whole scan.
     return { mediaNote: 'Вложение недоступно для скачивания; содержимое не прочитано', bytesDownloaded: 0 };
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
