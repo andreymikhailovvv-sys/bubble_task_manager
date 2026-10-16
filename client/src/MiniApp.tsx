@@ -27,7 +27,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from './lib/ai-chat-reconciliation';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
@@ -2600,7 +2600,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           });
           return;
         }
-        const { messages } = await api.getAiChatThreadMessages(projectId, chatId);
+        const { messages, projectsOutline } = await api.getAiChatThreadMessages(projectId, chatId);
         if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
             aiChatProjectsSaveInFlightRef.current) return;
         const remote: MiniAiChatMessage[] = messages
@@ -2608,11 +2608,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           .map((message, index) => attachChatMessageId(message,
             message.id ?? `${index}-${message.role}-${message.content}`));
         setAiChatProjects(previous => {
-          const chat = previous.find(p => p.id === projectId)?.chats.find(c => c.id === chatId);
-          if (!chat) return previous;
+          const outlined = reconcileAiChatProjectOutline(previous, projectsOutline);
+          const chat = outlined.find(p => p.id === projectId)?.chats.find(c => c.id === chatId);
+          if (!chat) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
           const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
-          if (merged === chat.messages) return previous;
-          const updated = previous.map(p => p.id !== projectId ? p : {
+          if (merged === chat.messages) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
+          const updated = outlined.map(p => p.id !== projectId ? p : {
             ...p, chats: p.chats.map(c => c.id === chatId ? { ...c, messages: merged } : c)
           });
           aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
