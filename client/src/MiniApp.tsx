@@ -837,9 +837,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
     const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
+    const openQuickAi = ['1', 'true', 'yes'].includes((params.get('openQuickAi') ?? '').toLowerCase());
     const commentTaskId = params.get('commentTaskId')?.trim() || null;
     const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
-    return { taskId, openAi, commentTaskId, chatRecipientUserId };
+    return { taskId, openAi, openQuickAi, commentTaskId, chatRecipientUserId };
   }, []);
 
   const getTaskAiRecipientId = (task: Task) => {
@@ -1595,6 +1596,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (launchParams.openAi) setIsAiDialogOpen(true);
     if (launchParams.commentTaskId) setPendingLaunchCommentTaskId(launchParams.commentTaskId);
   }, [launchParams, loading, openedTaskId, tasks]);
+
+  // Telegram inline Web App button deep link. Open only once after the
+  // account and server-backed chat projects have finished loading.
+  useEffect(() => {
+    if (!launchParams.openQuickAi || loading || !currentUser?.id || !aiChatProjectsSyncReadyRef.current) return;
+    const quickProject = aiChatProjects.find(project =>
+      project.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
+    if (!quickProject) return;
+    setActiveAiChatProjectId(quickProject.id);
+    setActiveAiChatId(QUICK_AI_CHAT_ID);
+    setIsQuickCreateOpen(false);
+    setIsAiChatMenuOpen(false);
+    setIsAiChatOpen(true);
+  }, [launchParams.openQuickAi, loading, currentUser?.id]);
 
   const closeTaskModal = () => {
     setOpenedTaskId(null);
