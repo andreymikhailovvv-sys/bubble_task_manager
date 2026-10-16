@@ -421,7 +421,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const defaultProject = normalized[0] ?? fallback[0];
   const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
-  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.length ? quickMessages.slice(-100) : (existingQuickChat?.messages ?? []) };
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-100) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
   return normalized;
 }
@@ -1071,6 +1071,9 @@ export default function App() {
   });
   const aiChatProjectsSyncReadyRef = useRef(false);
   const aiChatProjectsSaveTimerRef = useRef<number | null>(null);
+  const aiChatProjectsRemoteSnapshotRef = useRef('');
+  const aiChatProjectsSaveInFlightRef = useRef(false);
+  const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? QUICK_AI_CHAT_ID);
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
@@ -1424,6 +1427,8 @@ export default function App() {
   useEffect(() => {
     aiChatProjectsSyncReadyRef.current = false;
     if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+    aiChatProjectsRemoteSnapshotRef.current = '';
+    aiChatProjectsSaveInFlightRef.current = false;
     if (!currentUser) {
       setAiDialogByTask({});
       setAiReadCursorByTask({});
@@ -1472,7 +1477,7 @@ export default function App() {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
           const base = normalizeAiChatProjects(source, normalized);
           const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
-          if (!syncedProjects.projects?.length) void api.saveAiChatProjects(next).catch(() => undefined);
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
           return next;
         });
         aiChatProjectsSyncReadyRef.current = true;
@@ -2777,16 +2782,68 @@ ${allContext}`,
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
-    if (aiChatProjectsSyncReadyRef.current) {
+    const snapshot = JSON.stringify(aiChatProjects);
+    if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
       aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
-        void api.saveAiChatProjects(aiChatProjects).catch((error) => console.error('[AI chat] sync failed', error));
+        aiChatProjectsSaveTimerRef.current = null;
+        aiChatProjectsSaveInFlightRef.current = true;
+        void api.saveAiChatProjects(aiChatProjects)
+          .then(() => { aiChatProjectsRemoteSnapshotRef.current = snapshot; })
+          .catch((error) => console.error('[AI chat] sync failed', error))
+          .finally(() => { aiChatProjectsSaveInFlightRef.current = false; });
       }, 400);
     }
     return () => {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
     };
   }, [aiChatProjects]);
+
+  // Refresh canonical quick-chat history, projects and Telegram assistant inbox.
+  // A refresh never writes the fetched snapshot back to the server.
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let active = true;
+    const refresh = async () => {
+      if (!active || !aiChatProjectsSyncReadyRef.current || aiChatLoading ||
+          aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
+          aiChatProjectsPollingRef.current || document.visibilityState === 'hidden') return;
+      aiChatProjectsPollingRef.current = true;
+      try {
+        const [history, response, feed] = await Promise.all([
+          api.getGeneralAssistantHistory(),
+          api.getAiChatProjects<Partial<AiChatProject>>(),
+          api.telegramAssistantInbox().catch(() => null)
+        ]);
+        if (!active || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+            aiChatProjectsSaveInFlightRef.current) return;
+        const quickMessages: AiChatMessage[] = history.messages
+          .filter(message => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map(message => ({ ...message, id: message.id ?? crypto.randomUUID() }));
+        setAiChatProjects(previous => {
+          const base = normalizeAiChatProjects(response.projects?.length ? response.projects : previous, quickMessages);
+          const updated = feed ? mergeTelegramAiInbox(base, feed) : base;
+          const nextHash = JSON.stringify(updated);
+          aiChatProjectsRemoteSnapshotRef.current = nextHash;
+          return JSON.stringify(previous) === nextHash ? previous : updated;
+        });
+      } catch (error) {
+        console.warn('[AI chat] refreshing shared history failed', error);
+      } finally {
+        aiChatProjectsPollingRef.current = false;
+      }
+    };
+    const interval = window.setInterval(() => void refresh(), 12_000);
+    const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', focus);
+    };
+  }, [currentUser?.id, aiChatLoading]);
 
   const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
