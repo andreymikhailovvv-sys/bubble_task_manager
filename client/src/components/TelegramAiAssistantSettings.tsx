@@ -18,7 +18,8 @@ const DEFAULTS: TelegramAiChatSettings = {
   monitorModel: 'gpt-6-luna',
   dailyCreditLimitMilli: 50_000,
   instructions: '',
-  notifyImportant: true
+  notifyImportant: true,
+  reviewAttachments: true
 };
 const kindName = (kind: string) => kind === 'user' ? 'Личный чат' : kind === 'group' ? 'Группа' : 'Супергруппа';
 
@@ -129,7 +130,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
       instructions: existing.instructions,
-      notifyImportant: existing.notifyImportant
+      notifyImportant: existing.notifyImportant,
+      reviewAttachments: existing.reviewAttachments !== false
     } : { ...DEFAULTS });
     setError('');
     setNotice('');
@@ -172,11 +174,23 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     if (!selectedId || busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
+      // The explicit Save/Add click also grants monitoring consent. Do not
+      // require a second "Start" action after creating or editing a policy.
       await api.telegramAssistantSavePolicy(selectedId, draft);
+      window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
+      try {
+        await api.telegramAssistantStart(selectedId);
+      } catch (startError) {
+        const updated = await api.telegramAssistantPolicies();
+        setPolicies(updated.policies);
+        setError('Настройки сохранены, но включить мониторинг не удалось: ' +
+          (startError instanceof Error ? startError.message : 'ошибка подключения Telegram') +
+          '. Повторите включение кнопкой выше.');
+        return;
+      }
       const updated = await api.telegramAssistantPolicies();
       setPolicies(updated.policies);
-      window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
-      setNotice('Настройки сохранены. Переписка добавлена в проект «Телеграм ассистент» общего чата с ИИ. Мониторинг запускается отдельно.');
+      setNotice('Настройки сохранены. Мониторинг переписки включён.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить настройки');
     } finally { setBusy(false); }
@@ -214,7 +228,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
           <div>
             <strong>Контроль остаётся за вами</strong>
-            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается отдельно для каждого чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. Автоответы и автосоздание задач пока отключены.</p>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается при сохранении настроек конкретного чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. Автоответы и автосоздание задач пока отключены.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
@@ -281,7 +295,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           void api.telegramAssistantPolicies().then(data => setPolicies(data.policies)).catch(() => setError('Не удалось обновить данные'));
                         }} className="telegram-integrations-modal__secondary rounded-lg border px-3 py-2 text-xs">Обновить статус</button>
                       </div>
-                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При включении ассистент получит постоянное разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. При обычной проверке старые сообщения автоматически не анализируются; кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
+                      {!selected.isEnabled && <p className="integration-menu__muted text-xs">При сохранении настроек ассистент получит разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. При обычной проверке старые сообщения автоматически не анализируются; кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
                       {selected.lastSummary && (
                         <details className="telegram-ai-monitor-summary rounded-xl border p-3" open>
                           <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + new Date(selected.lastSummaryAt).toLocaleString('ru-RU') : ''}</summary>
@@ -344,7 +358,12 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
                   </label>
-                  {selected?.isEnabled && <p className="integration-menu__muted text-xs">Сохранение изменённых настроек остановит мониторинг. Для продолжения включите его снова.</p>}
+                  <label className="flex items-start gap-2 text-sm">
+                    <input type="checkbox" checked={draft.reviewAttachments} onChange={e => update('reviewAttachments', e.target.checked)} className="mt-1" />
+                    <span><span className="block font-semibold">Просматривать вложения</span>
+                      <span className="integration-menu__muted mt-1 block text-xs">Фото, PDF и поддерживаемые документы будут анализироваться ИИ. Это увеличивает расход кредитов. По умолчанию включено.</span>
+                    </span>
+                  </label>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button type="button" disabled={busy || !canConfigure}
                       onClick={() => void save()}
