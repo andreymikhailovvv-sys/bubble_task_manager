@@ -1813,7 +1813,7 @@ export default function App() {
     () => (Object.values(focusBonusEvents) as Array<FocusBonusEvent | null>).reduce((total, event) => total + (event?.totalDelta ?? 0), 0),
     [focusBonusEvents]
   );
-  const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE'), [rootTasks]);
+  const completedTasks = useMemo(() => rootTasks.filter((task) => task.status === 'DONE' && task.taskType !== 'REMINDER'), [rootTasks]);
   const completedTasksForPanel = useMemo(() => {
     if (completedFilter === 'all') return completedTasks;
     const now = new Date();
