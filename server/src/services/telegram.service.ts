@@ -5,7 +5,7 @@ import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
-import { recordAppliedTelegramBotTask } from './ai-task-proposal.service.js';
+import { recordAppliedTelegramBotTask, undoTaskProposal, getTaskProposal } from './ai-task-proposal.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
@@ -130,6 +130,15 @@ const buildMiniAppTaskAiUrl = (taskId: string) => {
   return url.toString();
 };
 
+// Inline Web App button launches the existing Mini App directly into
+// Personal project -> Quick AI requests. No bot-specific web route needed.
+const buildMiniAppQuickAiUrl = () => {
+  const url = new URL(MINI_APP_URL, APP_URL || undefined);
+  url.searchParams.set('openQuickAi', '1');
+  return url.toString();
+};
+
+
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
   const diffMs = dueDate.getTime() - Date.now();
@@ -237,6 +246,28 @@ const consumeTelegramLinkToken = async (token: string, chatId: string) => {
     return { ok: false as const, reason: 'invalid' as const };
   }
 };
+
+// Telegram callback_data limit: 64 bytes. Persisted proposal ID acts only
+// as a lookup key; callback must also pass authenticated chat ownership checks.
+export const telegramAiActionKeyboard = (
+  proposalId: string | null | undefined,
+  openUrl: string,
+  taskId?: string
+) => ({
+  inline_keyboard: [
+    ...(proposalId ? [[{ text: '↩️ Отменить', callback_data: `aiundo:${proposalId}` }]] : []),
+    [{ text: '📱 Открыть в приложении', web_app: { url: openUrl } }],
+    ...(taskId ? [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]] : [])
+  ]
+});
+
+const keyboardForAppliedAiProposal = (
+  proposal: { id: string; status: string } | null | undefined,
+  taskId?: string
+): Record<string, unknown> =>
+  proposal?.status === 'APPLIED'
+    ? telegramAiActionKeyboard(proposal.id, buildMiniAppQuickAiUrl(), taskId)
+    : (taskId ? keyboardBackTask(taskId) : keyboardReplyMain);
 
 const keyboardMain = (taskId: string) => ({
   inline_keyboard: [
@@ -969,6 +1000,7 @@ const createTaskFromPromptAndNotify = async (
 
   try {
     const created = await createTaskFromAiPrompt(userId, prompt, attachment);
+    let createdProposalId: string | null = null;
     try {
       const proposal = await recordAppliedTelegramBotTask({
         userId, requestId: requestId ?? 'telegram-create:' + crypto.randomUUID(),
@@ -976,6 +1008,7 @@ const createTaskFromPromptAndNotify = async (
         title: created.createdTask.title,
         dueDate: created.createdTask.dueDate
       });
+      createdProposalId = proposal.status === 'APPLIED' ? proposal.id : null;
       await aiAssistantService.appendGeneralDialogMessages({
         userId, messages: [{ role: 'user', content: prompt }]
       });
@@ -1004,7 +1037,9 @@ const createTaskFromPromptAndNotify = async (
       `🤖 <b>Первое сообщение ИИ:</b>\n${formatAiTextWithBold(created.generated.firstAssistantMessage)}`
     ].filter((line): line is string => Boolean(line));
 
-    await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+    await sendMessage(chatId, lines.join('\n'), createdProposalId
+      ? telegramAiActionKeyboard(createdProposalId, buildMiniAppQuickAiUrl())
+      : keyboardReplyMain);
   } catch (error) {
     const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось создать задачу через ИИ.');
     await sendMessage(chatId, `❌ ${escapeHtml(message)}`, keyboardReplyMain);
@@ -1193,7 +1228,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       lines.push('', `<b>Потрачено кредитов:</b> ${escapeHtml(formattedCredits)}`);
 
       await setSession(chatId, { mode: 'GENERAL_AI_CHAT', activeTaskId: null });
-      await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+      await sendMessage(chatId, lines.join('\n'), keyboardForAppliedAiProposal(result.taskProposal));
       return;
     } catch (error) {
       const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось обработать голосовое.');
@@ -1253,7 +1288,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     }
     if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
 
-    await sendMessage(chatId, lines.join('\n'), keyboardReplyMain);
+    await sendMessage(chatId, lines.join('\n'), keyboardForAppliedAiProposal(result.taskProposal));
     return;
   }
 
@@ -1328,7 +1363,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
             : []),
           '', '✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.'
         ].join('\n'),
-        keyboardBackTask(session.activeTaskId)
+        keyboardForAppliedAiProposal(result.taskProposal, session.activeTaskId)
       );
     } catch (error) {
       const message = normalizeAiErrorMessage(error instanceof Error ? error.message : 'Не удалось получить ответ ИИ.');
@@ -1454,6 +1489,48 @@ const handleCallback = async (update: TelegramUpdate) => {
     return;
   }
   const userId = session.userId;
+
+  if (action === 'aiundo') {
+    // Telegram callback payloads are not an authentication credential. Only
+    // the account linked to this private bot chat can reverse its own proposal.
+    const owner = await prisma.user.findFirst({
+      where: { id: userId, telegramChatId: chatId }, select: { id: true }
+    });
+    if (!owner || !taskId || taskId.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+      await answerCallback(callback.id, 'Недоступно для этого чата');
+      return;
+    }
+    try {
+      const existing = await getTaskProposal(userId, taskId);
+      if (existing.status === 'UNDONE') {
+        await answerCallback(callback.id, 'Изменения уже отменены');
+        await telegramRequest('editMessageReplyMarkup', {
+          chat_id: chatId, message_id: messageId,
+          reply_markup: telegramAiActionKeyboard(null, buildMiniAppQuickAiUrl())
+        });
+        return;
+      }
+      if (existing.status !== 'APPLIED') {
+        await answerCallback(callback.id, 'Это изменение не было применено');
+        return;
+      }
+      const outcome = await undoTaskProposal(userId, taskId);
+      if (outcome.status !== 'UNDONE') {
+        await answerCallback(callback.id, outcome.error || 'Не удалось вернуть изменения');
+        return;
+      }
+      await answerCallback(callback.id, 'Изменения отменены');
+      await telegramRequest('editMessageReplyMarkup', {
+        chat_id: chatId, message_id: messageId,
+        reply_markup: telegramAiActionKeyboard(null, buildMiniAppQuickAiUrl())
+      });
+      await sendMessage(chatId, '↩️ <b>Изменения ИИ отменены.</b> Они также отмечены как отменённые в карточке в приложении.');
+    } catch (error) {
+      console.error('[Telegram] AI undo callback failed', error);
+      await answerCallback(callback.id, 'Не удалось отменить изменения');
+    }
+    return;
+  }
 
   if (!taskId && action !== 'noop' && action !== 'backlist') {
     await answerCallback(callback.id, 'Некорректные данные');
