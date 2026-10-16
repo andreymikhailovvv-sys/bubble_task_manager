@@ -65,16 +65,17 @@ export function computeNextSlotRecurrenceDueDate(schedule: RecurrenceSchedule, b
     const day = new Date(start + offset * 86400_000);
     const year = day.getUTCFullYear(), month = day.getUTCMonth() + 1, date = day.getUTCDate();
     const weekday = day.getUTCDay() || 7;
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
     for (const slot of slots) {
       if (freq === 'WEEKLY' && weekday !== slot.weekday) continue;
-      if (freq === 'MONTHLY' && date !== slot.monthDay) continue;
+      if (freq === 'MONTHLY' && date !== Math.min(slot.monthDay!, daysInMonth)) continue;
       const [hour, minute] = slot.time.split(':').map(Number);
       const candidate = toZonedInstant(year, month, date, hour, minute, zone);
       if (candidate && candidate > baseline && (!until || candidate <= until)) {
         // Sort multiple slots within a day rather than using the UI order.
         const sameDay = slots.flatMap((other) => {
           if (freq === 'WEEKLY' && weekday !== other.weekday) return [];
-          if (freq === 'MONTHLY' && date !== other.monthDay) return [];
+          if (freq === 'MONTHLY' && date !== Math.min(other.monthDay!, daysInMonth)) return [];
           const [hh, mm] = other.time.split(':').map(Number);
           const proposed = toZonedInstant(year, month, date, hh, mm, zone);
           return proposed && proposed > baseline && (!until || proposed <= until) ? [proposed] : [];
