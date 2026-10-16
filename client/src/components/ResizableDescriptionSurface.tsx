@@ -9,14 +9,14 @@ type Props = {
   maxHeight?: number;
 };
 
-const clamp = (height: number, minHeight: number, maxHeight: number) =>
+export const clampDescriptionHeight = (height: number, minHeight: number, maxHeight: number) =>
   Math.max(minHeight, Math.min(maxHeight, Math.round(height)));
 
 /** Only used in web task/focus editors. Preview and textarea share one fixed, bounded viewport. */
 export function ResizableDescriptionSurface({
   children, className = '', initialHeight = 128, minHeight = 96, maxHeight = 320
 }: Props) {
-  const [height, setHeight] = useState(() => clamp(initialHeight, minHeight, maxHeight));
+  const [height, setHeight] = useState(() => clampDescriptionHeight(initialHeight, minHeight, maxHeight));
   const dragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
 
   const startResize = (event: PointerEvent<HTMLDivElement>) => {
@@ -28,7 +28,7 @@ export function ResizableDescriptionSurface({
   const moveResize = (event: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setHeight(clamp(drag.startHeight + event.clientY - drag.startY, minHeight, maxHeight));
+    setHeight(clampDescriptionHeight(drag.startHeight + event.clientY - drag.startY, minHeight, maxHeight));
   };
   const endResize = (event: PointerEvent<HTMLDivElement>) => {
     if (dragRef.current?.pointerId !== event.pointerId) return;
@@ -50,7 +50,7 @@ export function ResizableDescriptionSurface({
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Home' && event.key !== 'End') return;
           event.preventDefault();
           setHeight((prev) => event.key === 'Home' ? minHeight : event.key === 'End' ? maxHeight
-            : clamp(prev + (event.key === 'ArrowDown' ? 16 : -16), minHeight, maxHeight));
+            : clampDescriptionHeight(prev + (event.key === 'ArrowDown' ? 16 : -16), minHeight, maxHeight));
         }}>
         <GripHorizontal size={17} strokeWidth={1.8} aria-hidden="true"/>
       </div>
