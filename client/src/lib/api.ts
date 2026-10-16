@@ -230,7 +230,7 @@ export type TelegramAiAssistantInbox = {
   projectTitle: string;
   projectIcon: string;
   chats: Array<{ id: string; policyId: string; telegramChatId: string; title: string; kind: 'user' | 'group' | 'supergroup' }>;
-  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; approvedSuggestionIndices: number[] }>;
+  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; taskProposal?: import('./types').AiTaskProposal | null; approvedSuggestionIndices: number[] }>;
 };
 export type TelegramMonitorSummary = {
   summary: string;
