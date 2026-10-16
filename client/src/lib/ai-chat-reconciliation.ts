@@ -116,15 +116,36 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
 ): T[] {
   if (remote.length === 0) return local;
   if (local.length === 0) return remote;
+  // Index each message once instead of scanning the whole transcript for
+  // every item received in the frequent chat polling response.
+  type MatchQueue = { indices: number[]; cursor: number };
+  const byId = new Map<string, MatchQueue>();
+  const byContent = new Map<string, MatchQueue>();
+  const queueIndex = (index: Map<string, MatchQueue>, key: string, position: number) => {
+    const entry = index.get(key);
+    if (entry) entry.indices.push(position);
+    else index.set(key, { indices: [position], cursor: 0 });
+  };
+  for (let i = 0; i < local.length; i++) {
+    const message = local[i];
+    queueIndex(byId, message.id, i);
+    queueIndex(byContent, JSON.stringify([message.role, message.content]), i);
+  }
   const matchedLocal = new Set<number>();
+  const takeMatch = (index: Map<string, MatchQueue>, key: string): number => {
+    const queue = index.get(key);
+    if (!queue) return -1;
+    while (queue.cursor < queue.indices.length) {
+      const position = queue.indices[queue.cursor++];
+      if (!matchedLocal.has(position)) return position;
+    }
+    return -1;
+  };
   const additions: T[] = [];
   const updates = new Map<number, T>();
   for (const message of remote) {
-    let index = local.findIndex((candidate, i) => !matchedLocal.has(i) && candidate.id === message.id);
-    if (index < 0) {
-      index = local.findIndex((candidate, i) => !matchedLocal.has(i) &&
-        candidate.role === message.role && candidate.content === message.content);
-    }
+    let index = takeMatch(byId, message.id);
+    if (index < 0) index = takeMatch(byContent, JSON.stringify([message.role, message.content]));
     if (index < 0) {
       additions.push(message);
       continue;
@@ -141,7 +162,11 @@ export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage
         ? { taskProposal: original.taskProposal } : {}),
       ...(message.generatedDocument == null && original.generatedDocument
         ? { generatedDocument: original.generatedDocument } : {}) } as T;
-    if (JSON.stringify(original) !== JSON.stringify(combined)) updates.set(index, combined);
+    // Usually polling returns identical primitive fields. Skip serializing
+    // whole messages unless a field really differs by reference.
+    const sameFields = Object.keys(original).length === Object.keys(combined).length &&
+      (Object.keys(combined) as Array<keyof T>).every(key => original[key] === combined[key]);
+    if (!sameFields && JSON.stringify(original) !== JSON.stringify(combined)) updates.set(index, combined);
   }
   if (updates.size === 0 && additions.length === 0) return local;
   return [...local.map((message, index) => updates.get(index) ?? message), ...additions];
