@@ -14,6 +14,7 @@ import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
+import { MiniAiChatComposer, type MiniAiChatComposerHandle } from './components/MiniAiChatComposer';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, GeneratedDocument, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
 import { getCreatorInitial } from './lib/creatorInitial';
@@ -733,7 +734,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const mainScrollRef = useRef<HTMLElement | null>(null);
   const timelineGridRef = useRef<HTMLDivElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
-  const [aiDraft, setAiDraft] = useState('');
+  const taskAiDraftValueRef = useRef('');
+  const taskAiComposerRef = useRef<MiniAiChatComposerHandle | null>(null);
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
   const [aiRecipientByTaskId, setAiRecipientByTaskId] = useState<Record<string, string>>({});
   const [aiRecipientStorageUserId, setAiRecipientStorageUserId] = useState<string | null>(null);
@@ -787,7 +789,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [logoutSubmitting, setLogoutSubmitting] = useState(false);
   const [isEfficiencyDetailsOpen, setIsEfficiencyDetailsOpen] = useState(false);
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false);
-  const [aiChatDraft, setAiChatDraft] = useState('');
+  const aiChatDraftValueRef = useRef('');
+  const aiChatComposerRef = useRef<MiniAiChatComposerHandle | null>(null);
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna');
   const [aiChatLoading, setAiChatLoading] = useState(false);
@@ -1639,7 +1642,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setIsTaskNotesEditorOpen(false);
     setIsSubtaskNotesEditorOpen(false);
     setIsAiDialogOpen(false);
-    setAiDraft('');
+    taskAiDraftValueRef.current = '';
+    taskAiComposerRef.current?.clearDraft();
     setTaskAttachments([]);
     setTaskRecurrenceNextDueLabel(null);
   };
@@ -2768,7 +2772,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const sendAiChatQuestion = async () => {
-    const question = aiChatDraft.trim();
+    const question = aiChatDraftValueRef.current.trim();
     if ((!question && aiChatPendingFiles.length === 0) || aiChatLoading) return;
     const fileNames = aiChatPendingFiles.map((file) => file.name);
     let attachmentsPayload: ChatAttachmentPayload[] = [];
@@ -2784,7 +2788,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent };
     const history = activeAiChat?.messages ?? [];
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
-    setAiChatDraft('');
+    aiChatDraftValueRef.current = '';
+    aiChatComposerRef.current?.clearDraft();
     setAiChatPendingFiles([]);
     setAiChatLoading(true);
     setAiChatError(null);
@@ -2809,7 +2814,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     } catch (e) {
       const message = formatAiRequestError(e);
       setAiChatError(message);
-      setAiChatDraft((current) => current.trim() ? current : question);
+      if (!aiChatDraftValueRef.current.trim()) {
+        aiChatDraftValueRef.current = question;
+        aiChatComposerRef.current?.restoreIfEmpty(question);
+      }
       setAiChatPendingFiles((current) => current.length ? current : aiChatPendingFiles);
       if (activeAiChat?.id === QUICK_AI_CHAT_ID) {
         updateActiveAiChatMessages((messages) => [...messages, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
@@ -3204,7 +3212,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const sendAiMessage = async () => {
     if (!openedTask) return;
-    const question = aiDraft.trim();
+    const question = taskAiDraftValueRef.current.trim();
     const selectedRecipientUserId = getTaskAiRecipientId(openedTask);
     if (selectedRecipientUserId !== 'ai') {
       if (!question) return;
@@ -3217,7 +3225,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       try {
         const directMessage = await api.sendTaskParticipantMessage(openedTask.id, { recipientUserId: selectedRecipientUserId, content: question });
         setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: [...(prev[openedTask.id] ?? []), directMessage] }));
-        setAiDraft('');
+        taskAiDraftValueRef.current = '';
+        taskAiComposerRef.current?.clearDraft();
       } catch (error) {
         setError(error instanceof Error ? error.message : 'Не удалось отправить сообщение участнику');
       } finally {
@@ -3246,7 +3255,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const clientRequestId = crypto.randomUUID();
     const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
-    setAiDraft('');
+    taskAiDraftValueRef.current = '';
+    taskAiComposerRef.current?.clearDraft();
     setAiPendingFiles([]);
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
@@ -3270,7 +3280,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
-      setAiDraft((current) => current.trim() ? current : question);
+      if (!taskAiDraftValueRef.current.trim()) {
+        taskAiDraftValueRef.current = question;
+        taskAiComposerRef.current?.restoreIfEmpty(question);
+      }
       setAiPendingFiles((current) => current.length ? current : aiPendingFiles);
       // Do not erase the question from the dialog after a failed image edit.
       // Show the server's actual validation error so the user can correct it.
@@ -4542,32 +4555,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               ) : null}
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
-                <AutoGrowingTextarea
-                  value={aiDraft}
-                  onChange={(event) => setAiDraft(event.target.value)}
-                  placeholder="Напишите сообщение…"
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                  className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                      event.preventDefault();
-                      void sendAiMessage();
-                    }
-                  }}
+                <MiniAiChatComposer
+                  ref={taskAiComposerRef}
+                  variant="task"
+                  initialDraft={taskAiDraftValueRef.current}
+                  onDraftChange={(value) => { taskAiDraftValueRef.current = value; }}
+                  onSend={() => { void sendAiMessage(); }}
+                  onAttach={() => aiAttachmentInputRef.current?.click()}
+                  isSending={aiLoadingTaskId === openedTask.id}
+                  hasPendingFiles={aiPendingFiles.length > 0}
+                  attachDisabled={getTaskAiRecipientId(openedTask) !== 'ai'}
+                  attachTitle={getTaskAiRecipientId(openedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}
                 />
-                <button type="button" className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" disabled={getTaskAiRecipientId(openedTask) !== 'ai'} onClick={() => aiAttachmentInputRef.current?.click()} aria-label="Прикрепить файл" title={getTaskAiRecipientId(openedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'}>
-                  <Paperclip size={17} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendAiMessage()}
-                  disabled={aiLoadingTaskId === openedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)}
-                  className="miniapp-ai-chat-send flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
-                  aria-label="Отправить сообщение"
-                  title="Отправить"
-                >
-                  <SendHorizontal size={17} />
-                </button>
               </div>
               </div>
             </div>
@@ -4666,10 +4665,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
               {aiChatPendingFiles.length > 0 ? <div className="mb-2 flex flex-wrap gap-1.5">{aiChatPendingFiles.map((file) => <button key={`mini-general-ai-file-${file.name}-${file.size}`} type="button" className="miniapp-ai-file-pill inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]" onClick={() => setAiChatPendingFiles((prev) => prev.filter((item) => !(item.name === file.name && item.size === file.size)))}><Paperclip size={10} /><span className="max-w-[190px] truncate">{file.name}</span><X size={10} /></button>)}</div> : null}
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
-                <AutoGrowingTextarea value={aiChatDraft} onChange={(event) => setAiChatDraft(event.target.value)} placeholder="Напишите сообщение…" className="miniapp-ai-chat-input max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void sendAiChatQuestion(); } }} />
                 <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
-                <button type="button" onClick={() => aiChatFileInputRef.current?.click()} className="miniapp-ai-chat-attach flex h-11 w-11 shrink-0 items-center justify-center rounded-full" aria-label="Прикрепить файл"><Paperclip size={17} /></button>
-                <button type="button" onClick={() => void sendAiChatQuestion()} disabled={aiChatLoading || (!aiChatDraft.trim() && aiChatPendingFiles.length === 0)} className="miniapp-ai-chat-send flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50" aria-label="Отправить сообщение"><SendHorizontal size={17} /></button>
+                <MiniAiChatComposer
+                  ref={aiChatComposerRef}
+                  variant="general"
+                  initialDraft={aiChatDraftValueRef.current}
+                  onDraftChange={(value) => { aiChatDraftValueRef.current = value; }}
+                  onSend={() => { void sendAiChatQuestion(); }}
+                  onAttach={() => aiChatFileInputRef.current?.click()}
+                  isSending={aiChatLoading}
+                  hasPendingFiles={aiChatPendingFiles.length > 0}
+                />
               </div>
             </div>
           </div>
