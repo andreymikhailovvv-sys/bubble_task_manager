@@ -104,7 +104,7 @@ export async function publishTelegramAiSummary(input: {
   const { policy, summary } = input;
   const eventId = 'telegram-ai-summary:' + policy.id + ':' + input.requestId;
   const content = formatTelegramAiSummary(policy.chatTitle, summary, policy.taskMode);
-  return prisma.$transaction(async tx => {
+  const published = await prisma.$transaction(async tx => {
     const written = await tx.telegramAiChatPolicy.updateMany({
       where: {
         id: policy.id, userId: policy.userId, isEnabled: true,
@@ -134,6 +134,18 @@ export async function publishTelegramAiSummary(input: {
     });
     return true;
   });
+  if (published && policy.taskMode !== 'NONE') {
+    const actions = summary.taskSuggestions.slice(0, 4).map((title, index) => ({
+      type: 'telegram_suggestion', title: String(title).trim().slice(0, 180), eventId, index
+    })).filter(action => action.title);
+    if (actions.length) {
+      await prepareTaskProposal({
+        userId: policy.userId, requestId: eventId, source: 'telegram_assistant',
+        actions, autoApply: policy.taskMode === 'AUTO'
+      });
+    }
+  }
+  return published;
 }
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
