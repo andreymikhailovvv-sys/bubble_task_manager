@@ -2227,6 +2227,20 @@ body[data-theme='dark'] .workspace-global-search-panel {
 }
 .standalone-group-picker-option { color: var(--text-primary); }
 .standalone-group-picker-option:hover { background: var(--accent-soft); }
+.standalone-group-picker-option:disabled { opacity: .48; cursor: not-allowed; }
+.standalone-note-editor-group {
+  background: var(--field-bg);
+  color: var(--text-primary);
+  border-color: var(--panel-border);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.standalone-note-editor-group:hover,
+.standalone-note-editor-group:focus-visible {
+  background: var(--muted-bg);
+  border-color: var(--note-group-color, var(--accent));
+  outline: none;
+}
+
 .standalone-group-manager-backdrop { background: var(--overlay-bg); backdrop-filter: blur(9px); }
 .standalone-group-manager-header,
 .standalone-group-manager-row,
