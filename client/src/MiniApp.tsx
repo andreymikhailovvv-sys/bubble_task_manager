@@ -933,6 +933,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         else nextAiChatProjects.push(telegramProject);
       }
       aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(nextAiChatProjects);
+      if (!syncedProjects.projects?.length) {
+        void api.saveAiChatProjects(nextAiChatProjects).catch(error => console.warn('[MiniApp AI chat] initial project sync failed', error));
+      }
       setAiChatProjects(nextAiChatProjects);
       setActiveAiChatProjectId(nextAiChatProjects[0]?.id ?? '');
       setActiveAiChatId(QUICK_AI_CHAT_ID);
