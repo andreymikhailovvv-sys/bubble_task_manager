@@ -334,7 +334,7 @@ type GeneralAiUndoOperation = {
   previous: { dueDate: string | null; status: 'TODO' | 'IN_PROGRESS' | 'DONE' };
 };
 type GeneralAiMessage = ChatMessage & { id: string };
-type AiChatMessage = ChatMessage & { id: string; createdAt?: string };
+type AiChatMessage = ChatMessage & { id: string; createdAt?: string; taskSuggestions?: string[]; approvedSuggestionIndices?: number[] };
 type SystemNotification = { id: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
 type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
@@ -357,13 +357,15 @@ export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAi
       .slice(-300);
     return { id: dialog.id, title: dialog.title, messages };
   });
-  return [...ownedProjects, {
+  const nextProject: AiChatProject = {
     id: TELEGRAM_AI_MANAGED_PROJECT_ID,
     title: 'Телеграм ассистент',
     color: '#229ED9',
     icon: 'telegram',
     chats
-  }];
+  };
+  if (previous && JSON.stringify(previous) === JSON.stringify(nextProject)) return projects;
+  return [...ownedProjects, nextProject];
 }
 type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
@@ -2922,6 +2924,18 @@ ${allContext}`,
       if (activeAiChatId === chatId) setActiveAiChatId(nextChats[0]?.id ?? '');
       return { ...project, chats: nextChats };
     }));
+  };
+
+  const approveTelegramTask = async (eventId: string, index: number) => {
+    try {
+      const result = await api.telegramAssistantApproveTask(eventId, index);
+      const feed = await api.telegramAssistantInbox();
+      setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
+      if (result.ok) await load();
+      setAiChatError(null);
+    } catch (error) {
+      setAiChatError(error instanceof Error ? error.message : 'Не удалось создать задачу');
+    }
   };
 
   const sendGeneralAiQuestion = async () => {
@@ -7893,7 +7907,18 @@ ${allContext}`,
           onAddFiles={addAiChatFiles}
           onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
           onSend={(draft) => void sendAiChatQuestion(false, draft)}
-          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[86%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}<div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
+          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`ai-chat-message-bubble max-w-[86%] rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.message.taskSuggestions.map((suggestion, index) => (
+                <button key={index} type="button" title={suggestion}
+                  disabled={item.message.approvedSuggestionIndices?.includes(index)}
+                  className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-500 disabled:opacity-50"
+                  onClick={() => void approveTelegramTask(item.message.id, index)}>
+                  {item.message.approvedSuggestionIndices?.includes(index) ? '✓ Задача создана' : '＋ Создать задачу ' + (index + 1)}
+                </button>
+              ))}
+            </div>
+          ) : null}{item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}{item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, activeAiChatProject!.id, activeAiChat!.id)} /> : null}{item.message.role === 'assistant' && item.message.creditsSpentMilli != null && item.message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(item.message.creditsSpentMilli)}</div> : null}<div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={item.message.content} compact /></div></div></div>)}
           status={<>{aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}{aiChatError ? <p className="text-sm text-rose-400">{aiChatError}</p> : null}</>}
         />
       ) : null}
