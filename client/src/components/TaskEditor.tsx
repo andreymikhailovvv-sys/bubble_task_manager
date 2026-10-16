@@ -11,6 +11,7 @@ import {
   Maximize2,
   Paperclip,
   Plus,
+  Minus,
   Trash2,
   Underline,
   X,
@@ -33,6 +34,7 @@ import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
 import { CalendarExportDialog } from "./CalendarExportDialog";
+import { buildManualRecurrence, defaultRecurrenceSlots, loadManualRecurrence, recurrenceWeekdays, type RecurrencePeriod, type RecurrenceSlot } from "../lib/recurrenceSchedule";
 
 type Props = {
   task?: Task;
@@ -321,6 +323,11 @@ export function TaskEditor({
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceText, setRecurrenceText] = useState("");
   const [recurrenceLoading, setRecurrenceLoading] = useState(false);
+  const [recurrenceMethod, setRecurrenceMethod] = useState<"manual" | "ai">("manual");
+  const [recurrencePeriod, setRecurrencePeriod] = useState<RecurrencePeriod>("DAILY");
+  const [recurrenceSlots, setRecurrenceSlots] = useState<RecurrenceSlot[]>(defaultRecurrenceSlots);
+  const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
+  const [recurrenceAiReady, setRecurrenceAiReady] = useState(false);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(
     null,
   );
@@ -415,6 +422,12 @@ export function TaskEditor({
     setTitleError(null);
     setIsRecurring(Boolean(nextForm.isRecurring));
     setRecurrenceText(nextForm.recurrenceText ?? "");
+    const previousRule = loadManualRecurrence(nextForm.recurrenceJson);
+    setRecurrenceMethod(nextForm.isRecurring && !previousRule ? "ai" : "manual");
+    setRecurrencePeriod(previousRule?.period ?? "DAILY");
+    setRecurrenceSlots(previousRule?.slots ?? defaultRecurrenceSlots());
+    setRecurrenceError(null);
+    setRecurrenceAiReady(Boolean(nextForm.recurrenceJson));
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     setRecurrenceNextDueLabel(
       nextForm.dueDate
@@ -644,13 +657,66 @@ export function TaskEditor({
     ? `До дедлайна: ${formatDeadlineLeft(form.dueDate)}`
     : "Дедлайн не задан";
 
+  const commitManualRecurrence = (period: RecurrencePeriod, slots: RecurrenceSlot[]) => {
+    setRecurrencePeriod(period);
+    setRecurrenceSlots(slots);
+    try {
+      const { schedule, summary } = buildManualRecurrence(period, slots, timeZone);
+      setRecurrenceError(null);
+      setRecurrenceAiReady(false);
+      setRecurrenceSummary(summary);
+      setRecurrenceNextDueLabel(null);
+      setForm((previous) => ({
+        ...previous, isRecurring: true, recurrenceText: summary, recurrenceJson: schedule,
+        recurrenceSummary: summary, recurrenceUntil: null, dueDate: null
+      }));
+    } catch (error) {
+      setRecurrenceError(error instanceof Error ? error.message : "Некорректное расписание.");
+      // Leave the last saved rule untouched; editing an invalid draft must
+      // never cause autosave to erase the persisted schedule.
+    }
+  };
+  const addManualSlot = () => {
+    if (recurrenceSlots.length >= 31) return;
+    const previous = recurrenceSlots[recurrenceSlots.length - 1];
+    const next: RecurrenceSlot = {
+      time: previous?.time ?? "09:00",
+      weekday: recurrencePeriod === "WEEKLY" ? ((previous?.weekday ?? 0) % 7) + 1 : 1,
+      monthDay: recurrencePeriod === "MONTHLY" ? ((previous?.monthDay ?? 0) % 31) + 1 : 1
+    };
+    if (recurrencePeriod === "DAILY") {
+      const used = new Set(recurrenceSlots.map((slot) => slot.time));
+      for (let tick = 0; tick < 48; tick += 1) {
+        const hour = Math.floor(tick / 2);
+        const proposed = String(hour).padStart(2, "0") + ":" + (tick % 2 ? "30" : "00");
+        if (!used.has(proposed)) { next.time = proposed; break; }
+      }
+    }
+    commitManualRecurrence(recurrencePeriod, [...recurrenceSlots, next]);
+  };
+  const updateManualSlot = (index: number, patch: Partial<RecurrenceSlot>) =>
+    commitManualRecurrence(recurrencePeriod, recurrenceSlots.map((slot, position) => position === index ? { ...slot, ...patch } : slot));
+  const selectRecurrenceMethod = (method: "manual" | "ai") => {
+    if (method === recurrenceMethod) return;
+    setRecurrenceMethod(method);
+    setRecurrenceError(null);
+    if (method === "ai") setRecurrenceAiReady(false);
+    if (method === "manual") commitManualRecurrence(recurrencePeriod, recurrenceSlots);
+    else {
+      setRecurrenceSummary(null);
+      setRecurrenceNextDueLabel(null);
+      // Keep the existing schedule in an edited task until AI returns a valid replacement.
+    }
+  };
+
   const applyRecurrence = async () => {
     if (!isRecurring) return;
     const text = recurrenceText.trim();
-    if (!text) return;
+    if (!text) { setRecurrenceError("Опишите, когда должна повторяться задача."); return; }
+    setRecurrenceError(null);
     setRecurrenceLoading(true);
     try {
-      const parsed = await api.parseRecurrence({ text });
+      const parsed = await api.parseRecurrence({ text, ...(task?.id ? { taskId: task.id } : {}) });
       setRecurrenceSummary(parsed.summary);
       setRecurrenceNextDueLabel(
         parsed.nextDueDate
@@ -666,6 +732,9 @@ export function TaskEditor({
         recurrenceUntil: parsed.schedule.until,
         dueDate: parsed.nextDueDate,
       }));
+      setRecurrenceAiReady(true);
+    } catch (error) {
+      setRecurrenceError(error instanceof Error ? error.message : "Не удалось настроить повторение через ИИ.");
     } finally {
       setRecurrenceLoading(false);
     }
@@ -703,6 +772,7 @@ export function TaskEditor({
       titleInputRef.current?.focus();
       return;
     }
+    if (isRecurring && (recurrenceError || !form.recurrenceJson || (recurrenceMethod === "ai" && !recurrenceAiReady))) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
     setTitleError(null);
     await onSave(form, draftSubtasks);
   };
@@ -742,7 +812,7 @@ export function TaskEditor({
       onClick={() => void closeEditor()}
     >
       <aside
-        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100vh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
+        className={`task-edit-shell focused-task-editor-shell relative ${isEventEditor ? "h-[min(590px,calc(100vh-24px))]" : isSubtask ? (titleRows === 3 ? "h-[min(630px,calc(100dvh-24px))]" : "h-[min(560px,calc(100dvh-24px))]") : "h-[min(760px,calc(100dvh-24px))]"} w-full max-w-3xl overflow-hidden rounded-[2.3rem] border bg-white p-5 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -1105,6 +1175,8 @@ export function TaskEditor({
                                 recurrenceUntil: null,
                               },
                         );
+                        setRecurrenceError(null);
+                        if (enabled && recurrenceMethod === "manual") commitManualRecurrence(recurrencePeriod, recurrenceSlots);
                         if (!enabled) {
                           setRecurrenceSummary(null);
                           setRecurrenceNextDueLabel(null);
@@ -1134,39 +1206,102 @@ export function TaskEditor({
                 </div>
               ) : null}
               {isRecurring ? (
-                <div className="surface-card mt-2 rounded-2xl border p-2 text-xs">
-                  <p className="mb-1 text-muted">
-                    Опишите как должно повторяться {isEventEditor ? "событие" : "задача"}
-                  </p>
-                  <textarea
-                    className="form-field min-h-16 w-full rounded border p-2 text-sm"
-                    placeholder="Например: каждый вторник и четверг в 17:00"
-                    value={recurrenceText}
-                    onChange={(e) => setRecurrenceText(e.target.value)}
-                  />
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="recurrence-send-button rounded px-2 py-1 text-xs font-semibold disabled:opacity-70"
-                      onClick={() => void applyRecurrence()}
-                      disabled={recurrenceLoading}
-                    >
-                      {recurrenceLoading ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        "Отправить"
-                      )}
-                    </button>
-                    <p className="text-[11px] text-emerald-300">
-                      {recurrenceSummary ?? ""}
-                    </p>
+                <section className="recurrence-configuration surface-card mt-3 shrink-0 space-y-3 rounded-2xl border p-3 text-xs" aria-label="Расписание постоянной задачи">
+                  <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ настройки расписания">
+                    {([["manual", "Вручную"], ["ai", "Через ИИ"]] as const).map(([method, label]) => (
+                      <button key={method} type="button" onClick={() => selectRecurrenceMethod(method)}
+                        className={"rounded-xl border px-3 py-2 text-xs font-semibold transition " + (recurrenceMethod === method ? "border-violet-400 bg-violet-500/15 text-violet-600" : "border-slate-200 text-muted hover:border-violet-300")}
+                        aria-pressed={recurrenceMethod === method}>{label}</button>
+                    ))}
                   </div>
-                  <p className="mt-1 text-[11px] text-muted">
-                    {recurrenceNextDueLabel
-                      ? `Ближайший срок: ${recurrenceNextDueLabel}`
-                      : ""}
-                  </p>
-                </div>
+                  {recurrenceMethod === "manual" ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Период повторения">
+                        {([["DAILY", "В день"], ["WEEKLY", "В неделю"], ["MONTHLY", "В месяц"]] as const).map(([period, label]) => (
+                          <button key={period} type="button" aria-pressed={recurrencePeriod === period}
+                            className={"rounded-xl border px-2 py-2 text-xs font-semibold transition " + (recurrencePeriod === period ? "border-violet-400 bg-violet-500/15 text-violet-600" : "border-slate-200 text-muted")}
+                            onClick={() => commitManualRecurrence(period, recurrenceSlots.map((slot, index) => ({
+                              time: slot.time,
+                              weekday: period === "WEEKLY" ? (slot.weekday ?? ((index % 7) + 1)) : undefined,
+                              monthDay: period === "MONTHLY" ? (slot.monthDay ?? ((index % 31) + 1)) : undefined
+                            })))}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-primary">Сколько раз {recurrencePeriod === "DAILY" ? "в день" : recurrencePeriod === "WEEKLY" ? "в неделю" : "в месяц"}</span>
+                        <div className="inline-flex items-center overflow-hidden rounded-xl border border-violet-200" role="group" aria-label="Количество повторов">
+                          <button type="button" className="p-2 text-violet-600 disabled:opacity-30"
+                            disabled={recurrenceSlots.length <= 1}
+                            aria-label="Уменьшить количество повторений"
+                            onClick={() => commitManualRecurrence(recurrencePeriod, recurrenceSlots.slice(0, -1))}><Minus size={15}/></button>
+                          <span className="min-w-8 text-center text-sm font-bold text-primary">{recurrenceSlots.length}</span>
+                          <button type="button" className="p-2 text-violet-600 disabled:opacity-30"
+                            disabled={recurrenceSlots.length >= 31}
+                            aria-label="Увеличить количество повторений" onClick={addManualSlot}><Plus size={15}/></button>
+                        </div>
+                      </div>
+                      <div className="recurrence-manual-slots invisible-scrollbar max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {recurrenceSlots.map((slot, index) => (
+                          <div key={index} className="rounded-xl border border-violet-100 bg-white/70 p-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-semibold text-primary">Повтор {index + 1}</span>
+                              <label className="flex items-center gap-2 text-muted">
+                                Время
+                                <input type="time" className="form-field w-[118px] rounded-lg border px-2 py-1 text-sm"
+                                  value={slot.time} aria-label={"Время повтора " + (index + 1)}
+                                  onChange={(event) => updateManualSlot(index, { time: event.target.value })}/>
+                              </label>
+                            </div>
+                            {recurrencePeriod === "WEEKLY" ? (
+                              <div className="mt-2 grid grid-cols-7 gap-1" role="group" aria-label={"День недели повтора " + (index + 1)}>
+                                {recurrenceWeekdays.map((day) => (
+                                  <button key={day.value} type="button" aria-pressed={slot.weekday === day.value}
+                                    className={"rounded-lg border px-0 py-1.5 text-[11px] font-medium transition " + (slot.weekday === day.value ? "border-violet-400 bg-violet-500/15 text-violet-600" : "border-slate-200 text-muted")}
+                                    onClick={() => updateManualSlot(index, { weekday: day.value })}>{day.label}</button>
+                                ))}
+                              </div>
+                            ) : null}
+                            {recurrencePeriod === "MONTHLY" ? (
+                              <label className="mt-2 flex items-center justify-between gap-2 text-muted">
+                                День месяца
+                                <select className="form-field min-w-0 rounded-lg border px-2 py-1.5 text-sm"
+                                  value={slot.monthDay ?? 1}
+                                  aria-label={"День месяца повтора " + (index + 1)}
+                                  onChange={(event) => updateManualSlot(index, { monthDay: Number(event.target.value) })}>
+                                  {Array.from({ length: 31 }, (_, day) => <option key={day + 1} value={day + 1}>{day + 1}</option>)}
+                                </select>
+                              </label>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-muted">Время указано для вашего часового пояса. Следующая дата рассчитывается при сохранении.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-muted">Опишите, когда должна повторяться {isEventEditor ? "событие" : "задача"}</p>
+                      <textarea className="form-field min-h-16 w-full resize-y rounded-xl border p-2 text-sm"
+                        placeholder="Например: каждый вторник и четверг в 17:00"
+                        value={recurrenceText}
+                        onChange={(event) => { setRecurrenceText(event.target.value); setRecurrenceError(null); }}/>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" className="recurrence-send-button rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                          onClick={() => void applyRecurrence()} disabled={recurrenceLoading}>
+                          {recurrenceLoading ? <Loader2 size={14} className="animate-spin"/> : "Сформировать расписание"}
+                        </button>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-muted"><Coins size={12}/> Списание по фактическим токенам</span>
+                      </div>
+                    </div>
+                  )}
+                  {recurrenceError ? <p className="rounded-lg bg-rose-500/10 px-2 py-2 text-xs text-rose-500" role="alert">{recurrenceError}</p> : null}
+                  {recurrenceSummary && !recurrenceError ? (
+                    <p className="recurrence-summary-text rounded-lg bg-emerald-500/10 px-2 py-1.5 text-xs">
+                      {recurrenceSummary}{recurrenceNextDueLabel ? " · Ближайший срок: " + recurrenceNextDueLabel : ""}
+                    </p>
+                  ) : null}
+                </section>
               ) : null}
               {!isEventEditor && !isEditing && !isSubtask ? (
                 <div className="focused-task-subtasks mt-3 flex min-h-0 flex-col space-y-2 border-t border-violet-100 pt-3">
