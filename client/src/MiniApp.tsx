@@ -874,7 +874,22 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setIsTaskAiRecipientMenuOpen(false);
   }, [isAiDialogOpen, openedTaskId]);
 
-  const loadData = async (options: { showInitialLoader?: boolean } = {}) => {
+  const loadData = async (options: { showInitialLoader?: boolean; refreshPlannerOnly?: boolean } = {}) => {
+    // A task mutation must not reload AI projects or reset the selected chat:
+    // doing so unmounts consent cards exactly when their continuation succeeds.
+    if (options.refreshPlannerOnly) {
+      try {
+        const [sphereList, taskList, habitList] = await Promise.all([
+          api.getSpheres(), api.getTasks(), api.getHabits()
+        ]);
+        setSpheres(sphereList);
+        setTasks(taskList);
+        setHabits(habitList);
+      } catch (error) {
+        console.warn('[MiniApp] planner refresh failed', error);
+      }
+      return;
+    }
     if (options.showInitialLoader ?? false) {
       setLoading(true);
       // Never render data that belongs to the session used before an account switch.
@@ -2723,7 +2738,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         })
       }));
       refreshAiCredits();
-      if (result.taskDataChanged) await loadData();
+      if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } finally { setAiChatLoading(false); }
   };
   const continueTelegramReadTask = async (approval: import('./lib/types').TelegramReadApproval) => {
@@ -2745,7 +2760,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       };
       setAiDialogByTask(prev => ({ ...prev, [taskId]: [...(prev[taskId] ?? []), answer] }));
       refreshAiCredits();
-      if (result.taskDataChanged) await loadData();
+      if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } finally {
       setAiLoadingTaskId(null);
       setAiProgressByTask(prev => { const next = { ...prev }; delete next[taskId]; return next; });
@@ -2790,7 +2805,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
-      if (result.taskDataChanged) await loadData();
+      if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } catch (e) {
       const message = formatAiRequestError(e);
       setAiChatError(message);
@@ -3251,7 +3266,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
       refreshAiCredits();
-      if (result.taskDataChanged) await loadData();
+      if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Не удалось отправить сообщение в чат ИИ';
       setError(message);
