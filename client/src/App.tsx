@@ -343,7 +343,7 @@ const TELEGRAM_AI_MANAGED_CHAT_PREFIX = 'telegram-ai-assistant:';
 
 export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAiAssistantInbox): AiChatProject[] {
   const ownedProjects = projects.filter(project => project.id !== TELEGRAM_AI_MANAGED_PROJECT_ID);
-  if (!feed.chats.length) return ownedProjects;
+  if (!feed.chats.length) return ownedProjects.length === projects.length ? projects : ownedProjects;
   const previous = projects.find(project => project.id === TELEGRAM_AI_MANAGED_PROJECT_ID);
   const chats = feed.chats.map(dialog => {
     const old = previous?.chats.find(thread => thread.id === dialog.id);
