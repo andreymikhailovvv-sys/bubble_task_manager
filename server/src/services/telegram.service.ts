@@ -11,6 +11,7 @@ import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
 import { AccountRegistrationError, accountRegistrationService, validateAccountLogin, validateAccountPassword } from './account-registration.service.js';
 import { formatCreditsSpent } from './ai-billing-notification.service.js';
+import { formatTelegramTaskChanges } from '../lib/telegram-task-change-receipt.js';
 
 const TELEGRAM_API = 'https://api.telegram.org';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -1180,8 +1181,11 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         '',
         `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
       ];
-      if ((result.actionReports ?? []).length > 0) {
-        lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
+      const taskChanges = formatTelegramTaskChanges(result.taskProposal);
+      if (taskChanges.length) {
+        lines.push('', '<b>Что изменил ИИ:</b>', ...taskChanges.map(change => `• ${escapeHtml(change)}`));
+      } else if ((result.actionReports ?? []).length > 0) {
+        lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map(report => `• ${escapeHtml(report)}`));
       }
       if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
       lines.push('', `<b>Потрачено кредитов:</b> ${escapeHtml(formattedCredits)}`);
@@ -1237,8 +1241,11 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     const lines = [
       `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`
     ];
-    if ((result.actionReports ?? []).length > 0) {
-      lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map((report) => `• ${escapeHtml(report)}`));
+    const taskChanges = formatTelegramTaskChanges(result.taskProposal);
+    if (taskChanges.length) {
+      lines.push('', '<b>Что изменил ИИ:</b>', ...taskChanges.map(change => `• ${escapeHtml(change)}`));
+    } else if ((result.actionReports ?? []).length > 0) {
+      lines.push('', '<b>Что изменил ИИ:</b>', ...(result.actionReports ?? []).map(report => `• ${escapeHtml(report)}`));
     }
     if (result.webSources?.length) lines.push('', '<b>Источники:</b>', ...result.webSources.map((source, index) => `${index + 1}. <a href="${escapeHtml(source.url)}">${escapeHtml(source.title)}</a>`));
 
@@ -1310,7 +1317,13 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       await setSession(chatId, { mode: 'AI_CHAT' });
       await sendMessage(
         chatId,
-        `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}\n\n✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.`,
+        [
+          `🤖 <b>Ответ ИИ</b>\n\n${formatAiTextWithBold(result.answer)}`,
+          ...(formatTelegramTaskChanges(result.taskProposal, user?.timeZone || MOSCOW_TIMEZONE).length
+            ? ['', '<b>Что изменил ИИ:</b>', ...formatTelegramTaskChanges(result.taskProposal, user?.timeZone || MOSCOW_TIMEZONE).map(change => `• ${escapeHtml(change)}`)]
+            : []),
+          '', '✍️ Можете отправить следующее сообщение, чтобы продолжить диалог.'
+        ].join('\n'),
         keyboardBackTask(session.activeTaskId)
       );
     } catch (error) {
