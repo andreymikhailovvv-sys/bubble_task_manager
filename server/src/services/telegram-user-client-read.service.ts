@@ -9,6 +9,7 @@ import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { buildTelegramAnalysisSnapshot } from '../lib/telegram-user-client-analysis-snapshot.js';
 import { telegramSendTargetFromDialog } from './telegram-send-targets.service.js';
+import { downloadTelegramMonitorMedia, MONITOR_MEDIA_MAX_ITEMS, MONITOR_MEDIA_MAX_TOTAL_BYTES, type TelegramMonitorMedia } from './telegram-ai-monitor-media.service.js';
 
 // Closed, owner-only reader for PR5. This module is never exported as an AI tool.
 // No dialogs, message texts, attachments, or peer-access data are persisted.
@@ -180,7 +181,7 @@ export const telegramUserClientRead = {
       };
     });
   },
-  async aiHistory(userId: string, dialogId: unknown, count: number, monitoring = false) {
+  async aiHistory(userId: string, dialogId: unknown, count: number, monitoring = false, mediaAfterId?: number) {
     // This entry point is deliberately NOT an LLM tool. Invoke only from
     // the consent-consuming endpoint, after a real browser click.
     if (![10, 20, 30, 50, 100].includes(count)) {
@@ -198,10 +199,10 @@ export const telegramUserClientRead = {
       // No markAsRead, no downloads, no files, no logging of message bodies.
       const messages = await client.getMessages(row.inputEntity, { limit: count });
       const participants = new Map<string, number>();
-      const items = messages
+      const rawMessages = messages
         .filter((message): message is Api.Message => message instanceof Api.Message)
-        .reverse()
-        .map(message => {
+        .reverse();
+      const items = rawMessages.map(message => {
           const raw = typeof message.message === 'string' ? message.message : '';
           return {
             id: message.id,
@@ -223,12 +224,35 @@ export const telegramUserClientRead = {
         });
       // Overall bounded provider data size even for 100 very long messages.
       let used = 0;
-      const bounded = items.map(item => {
+      const bounded: Array<(typeof items)[number] & { media?: TelegramMonitorMedia; mediaNote?: string }> = items.map(item => {
         const left = Math.max(0, 72000 - used);
         const text = item.text.slice(0, left);
         used += text.length;
         return { ...item, text, truncated: item.truncated || text.length < item.text.length };
       });
+      // Attachment bytes are fetched only by autonomous monitoring with a
+      // verified policy and only for new messages (or an explicit refresh).
+      // Manual consent/history reads remain metadata and text only.
+      if (monitoring && Number.isSafeInteger(mediaAfterId) && (mediaAfterId ?? -1) >= 0) {
+        let usedBytes = 0;
+        let downloaded = 0;
+        for (const message of rawMessages.slice(-40)) {
+          if (message.id <= mediaAfterId! || !message.media) continue;
+          const item = bounded.find(row => row.id === message.id);
+          if (!item) continue;
+          if (downloaded >= MONITOR_MEDIA_MAX_ITEMS) {
+            item.mediaNote = 'Лимит вложений за одну проверку достигнут; содержимое не прочитано';
+            continue;
+          }
+          const result = await downloadTelegramMonitorMedia(client, message, MONITOR_MEDIA_MAX_TOTAL_BYTES - usedBytes);
+          item.mediaNote = result.mediaNote;
+          if (result.media) {
+            item.media = result.media;
+            usedBytes += result.bytesDownloaded;
+            downloaded += 1;
+          }
+        }
+      }
       return { chatName: target.name, kind: target.kind, requestedCount: count, messages: bounded };
     });
   },
