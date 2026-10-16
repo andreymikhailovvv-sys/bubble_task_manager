@@ -1471,7 +1471,27 @@ apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
   const policies = await prisma.telegramAiChatPolicy.findMany({
     where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
   });
-  res.json({ projects: canonicalizeTelegramAssistantProjects(user?.aiChatProjects, policies) });
+  let canonical = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, policies);
+  // Repair historical browser-generated ghost chats in the persisted snapshot.
+  // Lock the row and re-read to avoid overwriting messages saved concurrently.
+  if (JSON.stringify(user?.aiChatProjects ?? []) !== JSON.stringify(canonical)) {
+    canonical = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.user!.id} FOR UPDATE`;
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id: req.user!.id }, select: { aiChatProjects: true }
+      });
+      const currentPolicies = await tx.telegramAiChatPolicy.findMany({
+        where: { userId: req.user!.id }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
+      });
+      const clean = canonicalizeTelegramAssistantProjects(current.aiChatProjects, currentPolicies);
+      if (JSON.stringify(current.aiChatProjects ?? []) !== JSON.stringify(clean)) {
+        await tx.user.update({ where: { id: req.user!.id },
+          data: { aiChatProjects: clean as Prisma.InputJsonValue } });
+      }
+      return clean;
+    });
+  }
+  res.json({ projects: canonical });
 }));
 
 apiRouter.get('/system-notifications', requireAuth, asyncHandler(async (req, res) => {
