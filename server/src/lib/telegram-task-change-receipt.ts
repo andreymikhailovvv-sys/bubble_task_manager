@@ -50,18 +50,33 @@ export function formatTelegramTaskChanges(proposal: TaskReceipt, timeZone?: stri
       case 'complete_task':
       case 'complete_subtask': return 'Отметил выполненным ' + name;
       case 'reopen':
+      case 'reopen_task':
       case 'reopen_subtask': return 'Вернул в работу ' + name;
       case 'rename':
       case 'rename_task':
       case 'rename_subtask': return 'Переименовал ' + name +
         (newTitleFromAfter(action.after) ? ' в «' + newTitleFromAfter(action.after) + '»' : '');
       case 'delete':
+      case 'delete_task':
       case 'delete_subtask': return 'Удалил ' + name;
       case 'set_priority': return 'Изменил приоритет ' + name;
       case 'change_sphere':
       case 'change_task_sphere': return 'Изменил сектор ' + name;
       case 'set_notification': return 'Обновил уведомление ' + name;
       case 'set_description': return 'Изменил описание ' + name;
+      case 'update_task':
+      case 'update_subtask': {
+        const fields = action.after ?? '';
+        const changes: string[] = [];
+        const newName = newTitleFromAfter(fields);
+        if (newName) changes.push('название на «' + newName + '»');
+        if (/description:/.test(fields)) changes.push('описание');
+        if (/dueDate:/.test(fields)) changes.push('срок');
+        if (/importance:|urgency:/.test(fields)) changes.push('приоритет');
+        if (/notifyBeforeMinutes:/.test(fields)) changes.push('напоминания');
+        return 'Обновил ' + name + (changes.length ? ': ' + changes.join(', ') : '');
+      }
+      case 'rebalance_today': return 'Перераспределил запланированные задачи на сегодня';
       default: return 'Изменил ' + name;
     }
   });
