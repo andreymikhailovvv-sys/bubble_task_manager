@@ -28,7 +28,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -132,11 +132,14 @@ const QUICK_AI_CHAT_ID = 'quick-ai-requests';
 function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProject>> | null | undefined): MiniAiChatProject[] {
   const quickChat: MiniAiChatThread = { id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: [] };
   const fallback: MiniAiChatProject[] = [{ id: crypto.randomUUID(), title: QUICK_AI_CHAT_PROJECT_TITLE, color: '#8b5cf6', icon: '✨', chats: [quickChat] }];
-  const userProjects = (rawProjects ?? []).filter(p => p.id !== 'telegram-ai-assistant-project');
-  const tgProject = (rawProjects ?? []).find(p => p.id === 'telegram-ai-assistant-project');
+  // Never normalize historical Telegram-folder copies as regular user
+  // projects. Doing so generated random chat UUIDs and massive PUT payloads.
+  const userProjects = (rawProjects ?? []).filter(project => !isTelegramAssistantProjectLike(project));
+  const tgProject = (rawProjects ?? []).find(project => project.id === 'telegram-ai-assistant-project') ??
+    (rawProjects ?? []).find(project => isTelegramAssistantProjectLike(project));
   const source: Array<Partial<MiniAiChatProject>> = [
     ...(userProjects.length ? userProjects : fallback),
-    ...(tgProject ? [{ ...tgProject, chats: (tgProject.chats ?? [])
+    ...(tgProject ? [{ ...tgProject, id: 'telegram-ai-assistant-project', title: 'Телеграм ассистент', icon: 'telegram', chats: (tgProject.chats ?? [])
       .filter(chat => typeof chat?.id === 'string' && chat.id.startsWith('telegram-ai-assistant:'))
       .filter((chat, index, all) => all.findIndex(candidate => candidate.id === chat.id) === index)
       .slice(0, 25) }] : [])
