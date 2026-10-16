@@ -15,6 +15,7 @@ const DEFAULTS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
   checkIntervalMinutes: 30,
+  monitorModel: 'gpt-6-luna',
   dailyCreditLimitMilli: 50_000,
   instructions: '',
   notifyImportant: true
@@ -125,6 +126,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       mode: existing.mode,
       taskMode: existing.taskMode,
       checkIntervalMinutes: existing.checkIntervalMinutes,
+      monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
       instructions: existing.instructions,
       notifyImportant: existing.notifyImportant
@@ -173,7 +175,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       await api.telegramAssistantSavePolicy(selectedId, draft);
       const updated = await api.telegramAssistantPolicies();
       setPolicies(updated.policies);
-      setNotice('Настройки сохранены. Мониторинг ещё не запущен.');
+      window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
+      setNotice('Настройки сохранены. Переписка добавлена в проект «Телеграм ассистент» общего чата с ИИ. Мониторинг запускается отдельно.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить настройки');
     } finally { setBusy(false); }
@@ -187,6 +190,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       setPolicies(current => current.filter(item => item.chatId !== selectedId));
       setSelectedId(null);
       setDraft({ ...DEFAULTS });
+      window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
       setNotice('Переписка удалена из настроек ассистента.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить профиль');
@@ -310,6 +314,17 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     index={indexOfValue(CHECK_INTERVALS, draft.checkIntervalMinutes)} options={CHECK_NAMES}
                     shortLabels={['5 минут', '30 минут', '3 часа']}
                     onChange={i => update('checkIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                  <label className="block text-sm font-semibold">
+                    Модель фонового мониторинга
+                    <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для автоматических сводок. Модель ручных запросов выбирается отдельно в самом чате с ИИ.</p>
+                    <select className="telegram-integrations-modal__input mt-2 w-full rounded-xl border px-3 py-2 text-sm font-normal"
+                      value={draft.monitorModel}
+                      onChange={e => update('monitorModel', e.target.value as TelegramAiChatSettings['monitorModel'])}>
+                      <option value="gpt-6-luna">GPT-6 Luna</option>
+                      <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+                      <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
+                    </select>
+                  </label>
                   <SettingSlider title="Дневной предел кредитов" description="Максимальный расход ИИ по этой переписке за день"
                     index={indexOfValue(DAILY_LIMITS, draft.dailyCreditLimitMilli)} options={CREDIT_NAMES}
                     onChange={i => update('dailyCreditLimitMilli', DAILY_LIMITS[i] ?? null)}/>
