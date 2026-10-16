@@ -15,7 +15,7 @@ CREATE TABLE "TelegramAiInboxEvent" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "TelegramAiInboxEvent_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "TelegramAiInboxEvent_policyId_messageId_key" ON "TelegramAiInboxEvent"("policyId","messageId");
+CREATE INDEX "TelegramAiInboxEvent_policyId_messageId_idx" ON "TelegramAiInboxEvent"("policyId","messageId");
 CREATE INDEX "TelegramAiInboxEvent_userId_createdAt_idx" ON "TelegramAiInboxEvent"("userId","createdAt");
 CREATE INDEX "TelegramAiInboxEvent_botStatus_createdAt_idx" ON "TelegramAiInboxEvent"("botStatus","createdAt");
 ALTER TABLE "TelegramAiInboxEvent" ADD CONSTRAINT "TelegramAiInboxEvent_userId_fkey"
