@@ -3510,6 +3510,7 @@ function sanitizeUpstreamErrorText(payload: string): string {
 /** Reuses the existing task-chat mutation semantics only after durable approval. */
 export async function applyTaskChatProposalActions(input: {
   userId: string; taskId: string; actions: Record<string, unknown>[]; userTimeZone: string;
+  mode?: 'fast' | 'smart'; onProgress?: (status: TaskAiProgressStatus) => void;
 }): Promise<{ ok: boolean; reports: string[]; error?: string }> {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
