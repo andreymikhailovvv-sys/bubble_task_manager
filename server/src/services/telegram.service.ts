@@ -255,8 +255,8 @@ export const telegramAiActionKeyboard = (
   taskId?: string
 ) => ({
   inline_keyboard: [
-    ...(proposalId ? [[{ text: 'Отменить', callback_data: `aiundo:${proposalId}` }]] : []),
-    [{ text: 'Открыть в приложении', web_app: { url: openUrl } }],
+    ...(proposalId ? [[{ text: '↩️ Отменить', callback_data: `aiundo:${proposalId}` }]] : []),
+    [{ text: '📱 Открыть в приложении', web_app: { url: openUrl } }],
     ...(taskId ? [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]] : [])
   ]
 });
@@ -1971,8 +1971,51 @@ export const telegramService = {
   },
   async notifyShiningTasks() {
     const now = new Date();
+    // Reminders are an independent timeline type. They fire at their scheduled
+    // instant, not at a task deadline, and appear exactly once per due date.
+    const scheduledReminders = await prisma.task.findMany({
+      where: {
+        taskType: 'REMINDER', status: { not: 'DONE' },
+        dueDate: { not: null, lte: now }, parentTaskId: null
+      },
+      select: {
+        id: true, title: true, userId: true, dueDate: true,
+        telegramNotifiedAt: true,
+        user: { select: { telegramChatId: true } }
+      }
+    });
+    for (const reminder of scheduledReminders) {
+      if (!reminder.dueDate) continue;
+      const content = `Напоминание: ${reminder.title}`;
+      const eventKey = `reminder:${reminder.id}:${reminder.dueDate.toISOString()}`;
+      await prisma.systemNotification.create({
+        data: { userId: reminder.userId, taskId: reminder.id, eventKey, content }
+      }).catch((error: unknown) => {
+        if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002')) throw error;
+      });
+      if (!BOT_TOKEN || !reminder.user.telegramChatId || reminder.telegramNotifiedAt) continue;
+      // Atomic claim prevents two active scheduler replicas from sending twice.
+      const claimed = await prisma.task.updateMany({
+        where: { id: reminder.id, userId: reminder.userId, taskType: 'REMINDER',
+          dueDate: reminder.dueDate, telegramNotifiedAt: null },
+        data: { telegramNotifiedAt: now }
+      });
+      if (!claimed.count) continue;
+      try {
+        const sent = await sendMessage(reminder.user.telegramChatId, escapeHtml(content));
+        if (!sent) throw new Error('Telegram API did not accept reminder');
+      } catch (error) {
+        console.error('[Telegram] reminder delivery failed', { reminderId: reminder.id, error });
+        await prisma.task.updateMany({
+          where: { id: reminder.id, telegramNotifiedAt: now },
+          data: { telegramNotifiedAt: null }
+        });
+      }
+    }
+
     const tasks = await prisma.task.findMany({
       where: {
+        taskType: { not: 'REMINDER' },
         dueDate: { not: null },
         OR: [
           { status: { not: 'DONE' }, notifyBeforeMinutes: { not: null } },
