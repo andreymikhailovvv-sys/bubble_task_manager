@@ -1,3 +1,4 @@
+import { getTaskProposal, applyTaskProposal, rejectTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
@@ -1478,6 +1479,36 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
 apiRouter.get('/ai-documents/download', asyncHandler(aiGeneratedDocumentController.downloadWithToken));
 apiRouter.post('/ai-documents/:id/download-link', requireAuth, asyncHandler(aiGeneratedDocumentController.createDownloadLink));
 apiRouter.get('/ai-documents/:id/download', requireAuth, asyncHandler(aiGeneratedDocumentController.download));
+
+const taskProposalSameOrigin = (req: Request, res: Response, next: NextFunction) => {
+  if (!telegramChatRequestIsSameOrigin(req.get('origin') || undefined, req.get('host') || undefined, req.get('sec-fetch-site') || undefined)) {
+    res.status(403).json({ error: 'Запрос разрешён только из Планировыча' });
+    return;
+  }
+  next();
+};
+apiRouter.get('/ai/task-proposals/preferences', requireAuth, asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { aiTaskAutoApply: true } });
+  res.set('Cache-Control', 'no-store, private').json({ autoApply: user.aiTaskAutoApply });
+}));
+apiRouter.patch('/ai/task-proposals/preferences', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  if (typeof req.body?.autoApply !== 'boolean') { res.status(400).json({ error: 'autoApply должен быть boolean' }); return; }
+  const user = await prisma.user.update({ where: { id: req.user!.id }, data: { aiTaskAutoApply: req.body.autoApply }, select: { aiTaskAutoApply: true } });
+  res.json({ autoApply: user.aiTaskAutoApply });
+}));
+apiRouter.get('/ai/task-proposals/:id', requireAuth, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'no-store, private').json(await getTaskProposal(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+apiRouter.post('/ai/task-proposals/:id/approve', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try { res.json(await applyTaskProposal(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+apiRouter.post('/ai/task-proposals/:id/reject', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try { res.json(await rejectTaskProposal(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+}));
+
 apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
