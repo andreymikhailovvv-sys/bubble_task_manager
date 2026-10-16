@@ -26,6 +26,7 @@ export type TelegramAiChatSettings = {
   monitorModel: typeof TELEGRAM_AI_MONITOR_MODELS[number];
   instructions: string;
   notifyImportant: boolean;
+  reviewAttachments: boolean;
   dailyCreditLimitMilli: number | null;
 };
 
@@ -36,6 +37,7 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   monitorModel: 'gpt-6-luna',
   instructions: '',
   notifyImportant: true,
+  reviewAttachments: true,
   dailyCreditLimitMilli: 50_000
 };
 
@@ -56,6 +58,9 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
       /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(p.instructions)) {
     throw new TelegramUserClientError(400, 'Инструкции должны быть текстом до 3000 символов');
   }
+  if (p.reviewAttachments !== undefined && typeof p.reviewAttachments !== 'boolean') {
+    throw new TelegramUserClientError(400, 'Настройка просмотра вложений должна быть логическим значением');
+  }
   if (typeof p.notifyImportant !== 'boolean') {
     throw new TelegramUserClientError(400, 'Настройка уведомлений должна быть логическим значением');
   }
@@ -69,6 +74,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
     instructions: p.instructions.trim(),
     notifyImportant: p.notifyImportant,
+    reviewAttachments: p.reviewAttachments !== false,
     dailyCreditLimitMilli: p.dailyCreditLimitMilli as number | null
   };
 }
