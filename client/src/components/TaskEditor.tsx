@@ -678,7 +678,7 @@ export function TaskEditor({
   const addManualSlot = () => {
     if (recurrencePeriod !== "DAILY" || recurrenceSlots.length >= 31) return;
     const used = new Set(recurrenceSlots.map((slot) => slot.time));
-    const last = recurrenceSlots.at(-1)?.time ?? "09:00";
+    const last = recurrenceSlots[recurrenceSlots.length - 1]?.time ?? "09:00";
     const [hour, minute] = last.split(":").map(Number);
     const start = (hour * 60 + minute + 60) % 1440;
     let nextTime: string | null = null;
