@@ -1,6 +1,6 @@
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, BellRing, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
@@ -1265,7 +1265,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const listTasks = useMemo(() => {
     const selectedSpheres = new Set(listSelectedSphereIds ?? spheres.map((sphere) => sphere.id));
     const isSectorSubsetSelected = listSelectedSphereIds !== null && listSelectedSphereIds.length < spheres.length;
-    const result = filteredTasks.filter((task) => task.taskType !== 'EVENT' && (!isSectorSubsetSelected || Boolean(task.sphereId && selectedSpheres.has(task.sphereId))));
+    const result = filteredTasks.filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && (!isSectorSubsetSelected || Boolean(task.sphereId && selectedSpheres.has(task.sphereId))));
     result.sort((a, b) => {
       if (listSortMode === 'importance') {
         if (a.importance !== b.importance) return b.importance - a.importance;
@@ -1302,7 +1302,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     };
   }), [spheres, taskById, tasks]);
 
-  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && isOverdue(task)), [tasks]);
+  const overdueTasks = useMemo(() => tasks.filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task)), [tasks]);
 
   const postponeAllOverdueToToday = async () => {
     if (isPostponingOverdue || overdueTasks.length === 0) return;
@@ -3798,7 +3798,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const taskHour = dueDate.getHours();
                   const taskQuarter = (taskHour * TIMELINE_QUARTERS_PER_HOUR) + Math.floor(dueDate.getMinutes() / 15);
                   const isEvent = task.taskType === 'EVENT';
-                  const hasOverdueState = !isEvent && isOverdue(task);
+                  const isReminder = task.taskType === 'REMINDER';
+                  const hasOverdueState = !isEvent && !isReminder && isOverdue(task);
                   const isSubtask = Boolean(task.parentTaskId);
                   const parentTask = task.parentTaskId ? (taskById.get(task.parentTaskId) ?? null) : null;
                   const taskForSectorColor = parentTask ?? task;
@@ -3808,31 +3809,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     <button
                       type="button"
                       key={task.id}
-                      className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''}`}
+                      className={`miniapp-timeline-task-card absolute border px-2 py-1 text-left ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isSubtask ? 'miniapp-timeline-subtask-card' : ''} ${isEvent ? 'miniapp-timeline-event-card' : ''} ${isReminder ? 'miniapp-timeline-reminder-card' : ''}`}
                       style={{
                         top: `${placement.top}px`,
                         height: `${isSubtask ? TIMELINE_SUBTASK_CARD_HEIGHT : TIMELINE_CARD_HEIGHT}px`,
                         left: 'calc(4rem + 2px)',
                         width: 'calc(100% - 4rem - 8px)',
                         zIndex: 10,
-                        borderColor: isEvent
+                        borderColor: isReminder ? 'rgba(14,165,233,0.85)' : isEvent
                           ? 'rgba(245,158,11,0.9)'
                           : isSubtask
                             ? (isLightTheme ? 'rgba(148,163,184,0.95)' : 'rgba(100,116,139,0.9)')
                             : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.62 : 0.8) ?? (isLightTheme ? 'rgba(14,165,233,0.45)' : 'rgba(56,189,248,0.35)')),
-                        background: isEvent
+                        background: isReminder ? (isLightTheme ? 'rgba(224,242,254,0.97)' : 'rgba(3,105,161,0.34)') : isEvent
                           ? (isLightTheme ? 'rgba(254,243,199,0.96)' : 'rgba(146,64,14,0.42)')
                           : isSubtask
                             ? `linear-gradient(135deg, ${hexToRgba(sphereColor ?? '', isLightTheme ? 0.2 : 0.34) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.26)')}, ${isLightTheme ? 'rgba(248,250,252,0.94)' : 'rgba(15,23,42,0.82)'})`
                             : (hexToRgba(sphereColor ?? '', isLightTheme ? 0.15 : 0.25) ?? (isLightTheme ? 'rgba(224,242,254,0.94)' : 'rgba(14,165,233,0.18)')),
                         borderLeftWidth: isSubtask ? '4px' : '1px',
-                        borderLeftColor: isSubtask
+                        borderLeftColor: isReminder ? 'rgba(2,132,199,0.95)' : isSubtask
                           ? (hexToRgba(sphereColor ?? '', 0.95) ?? 'rgba(56,189,248,0.95)')
                           : isEvent
                             ? 'rgba(245,158,11,0.9)'
                             : (hexToRgba(sphereColor ?? '', 0.8) ?? 'rgba(56,189,248,0.35)')
                       }}
                       onClick={() => {
+                        if (isReminder) return;
                         if (isSubtask) {
                           openSubtaskModal(task);
                           return;
@@ -3840,8 +3842,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         openTaskModal(task);
                       }}
                     >
-                      <p className={`miniapp-timeline-card-title font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{task.title}</p>
-                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
+                      <p className={`miniapp-timeline-card-title font-semibold ${isSubtask ? 'text-xs leading-4' : 'text-sm'}`}>{isReminder ? '🔔 ' : ''}{task.title}</p>
+                      <p className={`${isSubtask ? 'text-[10px] leading-3' : 'text-xs'} ${hasOverdueState ? 'miniapp-overdue-label font-medium' : 'text-slate-300'}`}>{hasOverdueState ? formatRemaining(task.dueDate) : `${isReminder ? 'Напоминание · ' : isEvent ? 'Событие · ' : isSubtask ? 'Подзадача · ' : ''}${formatDueDate(task.dueDate)}`}</p>
                     </button>
                   );
                 })}
@@ -3887,7 +3889,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   const isToday = dateKey === toDateKey(timelineNow);
                   const isOutsideMonth = timelineView === 'month' && date.getMonth() !== timelineAnchorDate.getMonth();
                   const taskEntries = [
-                    ...dayTasks.map((task) => ({ id: task.id, time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
+                    ...dayTasks.map((task) => ({ id: task.id, time: new Date(task.dueDate as string).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), title: task.title, color: task.taskType === 'REMINDER' ? '#0284c7' : task.taskType === 'EVENT' ? '#f59e0b' : (spheres.find((sphere) => sphere.id === (taskById.get(task.parentTaskId ?? '') ?? task).sphereId)?.color ?? '#38bdf8'), task })),
                   ];
                   const habitEntries = dayHabits.map(({ habit, reminderTime }) => ({ id: `habit-${habit.id}-${reminderTime}`, time: reminderTime, title: `${habit.icon} ${habit.name}`, color: habit.color, habit }));
                   const entries = [...taskEntries, ...(timelineView === 'month' ? [] : habitEntries)].sort((a, b) => a.time.localeCompare(b.time));
@@ -3906,7 +3908,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                           <div key={group.hour || 'month'} className={timelineView === 'week' ? 'miniapp-calendar-hour-group' : undefined}>
                             {timelineView === 'week' ? <span className="miniapp-calendar-hour-label">{group.hour}:00</span> : null}
                             {group.entries.map((entry) => (
-                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
+                              <button key={entry.id} type="button" className={`miniapp-calendar-entry ${'task' in entry && entry.task.taskType === 'EVENT' ? 'miniapp-calendar-event-entry' : ''} ${'task' in entry && entry.task.taskType === 'REMINDER' ? 'miniapp-calendar-reminder-entry' : ''}`} style={{ '--calendar-entry-color': entry.color } as CSSProperties} onClick={() => 'task' in entry ? (entry.task.taskType === 'REMINDER' ? undefined : entry.task.parentTaskId ? openSubtaskModal(entry.task) : openTaskModal(entry.task)) : openEditHabitModal(entry.habit)}>
                                 <span className="miniapp-calendar-entry-title">{entry.title}</span>
                               </button>
                             ))}
