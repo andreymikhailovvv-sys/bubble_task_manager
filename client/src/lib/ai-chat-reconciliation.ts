@@ -34,3 +34,45 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
 
   return remote;
 }
+
+export type AiChatProjectOutline = {
+  id: string; title: string; color: string; icon: string;
+  chats: Array<{ id: string; title: string }>;
+};
+
+/**
+ * Reconcile only chat navigation metadata, never active selection, scroll
+ * container or any already rendered transcript. New chats load messages
+ * separately when opened, exactly like opening a task chat.
+ */
+export function reconcileAiChatProjectOutline<
+  TMessage,
+  TChat extends { id: string; title: string; messages: TMessage[] },
+  TProject extends { id: string; title: string; color: string; icon: string; chats: TChat[] }
+>(local: TProject[], outline: AiChatProjectOutline[]): TProject[] {
+  if (!outline.length) return local;
+  const managed = local.filter(p => p.id === 'telegram-ai-assistant-project');
+  let changed = false;
+  const result = outline.map(data => {
+    const previous = local.find(p => p.id === data.id);
+    const chats = data.chats.map(thread => {
+      const existing = previous?.chats.find(c => c.id === thread.id);
+      if (!existing) { changed = true; return { ...thread, messages: [] } as TChat; }
+      if (existing.title === thread.title) return existing;
+      changed = true;
+      return { ...existing, title: thread.title };
+    });
+    if (!previous) {
+      changed = true;
+      return { ...data, chats } as TProject;
+    }
+    if (previous.title === data.title && previous.color === data.color &&
+        previous.icon === data.icon && previous.chats.length === chats.length &&
+        chats.every((chat, index) => chat === previous.chats[index])) return previous;
+    changed = true;
+    return { ...previous, title: data.title, color: data.color, icon: data.icon, chats };
+  });
+  if (local.filter(p => p.id !== 'telegram-ai-assistant-project').length !== outline.length) changed = true;
+  if (!changed) return local;
+  return [...result, ...managed];
+}
