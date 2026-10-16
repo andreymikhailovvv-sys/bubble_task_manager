@@ -57,7 +57,7 @@ export function reconcileAiChatProjectOutline<
     const previous = local.find(p => p.id === data.id);
     const chats = data.chats.map(thread => {
       const existing = previous?.chats.find(c => c.id === thread.id);
-      if (!existing) { changed = true; return { ...thread, messages: [] } as TChat; }
+      if (!existing) { changed = true; return { ...thread, messages: [] } as unknown as TChat; }
       if (existing.title === thread.title) return existing;
       changed = true;
       return { ...existing, title: thread.title };
