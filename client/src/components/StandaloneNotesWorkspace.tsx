@@ -271,6 +271,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
     });
   };
 
+  const pickerNoteGroupId = groupPicker ? notes.find(note => note.id === groupPicker.noteId)?.groupId ?? null : null;
+
   return (
     <>
       <section className="workspace-widget-card standalone-notes-widget rounded-[1.35rem] border p-4" aria-label="Личные заметки">
@@ -393,11 +395,12 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
             style={{ top: groupPicker.top, left: groupPicker.left }} onMouseDown={(event) => event.stopPropagation()}
             onKeyDown={(event) => { if (event.key === 'Escape') setGroupPicker(null); }}>
             <p className="mb-2 px-2 text-xs font-semibold text-muted">Переместить в группу</p>
-            <button type="button" className="standalone-group-picker-option w-full rounded-lg px-2.5 py-2 text-left text-sm" onClick={() => void assignGroup(groupPicker.noteId, null)}>Без группы</button>
+            <button type="button" className="standalone-group-picker-option flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm" onClick={() => void assignGroup(groupPicker.noteId, null)}>Без группы {pickerNoteGroupId === null ? <Check size={15} className="shrink-0"/> : null}</button>
             {groups.map(group => (
               <button type="button" key={group.id} className="standalone-group-picker-option flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm"
                 onClick={() => void assignGroup(groupPicker.noteId, group.id)} style={noteGroupStyle(group.color)}>
-                <span className="standalone-group-color-dot h-3 w-3 shrink-0 rounded-full"/><span className="truncate">{group.name}</span>
+                <span className="standalone-group-color-dot h-3 w-3 shrink-0 rounded-full"/><span className="min-w-0 flex-1 truncate">{group.name}</span>
+                {pickerNoteGroupId === group.id ? <Check size={15} className="shrink-0"/> : null}
               </button>
             ))}
             <div className="my-1 border-t" style={{ borderColor: 'var(--panel-border)' }} />
