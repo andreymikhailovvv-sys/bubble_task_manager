@@ -705,7 +705,7 @@ model TelegramAiInboxEvent {
   taskApprovals    TelegramAiTaskApproval[]
   createdAt        DateTime @default(now())
 
-  @@unique([policyId, messageId])
+  @@index([policyId, messageId])
   @@index([userId, createdAt])
   @@index([botStatus, createdAt])
 }
