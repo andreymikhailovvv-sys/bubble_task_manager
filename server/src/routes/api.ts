@@ -1432,14 +1432,14 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
     where: { userId }, select: { id: true, chatTitle: true }, orderBy: { createdAt: 'asc' }
   });
   const projects = canonicalizeTelegramAssistantProjects(user?.aiChatProjects, allowedPolicies);
-  const outline = projects.filter((entry): entry is Prisma.JsonObject =>
+  const outline = projects.filter((entry) =>
     entry != null && typeof entry === 'object' && !Array.isArray(entry) &&
     typeof (entry as { id?: unknown }).id === 'string')
     .map(entry => ({
       id: String(entry.id), title: String(entry.title ?? ''), color: String(entry.color ?? '#8b5cf6'),
       icon: String(entry.icon ?? '✨'),
       chats: (Array.isArray(entry.chats) ? entry.chats : [])
-        .filter((item): item is Prisma.JsonObject =>
+        .filter((item) =>
           item != null && typeof item === 'object' && !Array.isArray(item) &&
           typeof (item as { id?: unknown }).id === 'string')
         .map(item => ({ id: String(item.id), title: String(item.title ?? '') }))
