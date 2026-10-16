@@ -100,3 +100,49 @@ export function mergeTelegramManagedMessages<T extends IdentifiedChatMessage>(
     ? local
     : next;
 }
+
+/**
+ * A project snapshot stores interactive cards that the legacy general-dialog
+ * feed cannot represent (Telegram read/send consent, documents, proposals).
+ * Polling that feed must never replace messages with lossy copies. Keep the
+ * existing message/key/component stable; merge new server text and cards.
+ *
+ * General-dialog rows may also have different database IDs than the client
+ * project snapshot of the same content. Match those by role + exact content
+ * in occurrence order, rather than rendering duplicates on each poll.
+ */
+export function reconcileAiChatMessagesWithChips<T extends IdentifiedChatMessage>(
+  local: T[], remote: T[]
+): T[] {
+  if (remote.length === 0) return local;
+  if (local.length === 0) return remote;
+  const matchedLocal = new Set<number>();
+  const additions: T[] = [];
+  const updates = new Map<number, T>();
+  for (const message of remote) {
+    let index = local.findIndex((candidate, i) => !matchedLocal.has(i) && candidate.id === message.id);
+    if (index < 0) {
+      index = local.findIndex((candidate, i) => !matchedLocal.has(i) &&
+        candidate.role === message.role && candidate.content === message.content);
+    }
+    if (index < 0) {
+      additions.push(message);
+      continue;
+    }
+    matchedLocal.add(index);
+    const original = local[index];
+    // If the server's older format omits a chip, leave the original intact.
+    const combined = { ...original, ...message, id: original.id,
+      ...(message.telegramReadDraft == null && original.telegramReadDraft
+        ? { telegramReadDraft: original.telegramReadDraft } : {}),
+      ...(message.telegramSendDraft == null && original.telegramSendDraft
+        ? { telegramSendDraft: original.telegramSendDraft } : {}),
+      ...(message.taskProposal == null && original.taskProposal
+        ? { taskProposal: original.taskProposal } : {}),
+      ...(message.generatedDocument == null && original.generatedDocument
+        ? { generatedDocument: original.generatedDocument } : {}) } as T;
+    if (JSON.stringify(original) !== JSON.stringify(combined)) updates.set(index, combined);
+  }
+  if (updates.size === 0 && additions.length === 0) return local;
+  return [...local.map((message, index) => updates.get(index) ?? message), ...additions];
+}
