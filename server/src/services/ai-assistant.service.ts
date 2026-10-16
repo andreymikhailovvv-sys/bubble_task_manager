@@ -3202,7 +3202,7 @@ function sanitizeUpstreamErrorText(payload: string): string {
 export async function applyTaskChatProposalActions(input: {
   userId: string; taskId: string; actions: Record<string, unknown>[]; userTimeZone: string;
   mode?: 'fast' | 'smart'; onProgress?: (status: TaskAiProgressStatus) => void;
-}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+}): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const task = await prisma.task.findFirstOrThrow({
     where: { id: input.taskId, AND: [taskAccessWhere(input.userId)] },
     select: { id: true, title: true, parentTaskId: true, collaborationId: true, importance: true, urgency: true }
@@ -3211,6 +3211,7 @@ export async function applyTaskChatProposalActions(input: {
   const requestId = 'approved-task-proposal';
   const model = 'stored-proposal';
   const actionReports: string[] = [];
+  const createdIds: string[] = [];
           let appliedActionsCount = 0;
           if (parsed.actions.length > 0) input.onProgress?.('applying_changes');
           for (const action of parsed.actions) {
@@ -3308,6 +3309,7 @@ export async function applyTaskChatProposalActions(input: {
               const subtask = await prisma.task.create({
                 data: { title: action.title.slice(0, 180), description: (action.description ?? '').slice(0, 2000), userId: input.userId, parentTaskId: task.id, sphereId: null, collaborationId: task.collaborationId, importance: 3, urgency: 3, priorityScore: 3, status: 'TODO', dueDate: dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null, notifyBeforeMinutes: 0 }
               });
+              createdIds.push(subtask.id);
               actionReports.push(`Добавил подзадачу "${subtask.title}". [[task_ref=${subtask.id}]]`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type, subtaskId: subtask.id });
@@ -3366,6 +3368,7 @@ export async function applyTaskChatProposalActions(input: {
   return {
     ok: appliedActionsCount === parsed.actions.length,
     reports: actionReports,
+    createdIds,
     ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Не все изменения удалось применить.' })
   };
 }
@@ -3374,9 +3377,10 @@ export async function applyTaskChatProposalActions(input: {
 /** Legacy /ai-general-chat route uses the same delayed approval gate. */
 export async function applyLegacyGeneralProposalActions(input: {
   userId: string; actions: Record<string, unknown>[]; userTimeZone?: string;
-}): Promise<{ ok: boolean; reports: string[]; error?: string }> {
+}): Promise<{ ok: boolean; reports: string[]; createdIds: string[]; error?: string }> {
   const parsed = { actions: input.actions as GeneralAssistantAction[] };
   const actionReports: string[] = [];
+  const createdIds: string[] = [];
       const undoOperations: GeneralAssistantUndoOperation[] = [];
       let appliedActionsCount = 0;
   
@@ -3465,6 +3469,7 @@ export async function applyLegacyGeneralProposalActions(input: {
             }
           });
   
+          createdIds.push(createdTask.id);
           const subtasks = Array.isArray(action.subtasks) ? action.subtasks : [];
           if (subtasks.length > 0) {
             await prisma.$transaction(subtasks.map((subtask) => {
@@ -3517,6 +3522,7 @@ export async function applyLegacyGeneralProposalActions(input: {
               notifyBeforeMinutes: 0
             }
           });
+          createdIds.push(subtask.id);
           actionReports.push(`Добавил подзадачу "${subtask.title}" к задаче "${parentTask.title}".`);
           appliedActionsCount += 1;
           continue;
@@ -3702,6 +3708,7 @@ export async function applyLegacyGeneralProposalActions(input: {
   return {
     ok: appliedActionsCount === parsed.actions.length,
     reports: actionReports,
+    createdIds,
     ...(appliedActionsCount === parsed.actions.length ? {} : { error: actionReports.join(' ').slice(0, 500) || 'Часть действий не выполнена.' })
   };
 }
