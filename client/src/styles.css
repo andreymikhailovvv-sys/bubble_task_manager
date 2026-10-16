@@ -8924,3 +8924,125 @@ body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus-visible {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+
+/* New-task recurring schedule: all controls have explicit light/dark contrast.
+   The action footer remains visible while the entire form content scrolls. */
+.focused-task-editor-shell .task-editor-scroll-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.focused-task-editor-shell .task-create-draft-subtasks {
+  flex: 0 0 auto;
+  max-height: none;
+}
+.focused-task-editor-shell .task-create-save-footer {
+  position: relative;
+  z-index: 1;
+  border-color: color-mix(in srgb, var(--panel-border) 86%, transparent);
+  background: var(--card-bg);
+}
+.focused-task-editor-shell .recurrence-configuration {
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--panel-border));
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--card-bg));
+  color: var(--text-primary);
+}
+.focused-task-editor-shell .recurrence-choice-button,
+.focused-task-editor-shell .recurrence-day-button,
+.focused-task-editor-shell .recurrence-remove-time-button {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--panel-border));
+  background: var(--card-bg);
+  color: var(--text-primary);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.focused-task-editor-shell .recurrence-choice-button:hover,
+.focused-task-editor-shell .recurrence-day-button:hover,
+.focused-task-editor-shell .recurrence-remove-time-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+.focused-task-editor-shell .recurrence-day-button[aria-pressed='true'] {
+  border-color: #7c3aed;
+  background: #6d28d9;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(109, 40, 217, 0.2);
+}
+.focused-task-editor-shell .recurrence-time-row,
+.focused-task-editor-shell .recurrence-month-calendar {
+  border-color: color-mix(in srgb, var(--accent) 21%, var(--panel-border));
+  background: var(--card-bg);
+}
+.focused-task-editor-shell .recurrence-add-time-button {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--panel-border));
+  background: color-mix(in srgb, var(--accent-soft) 76%, var(--card-bg));
+  color: color-mix(in srgb, var(--accent) 82%, var(--text-primary));
+}
+.focused-task-editor-shell .recurrence-add-time-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.focused-task-editor-shell .recurrence-add-time-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+body[data-theme='light'] .focused-task-editor-shell .recurrence-configuration {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button,
+body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button {
+  background: #fff;
+  border-color: #c4b5fd;
+  color: #4c1d95;
+}
+body[data-theme='light'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+body[data-theme='light'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'] {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+}
+body[data-theme='light'] .focused-task-editor-shell .recurrence-add-time-button {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #a78bfa;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-configuration {
+  background: #1c2034 !important;
+  border-color: #6d5c9d !important;
+  color: #f5f3ff;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-time-row,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-month-calendar {
+  background: #27283f;
+  border-color: #535078;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button,
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-remove-time-button {
+  background: #30314b;
+  border-color: #66618e;
+  color: #f5f3ff;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-choice-button[aria-pressed='true'],
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-day-button[aria-pressed='true'] {
+  background: #7c3aed;
+  border-color: #b39cff;
+  color: #fff;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-add-time-button {
+  background: #3c325e;
+  border-color: #9e85e1;
+  color: #ede9fe;
+}
+body[data-theme='dark'] .focused-task-editor-shell .recurrence-configuration input[type='time'] {
+  background: #20233a;
+  color: #f5f3ff;
+  border-color: #6b648f;
+  color-scheme: dark;
+}
+body[data-theme='dark'] .focused-task-editor-shell .task-create-save-footer {
+  background: #151a2b;
+  border-top-color: #4d4569;
+}
