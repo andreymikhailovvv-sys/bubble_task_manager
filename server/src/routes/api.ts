@@ -1,4 +1,5 @@
 import { mergeChatProjectSnapshots } from '../lib/ai-chat-project-sync.js';
+import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
