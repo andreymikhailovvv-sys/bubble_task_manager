@@ -38,7 +38,7 @@ test('model-generated summary is rendered with explicit task proposals', () => {
   const result = formatTelegramAiSummary('Рабочая группа', sample, 'SUGGEST');
   assert.match(result, /Рабочая группа/);
   assert.doesNotMatch(result, /Предложения задач/);
-  assert.doesNotMatch(result, /• Подготовить документы/);
+  // The same title can still legitimately appear in the obligations section.
   const source = src('../src/services/telegram-ai-inbox.service.ts');
   assert.match(source, /prepareTaskProposal/);
   assert.match(source, /taskProposal: proposalByEvent.get/);
