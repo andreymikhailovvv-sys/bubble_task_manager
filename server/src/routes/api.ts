@@ -1420,6 +1420,33 @@ apiRouter.post('/telegram-user-client/chat/send-confirm', requireAuth, requireTe
   catch (error) { telegramAuthError(res, error); }
 });
 
+// Like task-AI chat history: read only the *open* conversation, never
+// replace the full project tree just to deliver another assistant message.
+apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store, private');
+  const userId = req.user!.id;
+  const { projectId, chatId } = req.params;
+  if (chatId === 'quick-ai-requests') {
+    const messages = await aiAssistantService.listGeneralDialog({ userId });
+    res.json({ messages });
+    return;
+  }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiChatProjects: true } });
+  const projects = Array.isArray(user?.aiChatProjects) ? user.aiChatProjects : [];
+  const project = projects.find((entry: unknown) =>
+    entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
+    (entry as { id?: unknown }).id === projectId) as { chats?: unknown } | undefined;
+  const chats = Array.isArray(project?.chats) ? project.chats : [];
+  const chat = chats.find((entry: unknown) =>
+    entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
+    (entry as { id?: unknown }).id === chatId) as { messages?: unknown } | undefined;
+  if (!chat || !Array.isArray(chat.messages)) {
+    res.status(404).json({ error: 'Диалог не найден' });
+    return;
+  }
+  res.json({ messages: chat.messages.slice(-300) });
+}));
+
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
