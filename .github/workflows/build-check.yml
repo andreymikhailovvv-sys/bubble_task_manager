@@ -61,6 +61,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-ai-chat-policy.test.ts
       - name: Verify Telegram task receipts and cross-surface AI chat synchronization
         run: node --import tsx --test server/test/ai-chat-cross-surface-sync.test.ts
+      - name: Verify blue reminder timeline and notification behavior
+        run: node --import tsx --test server/test/timeline-reminders.test.ts server/test/ai-chat-navigation-reminders-ui.test.ts
       - name: Verify Telegram task change action buttons and quick-chat deep link
         run: node --import tsx --test server/test/telegram-ai-action-buttons.test.ts
       - name: Verify Telegram bot auto-apply and task proposal undo
