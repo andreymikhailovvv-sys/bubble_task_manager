@@ -74,10 +74,11 @@ export async function publishTelegramAiSummary(input: {
   policy: TelegramAiChatPolicy;
   leaseToken: string;
   lastSeenMessageId: number;
+  requestId: string;
   summary: MonitorSummary;
 }) {
   const { policy, summary } = input;
-  const eventId = 'telegram-ai-summary:' + policy.id + ':' + input.lastSeenMessageId;
+  const eventId = 'telegram-ai-summary:' + policy.id + ':' + input.requestId;
   const content = formatTelegramAiSummary(policy.chatTitle, summary, policy.taskMode);
   return prisma.$transaction(async tx => {
     const written = await tx.telegramAiChatPolicy.updateMany({
