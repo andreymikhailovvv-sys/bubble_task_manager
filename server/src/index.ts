@@ -14,6 +14,7 @@ import { aiAssistantService } from './services/ai-assistant.service.js';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
+import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -210,3 +211,11 @@ const runTelegramAiMonitor = () => telegramAiMonitorWorker.drain().catch(() => {
 });
 setTimeout(runTelegramAiMonitor, 8_000).unref();
 setInterval(runTelegramAiMonitor, 30_000).unref();
+
+// Durable outgoing summaries to the linked Telegram bot, distinct from
+// monitored peers. Each event is claimed at most once across replicas.
+const sendTelegramAssistantInbox = () => deliverTelegramAiBotNotifications().catch(() => {
+  console.warn('[TelegramAIInbox] delivery iteration failed');
+});
+setTimeout(sendTelegramAssistantInbox, 10_000).unref();
+setInterval(sendTelegramAssistantInbox, 20_000).unref();
