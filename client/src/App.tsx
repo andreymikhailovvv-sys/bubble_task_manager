@@ -35,6 +35,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
+import { reconcileActiveAiChatMessages } from './lib/ai-chat-reconciliation';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
@@ -1053,6 +1054,7 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
+  const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna');
   const [aiChatLoading, setAiChatLoading] = useState(false);
@@ -2781,53 +2783,71 @@ ${allContext}`,
     };
   }, [aiChatProjects]);
 
-  // Refresh canonical quick-chat history, projects and Telegram assistant inbox.
-  // A refresh never writes the fetched snapshot back to the server.
+  // Same pattern as the existing task-AI chats: fetch the currently open
+  // conversation only, compare messages and leave all other UI state alone.
   useEffect(() => {
-    if (!currentUser?.id) return;
-    let active = true;
+    if (!currentUser?.id || (!isAiChatOpen && !quickAiPreviewHovered)) return;
+    const projectId = isAiChatOpen ? activeAiChatProject?.id : aiChatProjects[0]?.id;
+    const chatId = isAiChatOpen ? activeAiChat?.id : QUICK_AI_CHAT_ID;
+    if (!projectId || !chatId) return;
+    let alive = true;
     const refresh = async () => {
-      if (!active || !aiChatProjectsSyncReadyRef.current || aiChatLoading ||
+      if (!alive || aiChatLoading || aiChatProjectsPollingRef.current ||
           aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
-          aiChatProjectsPollingRef.current || document.visibilityState === 'hidden') return;
+          document.visibilityState === 'hidden') return;
       aiChatProjectsPollingRef.current = true;
       try {
-        const [history, response, feed] = await Promise.all([
-          api.getGeneralAssistantHistory(),
-          api.getAiChatProjects<Partial<AiChatProject>>(),
-          api.telegramAssistantInbox().catch(() => null)
-        ]);
-        if (!active || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+        if (chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX)) {
+          const inbox = await api.telegramAssistantInbox();
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const updated = mergeTelegramAiInbox(previous, inbox);
+            if (JSON.stringify(updated) === JSON.stringify(previous)) return previous;
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+            return updated;
+          });
+          return;
+        }
+        const { messages } = await api.getAiChatThreadMessages(projectId, chatId);
+        if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
             aiChatProjectsSaveInFlightRef.current) return;
-        const quickMessages: AiChatMessage[] = history.messages
-          .filter(message => (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-          .map(message => ({ ...message, id: message.id ?? crypto.randomUUID() }));
+        const remote: AiChatMessage[] = messages
+          .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map((message, index) => ({ ...message, id: message.id ?? `${index}-${message.role}-${message.content}` }));
         setAiChatProjects(previous => {
-          const base = normalizeAiChatProjects(response.projects?.length ? response.projects : previous, quickMessages);
-          const updated = feed ? mergeTelegramAiInbox(base, feed) : base;
-          const nextHash = JSON.stringify(updated);
-          aiChatProjectsRemoteSnapshotRef.current = nextHash;
-          return JSON.stringify(previous) === nextHash ? previous : updated;
+          const project = previous.find(item => item.id === projectId);
+          const chat = project?.chats.find(item => item.id === chatId);
+          if (!chat) return previous;
+          const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
+          if (merged === chat.messages) return previous;
+          const updated = previous.map(item => item.id !== projectId ? item : {
+            ...item, chats: item.chats.map(thread =>
+              thread.id === chatId ? { ...thread, messages: merged } : thread)
+          });
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+          return updated;
         });
       } catch (error) {
-        console.warn('[AI chat] refreshing shared history failed', error);
+        console.warn('[AI chat] active conversation refresh failed', error);
       } finally {
         aiChatProjectsPollingRef.current = false;
       }
     };
-    const interval = window.setInterval(() => void refresh(), 12_000);
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2500);
     const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
     window.addEventListener('focus', focus);
     document.addEventListener('visibilitychange', focus);
     window.addEventListener('telegram-ai-assistant-updated', focus);
     return () => {
-      active = false;
-      window.clearInterval(interval);
+      alive = false;
+      window.clearInterval(timer);
       window.removeEventListener('focus', focus);
       document.removeEventListener('visibilitychange', focus);
       window.removeEventListener('telegram-ai-assistant-updated', focus);
     };
-  }, [currentUser?.id, aiChatLoading]);
+  }, [currentUser?.id, isAiChatOpen, quickAiPreviewHovered, activeAiChatProject?.id, activeAiChat?.id,
+      aiChatProjects[0]?.id, aiChatLoading]);
 
   const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
@@ -2840,7 +2860,13 @@ ${allContext}`,
   };
 
   useEffect(() => {
-    const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
+    const container = quickAiChatDialogContainerRef.current;
+    if (!container) return;
+    const frameId = window.requestAnimationFrame(() => {
+      // Background chat sync must not move a manually scrolled transcript.
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 110;
+      if (isAtBottom) scrollQuickAiChatToBottom();
+    });
     return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress]);
 
@@ -7848,7 +7874,8 @@ ${allContext}`,
 
       <div
         className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px] ${focusedTask ? 'ai-chat-launcher-task-open' : ''}`}
-        onMouseEnter={() => { scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
+        onMouseEnter={() => { setQuickAiPreviewHovered(true); scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
+        onMouseLeave={() => setQuickAiPreviewHovered(false)}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
         <div className={`absolute bottom-14 right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
