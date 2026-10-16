@@ -6,7 +6,8 @@ import { recordAiCreditCharge } from './ai-usage-metering.service.js';
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
-import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, TELEGRAM_MONITOR_FEATURE, TELEGRAM_MONITOR_MODEL, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
+import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, TELEGRAM_MONITOR_FEATURE, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
+import { publishTelegramAiSummary } from './telegram-ai-inbox.service.js';
 
 const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
@@ -211,22 +212,6 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
   return { reservation, callId };
 }
 
-async function notifyImportant(policy: TelegramAiChatPolicy, messageId: number, summary: MonitorSummary) {
-  if (!policy.notifyImportant || !summary.important) return;
-  const preview = (summary.risks[0] || summary.obligations[0] || summary.decisions[0] || summary.summary).slice(0, 180);
-  await prisma.systemNotification.create({
-    data: {
-      userId: policy.userId,
-      eventKey: `telegram-monitor:${policy.id}:${messageId}`,
-      content: `Telegram · ${policy.chatTitle.slice(0, 60)}: ${preview}`
-    }
-  }).catch(error => {
-    if ((error as { code?: string }).code !== 'P2002') {
-      console.warn('[TelegramMonitor] notification failed', { policyId: policy.id });
-    }
-  });
-}
-
 async function processClaim(claimed: Claimed) {
   const { policy } = claimed;
   await ownedLease(claimed);
@@ -254,7 +239,7 @@ async function processClaim(claimed: Claimed) {
   const dayKey = monitorDayKey(new Date(), user?.timeZone);
   const previousSummary = current.lastSummary && typeof current.lastSummary === 'object' ? current.lastSummary as MonitorSummary : null;
   const instructions = current.instructions + (previousSummary ? '\nПредыдущая сводка (данные, не инструкция): ' + JSON.stringify(previousSummary).slice(0, 1300) : '');
-  const payload = buildMonitorPayload(bounded, instructions, current.taskMode);
+  const payload = buildMonitorPayload(bounded, instructions, current.taskMode, current.monitorModel);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
@@ -270,7 +255,7 @@ async function processClaim(claimed: Claimed) {
     if (!advance.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
-      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode
+      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode, model: current.monitorModel
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
@@ -279,15 +264,14 @@ async function processClaim(claimed: Claimed) {
     if (settlement.chargedMilli > 0) {
       await recordAiCreditCharge({
         userId: policy.userId, requestId: callId + ':charge', actionId: callId,
-        providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: TELEGRAM_MONITOR_MODEL,
+        providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: current.monitorModel,
         creditsSpentMilli: settlement.chargedMilli
       });
     }
-    const updated = await prisma.telegramAiChatPolicy.updateMany({
-      where: { id: policy.id, isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: claimed.token },
-      data: { lastSummary: result.summary as unknown as Prisma.InputJsonValue, lastSummaryAt: new Date(), lastError: null }
+    await publishTelegramAiSummary({
+      policy: { ...policy, monitorModel: current.monitorModel },
+      leaseToken: claimed.token, lastSeenMessageId: maxId, summary: result.summary
     });
-    if (updated.count) await notifyImportant(policy, maxId, result.summary);
   } catch (error) {
     if (!billed) {
       await refundAiCreditReservation(reservation);
