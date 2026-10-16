@@ -236,7 +236,13 @@ export const taskService = {
     const recurrenceSchedule = (!isSubtask && input.recurrenceJson && typeof input.recurrenceJson === 'object'
       ? input.recurrenceJson as unknown as RecurrenceSchedule
       : null);
+    if (input.isRecurring && !isSubtask && !recurrenceSchedule?.rrule) {
+      throw new TypeError('Сначала настройте расписание постоянной задачи.');
+    }
     if (recurrenceSchedule?.slots !== undefined) validateManualRecurrenceSchedule(recurrenceSchedule);
+    if (input.isRecurring && !isSubtask && recurrenceSchedule && !computeNextRecurringDueDate(recurrenceSchedule, new Date())) {
+      throw new TypeError('Для постоянной задачи не найдено будущих повторений.');
+    }
     const resolvedDueDate = (input.dueDate !== undefined && input.dueDate !== null)
       ? toDueDate(input.dueDate)
       : input.isRecurring && recurrenceSchedule
