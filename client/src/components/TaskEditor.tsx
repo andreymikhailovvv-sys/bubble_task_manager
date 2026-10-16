@@ -327,6 +327,7 @@ export function TaskEditor({
   const [recurrencePeriod, setRecurrencePeriod] = useState<RecurrencePeriod>("DAILY");
   const [recurrenceSlots, setRecurrenceSlots] = useState<RecurrenceSlot[]>(defaultRecurrenceSlots);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
+  const [recurrenceAiReady, setRecurrenceAiReady] = useState(false);
   const [recurrenceSummary, setRecurrenceSummary] = useState<string | null>(
     null,
   );
@@ -426,6 +427,7 @@ export function TaskEditor({
     setRecurrencePeriod(previousRule?.period ?? "DAILY");
     setRecurrenceSlots(previousRule?.slots ?? defaultRecurrenceSlots());
     setRecurrenceError(null);
+    setRecurrenceAiReady(Boolean(nextForm.recurrenceJson));
     setRecurrenceSummary(nextForm.recurrenceSummary ?? null);
     setRecurrenceNextDueLabel(
       nextForm.dueDate
@@ -661,6 +663,7 @@ export function TaskEditor({
     try {
       const { schedule, summary } = buildManualRecurrence(period, slots, timeZone);
       setRecurrenceError(null);
+      setRecurrenceAiReady(false);
       setRecurrenceSummary(summary);
       setRecurrenceNextDueLabel(null);
       setForm((previous) => ({
@@ -682,8 +685,9 @@ export function TaskEditor({
     };
     if (recurrencePeriod === "DAILY") {
       const used = new Set(recurrenceSlots.map((slot) => slot.time));
-      for (let hour = 7; hour <= 22; hour += 1) {
-        const proposed = String(hour).padStart(2, "0") + ":00";
+      for (let tick = 0; tick < 48; tick += 1) {
+        const hour = Math.floor(tick / 2);
+        const proposed = String(hour).padStart(2, "0") + ":" + (tick % 2 ? "30" : "00");
         if (!used.has(proposed)) { next.time = proposed; break; }
       }
     }
@@ -695,11 +699,12 @@ export function TaskEditor({
     if (method === recurrenceMethod) return;
     setRecurrenceMethod(method);
     setRecurrenceError(null);
+    if (method === "ai") setRecurrenceAiReady(false);
     if (method === "manual") commitManualRecurrence(recurrencePeriod, recurrenceSlots);
     else {
       setRecurrenceSummary(null);
       setRecurrenceNextDueLabel(null);
-      setForm((previous) => ({ ...previous, recurrenceJson: null, recurrenceSummary: null, dueDate: null }));
+      // Keep the existing schedule in an edited task until AI returns a valid replacement.
     }
   };
 
@@ -726,6 +731,7 @@ export function TaskEditor({
         recurrenceUntil: parsed.schedule.until,
         dueDate: parsed.nextDueDate,
       }));
+      setRecurrenceAiReady(true);
     } catch (error) {
       setRecurrenceError(error instanceof Error ? error.message : "Не удалось настроить повторение через ИИ.");
     } finally {
@@ -765,7 +771,7 @@ export function TaskEditor({
       titleInputRef.current?.focus();
       return;
     }
-    if (isRecurring && !form.recurrenceJson) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
+    if (isRecurring && (!form.recurrenceJson || (recurrenceMethod === "ai" && !recurrenceAiReady))) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
     setTitleError(null);
     await onSave(form, draftSubtasks);
   };
