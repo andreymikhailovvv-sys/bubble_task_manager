@@ -29,7 +29,7 @@ function afterValue(action: TaskProposalAction): string {
     .map(key => key + ': ' + String(action[key]).slice(0, 120)).join(' · ').slice(0, 240);
 }
 function isCreate(action: TaskProposalAction): boolean {
-  return ['create_task', 'create_event', 'create_subtask', 'telegram_suggestion'].includes(label(action));
+  return ['create_task', 'create_event', 'create_reminder', 'create_subtask', 'telegram_suggestion'].includes(label(action));
 }
 export function proposalView(row: {
   id: string; status: string; source: string; autoApplied: boolean; display: unknown; result: unknown; error: string | null;
