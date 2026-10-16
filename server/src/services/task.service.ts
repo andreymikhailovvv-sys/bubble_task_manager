@@ -110,8 +110,8 @@ export const computeNextRecurringDueDate = (schedule: RecurrenceSchedule, baseli
     for (let i = 0; i < 24; i += 1) {
       const probe = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + i, 1, next.getUTCHours(), next.getUTCMinutes(), 0, 0));
       for (const day of monthDays) {
-        const candidate = new Date(Date.UTC(probe.getUTCFullYear(), probe.getUTCMonth(), day, next.getUTCHours(), next.getUTCMinutes(), 0, 0));
-        if (candidate.getUTCMonth() !== probe.getUTCMonth()) continue;
+        const lastDay = new Date(Date.UTC(probe.getUTCFullYear(), probe.getUTCMonth() + 1, 0)).getUTCDate();
+        const candidate = new Date(Date.UTC(probe.getUTCFullYear(), probe.getUTCMonth(), Math.min(day, lastDay), next.getUTCHours(), next.getUTCMinutes(), 0, 0));
         if (candidate > baseline) return until && candidate > until ? null : candidate;
       }
     }
