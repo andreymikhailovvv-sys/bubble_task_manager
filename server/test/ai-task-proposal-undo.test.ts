@@ -17,7 +17,7 @@ test('Telegram text and voice calls force task auto-apply and persist their prop
   assert.match(tools, /source: input\.autoApplyTaskActions \? 'telegram_bot' : 'planner'/);
   assert.match(telegram, /recordAppliedTelegramBotTask/);
   assert.match(telegram, /telegram-create:/);
-  assert.match(source('../src/services/ai-task-proposal.service.ts'), /status: 'APPLIED',[\\s\\S]*undoData: undoData/);
+  assert.match(source('../src/services/ai-task-proposal.service.ts'), /status: 'APPLIED',[\s\S]*undoData: undoData/);
 });
 
 test('undo is owner-scoped, one-shot and rejects data added after AI actions', () => {
