@@ -1290,7 +1290,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   };
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
-  const timelinePickerTasks = useMemo(() => tasks.map((task) => {
+  const timelinePickerTasks = useMemo(() => tasks.filter(task => task.taskType !== 'REMINDER').map((task) => {
     const colorSourceTask = task.parentTaskId ? taskById.get(task.parentTaskId) ?? task : task;
     return {
       id: task.id,
