@@ -27,6 +27,7 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from './lib/ai-chat-reconciliation';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
@@ -163,7 +164,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
     ...existingQuickChat,
     id: QUICK_AI_CHAT_ID,
     title: QUICK_AI_CHAT_TITLE,
-    messages: (existingQuickChat?.messages ?? []).slice(-20)
+    messages: (existingQuickChat?.messages ?? []).slice(-100)
   };
   normalized[0] = {
     ...defaultProject,
@@ -804,10 +805,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   });
   const aiChatProjectsSyncReadyRef = useRef(false);
   const aiChatProjectsSaveTimerRef = useRef<number | null>(null);
+  const aiChatProjectsRemoteSnapshotRef = useRef('');
+  const aiChatProjectsSaveInFlightRef = useRef(false);
+  const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
+  const generalAiChatNearBottomRef = useRef(true);
+  const previousGeneralAiChatIdRef = useRef('');
   const [isGeneralAiChatHeaderHidden, setIsGeneralAiChatHeaderHidden] = useState(false);
   const aiChatFileInputRef = useRef<HTMLInputElement | null>(null);
   const taskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -876,6 +882,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiDialogByTask({});
       aiChatProjectsSyncReadyRef.current = false;
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+      aiChatProjectsRemoteSnapshotRef.current = '';
+      aiChatProjectsSaveInFlightRef.current = false;
     }
     setError(null);
     try {
@@ -906,8 +914,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       ]);
       const quickMessages: MiniAiChatMessage[] = quickHistory.messages
         .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-        .map((message) => attachChatMessageId(message, crypto.randomUUID()))
-        .slice(-20);
+        .map((message) => attachChatMessageId(message, message.id ?? crypto.randomUUID()))
+        .slice(-100);
       const nextAiChatProjects = normalizeMiniAiChatProjects(syncedProjects.projects).map((project, projectIndex) => projectIndex === 0 ? {
         ...project,
         chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: quickMessages } : chat)
@@ -926,6 +934,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         const telegramProject: MiniAiChatProject = { id: telegramInbox.projectId, title: telegramInbox.projectTitle, color: '#229ed9', icon: 'telegram', chats: telegramChats };
         if (idx >= 0) nextAiChatProjects[idx] = telegramProject;
         else nextAiChatProjects.push(telegramProject);
+      }
+      aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(nextAiChatProjects);
+      if (!syncedProjects.projects?.length) {
+        void api.saveAiChatProjects(nextAiChatProjects).catch(error => console.warn('[MiniApp AI chat] initial project sync failed', error));
       }
       setAiChatProjects(nextAiChatProjects);
       setActiveAiChatProjectId(nextAiChatProjects[0]?.id ?? '');
@@ -2535,10 +2547,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(aiChatProjects));
-    if (aiChatProjectsSyncReadyRef.current) {
+    const snapshot = JSON.stringify(aiChatProjects);
+    if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
       aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
-        void api.saveAiChatProjects(aiChatProjects).catch((error) => console.error('[MiniApp AI chat] sync failed', error));
+        aiChatProjectsSaveTimerRef.current = null;
+        aiChatProjectsSaveInFlightRef.current = true;
+        void api.saveAiChatProjects(aiChatProjects)
+          .then(() => { aiChatProjectsRemoteSnapshotRef.current = snapshot; })
+          .catch(error => console.error('[MiniApp AI chat] sync failed', error))
+          .finally(() => { aiChatProjectsSaveInFlightRef.current = false; });
       }, 400);
     }
     return () => {
@@ -2548,12 +2566,95 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
 
 
+  // Mirror task-chat sync: only the open conversation is read. Never replace
+  // the whole project/chat tree on a timer or reset active selection.
+  useEffect(() => {
+    if (!currentUser?.id || !isAiChatOpen) return;
+    const projectId = activeAiChatProject?.id;
+    const chatId = activeAiChat?.id;
+    if (!projectId || !chatId) return;
+    let alive = true;
+    const refresh = async () => {
+      if (!alive || aiChatLoading || aiChatProjectsPollingRef.current ||
+          aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
+          document.visibilityState === 'hidden') return;
+      aiChatProjectsPollingRef.current = true;
+      try {
+        if (chatId.startsWith('telegram-ai-assistant:')) {
+          const feed = await api.telegramAssistantInbox();
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const project = previous.find(p => p.id === feed.projectId);
+            const thread = project?.chats.find(c => c.id === chatId);
+            if (!thread) return previous;
+            const remote = feed.messages.filter(m => m.chatId === chatId)
+              .map(m => ({ id: m.id, role: 'assistant' as const, content: m.content,
+                taskProposal: m.taskProposal ?? undefined }));
+            const merged = reconcileActiveAiChatMessages(thread.messages, remote, aiChatLoading);
+            if (merged === thread.messages) return previous;
+            const updated = previous.map(p => p.id !== feed.projectId ? p : {
+              ...p, chats: p.chats.map(c => c.id !== chatId ? c : { ...c, messages: merged })
+            });
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+            return updated;
+          });
+          return;
+        }
+        const { messages, projectsOutline } = await api.getAiChatThreadMessages(projectId, chatId);
+        if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+            aiChatProjectsSaveInFlightRef.current) return;
+        const remote: MiniAiChatMessage[] = messages
+          .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map((message, index) => attachChatMessageId(message,
+            message.id ?? `${index}-${message.role}-${message.content}`));
+        setAiChatProjects(previous => {
+          const outlined = reconcileAiChatProjectOutline(previous, projectsOutline);
+          const chat = outlined.find(p => p.id === projectId)?.chats.find(c => c.id === chatId);
+          if (!chat) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
+          const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
+          if (merged === chat.messages) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
+          const updated = outlined.map(p => p.id !== projectId ? p : {
+            ...p, chats: p.chats.map(c => c.id === chatId ? { ...c, messages: merged } : c)
+          });
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+          return updated;
+        });
+      } catch (error) {
+        console.warn('[MiniApp AI chat] active thread sync failed', error);
+      } finally {
+        aiChatProjectsPollingRef.current = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2500);
+    const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', focus);
+    };
+  }, [currentUser?.id, isAiChatOpen, activeAiChatProject?.id, activeAiChat?.id, aiChatLoading]);
+
   useEffect(() => {
     const container = aiChatDialogContainerRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-    generalAiChatScrollTopRef.current = container.scrollHeight;
-  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen]);
+    if (!container || !isAiChatOpen) return;
+    if (previousGeneralAiChatIdRef.current !== activeAiChatId) {
+      previousGeneralAiChatIdRef.current = activeAiChatId;
+      generalAiChatNearBottomRef.current = true;
+    }
+    if (!generalAiChatNearBottomRef.current) return;
+    container.scrollTop = container.scrollHeight;
+    generalAiChatScrollTopRef.current = container.scrollTop;
+  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
 
   useEffect(() => {
     if (!isAiChatOpen) return;
@@ -4495,7 +4596,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </select>
             </div>
             <div className="miniapp-ai-chat-thread-wrap relative min-h-0 flex-1">
-              <div ref={aiChatDialogContainerRef} onScroll={(event) => updateAiChatHeaderVisibility(event.currentTarget.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden)} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              <div ref={aiChatDialogContainerRef} onScroll={(event) => {
+                const container = event.currentTarget;
+                generalAiChatNearBottomRef.current =
+                  container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+                updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
+              }} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {(activeAiChat?.messages ?? []).length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>

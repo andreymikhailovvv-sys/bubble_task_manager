@@ -35,6 +35,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from './lib/ai-chat-reconciliation';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
@@ -421,7 +422,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const defaultProject = normalized[0] ?? fallback[0];
   const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
-  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: existingQuickChat?.messages?.length ? existingQuickChat.messages : quickChat.messages };
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: quickMessages.slice(-100) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
   return normalized;
 }
@@ -1053,6 +1054,7 @@ export default function App() {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
+  const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna');
   const [aiChatLoading, setAiChatLoading] = useState(false);
@@ -1071,6 +1073,9 @@ export default function App() {
   });
   const aiChatProjectsSyncReadyRef = useRef(false);
   const aiChatProjectsSaveTimerRef = useRef<number | null>(null);
+  const aiChatProjectsRemoteSnapshotRef = useRef('');
+  const aiChatProjectsSaveInFlightRef = useRef(false);
+  const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? QUICK_AI_CHAT_ID);
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
@@ -1424,6 +1429,8 @@ export default function App() {
   useEffect(() => {
     aiChatProjectsSyncReadyRef.current = false;
     if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
+    aiChatProjectsRemoteSnapshotRef.current = '';
+    aiChatProjectsSaveInFlightRef.current = false;
     if (!currentUser) {
       setAiDialogByTask({});
       setAiReadCursorByTask({});
@@ -1464,13 +1471,18 @@ export default function App() {
         if (isCancelled) return;
         const normalized = result.messages
           .filter((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
-          .map((message) => ({ id: crypto.randomUUID(), role: message.role, content: message.content }));
+          .map((message) => ({
+            ...message, id: message.id ?? crypto.randomUUID(), role: message.role, content: message.content
+          }));
         setGeneralAiMessages(normalized);
         setAiChatProjects((prev) => {
           const source = syncedProjects.projects?.length ? syncedProjects.projects : prev;
           const base = normalizeAiChatProjects(source, normalized);
           const next = telegramInbox ? mergeTelegramAiInbox(base, telegramInbox) : base;
-          if (!syncedProjects.projects?.length) void api.saveAiChatProjects(next).catch(() => undefined);
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(next);
+          if (!syncedProjects.projects?.length) {
+            void api.saveAiChatProjects(next).catch(error => console.warn('[AI chat] initial project sync failed', error));
+          }
           return next;
         });
         aiChatProjectsSyncReadyRef.current = true;
@@ -2751,40 +2763,98 @@ ${allContext}`,
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
-    let alive = true;
-    const refresh = async () => {
-      try {
-        const feed = await api.telegramAssistantInbox();
-        if (alive) setAiChatProjects(previous => mergeTelegramAiInbox(previous, feed));
-      } catch (error) {
-        console.warn('[Telegram AI inbox] sync unavailable', error);
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 15_000);
-    window.addEventListener('telegram-ai-assistant-updated', refresh);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-      window.removeEventListener('telegram-ai-assistant-updated', refresh);
-    };
-  }, [currentUser?.id]);
-
-  useEffect(() => {
     localStorage.setItem('btm:ai-chat-projects', JSON.stringify(aiChatProjects));
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
-    if (aiChatProjectsSyncReadyRef.current) {
+    const snapshot = JSON.stringify(aiChatProjects);
+    if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
       aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
-        void api.saveAiChatProjects(aiChatProjects).catch((error) => console.error('[AI chat] sync failed', error));
+        aiChatProjectsSaveTimerRef.current = null;
+        aiChatProjectsSaveInFlightRef.current = true;
+        void api.saveAiChatProjects(aiChatProjects)
+          .then(() => { aiChatProjectsRemoteSnapshotRef.current = snapshot; })
+          .catch((error) => console.error('[AI chat] sync failed', error))
+          .finally(() => { aiChatProjectsSaveInFlightRef.current = false; });
       }, 400);
     }
     return () => {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
     };
   }, [aiChatProjects]);
+
+  // Same pattern as the existing task-AI chats: fetch the currently open
+  // conversation only, compare messages and leave all other UI state alone.
+  useEffect(() => {
+    if (!currentUser?.id || (!isAiChatOpen && !quickAiPreviewHovered)) return;
+    const projectId = isAiChatOpen ? activeAiChatProject?.id : aiChatProjects[0]?.id;
+    const chatId = isAiChatOpen ? activeAiChat?.id : QUICK_AI_CHAT_ID;
+    if (!projectId || !chatId) return;
+    let alive = true;
+    const refresh = async () => {
+      if (!alive || aiChatLoading || aiChatProjectsPollingRef.current ||
+          aiChatProjectsSaveTimerRef.current !== null || aiChatProjectsSaveInFlightRef.current ||
+          document.visibilityState === 'hidden') return;
+      aiChatProjectsPollingRef.current = true;
+      try {
+        if (chatId.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX)) {
+          const inbox = await api.telegramAssistantInbox();
+          if (!alive) return;
+          setAiChatProjects(previous => {
+            const updated = mergeTelegramAiInbox(previous, inbox);
+            if (JSON.stringify(updated) === JSON.stringify(previous)) return previous;
+            aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+            return updated;
+          });
+          return;
+        }
+        const { messages, projectsOutline } = await api.getAiChatThreadMessages(projectId, chatId);
+        if (!alive || aiChatLoading || aiChatProjectsSaveTimerRef.current !== null ||
+            aiChatProjectsSaveInFlightRef.current) return;
+        const remote: AiChatMessage[] = messages
+          .filter(message => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string')
+          .map((message, index) => ({ ...message, id: message.id ?? `${index}-${message.role}-${message.content}` }));
+        setAiChatProjects(previous => {
+          const outlined = reconcileAiChatProjectOutline(previous, projectsOutline);
+          const project = outlined.find(item => item.id === projectId);
+          const chat = project?.chats.find(item => item.id === chatId);
+          if (!chat) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
+          const merged = reconcileActiveAiChatMessages(chat.messages, remote, aiChatLoading);
+          if (merged === chat.messages) {
+            if (outlined !== previous) aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(outlined);
+            return outlined;
+          }
+          const updated = outlined.map(item => item.id !== projectId ? item : {
+            ...item, chats: item.chats.map(thread =>
+              thread.id === chatId ? { ...thread, messages: merged } : thread)
+          });
+          aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+          return updated;
+        });
+      } catch (error) {
+        console.warn('[AI chat] active conversation refresh failed', error);
+      } finally {
+        aiChatProjectsPollingRef.current = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2500);
+    const focus = () => { if (document.visibilityState === 'visible') void refresh(); };
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
+    window.addEventListener('telegram-ai-assistant-updated', focus);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', focus);
+      window.removeEventListener('telegram-ai-assistant-updated', focus);
+    };
+  }, [currentUser?.id, isAiChatOpen, quickAiPreviewHovered, activeAiChatProject?.id, activeAiChat?.id,
+      aiChatProjects[0]?.id, aiChatLoading]);
 
   const scrollQuickAiChatToBottom = () => {
     const container = quickAiChatDialogContainerRef.current;
@@ -2797,7 +2867,13 @@ ${allContext}`,
   };
 
   useEffect(() => {
-    const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
+    const container = quickAiChatDialogContainerRef.current;
+    if (!container) return;
+    const frameId = window.requestAnimationFrame(() => {
+      // Background chat sync must not move a manually scrolled transcript.
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 110;
+      if (isAtBottom) scrollQuickAiChatToBottom();
+    });
     return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress]);
 
@@ -7805,7 +7881,8 @@ ${allContext}`,
 
       <div
         className={`ai-chat-launcher group fixed bottom-8 right-6 z-[95] lg:right-[360px] ${focusedTask ? 'ai-chat-launcher-task-open' : ''}`}
-        onMouseEnter={() => { scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
+        onMouseEnter={() => { setQuickAiPreviewHovered(true); scheduleQuickAiChatScrollToBottom(); markSystemNotificationsRead(); }}
+        onMouseLeave={() => setQuickAiPreviewHovered(false)}
         onFocus={scheduleQuickAiChatScrollToBottom}
       >
         <div className={`absolute bottom-14 right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>

@@ -101,6 +101,8 @@ export type AiTaskProposal = {
 };
 
 export type ChatMessage = {
+  id?: string;
+  createdAt?: string;
   role: 'user' | 'assistant';
   content: string;
   creditsSpentMilli?: number;

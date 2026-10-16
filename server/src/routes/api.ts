@@ -1,3 +1,5 @@
+import { mergeChatProjectSnapshots } from '../lib/ai-chat-project-sync.js';
+import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
@@ -1419,6 +1421,45 @@ apiRouter.post('/telegram-user-client/chat/send-confirm', requireAuth, requireTe
   catch (error) { telegramAuthError(res, error); }
 });
 
+// Like task-AI chat history: read only the *open* conversation, never
+// replace the full project tree just to deliver another assistant message.
+apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth, asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store, private');
+  const userId = req.user!.id;
+  const { projectId, chatId } = req.params;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { aiChatProjects: true } });
+  const projects = Array.isArray(user?.aiChatProjects) ? user.aiChatProjects : [];
+  const outline = projects.filter((entry): entry is Prisma.JsonObject =>
+    entry != null && typeof entry === 'object' && !Array.isArray(entry) &&
+    typeof (entry as { id?: unknown }).id === 'string')
+    .map(entry => ({
+      id: String(entry.id), title: String(entry.title ?? ''), color: String(entry.color ?? '#8b5cf6'),
+      icon: String(entry.icon ?? '✨'),
+      chats: (Array.isArray(entry.chats) ? entry.chats : [])
+        .filter((item): item is Prisma.JsonObject =>
+          item != null && typeof item === 'object' && !Array.isArray(item) &&
+          typeof (item as { id?: unknown }).id === 'string')
+        .map(item => ({ id: String(item.id), title: String(item.title ?? '') }))
+    }));
+  if (chatId === 'quick-ai-requests') {
+    const messages = await aiAssistantService.listGeneralDialog({ userId });
+    res.json({ messages, projectsOutline: outline });
+    return;
+  }
+  const project = projects.find((entry: unknown) =>
+    entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
+    (entry as { id?: unknown }).id === projectId) as { chats?: unknown } | undefined;
+  const chats = Array.isArray(project?.chats) ? project.chats : [];
+  const chat = chats.find((entry: unknown) =>
+    entry !== null && typeof entry === 'object' && !Array.isArray(entry) &&
+    (entry as { id?: unknown }).id === chatId) as { messages?: unknown } | undefined;
+  if (!chat || !Array.isArray(chat.messages)) {
+    res.status(404).json({ error: 'Диалог не найден' });
+    return;
+  }
+  res.json({ messages: chat.messages.slice(-300), projectsOutline: outline });
+}));
+
 apiRouter.get('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -1458,11 +1499,23 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     res.status(413).json({ error: 'История чатов слишком большая' });
     return;
   }
-  await prisma.user.update({
-    where: { id: req.user!.id },
-    data: { aiChatProjects: projects }
+  // Serialize concurrent website / Mini App saves for one account.
+  // Without row locking, an older full snapshot can erase new messages.
+  const mergedProjects = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.user!.id} FOR UPDATE`;
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: req.user!.id }, select: { aiChatProjects: true }
+    });
+    const merged = mergeChatProjectSnapshots(user.aiChatProjects, projects);
+    if (Buffer.byteLength(JSON.stringify(merged), 'utf8') > 2_000_000) {
+      throw new Error('История чатов слишком большая');
+    }
+    await tx.user.update({
+      where: { id: req.user!.id }, data: { aiChatProjects: merged as Prisma.InputJsonValue }
+    });
+    return merged;
   });
-  const existingPairs = projects.flatMap((project: unknown) => {
+  const existingPairs = mergedProjects.flatMap((project: unknown) => {
     if (!project || typeof project !== 'object' || typeof (project as { id?: unknown }).id !== 'string' || !Array.isArray((project as { chats?: unknown }).chats)) return [];
     const projectId = (project as { id: string }).id;
     return ((project as { chats: unknown[] }).chats).flatMap((chat) => chat && typeof chat === 'object' && typeof (chat as { id?: unknown }).id === 'string' ? [{ projectId, chatId: (chat as { id: string }).id }] : []);
@@ -1473,7 +1526,7 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
       ...(existingPairs.length ? { NOT: { OR: existingPairs } } : {})
     }
   });
-  res.json({ projects });
+  res.json({ projects: mergedProjects });
 }));
 
 apiRouter.get('/ai-documents/download', asyncHandler(aiGeneratedDocumentController.downloadWithToken));

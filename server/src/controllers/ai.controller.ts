@@ -175,12 +175,9 @@ export const aiController = {
 
   getGeneralAssistantHistory: async (req: Request, res: Response) => {
     try {
-      const todayUtc = new Date();
-      todayUtc.setUTCHours(0, 0, 0, 0);
       const userTimeZone = await resolveUserTimeZone(req);
       const messages = await aiAssistantService.listGeneralDialog({
         userId: req.user!.id,
-        since: todayUtc,
         userTimeZone
       });
       res.json({ messages });
