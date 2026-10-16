@@ -1945,9 +1945,11 @@ export const aiAssistantService = {
         userId: input.userId,
         ...(input.since ? { createdAt: { gte: input.since } } : {})
       },
-      orderBy: { createdAt: 'asc' },
-      select: { role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true }
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true }
     });
+    messages.reverse();
 
     const proposalIds = messages.map(m => m.aiTaskProposalId).filter((id): id is string => Boolean(id));
     const proposals = proposalIds.length ? await prisma.aiTaskProposal.findMany({
@@ -1955,6 +1957,8 @@ export const aiAssistantService = {
     }) : [];
     const byId = new Map(proposals.map(p => [p.id, proposalView(p)]));
     return messages.map((message) => ({
+      id: message.id,
+      createdAt: message.createdAt.toISOString(),
       role: message.role,
       content: message.content,
       ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
