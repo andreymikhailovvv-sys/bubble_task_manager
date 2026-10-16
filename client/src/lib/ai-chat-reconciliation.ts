@@ -76,3 +76,27 @@ export function reconcileAiChatProjectOutline<
   if (!changed) return local;
   return [...result, ...managed];
 }
+
+/**
+ * Telegram inbox polling contains published monitor summaries, not every
+ * conversation message. Preserve locally rendered assistant replies and
+ * pending consent/send cards while updating and appending inbox events.
+ */
+export function mergeTelegramManagedMessages<T extends IdentifiedChatMessage>(
+  local: T[], remoteSummaries: T[]
+): T[] {
+  const byId = new Map(local.map(message => [message.id, message] as const));
+  for (const incoming of remoteSummaries) {
+    const existing = byId.get(incoming.id);
+    if (!existing) {
+      byId.set(incoming.id, incoming);
+      continue;
+    }
+    const merged = { ...existing, ...incoming };
+    byId.set(incoming.id, JSON.stringify(merged) === JSON.stringify(existing) ? existing : merged);
+  }
+  const next = [...byId.values()].slice(-300);
+  return next.length === local.length && next.every((message, index) => message === local[index])
+    ? local
+    : next;
+}
