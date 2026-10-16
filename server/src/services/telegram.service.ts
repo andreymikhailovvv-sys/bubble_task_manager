@@ -255,8 +255,8 @@ export const telegramAiActionKeyboard = (
   taskId?: string
 ) => ({
   inline_keyboard: [
-    ...(proposalId ? [[{ text: '↩️ Отменить', callback_data: `aiundo:${proposalId}` }]] : []),
-    [{ text: '📱 Открыть в приложении', web_app: { url: openUrl } }],
+    ...(proposalId ? [[{ text: 'Отменить', callback_data: `aiundo:${proposalId}` }]] : []),
+    [{ text: 'Открыть в приложении', web_app: { url: openUrl } }],
     ...(taskId ? [[{ text: '⬅️ Назад', callback_data: `backtask:${taskId}` }]] : [])
   ]
 });
@@ -1502,6 +1502,10 @@ const handleCallback = async (update: TelegramUpdate) => {
     }
     try {
       const existing = await getTaskProposal(userId, taskId);
+      if (!['telegram_bot', 'telegram_bot_task'].includes(existing.source)) {
+        await answerCallback(callback.id, 'Эту карточку нельзя отменить через бота');
+        return;
+      }
       if (existing.status === 'UNDONE') {
         await answerCallback(callback.id, 'Изменения уже отменены');
         await telegramRequest('editMessageReplyMarkup', {
