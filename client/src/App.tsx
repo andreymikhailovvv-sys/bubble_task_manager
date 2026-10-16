@@ -4307,7 +4307,7 @@ ${allContext}`,
           {isReminderChip ? <BellRing size={12} className="shrink-0 text-sky-500" /> : null}
           {isSubtaskChip ? <span className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: parentSphereColor }} /> : null}
           <span className={`truncate transition-all duration-300 ${isCompletingInTimeline || isCompletingOutsideTimeline ? 'timeline-task-chip-completed line-through decoration-2' : ''}`}>
-            <LinkifiedText text={task.title} stopPropagationOnLinkClick />
+            {isReminderChip ? task.title : <LinkifiedText text={task.title} stopPropagationOnLinkClick />}
           </span>
           {!isEventChip && !isReminderChip && hasUnreadAiMessage(task.id) ? <span title="Непрочитанное ИИ-уведомление"><Sparkles size={12} className="timeline-task-ai-icon shrink-0" /></span> : null}
           {!isEventChip && !isReminderChip ? renderWorkspaceCommentIndicator(task, true) : null}
@@ -4452,7 +4452,7 @@ ${allContext}`,
     return [subtask.title, subtask.description ?? '', parentTitle].some((value) => value.toLowerCase().includes(query));
   });
   const timelineOverdueTasks = [...activeTasks, ...subtasks.filter((task) => task.status !== 'DONE')]
-    .filter((task) => task.taskType !== 'EVENT' && isOverdue(task))
+    .filter((task) => task.taskType !== 'EVENT' && task.taskType !== 'REMINDER' && isOverdue(task))
     .sort((a, b) => (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0));
 
   const postponeAllOverdueToToday = async () => {
