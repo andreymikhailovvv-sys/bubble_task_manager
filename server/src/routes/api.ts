@@ -1,3 +1,4 @@
+import { mergeChatProjectSnapshots } from '../lib/ai-chat-project-sync.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
@@ -1458,11 +1459,23 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
     res.status(413).json({ error: 'История чатов слишком большая' });
     return;
   }
-  await prisma.user.update({
-    where: { id: req.user!.id },
-    data: { aiChatProjects: projects }
+  // Serialize concurrent website / Mini App saves for one account.
+  // Without row locking, an older full snapshot can erase new messages.
+  const mergedProjects = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${req.user!.id} FOR UPDATE`;
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: req.user!.id }, select: { aiChatProjects: true }
+    });
+    const merged = mergeChatProjectSnapshots(user.aiChatProjects, projects);
+    if (Buffer.byteLength(JSON.stringify(merged), 'utf8') > 2_000_000) {
+      throw new Error('История чатов слишком большая');
+    }
+    await tx.user.update({
+      where: { id: req.user!.id }, data: { aiChatProjects: merged as Prisma.InputJsonValue }
+    });
+    return merged;
   });
-  const existingPairs = projects.flatMap((project: unknown) => {
+  const existingPairs = mergedProjects.flatMap((project: unknown) => {
     if (!project || typeof project !== 'object' || typeof (project as { id?: unknown }).id !== 'string' || !Array.isArray((project as { chats?: unknown }).chats)) return [];
     const projectId = (project as { id: string }).id;
     return ((project as { chats: unknown[] }).chats).flatMap((chat) => chat && typeof chat === 'object' && typeof (chat as { id?: unknown }).id === 'string' ? [{ projectId, chatId: (chat as { id: string }).id }] : []);
@@ -1473,7 +1486,7 @@ apiRouter.put('/ai-chat/projects', requireAuth, asyncHandler(async (req, res) =>
       ...(existingPairs.length ? { NOT: { OR: existingPairs } } : {})
     }
   });
-  res.json({ projects });
+  res.json({ projects: mergedProjects });
 }));
 
 apiRouter.get('/ai-documents/download', asyncHandler(aiGeneratedDocumentController.downloadWithToken));
