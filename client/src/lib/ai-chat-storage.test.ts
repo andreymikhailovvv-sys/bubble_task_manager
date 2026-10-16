@@ -1,14 +1,15 @@
+import type { ChatMessage } from './types';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeTelegramManagedMessages } from './ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './ai-chat-storage';
 
 test('Telegram summary polling leaves pending read-consent card and user replies intact', () => {
-  const draft = { requestId: 'read-1', requestedChat: 'Работа', chatId: 'group:chat:1', chatName: 'Работа' };
-  const summary = { id: 'summary-1', role: 'assistant' as const, content: 'Сводка', taskProposal: { id: 'task-1', status: 'PENDING' } };
+  const draft = { requestId: 'read-1', requestedChat: 'Работа', chatId: 'group:chat:1', chatName: 'Работа', match: 'exact' as const };
+  const summary: ChatMessage & { id: string } = { id: 'summary-1', role: 'assistant', content: 'Сводка', taskProposal: { id: 'task-1', status: 'PENDING', source: 'telegram_assistant', autoApplied: false, operations: [], result: null, error: null } };
   const user = { id: 'user-1', role: 'user' as const, content: 'Прочитай переписку' };
   const chip = { id: 'chip-1', role: 'assistant' as const, content: 'Доступ требуется', telegramReadDraft: draft };
-  const local = [summary, user, chip];
+  const local: Array<ChatMessage & { id: string }> = [summary, user, chip];
   const feed = [{ ...summary }];
   assert.strictEqual(mergeTelegramManagedMessages(local, feed), local);
   const next = mergeTelegramManagedMessages(local, [{ ...summary, taskProposal: { id: 'task-1', status: 'APPLIED' } },
@@ -22,7 +23,7 @@ test('Telegram summary polling leaves pending read-consent card and user replies
 test('a large chat is compacted for browser storage without changing its in-memory contents', () => {
   const large = Array.from({ length: 100 }, (_, i) => ({
     id: String(i), role: 'assistant' as const, content: 'x'.repeat(9_000),
-    telegramReadDraft: i === 99 ? { requestId: 'last', requestedChat: 'Работа', chatId: 'chat-1', chatName: 'Работа' } : undefined
+    telegramReadDraft: i === 99 ? { requestId: 'last', requestedChat: 'Работа', chatId: 'chat-1', chatName: 'Работа', match: 'exact' as const } : undefined
   }));
   const projects = [{ id: 'p', title: 'Проект', color: '#fff', icon: '✈️',
     chats: [{ id: 'c', title: 'Чат', messages: large }] }];
