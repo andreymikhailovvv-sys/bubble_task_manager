@@ -90,6 +90,9 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
       if (!Array.isArray(saved.before) || !Array.isArray(saved.after) || !Array.isArray(saved.created)) {
         throw new Error('Некорректная история отмены.');
       }
+      if (!saved.before.length && !saved.created.length) {
+        throw new Error('Недостаточно данных для безопасного возврата изменений.');
+      }
       const current = await tx.task.findMany({
         where: { id: { in: [...saved.after, ...saved.created].map(item => item.id) }, AND: [taskAccessWhere(userId)] },
         select: { id: true, updatedAt: true }
