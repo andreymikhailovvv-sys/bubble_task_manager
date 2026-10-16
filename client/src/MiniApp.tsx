@@ -27,7 +27,8 @@ import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline } from './lib/ai-chat-reconciliation';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages } from './lib/ai-chat-reconciliation';
+import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { loadTaskAiRecipientSelection, saveTaskAiRecipientSelection } from './lib/taskAiRecipientStorage';
@@ -2561,7 +2562,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
 
   useEffect(() => {
-    localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(aiChatProjects));
+    persistAiChatProjectsCache(localStorage, AI_CHAT_STORAGE_KEY, aiChatProjects);
     const snapshot = JSON.stringify(aiChatProjects);
     if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
@@ -2605,7 +2606,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             const remote = feed.messages.filter(m => m.chatId === chatId)
               .map(m => ({ id: m.id, role: 'assistant' as const, content: m.content,
                 taskProposal: m.taskProposal ?? undefined }));
-            const merged = reconcileActiveAiChatMessages(thread.messages, remote, aiChatLoading);
+            // Inbox contains summaries only. Never erase pending Telegram
+            // read-consent chips or conversation replies on a 2.5s refresh.
+            const merged = mergeTelegramManagedMessages(thread.messages, remote);
             if (merged === thread.messages) return previous;
             const updated = previous.map(p => p.id !== feed.projectId ? p : {
               ...p, chats: p.chats.map(c => c.id !== chatId ? c : { ...c, messages: merged })
