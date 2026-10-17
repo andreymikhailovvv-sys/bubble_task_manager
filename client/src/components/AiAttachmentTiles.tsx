@@ -34,7 +34,7 @@ function AiAttachmentTile({ file, busy = false, uploadProgress, onRemove }: Tile
     if (kind !== 'image') return;
     const url = URL.createObjectURL(file);
     setImageUrl(url);
-    return () => { URL.revokeObjectURL(url); setImageUrl(null); };
+    return () => { URL.revokeObjectURL(url); };
   }, [file, kind]);
 
   useEffect(() => {
@@ -107,11 +107,12 @@ export async function makeAiAttachmentPreviews(files: File[]): Promise<AiAttachm
     const url = URL.createObjectURL(file);
     try {
       const image = new Image();
-      image.src = url;
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
         image.onerror = () => reject(new Error('Preview not available'));
+        image.src = url;
       });
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error('Invalid image dimensions');
       const scale = Math.min(1, 136 / Math.max(image.naturalWidth, image.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
