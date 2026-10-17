@@ -6,8 +6,8 @@ import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { monitorDayKey } from './telegram-ai-monitor-worker.service.js';
 
-// PR1 has no worker and NO autonomous Telegram access. Configuration is not
-// approval to start reading or writing. PR2 must implement an explicit activation.
+// Each policy is explicitly activated after the owner saves the selected chat.
+// Revocation disables all three independent monitoring schedules.
 const MAX_CHATS = 25;
 const saveLimiter = new FixedWindowRateLimiter(20, 60_000);
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
@@ -30,7 +30,7 @@ export type TelegramAiChatSettings = {
   suggestWhen: string;
   suggestHow: string;
   monitorModel: typeof TELEGRAM_AI_MONITOR_MODELS[number];
-   autoReplyWhen: string;
+  autoReplyWhen: string;
   autoReplyHow: string;
   notifyImportant: boolean;
   reviewAttachments: boolean;
@@ -47,7 +47,7 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   suggestWhen: '',
   suggestHow: '',
   monitorModel: 'gpt-6-luna',
-    autoReplyWhen: '',
+  autoReplyWhen: '',
   autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true,
@@ -71,7 +71,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     const value = p[field];
     if (value !== undefined && (typeof value !== 'string' || value.length > 2000 ||
         /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value))) {
-      throw new TelegramUserClientError(400, 'Условия и стиль автоответов должны быть текстом до 2000 символов');
+      throw new TelegramUserClientError(400, 'Инструкции участия в переписке и сводок должны быть текстом до 2000 символов');
     }
   }
   if (p.mode === 'SUGGEST' && (!(p.suggestWhen as string | undefined)?.trim() ||
@@ -101,7 +101,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     suggestWhen: typeof p.suggestWhen === 'string' ? p.suggestWhen.trim() : '',
     suggestHow: typeof p.suggestHow === 'string' ? p.suggestHow.trim() : '',
     monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
-     autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
+    autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
