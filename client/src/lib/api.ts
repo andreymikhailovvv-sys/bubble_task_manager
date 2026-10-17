@@ -448,9 +448,9 @@ export const api = {
     request<{ url: string; fileName: string }>(`/api/ai-documents/${encodeURIComponent(id)}/download-link`, { method: 'POST' }),
   getSystemNotifications: () => request<{ notifications: Array<{ id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string }>; unreadCount: number }>('/api/system-notifications'),
   markSystemNotificationsRead: () => request<{ ok: true }>('/api/system-notifications/read', { method: 'POST' }),
-  saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
+  saveAiChatProjects: <T extends { chats: Array<{ messages: ChatMessage[] }> }>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
     method: 'PUT',
-    body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects as Array<{ chats: Array<{ messages: ChatMessage[] }> }>) })
+    body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
