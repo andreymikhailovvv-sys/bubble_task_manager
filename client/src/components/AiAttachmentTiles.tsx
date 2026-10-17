@@ -96,22 +96,55 @@ export function AiAttachmentTiles({ files, onRemove, busy, uploadProgress }: {
   </div>;
 }
 
+export type AiAttachmentPreview = { name: string; thumbnail?: string };
+
+/** A tiny, bounded image preview is stored alongside new messages, not the
+ * original attachment. Old history without previews still renders type icons.
+ */
+export async function makeAiAttachmentPreviews(files: File[]): Promise<AiAttachmentPreview[]> {
+  return Promise.all(files.slice(0, 3).map(async (file) => {
+    if (getAiAttachmentKind(file.name, file.type) !== 'image') return { name: file.name };
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('Preview not available'));
+      });
+      const scale = Math.min(1, 136 / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const thumbnail = canvas.toDataURL('image/jpeg', .58);
+      return thumbnail.length <= 22_000 ? { name: file.name, thumbnail } : { name: file.name };
+    } catch {
+      return { name: file.name };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }));
+}
+
 /** Legacy chat history contains filenames as text, not image bytes.
  * Display appropriately styled file cards rather than pretending those bytes
  * are available after a reload. Never turn an untrusted filename into a URL.
  */
-export function AiMessageAttachments({ names }: { names: string[] }) {
+export function AiMessageAttachments({ names, previews }: { names: string[]; previews?: AiAttachmentPreview[] }) {
   if (!names.length) return null;
   return <div className="ai-attachment-tiles ai-attachment-tiles-history" aria-label="Вложения сообщения">
     {names.map((name, i) => {
       const kind = getAiAttachmentKind(name);
       return <div key={`${name}:${i}`} className={`ai-attachment-tile ai-attachment-kind-${kind}`} title={name}>
         <div className="ai-attachment-tile-visual">
-          <span className="ai-attachment-tile-file-icon" aria-hidden="true">
+          {kind === 'image' && previews?.[i]?.name === name && previews[i].thumbnail?.startsWith('data:image/jpeg;base64,')
+            ? <img className="ai-attachment-tile-image" alt="" src={previews[i].thumbnail} />
+            : <span className="ai-attachment-tile-file-icon" aria-hidden="true">
             {kind === 'image' ? <FileImage size={26} /> : kind === 'word' ? <FileText size={26} /> :
               kind === 'excel' ? <FileSpreadsheet size={26} /> : kind === 'pdf' ? <FileType2 size={26} /> : <File size={26} />}
             <span>{kind === 'image' ? 'IMG' : kind === 'word' ? 'W' : kind === 'excel' ? 'X' : kind === 'pdf' ? 'PDF' : 'FILE'}</span>
-          </span>
+          </span>}
         </div>
         <span className="ai-attachment-tile-name">{name}</span>
       </div>;
