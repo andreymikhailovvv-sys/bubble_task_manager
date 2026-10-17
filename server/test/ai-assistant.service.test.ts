@@ -6,7 +6,6 @@ import {
   TASK_ASSISTANT_MAX_ANSWER_CHARS,
   TASK_ASSISTANT_RESPONSE_FORMAT,
   createTaskChatOpenAiPayload,
-  normalizeTaskAssistantActionAnswer,
   parseGeneralAssistantPayload,
   toOpenAiGeneralHistory
 } from '../src/services/ai-assistant.service.js';
@@ -19,24 +18,24 @@ const makeCreateSubtaskActions = (count: number) => Array.from({ length: count }
   dueDate: null
 }));
 
-test('task assistant не обещает изменение без action', () => {
-  const failure = 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
+test('task assistant не подменяет творческий ответ без actions', async () => {
+  const song = ['Сделаю шаг сквозь тишину,', 'Добавлю звёзды в темноту,', 'Создам из света новый мир,', 'И сохраню его мотив.'].join('\n');
+  const parsed = parseGeneralAssistantPayload(JSON.stringify({ answer: song, actions: [], document: null, spreadsheet: null }));
+  assert.equal(parsed.answer, song);
+  assert.deepEqual(parsed.actions, []);
 
-  assert.equal(normalizeTaskAssistantActionAnswer('Сейчас обновляю описание подзадачи.', 0), failure);
-  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0), failure);
-  assert.equal(
-    normalizeTaskAssistantActionAnswer('Могу обновить описание после подтверждения.', 0),
-    'Могу обновить описание после подтверждения.'
-  );
-  assert.equal(normalizeTaskAssistantActionAnswer('Обновляю описание.', 1), 'Обновляю описание.');
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const taskChat = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('generateOverdueTaskNudge:'));
+  assert.doesNotMatch(source, /TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN|normalizeTaskAssistantActionAnswer|expectsTaskMutationAction/);
+  assert.match(taskChat, /:\s*parsed\.answer;/);
+  assert.match(taskChat, /failedFileEditReason && !generatedDocument/);
 });
 
-test('ошибка редактирования файла не подменяется ошибкой task_action', () => {
-  const failure = 'Не получилось автоматически править файл: Word разделил текст на несколько частей. Могу предложить другой способ.';
-  assert.equal(normalizeTaskAssistantActionAnswer(failure, 0), failure);
-  const editorError = 'Документ содержит защищённые поля Word.';
-  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0, editorError), 'Файл не изменён. ' + editorError);
-  assert.equal(normalizeTaskAssistantActionAnswer('Сделал.', 0), 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.');
+test('task assistant сохраняет инструкцию выполнять изменения сразу без пустых обещаний', async () => {
+  const source = await readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8');
+  const taskChat = source.slice(source.indexOf('askTaskAssistant: async'), source.indexOf('generateOverdueTaskNudge:'));
+  assert.match(taskChat, /Прямой приказ пользователя изменить данные задачи уже является явным подтверждением/);
+  assert.match(taskChat, /Не пиши «сделаю», «обновляю», «выполняю», «добавлю» или «сделал», если в этом же ответе actions пустой/);
 });
 
 test('task assistant сохраняет длинный полезный текст вместо обрезания до 6000 символов', () => {

@@ -978,19 +978,6 @@ function extractUnexpectedTaskAssistantText(source: Record<string, unknown>): st
   return Array.from(new Set(extras));
 }
 
-const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
-
-export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number, failedFileEditReason?: string | null): string {
-  const normalized = answer.trim();
-  if (actionsCount > 0 || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
-  // A document edit is not a task_action. If the editor reported a failure,
-  // do not overwrite it with an unrelated "no task action" diagnostic.
-  const admitsFailure = /(?:не\s+(?:удалось|получилось|выполнено|измен[её]н)|остал(?:ся|ась)\s+без\s+изменений|невозможно|не\s+смог)/iu.test(normalized);
-  if (admitsFailure) return normalized;
-  if (failedFileEditReason) return 'Файл не изменён. ' + failedFileEditReason.slice(0, 700);
-  return 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
-}
-
 export function parseGeneralAssistantPayload(rawAnswer: string): { answer: string; actions: GeneralAssistantAction[] } {
   const parsed = extractJsonObjectFromText(rawAnswer);
   if (parsed === null) {
@@ -2505,7 +2492,11 @@ export const aiAssistantService = {
         const actionReports: string[] = [];
         const appliedActionsCount = taskProposal?.status === 'APPLIED' ? parsed.actions.length : 0;
 
-        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0), failedFileEditReason);
+        // Never replace the model's answer based on action-like words in prose.
+        // Keep a concrete file editor failure visible without discarding the answer.
+        const actionAwareAnswer = failedFileEditReason && !generatedDocument
+          ? [parsed.answer, `Файл не изменён. ${failedFileEditReason.slice(0, 700)}`].filter(Boolean).join('\n\n')
+          : parsed.answer;
         const answer = taskProposal
           ? (taskProposal.status === 'APPLIED'
               ? 'Изменения автоматически применены. Подробности в карточке.'
