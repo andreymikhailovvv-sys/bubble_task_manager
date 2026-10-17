@@ -320,7 +320,7 @@ async function processClaim(claimed: Claimed) {
       console.info('[TelegramAutoReply] decision', {
         policyId: policy.id,
         reason: !autoReplyRules ? 'not_eligible'
-          : !reply ? 'no_valid_reply_proposal'
+          : !reply ? result.autoReplyOutcome
             : !eligibleReplyTarget ? 'invalid_or_non_incoming_target' : 'sending',
         // No message or generated reply text ever enters server logs.
         triggerMessageId: eligibleReplyTarget ? reply?.messageId : undefined
