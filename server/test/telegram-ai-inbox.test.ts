@@ -77,3 +77,25 @@ test('web app syncs managed Telegram project and uses owner-authorized chat cont
   assert.match(ai, /request_telegram_chat_read/);
   assert.match(ai, /prepare_telegram_send/);
 });
+
+test('reply proposals appear only in the authorized Telegram assistant thread and require owner click', () => {
+  const server = src('../src/services/telegram-ai-inbox.service.ts');
+  const routes = src('../src/routes/api.ts');
+  const app = src('../../client/src/App.tsx');
+  const mini = src('../../client/src/MiniApp.tsx');
+  const chip = src('../../client/src/components/TelegramAiReplySuggestionCard.tsx');
+  assert.match(server, /'telegram-ai-reply:' \+ policy\.id \+ ':' \+ input\.messageId/);
+  assert.match(server, /mode: 'SUGGEST'/);
+  assert.match(server, /botStatus: 'SKIPPED'/);
+  assert.match(server, /suggestedReplyMessageId: input\.messageId/);
+  assert.match(server, /suggestedReplyStatus: 'SENDING'/);
+  assert.match(server, /replyTo: item\.suggestedReplyMessageId/);
+  assert.match(server, /telegramSendTargetFromDialog/);
+  assert.match(server, /userId, suggestedReplyStatus/);
+  assert.match(routes, /assistant\/inbox\/:eventId\/send-reply', requireAuth, requireTelegramChatOrigin/);
+  assert.match(app, /TelegramAiReplySuggestionCard/);
+  assert.match(mini, /TelegramAiReplySuggestionCard/);
+  assert.match(chip, /<textarea/);
+  assert.match(chip, /onClick=\{\(\) => void submit\(\)\}/);
+  assert.match(chip, /disabled=\{blocked \|\| !text\.trim\(\)\}/);
+});
