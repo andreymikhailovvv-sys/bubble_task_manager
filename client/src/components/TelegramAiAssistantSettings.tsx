@@ -18,6 +18,8 @@ const DEFAULTS: TelegramAiChatSettings = {
   monitorModel: 'gpt-6-luna',
   dailyCreditLimitMilli: 50_000,
   instructions: '',
+  autoReplyWhen: '',
+  autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true
 };
@@ -130,6 +132,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
       instructions: existing.instructions,
+      autoReplyWhen: existing.autoReplyWhen ?? '',
+      autoReplyHow: existing.autoReplyHow ?? '',
       notifyImportant: existing.notifyImportant,
       reviewAttachments: existing.reviewAttachments !== false
     } : { ...DEFAULTS });
@@ -172,6 +176,10 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
 
   const save = async () => {
     if (!selectedId || busy) return;
+    if (draft.mode === 'AUTO' && (!draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) {
+      setError('Заполните оба поля для автоответов');
+      return;
+    }
     setBusy(true); setError(''); setNotice('');
     try {
       // The explicit Save/Add click also grants monitoring consent. Do not
@@ -228,7 +236,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
           <div>
             <strong>Контроль остаётся за вами</strong>
-            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается при сохранении настроек конкретного чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. Автоответы и автосоздание задач пока отключены.</p>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается при сохранении настроек конкретного чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. В режиме «Автоответы» ИИ может самостоятельно отправлять сообщения от вашего Telegram-аккаунта только в выбранную переписку. Автосоздание задач настраивается отдельно.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
@@ -320,6 +328,25 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
                     shortLabels={['Наблюдение', 'Предлагать', 'Автоответы']}
                     onChange={i => update('mode', MODES[i] ?? MODES[0])}/>
+                  {draft.mode === 'AUTO' && (
+                    <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
+                      <p className="text-sm font-semibold">Правила автоматических ответов</p>
+                      <p className="integration-menu__muted text-xs">Ответы отправляются от вашего имени в эту переписку только при выполнении заданных условий, без дополнительного подтверждения каждого сообщения. Укажите условия максимально конкретно.</p>
+                      {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Отправка Telegram недоступна. Проверьте разрешение на отправку в интеграциях и настройки сервера.</p>}
+                      <label className="block text-sm font-semibold">В каких случаях ассистент отвечает
+                        <textarea rows={3} maxLength={2000} required value={draft.autoReplyWhen}
+                          onChange={event => update('autoReplyWhen', event.target.value)}
+                          placeholder={'Например: отвечай, когда меня упоминают через @мой_ник и задают вопрос; или когда обсуждают сроки по проекту.'}
+                          className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
+                      </label>
+                      <label className="block text-sm font-semibold">Что именно должен отвечать ассистент
+                        <textarea rows={3} maxLength={2000} required value={draft.autoReplyHow}
+                          onChange={event => update('autoReplyHow', event.target.value)}
+                          placeholder="Например: отвечай кратко и дружелюбно от моего лица; если спрашивают о сроках, сообщай, что я уточню их позже. Ничего не обещай без подтверждения."
+                          className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
+                      </label>
+                    </div>
+                  )}
                   <SettingSlider title="Добавление задач" description="Что делать с договорённостями и поручениями"
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
@@ -345,8 +372,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   <p className="integration-menu__muted text-xs leading-relaxed">
                     «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
                   </p>
-                  {(draft.mode === 'AUTO' || draft.taskMode === 'AUTO') && (
-                    <p className="telegram-integrations-modal__warning text-xs">Автоматические действия ещё недоступны. Этот выбор только сохраняет желаемый режим и не разрешает ни отправку сообщений, ни создание задач.</p>
+                  {draft.taskMode === 'AUTO' && (
+                    <p className="integration-menu__muted text-xs">Автодобавление задач работает по настройке «Добавление задач» и не зависит от автоответов.</p>
                   )}
                   <label className="block text-sm font-semibold">Инструкции ассистенту
                     <textarea rows={3} maxLength={3000} value={draft.instructions}
@@ -365,7 +392,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     </span>
                   </label>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button type="button" disabled={busy || !canConfigure}
+                    <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && (!capability?.sendEnabled || !draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim()))}
                       onClick={() => void save()}
                       className="integration-menu__action rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
                       {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить переписку'}
