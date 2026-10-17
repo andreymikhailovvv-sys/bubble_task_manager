@@ -29,7 +29,7 @@ export async function sendConditionalTelegramAutoReply(input: {
     where: { id: input.policyId, userId: input.userId, chatId: input.chatId,
       mode: 'AUTO', isEnabled: true, monitorRevision: input.revision,
       leaseToken: input.leaseToken, leasedUntil: { gt: new Date() },
-      NOT: [{ autoReplyWhen: '' }, { autoReplyHow: '' }] }
+      autoReplyWhen: { not: '' }, autoReplyHow: { not: '' } }
   });
 
   if (!await active()) return 'SKIPPED';
@@ -45,7 +45,7 @@ export async function sendConditionalTelegramAutoReply(input: {
         where: { id: input.policyId, userId: input.userId, chatId: input.chatId,
           mode: 'AUTO', isEnabled: true, monitorRevision: input.revision,
           leaseToken: input.leaseToken, leasedUntil: { gt: new Date() },
-          NOT: [{ autoReplyWhen: '' }, { autoReplyHow: '' }] },
+          autoReplyWhen: { not: '' }, autoReplyHow: { not: '' } },
         select: { id: true }
       });
       if (!policy) throw new TelegramUserClientError(409, 'Автоответы выключены');
