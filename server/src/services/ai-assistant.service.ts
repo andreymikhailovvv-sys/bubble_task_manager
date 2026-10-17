@@ -982,12 +982,16 @@ const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейча�
 const TASK_MUTATION_COMMAND_PATTERN = /(?:^|[\s,.!?;:])(?:сделай|создай|создать|добавь|добавить|измени|изменить|обнови|обновить|перенеси|перенести|отложи|отложить|переименуй|переименовать|удали|удалить|заверши|завершить|закрой|закрыть|отметь|поставь|поставить|назначь|назначить|выполни|разбей|сохрани)(?=$|[\s,.!?;:])/iu;
 const TASK_MUTATION_TARGET_PATTERN = /(?:^|[\s,.!?;:])(?:задач[а-яё]*|подзадач[а-яё]*|напоминани[а-яё]*|дедлайн[а-яё]*|срок[а-яё]*|приоритет[а-яё]*|статус[а-яё]*|сфер[а-яё]*|сектор[а-яё]*|дат[а-яё]*|уведомлени[а-яё]*)(?=$|[\s,.!?;:])/iu;
 const TASK_MUTATION_CONFIRMATION_PATTERN = /^(?:да|делай|сделай|выполняй|подтверждаю|согласен|согласна|ок(?:ей)?|хорошо)[\s.!?]*$/iu;
+const CREATIVE_WRITING_REQUEST_PATTERN = /(?:^|[\s,.!?;:])(?:песн[а-яё]*|стих[а-яё]*|куплет[а-яё]*|припев[а-яё]*|рифм[а-яё]*|рассказ[а-яё]*|сценари[а-яё]*|слоган[а-яё]*)(?=$|[\s,.!?;:])/iu;
+const DIRECT_TASK_EDIT_COMMAND_PATTERN = /(?:^|[\s,.!?;:])(?:сделай|создай|создать|добавь|добавить|измени|изменить|обнови|обновить|перенеси|перенести|переименуй|переименовать|удали|удалить|заверши|завершить|закрой|закрыть|отложи|отложить|поставь|поставить)(?:\s+(?:новую|текущую|эту|мою|основную|важную|описание|название|срок|дату)){0,2}\s+(?:задач[а-яё]*|подзадач[а-яё]*|напоминани[а-яё]*|срок[а-яё]*|дат[а-яё]*|дедлайн[а-яё]*)(?=$|[\s,.!?;:])/iu;
 const TASK_MUTATION_OFFER_PATTERN = /(?:создать|изменить|обновить|удалить|переименовать|перенести|добавить|завершить|закрыть|поставить)[^\n.!?]{0,100}(?:задач[а-яё]*|подзадач[а-яё]*|напоминани[а-яё]*|дедлайн[а-яё]*|срок[а-яё]*|приоритет[а-яё]*)/iu;
 
 // A task chat also supports ordinary writing, brainstorming and conversation.
 // Only police missing task actions when the user actually requested a task mutation,
 // rather than scanning lyrics or edited prose for common verbs like "сделаю".
 export function expectsTaskMutationAction(question: string, previousAssistantAnswer?: string): boolean {
+  // A song *about* tasks with a request to add metaphors is not a task mutation.
+  if (CREATIVE_WRITING_REQUEST_PATTERN.test(question) && !DIRECT_TASK_EDIT_COMMAND_PATTERN.test(question)) return false;
   if (TASK_MUTATION_COMMAND_PATTERN.test(question) && TASK_MUTATION_TARGET_PATTERN.test(question)) return true;
   return TASK_MUTATION_CONFIRMATION_PATTERN.test(question.trim())
     && Boolean(previousAssistantAnswer && TASK_MUTATION_OFFER_PATTERN.test(previousAssistantAnswer));
@@ -995,12 +999,13 @@ export function expectsTaskMutationAction(question: string, previousAssistantAns
 
 export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number, failedFileEditReason?: string | null, expectsTaskAction = true): string {
   const normalized = answer.trim();
-  if (actionsCount > 0 || !expectsTaskAction || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
-  // A document edit is not a task_action. If the editor reported a failure,
-  // do not overwrite it with an unrelated "no task action" diagnostic.
+  if (actionsCount > 0 || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
+  // A document edit is not a task_action. Preserve an actual editor failure
+  // even when the request did not ask to mutate a task.
   const admitsFailure = /(?:не\s+(?:удалось|получилось|выполнено|измен[её]н)|остал(?:ся|ась)\s+без\s+изменений|невозможно|не\s+смог)/iu.test(normalized);
   if (admitsFailure) return normalized;
   if (failedFileEditReason) return 'Файл не изменён. ' + failedFileEditReason.slice(0, 700);
+  if (!expectsTaskAction) return normalized;
   return 'Изменение не выполнено: ИИ не сформировал действие для задачи. Повтори команду.';
 }
 
