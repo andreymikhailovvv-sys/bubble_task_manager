@@ -204,8 +204,11 @@ export const telegramUserClientRead = {
         .reverse();
       const items = rawMessages.map(message => {
           const raw = typeof message.message === 'string' ? message.message : '';
+          const sender = (message as Api.Message & { sender?: unknown }).sender;
           return {
             id: message.id,
+            out: Boolean(message.out),
+            isBot: sender instanceof Api.User && Boolean(sender.bot),
             date: typeof message.date === 'number' ? message.date : 0,
             speaker: message.out ? 'Вы' : target.kind === 'user' ? target.name : (() => {
               const from = (message as Api.Message & { sender?: unknown; senderId?: unknown }).sender;

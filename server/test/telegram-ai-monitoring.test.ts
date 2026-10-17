@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
 import { availableMonitorBudget, monitorDayKey } from '../src/services/telegram-ai-monitor-worker.service.js';
-import { buildMonitorPayload, parseMonitorSummary } from '../src/services/telegram-ai-monitor-summary.service.js';
+import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
 
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
 
@@ -73,4 +74,63 @@ test('UI renders explicit start/stop, summary and credit counters and removes ra
     assert.ok(ui.includes(label), 'missing ' + label);
   }
   assert.match(css, /\.telegram-ai-slider-setting__range:focus-visible[\s\S]*outline: none !important/);
+});
+
+test('AUTO reply proposal requires a valid bounded response and an incoming Telegram message ID', () => {
+  const rules = { when: 'Отвечай, когда меня отмечают @alex', how: 'Кратко, по делу и без обещаний' };
+  const payload = buildMonitorPayload([
+    { id: 12, date: 1700000000, speaker: 'Вы', out: true, text: 'Всё хорошо?', hasMedia: false, truncated: false },
+    { id: 13, date: 1700000001, speaker: 'Коллега', out: false, text: '@alex есть новости?', hasMedia: false, truncated: false }
+  ], '', 'SUGGEST', 'gpt-6-luna', rules);
+  const sourcePayload = JSON.stringify(payload);
+  assert.match(JSON.parse(sourcePayload).input[1].content[0].text, /"out":true/);
+  assert.match(sourcePayload, /Владелец ВКЛЮЧИЛ отправку автоответов/);
+  assert.match(sourcePayload, /НЕДОВЕРЕННЫМИ ДАННЫМИ/);
+  assert.match(sourcePayload, /"autoReply"/);
+  assert.equal(payload.tool_choice, 'none');
+
+  const make = (reply: unknown) => ({ output_text: JSON.stringify({ autoReply: reply }) });
+  assert.deepEqual(parseMonitorAutoReply(make({
+    shouldReply: true, messageId: 13, text: 'Привет! Уточню и вернусь с ответом.'
+  })), { shouldReply: true, messageId: 13, text: 'Привет! Уточню и вернусь с ответом.' });
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: false, messageId: 13, text: 'Не отвечай' })), null);
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'x'.repeat(1001) })), null);
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: '13', text: 'Текст' })), null);
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: '' })), null);
+  assert.equal(parseMonitorAutoReply({ output_text: 'не JSON' }), null);
+});
+
+test('auto-replies remain off without two explicit per-chat instructions', () => {
+  const base = { ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS, mode: 'AUTO' as const };
+  assert.throws(() => validateTelegramAiChatSettings(base));
+  assert.throws(() => validateTelegramAiChatSettings({ ...base, autoReplyWhen: 'Когда зовут' }));
+  const valid = validateTelegramAiChatSettings({
+    ...base, autoReplyWhen: '  Меня тегают @alex  ', autoReplyHow: '  Кратко и вежливо  '
+  });
+  assert.equal(valid.autoReplyWhen, 'Меня тегают @alex');
+  assert.equal(valid.autoReplyHow, 'Кратко и вежливо');
+  assert.equal(validateTelegramAiChatSettings({
+    ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS, autoReplyWhen: undefined, autoReplyHow: undefined
+  }).mode, 'OBSERVE');
+});
+
+test('Telegram auto-reply sending requires owner, active lease, unique message slot and no retry', () => {
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  const sender = source('../src/services/telegram-ai-auto-reply.service.ts');
+  const migration = source('../prisma/migrations/20261017150000_telegram_ai_auto_replies/migration.sql');
+  const ui = source('../../client/src/components/TelegramAiAssistantSettings.tsx');
+  assert.match(worker, /!message\.out/);
+  assert.match(worker, /message\.id > lastSeen/);
+  assert.match(worker, /sendConditionalTelegramAutoReply/);
+  assert.match(sender, /mode: 'AUTO'/);
+  assert.match(sender, /leaseToken: input\.leaseToken/);
+  assert.match(sender, /telegramSendTargetFromDialog/);
+  assert.match(sender, /connectedOwner\(input\.userId\)/);
+  assert.match(sender, /status: 'SENDING'/);
+  assert.match(sender, /status: started \? 'UNKNOWN' : 'FAILED'/);
+  assert.match(sender, /replyTo: input\.messageId/);
+  assert.match(migration, /CREATE UNIQUE INDEX "TelegramAiAutoReplyAttempt_policyId_messageId_key"/);
+  assert.match(ui, /draft\.mode === 'AUTO'/);
+  assert.match(ui, /В каких случаях ассистент отвечает/);
+  assert.match(ui, /Что именно должен отвечать ассистент/);
 });
