@@ -20,7 +20,8 @@ const MAX_VISIBLE_DIALOGS = 60;
 const MAX_SEND_TARGETS = 120;
 const HISTORY_LIMIT = 30;
 const MAX_MESSAGE_CHARS = 4096;
-const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
+// A user may load the recipient list and save several chat policies in one session.
+const listLimiter = new FixedWindowRateLimiter(30, 5 * 60_000);
 const historyLimiter = new FixedWindowRateLimiter(15, 5 * 60_000);
 // Allows several 15-second chat polls per account while retaining a request ceiling.
 const monitorLimiter = new FixedWindowRateLimiter(120, 5 * 60_000);
