@@ -32,30 +32,127 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
     val state by vm.state.collectAsStateWithLifecycle()
     var settings by remember { mutableStateOf(false) }
     var authMode by remember { mutableStateOf<AuthMode?>(null) }
-    Scaffold(contentWindowInsets=WindowInsets.safeDrawing, containerColor=MaterialTheme.colorScheme.background) { padding ->
+    var openedTaskId by remember { mutableStateOf<String?>(null) }
+    var newSubtaskParentId by remember { mutableStateOf<String?>(null) }
+
+    // Never leave the previous account's task editor open after login/logout.
+    LaunchedEffect(state.user?.id) {
+        openedTaskId = null
+        newSubtaskParentId = null
+    }
+
+    Scaffold(contentWindowInsets = WindowInsets.safeDrawing, containerColor = MaterialTheme.colorScheme.background) { padding ->
         when {
             state.loading -> Loading(Modifier.padding(padding))
             state.error != null -> ErrorState(state.error!!, vm::refresh, Modifier.padding(padding))
-            else -> Workspace(state, vm::search, { settings=true }, Modifier.padding(padding))
+            else -> Workspace(
+                state, vm::search, { settings = true },
+                onOpenTask = {
+                    openedTaskId = it
+                    newSubtaskParentId = null
+                    vm.clearTaskError()
+                },
+                modifier = Modifier.padding(padding),
+            )
         }
     }
-    if(settings) SettingsSheet(state.user, dark, { vm.setDark(it) }, { settings=false }, { authMode=it; settings=false }, { vm.logout { settings=false } })
-    authMode?.let { mode -> AuthDialog(mode, state.authBusy, state.authError, { authMode=null; vm.clearAuthError() }, vm::login, vm::register) }
+    if (settings) SettingsSheet(
+        state.user, dark, { vm.setDark(it) }, { settings = false },
+        { authMode = it; settings = false }, { vm.logout { settings = false } },
+    )
+    authMode?.let { mode ->
+        AuthDialog(mode, state.authBusy, state.authError, { authMode = null; vm.clearAuthError() }, vm::login, vm::register)
+    }
+
+    val openedTask = state.tasks.firstOrNull { it.id == openedTaskId }
+    val parent = when {
+        newSubtaskParentId != null -> state.tasks.firstOrNull { it.id == newSubtaskParentId }
+        openedTask?.parentTaskId != null -> state.tasks.firstOrNull { it.id == openedTask.parentTaskId }
+        else -> null
+    }
+    val editorVisible = (openedTaskId != null && openedTask != null) ||
+        (newSubtaskParentId != null && parent != null)
+    if (editorVisible) {
+        val back: () -> Unit = {
+            openedTaskId = parent?.id
+            newSubtaskParentId = null
+            vm.clearTaskError()
+        }
+        TaskEditorSheet(
+            task = openedTask,
+            parent = parent,
+            tasks = state.tasks,
+            spheres = state.spheres,
+            busy = state.taskBusy,
+            error = state.taskError,
+            onBack = back,
+            onOpenSubtask = { childId ->
+                openedTaskId = childId
+                newSubtaskParentId = null
+                vm.clearTaskError()
+            },
+            onNewSubtask = {
+                val root = openedTask ?: parent
+                if (root != null) {
+                    newSubtaskParentId = root.id
+                    openedTaskId = null
+                    vm.clearTaskError()
+                }
+            },
+            onSave = vm::saveTask,
+            onCreateSubtask = vm::createSubtask,
+            onChangeStatus = vm::changeStatus,
+            onDelete = vm::deleteTask,
+            onClearError = vm::clearTaskError,
+        )
+    }
 }
 
 @Composable private fun Loading(modifier: Modifier) = Box(modifier.fillMaxSize(), contentAlignment=Alignment.Center) { Column(horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(14.dp)) { CircularProgressIndicator(); Text("Загружаем Планировыч…", fontWeight=FontWeight.SemiBold) } }
 @Composable private fun ErrorState(message:String, retry:()->Unit, modifier:Modifier) = Box(modifier.fillMaxSize().padding(24.dp), contentAlignment=Alignment.Center) { Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.errorContainer), shape=RoundedCornerShape(24.dp)) { Column(Modifier.padding(24.dp), horizontalAlignment=Alignment.CenterHorizontally, verticalArrangement=Arrangement.spacedBy(14.dp)) { Icon(Icons.Default.CloudOff,null); Text(message); Button(retry) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(8.dp)); Text("Повторить") } } } }
 
-@Composable private fun Workspace(state:HomeState, search:(String)->Unit, settings:()->Unit, modifier:Modifier) {
-    val spheres=remember(state.spheres){state.spheres.associateBy{it.id}}
-    val query=state.query.trim().lowercase(Locale.getDefault())
-    val tasks=state.tasks.filter { it.parentTaskId==null && (query.isEmpty() || it.title.lowercase().contains(query) || it.description.orEmpty().lowercase().contains(query)) }
-    LazyColumn(modifier.fillMaxSize(), contentPadding=PaddingValues(14.dp), verticalArrangement=Arrangement.spacedBy(14.dp)) {
+@Composable
+private fun Workspace(
+    state: HomeState,
+    search: (String) -> Unit,
+    settings: () -> Unit,
+    onOpenTask: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val spheres = remember(state.spheres) { state.spheres.associateBy { it.id } }
+    val query = state.query.trim().lowercase(Locale.getDefault())
+    val tasks = remember(state.tasks, query) {
+        state.tasks
+            .asSequence()
+            .filter { it.parentTaskId == null && it.status != TaskStatus.DONE }
+            .filter {
+                query.isEmpty() ||
+                    it.title.lowercase(Locale.getDefault()).contains(query) ||
+                    it.description.orEmpty().lowercase(Locale.getDefault()).contains(query)
+            }
+            .sortedWith(compareBy<Task> { taskSortTime(it.dueDate) }.thenByDescending { it.importance })
+            .toList()
+    }
+    val children = remember(state.tasks) { state.tasks.groupBy { it.parentTaskId } }
+    LazyColumn(
+        modifier.fillMaxSize(),
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         item { Header(state, search, settings) }
         item { HabitsCard(state.habits) }
-        item { Text("Задачи", style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold) }
-        if(tasks.isEmpty()) item { EmptyCard(if(query.isNotEmpty()) "По вашему запросу ничего не найдено" else "Задач пока нет") }
-        else items(tasks,key={it.id}) { task -> TaskCard(task, spheres[task.sphereId], state.tasks.count{it.parentTaskId==task.id}) }
+        item { Text("Задачи", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (tasks.isEmpty()) {
+            item {
+                EmptyCard(if (query.isNotEmpty()) "По вашему запросу ничего не найдено" else "Активных задач пока нет")
+            }
+        } else {
+            items(tasks, key = { it.id }) { task ->
+                TaskCard(task, spheres[task.sphereId], children[task.id].orEmpty()) {
+                    onOpenTask(task.id)
+                }
+            }
+        }
         item { Spacer(Modifier.height(6.dp)) }
     }
 }
@@ -86,8 +183,66 @@ fun HomeScreen(vm: HomeViewModel, dark: Boolean) {
 }
 @Composable private fun HabitBubble(habit:Habit,today:String){val amount=habit.stats.filter{it.dateKey==today}.sumOf{it.amount};val done=amount>=habit.targetCount;val color=parseColor(habit.color,MaterialTheme.colorScheme.primary);Column(Modifier.width(72.dp),horizontalAlignment=Alignment.CenterHorizontally){Surface(shape=CircleShape,color=color.copy(if(done).26f else .13f),border=BorderStroke(2.dp,if(done)Color(0xFF22C55E) else color),shadowElevation=2.dp){Box(Modifier.size(60.dp),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text(habit.icon,style=MaterialTheme.typography.titleLarge);Text("${amount.coerceAtMost(habit.targetCount)}/${habit.targetCount}",style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)}}};Text(habit.name,Modifier.padding(top=5.dp),style=MaterialTheme.typography.labelSmall,maxLines=1,overflow=TextOverflow.Ellipsis)}}
 
-@Composable private fun TaskCard(task:Task,sphere:Sphere?,children:Int){val importance=when(task.importance){in 8..Int.MAX_VALUE->Color(0xFFEF4444);in 5..7->Color(0xFFF59E0B);else->Color(0xFF22C55E)};Surface(shape=RoundedCornerShape(20.dp),shadowElevation=3.dp,border=BorderStroke(1.dp,importance.copy(.32f))){Row(Modifier.fillMaxWidth()){Box(Modifier.width(5.dp).heightIn(min=118.dp).background(importance));Column(Modifier.padding(14.dp).weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)){Row(verticalAlignment=Alignment.Top){Text(task.title,Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.SemiBold);Surface(shape=CircleShape,color=importance.copy(.13f)){Text("${task.importance}",Modifier.padding(horizontal=9.dp,vertical=4.dp),color=importance,fontWeight=FontWeight.Bold)}};task.description?.takeIf{it.isNotBlank()}?.let{Text(it,maxLines=2,overflow=TextOverflow.Ellipsis,color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall)};Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){Chip(if(task.taskType==TaskType.EVENT)"Событие" else "Задача",if(task.taskType==TaskType.EVENT)Color(0xFF06B6D4) else Color(0xFF8B5CF6));Chip(statusText(task.status),MaterialTheme.colorScheme.primary);sphere?.let{Chip("${it.icon.orEmpty()} ${it.name}".trim(),parseColor(it.color,MaterialTheme.colorScheme.secondary))}};Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Schedule,null,Modifier.size(15.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant);Spacer(Modifier.width(5.dp));Text(formatDate(task.dueDate),style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.onSurfaceVariant);if(children>0){Spacer(Modifier.width(14.dp));Icon(Icons.Default.AccountTree,null,Modifier.size(15.dp));Text(" $children",style=MaterialTheme.typography.labelMedium)}}}}}}
-@Composable private fun Chip(text:String,color:Color){Surface(shape=CircleShape,color=color.copy(.12f)){Text(text,Modifier.padding(horizontal=8.dp,vertical=4.dp),style=MaterialTheme.typography.labelSmall,color=color,fontWeight=FontWeight.SemiBold)}}
+/** Compact, clickable card following the Telegram MiniApp list, without status chips. */
+@Composable
+private fun TaskCard(task: Task, sphere: Sphere?, children: List<Task>, onClick: () -> Unit) {
+    val isEvent = task.taskType == TaskType.EVENT
+    val stripe = if (isEvent) Color(0xFFF59E0B)
+        else sphere?.let { parseColor(it.color, Color(0xFF64748B)) } ?: Color(0xFF64748B)
+    val complete = children.count { it.status == TaskStatus.DONE }
+    val overdue = !isEvent && task.dueDate?.let { taskSortTime(it) < System.currentTimeMillis() } == true
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.64f),
+        border = BorderStroke(1.dp, if (overdue) Color(0xFFEF4444).copy(alpha = .5f) else stripe.copy(alpha = .36f)),
+        shadowElevation = 2.dp,
+    ) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 74.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(if (isEvent) 2.dp else 4.dp).height(74.dp).background(stripe))
+            Column(
+                Modifier.weight(1f).padding(horizontal = 13.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    task.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    (if (isEvent) "Событие: " else "Дедлайн: ") + formatDate(task.dueDate),
+                    color = if (overdue) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
+            if (children.isNotEmpty()) {
+                Box(Modifier.padding(end = 14.dp).size(29.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = { complete.toFloat() / children.size },
+                        modifier = Modifier.fillMaxSize(),
+                        color = Color(0xFF22C55E),
+                        trackColor = MaterialTheme.colorScheme.outlineVariant,
+                        strokeWidth = 3.dp,
+                    )
+                    Text(
+                        complete.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun taskSortTime(value: String?): Long {
+    if (value.isNullOrBlank()) return Long.MAX_VALUE
+    return runCatching { OffsetDateTime.parse(value).toInstant().toEpochMilli() }
+        .getOrElse { Long.MAX_VALUE }
+}
+
 @Composable private fun EmptyCard(text:String){Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceVariant){Column(Modifier.padding(28.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Spacer(Modifier.height(8.dp));Text(text)}}}
 
 @OptIn(ExperimentalMaterial3Api::class) @Composable private fun SettingsSheet(user:CurrentUser?,dark:Boolean,setDark:(Boolean)->Unit,close:()->Unit,auth:(AuthMode)->Unit,logout:()->Unit){ModalBottomSheet(onDismissRequest=close){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){Text("Настройки",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text(user?.displayName ?: "Профиль");Text(if(user?.hasAccount==true)"Аккаунт Планировыча" else "Локальный профиль устройства",color=MaterialTheme.colorScheme.onSurfaceVariant);Row(verticalAlignment=Alignment.CenterVertically){Icon(if(dark)Icons.Default.DarkMode else Icons.Default.LightMode,null);Text("Тёмная тема",Modifier.padding(start=10.dp).weight(1f));Switch(dark,{setDark(it)})};if(user?.hasAccount==true)OutlinedButton(logout,Modifier.fillMaxWidth()){Text("Выйти")}else Row(horizontalArrangement=Arrangement.spacedBy(10.dp)){Button({auth(AuthMode.LOGIN)},Modifier.weight(1f)){Text("Войти")};OutlinedButton({auth(AuthMode.REGISTER)},Modifier.weight(1f)){Text("Регистрация")}};Spacer(Modifier.height(8.dp))}}}

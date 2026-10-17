@@ -65,6 +65,8 @@ data class Task(
     val priorityScore: Double = 0.0,
     val dueDate: String? = null,
     val status: TaskStatus = TaskStatus.TODO,
+    val isCollaborative: Boolean = false,
+    val collaborationOwner: Boolean = false,
     val createdAt: String? = null,
     val updatedAt: String? = null,
 )
