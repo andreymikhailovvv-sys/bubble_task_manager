@@ -232,11 +232,24 @@ async function processClaim(claimed: Claimed) {
   const all = latest.messages;
   const maxId = Math.max(lastSeen, ...all.map(m => m.id));
   const newMessages = all.filter(m => m.id > lastSeen);
+  // Metadata only: never log message bodies, sender names, or AI reply text.
+  if (policy.mode === 'AUTO' && newMessages.length) {
+    console.info('[TelegramAutoReply] incoming batch', {
+      policyId: policy.id,
+      total: newMessages.length,
+      incomingText: newMessages.filter(m => !m.out && !m.isBot && m.text.trim()).length,
+      outgoing: newMessages.filter(m => m.out).length,
+      fromBots: newMessages.filter(m => m.isBot).length
+    });
+  }
   const selected = newMessages.length
     ? newMessages.slice(-MAX_INPUT_MESSAGES)
     : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
   // A photo or document without a caption must still trigger analysis.
   if (!selected.length || !selected.some(m => m.text.trim() || (policy.reviewAttachments && m.hasMedia))) {
+    if (policy.mode === 'AUTO' && newMessages.length) {
+      console.info('[TelegramAutoReply] skipped', { policyId: policy.id, reason: 'no_analyzable_content' });
+    }
     await prisma.telegramAiChatPolicy.updateMany({
       where: { id: policy.id, leaseToken: claimed.token, monitorRevision: policy.monitorRevision, isEnabled: true },
       data: { lastSeenMessageId: maxId, summaryRequested: false }
@@ -259,6 +272,13 @@ async function processClaim(claimed: Claimed) {
   const autoReplyRules = current.mode === 'AUTO' && current.autoReplyWhen.trim() && current.autoReplyHow.trim() &&
     newMessages.some(message => !message.out && !message.isBot && message.text.trim())
     ? { when: current.autoReplyWhen, how: current.autoReplyHow } : undefined;
+  if (current.mode === 'AUTO' && newMessages.length && !autoReplyRules) {
+    console.info('[TelegramAutoReply] skipped', {
+      policyId: current.id,
+      reason: !current.autoReplyWhen.trim() || !current.autoReplyHow.trim()
+        ? 'missing_auto_reply_instructions' : 'no_eligible_incoming_message'
+    });
+  }
   const payload = buildMonitorPayload(bounded, instructions, current.taskMode, current.monitorModel, autoReplyRules);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
@@ -293,13 +313,27 @@ async function processClaim(claimed: Claimed) {
     // consumed batch cannot auto-send again. The send service adds its own
     // durable per-message uniqueness and owner/policy checks.
     const reply = result.autoReply;
-    if (autoReplyRules && reply?.shouldReply &&
-        bounded.some(message => message.id === reply.messageId && message.id > lastSeen &&
-          !message.out && !message.isBot && Boolean(message.text.trim()))) {
-      await sendConditionalTelegramAutoReply({
+    const eligibleReplyTarget = Boolean(reply && bounded.some(message =>
+      message.id === reply.messageId && message.id > lastSeen &&
+      !message.out && !message.isBot && Boolean(message.text.trim())));
+    if (current.mode === 'AUTO' && newMessages.length) {
+      console.info('[TelegramAutoReply] decision', {
+        policyId: policy.id,
+        reason: !autoReplyRules ? 'not_eligible'
+          : !reply ? 'no_valid_reply_proposal'
+            : !eligibleReplyTarget ? 'invalid_or_non_incoming_target' : 'sending',
+        // No message or generated reply text ever enters server logs.
+        triggerMessageId: eligibleReplyTarget ? reply?.messageId : undefined
+      });
+    }
+    if (autoReplyRules && reply?.shouldReply && eligibleReplyTarget) {
+      const status = await sendConditionalTelegramAutoReply({
         userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
         messageId: reply.messageId, text: reply.text,
         revision: policy.monitorRevision, leaseToken: claimed.token
+      });
+      console.info('[TelegramAutoReply] result', {
+        policyId: policy.id, triggerMessageId: reply.messageId, status
       });
     }
     await publishTelegramAiSummary({
