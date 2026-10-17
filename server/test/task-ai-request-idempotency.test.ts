@@ -128,10 +128,10 @@ test('site, focus and mini task requests have stable message UUID and API fallba
   const app = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
   const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
   const api = await readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8');
-  assert.match(app, /const clientRequestId = crypto\.randomUUID\(\);\s*const nextDialog/);
+  assert.match(app, /const clientRequestId = crypto\.randomUUID\(\);\s*const attachmentPreviews = await makeAiAttachmentPreviews\([^)]+\);\s*const nextDialog/);
   assert.match(app, /await askTaskAssistant\(taskId, \{\s*clientRequestId,/);
   assert.match(app, /await askTaskAssistant\(currentTask\.id, \{ clientRequestId,/);
-  assert.match(mini, /const clientRequestId = crypto\.randomUUID\(\);\s*const nextDialog/);
+  assert.match(mini, /const clientRequestId = crypto\.randomUUID\(\);\s*const attachmentPreviews = await makeAiAttachmentPreviews\([^)]+\);\s*const nextDialog/);
   assert.match(mini, /api\.askTaskAssistantStreaming\(openedTask\.id, \{\s*clientRequestId,/);
   assert.match(api, /clientRequestId: payload\.clientRequestId \?\? crypto\.randomUUID\(\)/);
 });
