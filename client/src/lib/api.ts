@@ -111,6 +111,19 @@ export function stripAiChatDisplayPreviews(history: ChatMessage[]): ChatMessage[
   return history.map(({ attachmentPreviews: _preview, ...message }) => message);
 }
 
+/** Thumbnails are UI state, never persisted to AI project storage or uploaded
+ * to the chat-project synchronization endpoint.
+ */
+export function stripAiChatProjectDisplayPreviews<T extends { chats: Array<{ messages: ChatMessage[] }> }>(projects: T[]): T[] {
+  return projects.map((project) => ({
+    ...project,
+    chats: project.chats.map((chat) => ({
+      ...chat,
+      messages: stripAiChatDisplayPreviews(chat.messages)
+    }))
+  })) as T[];
+}
+
 /** XMLHttpRequest is used only for requests with actual files. Fetch does not
  * expose upload progress, whereas XHR reports transferred bytes of the JSON
  * request (which contains all encoded attachments). Responses stay NDJSON.
@@ -437,7 +450,7 @@ export const api = {
   markSystemNotificationsRead: () => request<{ ok: true }>('/api/system-notifications/read', { method: 'POST' }),
   saveAiChatProjects: <T>(projects: T[]) => request<{ projects: T[] }>('/api/ai-chat/projects', {
     method: 'PUT',
-    body: JSON.stringify({ projects })
+    body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects as Array<{ chats: Array<{ messages: ChatMessage[] }> }>) })
   }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
