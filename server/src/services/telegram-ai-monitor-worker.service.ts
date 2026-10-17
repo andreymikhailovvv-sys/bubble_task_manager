@@ -8,7 +8,7 @@ import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, TELEGRAM_MONITOR_FEATURE, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
 import { publishTelegramAiSummary, publishTelegramAiReplySuggestion, publishTelegramAiTaskSuggestions } from './telegram-ai-inbox.service.js';
-import { sendConditionalTelegramAutoReply } from './telegram-ai-auto-reply.service.js';
+import { sendConditionalTelegramAutoReply, telegramAutoReplyNextAllowedAt } from './telegram-ai-auto-reply.service.js';
 
 const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
@@ -286,10 +286,30 @@ async function processClaim(claimed: Claimed) {
   const fresh = all.filter(message => message.id > cutoff);
   const selected = fresh.length ? fresh.slice(-MAX_INPUT_MESSAGES)
     : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
-  const eligibleForReply = dueInteraction
+  let eligibleForReply = dueInteraction
     ? selected.filter(message => message.id > lastInteraction && !message.out && !message.isBot && message.text.trim())
     : [];
+  if (eligibleForReply.length && policy.mode === 'AUTO') {
+    // Retried rate-limited batches must not re-send earlier successful or
+    // uncertain deliveries. The DB records their exact incoming message IDs.
+    const alreadyAttempted = await prisma.telegramAiAutoReplyAttempt.findMany({
+      where: { policyId: policy.id, messageId: { in: eligibleForReply.map(m => m.id) } },
+      select: { messageId: true }
+    });
+    const attemptedIds = new Set(alreadyAttempted.map(row => row.messageId));
+    eligibleForReply = eligibleForReply.filter(message => !attemptedIds.has(message.id));
+  }
+  const allowedAt = dueInteraction && policy.mode === 'AUTO' && eligibleForReply.length
+    ? await telegramAutoReplyNextAllowedAt(policy.userId, policy.id) : Date.now();
+  const interactionDeferred = allowedAt > Date.now();
 
+  if (interactionDeferred) {
+    console.info('[TelegramAutoReply] deferred', {
+      policyId: policy.id, reason: 'rate_limit_reached',
+      pendingIncoming: eligibleForReply.length,
+      retryInSeconds: Math.ceil((allowedAt - Date.now()) / 1000)
+    });
+  }
   if (dueInteraction && policy.mode === 'AUTO') {
     console.info('[TelegramAutoReply] incoming batch', {
       policyId: policy.id, total: selected.length, incomingText: eligibleForReply.length
@@ -298,8 +318,10 @@ async function processClaim(claimed: Claimed) {
 
   const current = await ownedLease(claimed);
   const nextInteractionAt = dueInteraction
-    ? new Date(Date.now() + telegramInteractionDelayMs(
-      current.mode === 'SUGGEST' ? current.interactionIntervalMinutes : current.autoReplyIntervalMinutes))
+    ? new Date(interactionDeferred
+      ? Math.max(allowedAt, Date.now() + IMMEDIATE_POLL_MS)
+      : Date.now() + telegramInteractionDelayMs(
+        current.mode === 'SUGGEST' ? current.interactionIntervalMinutes : current.autoReplyIntervalMinutes))
     : current.nextInteractionAt;
   const nextSummaryAt = dueSummary && !policy.summaryRequested && current.summaryIntervalMinutes === -1
     ? null : dueSummary && current.summaryIntervalMinutes !== -1
@@ -314,7 +336,12 @@ async function processClaim(claimed: Claimed) {
     where: { id: policy.id, isEnabled: true, leaseToken: claimed.token, monitorRevision: policy.monitorRevision },
     data: {
       lastSeenMessageId: maxProcessed,
-      ...(dueInteraction ? { lastInteractionMessageId: maxId, nextInteractionAt } : {}),
+      ...(dueInteraction ? {
+        // Keep incoming messages pending while the account is rate-limited.
+        // Independent summary/task cursors can still move forward.
+        ...(interactionDeferred ? {} : { lastInteractionMessageId: maxId }),
+        nextInteractionAt
+      } : {}),
       ...(dueSummary ? { lastSummaryMessageId: maxId, nextSummaryAt, summaryRequested: false } : {}),
       ...(dueTasks ? { lastTaskMessageId: maxId, nextTaskAt } : {}),
       nextCheckAt: nextMonitorWakeup([nextInteractionAt, nextSummaryAt, nextTaskAt])
@@ -322,7 +349,7 @@ async function processClaim(claimed: Claimed) {
   });
   if (!update.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
 
-  if (!selected.length ||
+  if ((interactionDeferred && !dueSummary && !dueTasks) || !selected.length ||
       !selected.some(message => message.text.trim() || (current.reviewAttachments && message.hasMedia))) {
     return;
   }
@@ -331,7 +358,7 @@ async function processClaim(claimed: Claimed) {
     ...(current.reviewAttachments ? {} : { hasMedia: false, media: undefined, mediaNote: undefined })
   }));
   const eligibleIds = eligibleForReply.map(message => message.id);
-  const rules = dueInteraction && eligibleIds.length && current.mode === 'AUTO' &&
+  const rules = dueInteraction && !interactionDeferred && eligibleIds.length && current.mode === 'AUTO' &&
     current.autoReplyWhen.trim() && current.autoReplyHow.trim()
       ? { when: current.autoReplyWhen, how: current.autoReplyHow, kind: 'AUTO' as const,
           eligibleMessageIds: eligibleIds }
@@ -385,11 +412,35 @@ async function processClaim(claimed: Claimed) {
     }
     if (rules && reply?.shouldReply && eligibleReplyTarget) {
       if (current.mode === 'AUTO') {
-        await sendConditionalTelegramAutoReply({
+        const outcome = await sendConditionalTelegramAutoReply({
           userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
           messageId: reply.messageId, text: reply.text,
           revision: policy.monitorRevision, leaseToken: claimed.token
         });
+        if (outcome === 'RATE_LIMITED') {
+          // Another chat may have claimed the final slot during the model call.
+          // No Telegram send was attempted, so this batch is safe to revisit.
+          const active = await ownedLease(claimed);
+          const retryAt = new Date(Math.max(
+            Date.now() + IMMEDIATE_POLL_MS,
+            await telegramAutoReplyNextAllowedAt(policy.userId, policy.id)
+          ));
+          await prisma.telegramAiChatPolicy.updateMany({
+            where: {
+              id: policy.id, userId: policy.userId, isEnabled: true,
+              leaseToken: claimed.token, monitorRevision: policy.monitorRevision,
+              lastInteractionMessageId: maxId
+            },
+            data: {
+              lastInteractionMessageId: lastInteraction,
+              nextInteractionAt: retryAt,
+              nextCheckAt: nextMonitorWakeup([
+                retryAt, active.nextSummaryAt, active.nextTaskAt,
+                active.summaryRequested ? new Date() : null
+              ])
+            }
+          });
+        }
       } else if (current.mode === 'SUGGEST') {
         await publishTelegramAiReplySuggestion({
           policy: current, leaseToken: claimed.token,
