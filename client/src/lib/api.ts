@@ -218,9 +218,13 @@ export type TelegramQuickSendJob = {
 export type TelegramAiChatSettings = {
   mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
   taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
-  checkIntervalMinutes: 5 | 30 | 180;
+  interactionIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
+  autoReplyIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
+  summaryIntervalMinutes: -1 | 5 | 10 | 30 | 180 | 360 | 1440;
+  summaryInstructions: string;
+  suggestWhen: string;
+  suggestHow: string;
   monitorModel: 'gpt-6-luna' | 'gpt-5.4-mini' | 'gpt-6.1-sol';
-  instructions: string;
   autoReplyWhen: string;
   autoReplyHow: string;
   notifyImportant: boolean;
@@ -233,7 +237,11 @@ export type TelegramAiAssistantInbox = {
   projectTitle: string;
   projectIcon: string;
   chats: Array<{ id: string; policyId: string; telegramChatId: string; title: string; kind: 'user' | 'group' | 'supergroup' }>;
-  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; taskProposal?: import('./types').AiTaskProposal | null; approvedSuggestionIndices: number[] }>;
+  messages: Array<{ id: string; chatId: string; role: 'assistant'; content: string; createdAt: string; taskSuggestions?: string[]; taskProposal?: import('./types').AiTaskProposal | null; approvedSuggestionIndices: number[]; telegramSuggestedReply?: TelegramAiSuggestedReply | null }>;
+};
+export type TelegramAiSuggestedReply = {
+  eventId: string; text: string; messageId: number; status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'UNKNOWN'; chatTitle: string;
+};
 };
 export type TelegramMonitorSummary = {
   summary: string;
@@ -576,6 +584,10 @@ export const api = {
   aiTaskProposalPreference: () => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences'),
   setAiTaskProposalPreference: (autoApply: boolean) => request<{ autoApply: boolean }>('/api/ai/task-proposals/preferences', { method: 'PATCH', body: JSON.stringify({ autoApply }) }),
   telegramAssistantInbox: () => request<TelegramAiAssistantInbox>('/api/telegram-user-client/assistant/inbox'),
+  telegramAssistantSendSuggestedReply: (eventId: string, text: string) =>
+    request<{ status: 'SENT' | 'FAILED' | 'UNKNOWN'; ok: boolean }>(`/api/telegram-user-client/assistant/inbox/${encodeURIComponent(eventId)}/send-reply`, {
+      method: 'POST', body: JSON.stringify({ text })
+    }),
   telegramAssistantApproveTask: (eventId: string, index: number) => request<{ ok: true; taskId: string; alreadyCreated: boolean }>(
     `/api/telegram-user-client/assistant/inbox/${encodeURIComponent(eventId)}/tasks/${index}`,
     { method: 'POST', body: '{}' }
