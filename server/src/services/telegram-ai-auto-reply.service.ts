@@ -6,9 +6,54 @@ import { telegramUserChatCapability } from './telegram-user-client-chat-access.s
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 
 const MAX_REPLY_CHARS = 1000;
-const MAX_AUTO_REPLIES_PER_DAY = 30;
-const MAX_AUTO_REPLIES_PER_10_MINUTES = 4;
-const MIN_AUTO_REPLY_GAP_MS = 15_000;
+// Applies to actual outgoing messages, not 15-second *checks*. Spread a
+// reasonable allowance across multiple authorized chats on the same account.
+const MAX_AUTO_REPLIES_PER_DAY = 120;
+const MAX_AUTO_REPLIES_PER_10_MINUTES = 18;
+const MAX_CHAT_REPLIES_PER_10_MINUTES = 10;
+const MIN_AUTO_REPLY_GAP_MS = 3_000;
+const TEN_MINUTES_MS = 10 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
+
+type OutgoingAttempt = { createdAt: Date; policyId: string };
+
+/** Earliest safe send slot. Uncertain sends count against limits. */
+export function nextTelegramAutoReplyAllowedAt(
+  attempts: OutgoingAttempt[], policyId: string, now: number
+): number {
+  const recent = attempts
+    .filter(row => row.createdAt.getTime() > now - DAY_MS && row.createdAt.getTime() <= now)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const tenMinute = recent.filter(row => row.createdAt.getTime() > now - TEN_MINUTES_MS);
+  const inChat = tenMinute.filter(row => row.policyId === policyId);
+  return Math.max(
+    now,
+    recent.length >= MAX_AUTO_REPLIES_PER_DAY
+      ? recent[MAX_AUTO_REPLIES_PER_DAY - 1].createdAt.getTime() + DAY_MS + 1 : now,
+    tenMinute.length >= MAX_AUTO_REPLIES_PER_10_MINUTES
+      ? tenMinute[MAX_AUTO_REPLIES_PER_10_MINUTES - 1].createdAt.getTime() + TEN_MINUTES_MS + 1 : now,
+    inChat.length >= MAX_CHAT_REPLIES_PER_10_MINUTES
+      ? inChat[MAX_CHAT_REPLIES_PER_10_MINUTES - 1].createdAt.getTime() + TEN_MINUTES_MS + 1 : now,
+    recent.length ? recent[0].createdAt.getTime() + MIN_AUTO_REPLY_GAP_MS + 1 : now
+  );
+}
+
+async function recentOutgoingAttempts(userId: string, now: number) {
+  return prisma.telegramAiAutoReplyAttempt.findMany({
+    where: { policy: { userId }, status: { not: 'FAILED' },
+      createdAt: { gte: new Date(now - DAY_MS) } },
+    orderBy: { createdAt: 'desc' },
+    take: MAX_AUTO_REPLIES_PER_DAY,
+    select: { createdAt: true, policyId: true }
+  });
+}
+
+/** Read-only preflight: avoid buying an AI analysis when sends are known blocked.
+ * The serializable send claim remains the authoritative rate check. */
+export async function telegramAutoReplyNextAllowedAt(userId: string, policyId: string) {
+  const now = Date.now();
+  return nextTelegramAutoReplyAllowedAt(await recentOutgoingAttempts(userId, now), policyId, now);
+}
 
 /** An LLM cannot authorize sending: this guard is evaluated after the model
  * answers, against current owner-controlled DB policy and an active monitor
@@ -16,13 +61,13 @@ const MIN_AUTO_REPLY_GAP_MS = 15_000;
 export async function sendConditionalTelegramAutoReply(input: {
   userId: string; policyId: string; chatId: string;
   messageId: number; text: string; revision: number; leaseToken: string;
-}): Promise<'SENT' | 'SKIPPED'> {
-  const skip = (reason: string): 'SKIPPED' => {
+}): Promise<'SENT' | 'SKIPPED' | 'RATE_LIMITED'> {
+  const skip = (reason: string): 'SKIPPED' | 'RATE_LIMITED' => {
     // Do not log message or reply bodies, contacts, or authentication data.
     console.info('[TelegramAutoReply] skipped', {
       policyId: input.policyId, triggerMessageId: input.messageId, reason
     });
-    return 'SKIPPED';
+    return reason === 'rate_limit_reached' ? 'RATE_LIMITED' : 'SKIPPED';
   };
   if (!Number.isSafeInteger(input.messageId) || input.messageId <= 0 ||
       !parseTelegramSendTargetId(input.chatId) ||
@@ -60,15 +105,12 @@ export async function sendConditionalTelegramAutoReply(input: {
       if (!policy) throw new TelegramUserClientError(409, 'Автоответы выключены');
       const now = Date.now();
       const recent = await tx.telegramAiAutoReplyAttempt.findMany({
-        where: { policy: { userId: input.userId },
-          createdAt: { gte: new Date(now - 24 * 60 * 60_000) } },
+        where: { policy: { userId: input.userId }, status: { not: 'FAILED' },
+          createdAt: { gte: new Date(now - DAY_MS) } },
         orderBy: { createdAt: 'desc' }, take: MAX_AUTO_REPLIES_PER_DAY,
-        select: { createdAt: true, status: true }
+        select: { createdAt: true, policyId: true }
       });
-      const sent = recent.filter(row => row.status !== 'FAILED');
-      if (sent.length >= MAX_AUTO_REPLIES_PER_DAY ||
-          sent.filter(row => row.createdAt.getTime() > now - 10 * 60_000).length >= MAX_AUTO_REPLIES_PER_10_MINUTES ||
-          (sent.length > 0 && sent[0].createdAt.getTime() + MIN_AUTO_REPLY_GAP_MS > now)) {
+      if (nextTelegramAutoReplyAllowedAt(recent, input.policyId, now) > now) {
         throw new TelegramUserClientError(429, 'Лимит частоты автоответов');
       }
       const attempt = await tx.telegramAiAutoReplyAttempt.create({
