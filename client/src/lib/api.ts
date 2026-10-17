@@ -107,7 +107,82 @@ export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>
   return result;
 }
 
-async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void }): Promise<TaskAssistantResult> {
+/** XMLHttpRequest is used only for requests with actual files. Fetch does not
+ * expose upload progress, whereas XHR reports transferred bytes of the JSON
+ * request (which contains all encoded attachments). Responses stay NDJSON.
+ */
+function streamAiRequestWithUploadProgress<Result, Status extends string>(
+  url: string, body: unknown,
+  options: { onStatus?: (status: Status) => void; onUploadProgress?: (percent: number | null) => void }
+): Promise<Result> {
+  return new Promise<Result>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let position = 0;
+    let pending = '';
+    let result: Result | undefined;
+    let error: Error | null = null;
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Accept', 'application/x-ndjson');
+    xhr.upload.onprogress = (event) => {
+      options.onUploadProgress?.(event.lengthComputable && event.total > 0
+        ? Math.min(100, Math.round(event.loaded * 100 / event.total)) : null);
+    };
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line) as { type?: string; status?: Status; result?: Result; message?: string };
+      if (event.type === 'status' && event.status) options.onStatus?.(event.status);
+      else if (event.type === 'result' && event.result) result = event.result;
+      else if (event.type === 'error') throw new Error(event.message || 'Ошибка чата ИИ');
+    };
+    const readAvailable = (final = false) => {
+      if (error) return;
+      try {
+        const text = xhr.responseText;
+        pending += text.slice(position);
+        position = text.length;
+        const lines = pending.split('\n');
+        pending = lines.pop() ?? '';
+        for (const line of lines) consume(line);
+        if (final) consume(pending);
+      } catch (cause) {
+        error = cause instanceof Error ? cause : new Error('Некорректный ответ сервера');
+      }
+    };
+    xhr.onprogress = () => readAvailable();
+    xhr.onload = () => {
+      if (xhr.status === 401) unauthorizedHandler?.();
+      readAvailable(true);
+      if (error) { reject(error); return; }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        let message = `HTTP ${xhr.status}`;
+        try {
+          const parsed = JSON.parse(xhr.responseText) as { error?: string; message?: string };
+          message = parsed.error || parsed.message || message;
+        } catch { /* NDJSON may already contain an error event. */ }
+        const failure = new Error(message) as ApiError;
+        failure.status = xhr.status;
+        reject(failure);
+        return;
+      }
+      if (!result) { reject(new Error('Сервер не вернул результат чата ИИ')); return; }
+      options.onUploadProgress?.(100);
+      resolve(result);
+    };
+    xhr.onerror = () => reject(new Error('Ошибка сети при отправке файлов'));
+    xhr.onabort = () => reject(new Error('Отправка файлов отменена'));
+    xhr.send(JSON.stringify(body));
+  });
+}
+
+async function askTaskAssistantStreaming(taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model?: AiChatModel; mode?: ChatMode; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean; interactionContext?: 'chat' | 'focus' | 'smart_postpone'; clientSurface?: 'web' | 'miniapp'; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: TaskAiProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }): Promise<TaskAssistantResult> {
+  if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
+    return streamAiRequestWithUploadProgress<TaskAssistantResult, TaskAiProgressStatus>(
+      `/api/tasks/${taskId}/ai-chat`,
+      { ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }, options
+    );
+  }
   const response = await fetch(`/api/tasks/${taskId}/ai-chat`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, clientRequestId: payload.clientRequestId ?? crypto.randomUUID(), userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.();
   if (!response.body) throw new Error(response.ok ? 'Поток ответа чата ИИ недоступен' : `HTTP ${response.status}`);
@@ -126,7 +201,12 @@ export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onSta
   while (true) { const { value, done } = await reader.read(); buffer += decoder.decode(value, { stream: !done }); const lines = buffer.split('\n'); buffer = lines.pop() ?? ''; lines.forEach(consume); if (done) break; }
   consume(buffer); if (!result) throw new Error('Сервер не вернул результат чата ИИ'); return result;
 }
-async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void }) {
+async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }) {
+  if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
+    return streamAiRequestWithUploadProgress<AiChatResult, AiChatProgressStatus>(
+      '/api/ai-chat', { ...payload, userTimeZone: resolveUserTimeZone() }, options
+    );
+  }
   const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
 }
