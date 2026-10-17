@@ -110,3 +110,48 @@ test('Telegram read slots do not serialize independent accounts', async () => {
   finish();
   await blocked;
 });
+
+test('timed-out interactive request does not release a still-running MTProto read', async () => {
+  const userId = 'test-timeout-reader';
+  const steps: string[] = [];
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const first = withTelegramReadSlot(userId, 'monitor', async () => {
+    steps.push('first-start');
+    await gate;
+    steps.push('first-end');
+  });
+  const timedOut = withTelegramReadSlot(userId, 'list', async () => {
+    steps.push('timed-out-must-not-run');
+  }, 20);
+  const last = withTelegramReadSlot(userId, 'history', async () => {
+    steps.push('last-start');
+  }, 5000);
+  try {
+    await assert.rejects(timedOut, /Telegram занят дольше обычного/);
+    assert.deepEqual(steps, ['first-start']);
+    await assert.rejects(
+      withTelegramReadSlot(userId, 'monitor', async () => { steps.push('overlapping-monitor'); }),
+      /Предыдущий запрос Telegram ещё выполняется/
+    );
+  } finally {
+    finish();
+  }
+  await first;
+  await last;
+  assert.deepEqual(steps, ['first-start', 'first-end', 'last-start']);
+});
+
+test('multiple monitored dialogs on the same account never overlap at the read gate', async () => {
+  const userId = 'test-many-monitored-dialogs';
+  let unblock!: () => void;
+  const gate = new Promise<void>(resolve => { unblock = resolve; });
+  const first = withTelegramReadSlot(userId, 'monitor', async () => { await gate; });
+  await assert.rejects(
+    withTelegramReadSlot(userId, 'monitor', async () => 'another-chat'),
+    /Предыдущий запрос Telegram ещё выполняется/
+  );
+  unblock();
+  await first;
+  assert.equal(await withTelegramReadSlot(userId, 'monitor', async () => 'another-chat'), 'another-chat');
+});
