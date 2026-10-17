@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { Api, TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions';
 import { prisma } from '../db/prisma.js';
@@ -64,6 +66,64 @@ export async function withTelegramReadSlot<T>(
     }
   }
 }
+// Lease is persisted across replicas, unlike the local read queue above.
+// Expiry recovers from crashed containers; a heartbeat extends active reads.
+const DISTRIBUTED_READ_LEASE_MS = 120_000;
+const DISTRIBUTED_READ_REFRESH_MS = 20_000;
+const DISTRIBUTED_READ_WAIT_MS = 30_000;
+
+async function tryClaimDistributedRead(userId: string, token: string): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + DISTRIBUTED_READ_LEASE_MS);
+  const updated = await prisma.telegramUserReadLease.updateMany({
+    where: { userId, expiresAt: { lt: new Date() } },
+    data: { token, expiresAt }
+  });
+  if (updated.count) return true;
+  try {
+    await prisma.telegramUserReadLease.create({ data: { userId, token, expiresAt } });
+    return true;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return false;
+    throw error;
+  }
+}
+
+async function withDistributedTelegramRead<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>): Promise<T> {
+  const token = randomUUID();
+  const deadline = Date.now() + DISTRIBUTED_READ_WAIT_MS;
+  while (!(await tryClaimDistributedRead(userId, token))) {
+    if (kind === 'monitor') {
+      // Defer the background poll instead of blocking this account's manual operations.
+      throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
+    }
+    if (Date.now() >= deadline) {
+      throw new TelegramUserClientError(503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд');
+    }
+    await new Promise<void>(resolve => setTimeout(resolve, 250));
+  }
+
+  let leaseLost = false;
+  const refresh = setInterval(() => {
+    void prisma.telegramUserReadLease.updateMany({
+      where: { userId, token },
+      data: { expiresAt: new Date(Date.now() + DISTRIBUTED_READ_LEASE_MS) }
+    }).then(result => {
+      if (!result.count) leaseLost = true;
+    }).catch(() => { leaseLost = true; });
+  }, DISTRIBUTED_READ_REFRESH_MS);
+  refresh.unref();
+  try {
+    const value = await work();
+    if (leaseLost) throw new TelegramUserClientError(503, 'Соединение с Telegram прервалось. Повторите действие');
+    return value;
+  } finally {
+    clearInterval(refresh);
+    // Failure to release is temporary: the expiration time eventually frees the lease.
+    await prisma.telegramUserReadLease.deleteMany({ where: { userId, token } })
+      .catch(() => console.warn('[TelegramUserClient] could not release read lease'));
+  }
+}
+
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
 
 export function isTelegramUserReadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -175,7 +235,7 @@ async function loadPersonalDialogs(client: TelegramClient, accountId: string) {
 }
 
 async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: (client: TelegramClient, owner: ReadOwner) => Promise<T>): Promise<T> {
-  return withTelegramReadSlot(userId, kind, async () => {
+  return withTelegramReadSlot(userId, kind, () => withDistributedTelegramRead(userId, kind, async () => {
     // Rate limits apply only after acquiring a slot, not while an owner waits.
     const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
     if (!limiter.consume(userId).allowed) {
@@ -199,7 +259,7 @@ async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'mon
     } finally {
       if (client) try { await client.disconnect(); } catch { /* best effort */ }
     }
-  });
+  }));
 }
 
 export const telegramUserClientRead = {
