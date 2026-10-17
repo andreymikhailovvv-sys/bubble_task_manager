@@ -139,9 +139,8 @@ export function parseMonitorSummary(output: unknown): MonitorSummary {
   };
 }
 
-/** Model output is only a proposal: worker validates the target as a new inbound
- * Telegram ID, verifies the policy again and claims the send durably. */
-export function parseMonitorAutoReply(output: unknown): MonitorAutoReply | null {
+/** Parse the AI's structured decision without exposing the response body to logs. */
+function rawMonitorAutoReply(output: unknown): Record<string, unknown> | null {
   const r = output && typeof output === 'object' ? output as Record<string, unknown> : {};
   let text = typeof r.output_text === 'string' ? r.output_text : '';
   if (!text && Array.isArray(r.output)) {
@@ -154,12 +153,26 @@ export function parseMonitorAutoReply(output: unknown): MonitorAutoReply | null 
   try { json = JSON.parse(text); } catch { return null; }
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
   const reply = (json as { autoReply?: unknown }).autoReply;
-  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) return null;
-  const data = reply as Record<string, unknown>;
+  return reply && typeof reply === 'object' && !Array.isArray(reply)
+    ? reply as Record<string, unknown> : null;
+}
+
+/** These values are safe to log; they do not contain Telegram message bodies. */
+export function classifyMonitorAutoReply(output: unknown): 'model_declined' | 'invalid_proposal' | 'proposed' {
+  const raw = rawMonitorAutoReply(output);
+  if (raw?.shouldReply === false) return 'model_declined';
+  return parseMonitorAutoReply(output) ? 'proposed' : 'invalid_proposal';
+}
+
+/** Model output is only a proposal: worker validates the target as a new inbound
+ * Telegram ID, verifies the policy again and claims the send durably. */
+export function parseMonitorAutoReply(output: unknown): MonitorAutoReply | null {
+  const data = rawMonitorAutoReply(output);
+  if (!data) return null;
   if (data.shouldReply !== true || !Number.isSafeInteger(data.messageId) ||
       typeof data.text !== 'string') return null;
   const value = data.text.trim();
-  if (!value || value.length > 1000 || /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(value)) return null;
+  if (!value || value.length > 1000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)) return null;
   return { shouldReply: true, messageId: data.messageId as number, text: value };
 }
 
@@ -212,5 +225,10 @@ export async function analyzeMonitorMessages(input: {
     feature: TELEGRAM_MONITOR_FEATURE, model: input.model, usage: output.usage,
     openAiResponseId: typeof output.id === 'string' ? output.id : null, billingMode: 'DYNAMIC'
   });
-  return { summary: parseMonitorSummary(output), autoReply: parseMonitorAutoReply(output), actualMilli };
+  return {
+    summary: parseMonitorSummary(output),
+    autoReply: parseMonitorAutoReply(output),
+    autoReplyOutcome: classifyMonitorAutoReply(output),
+    actualMilli
+  };
 }
