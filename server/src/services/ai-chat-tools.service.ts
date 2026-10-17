@@ -405,7 +405,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           create_excel_workbook: 'forming_answer',
           generate_image: 'generating_image',
           read_file: 'reading_attachment',
-          edit_file: 'editing_document',
+          edit_file: input.fileTools?.catalog.items.some((item) =>
+            item.fileId === (value as { fileId?: unknown })?.fileId &&
+            (item.mimeType.toLowerCase().startsWith('image/') || /\.(?:png|jpe?g|webp)$/i.test(item.fileName)))
+            ? 'editing_image' : 'editing_document',
           prepare_telegram_send: 'forming_answer',
           request_telegram_chat_read: 'forming_answer'
         };
