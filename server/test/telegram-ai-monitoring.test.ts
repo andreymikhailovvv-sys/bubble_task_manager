@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
-import { availableMonitorBudget, monitorDayKey } from '../src/services/telegram-ai-monitor-worker.service.js';
+import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs } from '../src/services/telegram-ai-monitor-worker.service.js';
 import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
 
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
@@ -84,7 +84,7 @@ test('AUTO reply proposal requires a valid bounded response and an incoming Tele
   ], '', 'SUGGEST', 'gpt-6-luna', rules);
   const sourcePayload = JSON.stringify(payload);
   assert.match(JSON.parse(sourcePayload).input[1].content[0].text, /"out":true/);
-  assert.match(sourcePayload, /Владелец ВКЛЮЧИЛ отправку автоответов/);
+  assert.match(sourcePayload, /Владелец ВКЛЮЧИЛ автоответы/);
   assert.match(sourcePayload, /НЕДОВЕРЕННЫМИ ДАННЫМИ/);
   assert.match(sourcePayload, /"autoReply"/);
   assert.equal(payload.tool_choice, 'none');
@@ -129,7 +129,7 @@ test('Telegram auto-reply sending requires owner, active lease, unique message s
   const migration = source('../prisma/migrations/20261017150000_telegram_ai_auto_replies/migration.sql');
   const ui = source('../../client/src/components/TelegramAiAssistantSettings.tsx');
   assert.match(worker, /!message\.out/);
-  assert.match(worker, /message\.id > lastSeen/);
+  assert.match(worker, /message\.id > lastInteraction/);
   assert.match(worker, /sendConditionalTelegramAutoReply/);
   assert.match(sender, /mode: 'AUTO'/);
   assert.match(sender, /leaseToken: input\.leaseToken/);
@@ -150,11 +150,30 @@ test('auto-reply diagnostics report safe decision and server skip reasons withou
   assert.match(worker, /\[TelegramAutoReply\] incoming batch/);
   assert.match(worker, /\[TelegramAutoReply\] decision/);
   assert.match(worker, /result\.autoReplyOutcome/);
-  assert.match(worker, /\[TelegramAutoReply\] result/);
+  assert.match(worker, /eligibleIds\.includes/);
   for (const reason of [
     'invalid_reply_or_target', 'telegram_send_or_read_permission_unavailable',
     'policy_disabled_or_lease_changed', 'rate_limit_reached',
     'already_attempted_this_message', 'telegram_send_outcome_unknown'
   ]) assert.ok(sender.includes(reason), reason);
   assert.doesNotMatch(sender, /console\.(?:info|warn)\([^\n]*input\.text/);
+});
+
+test('independent interaction, summary and task schedules preserve non-overlapping message cursors', () => {
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  const migration = source('../prisma/migrations/20261017193000_telegram_ai_independent_schedules/migration.sql');
+  assert.equal(telegramInteractionDelayMs(0), 30_000);
+  assert.equal(telegramInteractionDelayMs(5), 300_000);
+  assert.match(worker, /lastInteractionMessageId: maxId/);
+  assert.match(worker, /lastSummaryMessageId: maxId/);
+  assert.match(worker, /lastTaskMessageId: maxId/);
+  assert.match(worker, /nextMonitorWakeup\(\[nextInteractionAt, nextSummaryAt, nextTaskAt\]\)/);
+  assert.match(worker, /current\.summaryInstructions/);
+  assert.match(worker, /current\.suggestWhen/);
+  assert.match(worker, /publishTelegramAiReplySuggestion/);
+  assert.match(worker, /publishTelegramAiTaskSuggestions/);
+  assert.match(worker, /if \(dueSummary\)/);
+  for (const field of ['lastInteractionMessageId', 'lastSummaryMessageId', 'lastTaskMessageId']) {
+    assert.ok(migration.includes('"' + field + '"'), field);
+  }
 });
