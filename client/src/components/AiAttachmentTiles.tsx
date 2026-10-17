@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileImage, FileSpreadsheet, FileText, FileType2, File, X } from 'lucide-react';
+import { FileImage, FileSpreadsheet, FileText, FileType2, File as FileIcon, X } from 'lucide-react';
 
 export type AiAttachmentKind = 'image' | 'word' | 'excel' | 'pdf' | 'file';
 
@@ -63,7 +63,7 @@ function AiAttachmentTile({ file, busy = false, uploadProgress, onRemove }: Tile
           ? <img src={imageUrl} alt="" className="ai-attachment-tile-image" />
           : <span className="ai-attachment-tile-file-icon" aria-hidden="true">
             {kind === 'word' ? <FileText size={27} /> : kind === 'excel' ? <FileSpreadsheet size={27} /> :
-              kind === 'pdf' ? <FileType2 size={27} /> : kind === 'image' ? <FileImage size={27} /> : <File size={27} />}
+              kind === 'pdf' ? <FileType2 size={27} /> : kind === 'image' ? <FileImage size={27} /> : <FileIcon size={27} />}
             <span>{kind === 'word' ? 'W' : kind === 'excel' ? 'X' : kind === 'pdf' ? 'PDF' : kind === 'image' ? 'IMG' : 'FILE'}</span>
           </span>}
         {showingProgress ? <div className="ai-attachment-tile-progress" role="progressbar"
@@ -143,7 +143,7 @@ export function AiMessageAttachments({ names, previews }: { names: string[]; pre
             ? <img className="ai-attachment-tile-image" alt="" src={previews[i].thumbnail} />
             : <span className="ai-attachment-tile-file-icon" aria-hidden="true">
             {kind === 'image' ? <FileImage size={26} /> : kind === 'word' ? <FileText size={26} /> :
-              kind === 'excel' ? <FileSpreadsheet size={26} /> : kind === 'pdf' ? <FileType2 size={26} /> : <File size={26} />}
+              kind === 'excel' ? <FileSpreadsheet size={26} /> : kind === 'pdf' ? <FileType2 size={26} /> : <FileIcon size={26} />}
             <span>{kind === 'image' ? 'IMG' : kind === 'word' ? 'W' : kind === 'excel' ? 'X' : kind === 'pdf' ? 'PDF' : 'FILE'}</span>
           </span>}
         </div>
