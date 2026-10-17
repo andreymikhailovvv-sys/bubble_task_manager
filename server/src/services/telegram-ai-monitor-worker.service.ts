@@ -7,13 +7,24 @@ import { telegramUserChatCapability } from './telegram-user-client-chat-access.s
 import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, TELEGRAM_MONITOR_FEATURE, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
-import { publishTelegramAiSummary } from './telegram-ai-inbox.service.js';
+import { publishTelegramAiSummary, publishTelegramAiReplySuggestion, publishTelegramAiTaskSuggestions } from './telegram-ai-inbox.service.js';
 import { sendConditionalTelegramAutoReply } from './telegram-ai-auto-reply.service.js';
 
 const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
 const MAX_JOBS_PER_TICK = 2;
 const MAX_INPUT_MESSAGES = 40;
+const TASK_SCAN_INTERVAL_MS = 30 * 60_000;
+const IMMEDIATE_POLL_MS = 15_000; // Near-immediate polling, no permanent MTProto listener.
+
+export function telegramInteractionDelayMs(minutes: number) {
+  return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
+}
+
+function nextMonitorWakeup(values: Array<Date | null | undefined>): Date | null {
+  const valid = values.filter((value): value is Date => value instanceof Date);
+  return valid.length ? new Date(Math.min(...valid.map(value => value.getTime()))) : null;
+}
 
 export function monitorDayKey(now: Date, timeZone: string | null | undefined): string {
   let zone = timeZone || 'Europe/Moscow';
@@ -58,7 +69,18 @@ export const telegramAiMonitorControl = {
       data: {
         isEnabled: true, monitorRevision: { increment: 1 },
         lastSeenMessageId: maxId, lastCheckedAt: new Date(),
-        nextCheckAt: new Date(Date.now() + policy.checkIntervalMinutes * 60_000),
+        lastInteractionMessageId: maxId, lastSummaryMessageId: maxId, lastTaskMessageId: maxId,
+        nextInteractionAt: policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
+          (policy.mode === 'SUGGEST' ? telegramInteractionDelayMs(policy.interactionIntervalMinutes)
+            : telegramInteractionDelayMs(policy.autoReplyIntervalMinutes))),
+        nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + policy.summaryIntervalMinutes * 60_000),
+        nextTaskAt: policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS),
+        nextCheckAt: nextMonitorWakeup([
+          policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
+            telegramInteractionDelayMs(policy.mode === 'SUGGEST' ? policy.interactionIntervalMinutes : policy.autoReplyIntervalMinutes)),
+          policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + policy.summaryIntervalMinutes * 60_000),
+          policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS)
+        ]),
         lastError: null, leaseToken: null, leasedUntil: null, summaryRequested: false
       }
     });
@@ -68,7 +90,8 @@ export const telegramAiMonitorControl = {
   async stop(userId: string, chatId: string) {
     const result = await prisma.telegramAiChatPolicy.updateMany({
       where: { userId, chatId },
-      data: { isEnabled: false, monitorRevision: { increment: 1 }, leaseToken: null, leasedUntil: null, nextCheckAt: null, summaryRequested: false }
+      data: { isEnabled: false, monitorRevision: { increment: 1 }, leaseToken: null, leasedUntil: null,
+        nextCheckAt: null, nextInteractionAt: null, nextSummaryAt: null, nextTaskAt: null, summaryRequested: false }
     });
     if (!result.count) throw new TelegramUserClientError(404, 'Настройки переписки не найдены');
     return { ok: true, enabled: false };
@@ -113,7 +136,7 @@ async function release(claimed: Claimed, error: string | null = null) {
     where: { id: claimed.policy.id, leaseToken: claimed.token },
     data: {
       leaseToken: null, leasedUntil: null,
-      nextCheckAt: new Date(Date.now() + claimed.policy.checkIntervalMinutes * 60_000),
+      ...(error ? { nextCheckAt: new Date(Date.now() + 60_000) } : {}),
       lastCheckedAt: new Date(),
       ...(error ? { lastError: error.slice(0, 160) } : { lastError: null })
     }
@@ -219,84 +242,121 @@ async function reserveForCall(claimed: Claimed, desired: number, dayKey: string)
   return { reservation, callId };
 }
 
+
 async function processClaim(claimed: Claimed) {
   const { policy } = claimed;
   await ownedLease(claimed);
-  const lastSeen = policy.lastSeenMessageId ?? 0;
-  // Fetch media only from the monitored message range; the explicit refresh
-  // can also inspect the limited existing history.
-  const latest = await telegramUserClientRead.aiHistory(
-    policy.userId, policy.chatId, 100, true,
-    policy.reviewAttachments ? (policy.summaryRequested ? 0 : lastSeen) : undefined
-  );
-  const all = latest.messages;
-  const maxId = Math.max(lastSeen, ...all.map(m => m.id));
-  const newMessages = all.filter(m => m.id > lastSeen);
-  // Metadata only: never log message bodies, sender names, or AI reply text.
-  if (policy.mode === 'AUTO' && newMessages.length) {
-    console.info('[TelegramAutoReply] incoming batch', {
-      policyId: policy.id,
-      total: newMessages.length,
-      incomingText: newMessages.filter(m => !m.out && !m.isBot && m.text.trim()).length,
-      outgoing: newMessages.filter(m => m.out).length,
-      fromBots: newMessages.filter(m => m.isBot).length
-    });
-  }
-  const selected = newMessages.length
-    ? newMessages.slice(-MAX_INPUT_MESSAGES)
-    : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
-  // A photo or document without a caption must still trigger analysis.
-  if (!selected.length || !selected.some(m => m.text.trim() || (policy.reviewAttachments && m.hasMedia))) {
-    if (policy.mode === 'AUTO' && newMessages.length) {
-      console.info('[TelegramAutoReply] skipped', { policyId: policy.id, reason: 'no_analyzable_content' });
-    }
+  const now = new Date();
+  const dueInteraction = policy.mode !== 'OBSERVE' &&
+    policy.nextInteractionAt != null && policy.nextInteractionAt <= now;
+  const dueSummary = policy.summaryRequested ||
+    (policy.summaryIntervalMinutes !== -1 && policy.nextSummaryAt != null && policy.nextSummaryAt <= now);
+  const dueTasks = policy.taskMode !== 'NONE' &&
+    policy.nextTaskAt != null && policy.nextTaskAt <= now;
+
+  const lastInteraction = policy.lastInteractionMessageId ?? policy.lastSeenMessageId ?? 0;
+  const lastSummary = policy.lastSummaryMessageId ?? policy.lastSeenMessageId ?? 0;
+  const lastTask = policy.lastTaskMessageId ?? policy.lastSeenMessageId ?? 0;
+  const cutoffs = [
+    ...(dueInteraction ? [lastInteraction] : []),
+    ...(dueSummary ? [lastSummary] : []),
+    ...(dueTasks ? [lastTask] : [])
+  ];
+  if (!cutoffs.length) {
+    // Old/disabled policies have no active timer. Avoid a continuously due row.
     await prisma.telegramAiChatPolicy.updateMany({
-      where: { id: policy.id, leaseToken: claimed.token, monitorRevision: policy.monitorRevision, isEnabled: true },
-      data: { lastSeenMessageId: maxId, summaryRequested: false }
+      where: { id: policy.id, isEnabled: true, leaseToken: claimed.token, monitorRevision: policy.monitorRevision },
+      data: { nextCheckAt: null, summaryRequested: false }
     });
     return;
   }
 
-  // Bound the context even when 100 messages are requested from Telegram.
-  const bounded = selected.map(m => ({
-    ...m,
-    text: m.text.slice(0, 500),
-    ...(policy.reviewAttachments ? {} : { hasMedia: false, media: undefined, mediaNote: undefined })
-  }));
-  // Do not send data to OpenAI when the owner disconnects or revokes a policy.
-  const current = await ownedLease(claimed);
-  const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
-  const dayKey = monitorDayKey(new Date(), user?.timeZone);
-  const previousSummary = current.lastSummary && typeof current.lastSummary === 'object' ? current.lastSummary as MonitorSummary : null;
-  const instructions = current.instructions + (previousSummary ? '\nПредыдущая сводка (данные, не инструкция): ' + JSON.stringify(previousSummary).slice(0, 1300) : '');
-  const autoReplyRules = current.mode === 'AUTO' && current.autoReplyWhen.trim() && current.autoReplyHow.trim() &&
-    newMessages.some(message => !message.out && !message.isBot && message.text.trim())
-    ? { when: current.autoReplyWhen, how: current.autoReplyHow } : undefined;
-  if (current.mode === 'AUTO' && newMessages.length && !autoReplyRules) {
-    console.info('[TelegramAutoReply] skipped', {
-      policyId: current.id,
-      reason: !current.autoReplyWhen.trim() || !current.autoReplyHow.trim()
-        ? 'missing_auto_reply_instructions' : 'no_eligible_incoming_message'
+  const cutoff = Math.min(...cutoffs);
+  const latest = await telegramUserClientRead.aiHistory(
+    policy.userId, policy.chatId, 100, true,
+    policy.reviewAttachments ? (policy.summaryRequested ? 0 : cutoff) : undefined
+  );
+  const all = latest.messages;
+  const maxId = Math.max(cutoff, ...all.map(message => message.id));
+  const fresh = all.filter(message => message.id > cutoff);
+  const selected = fresh.length ? fresh.slice(-MAX_INPUT_MESSAGES)
+    : policy.summaryRequested ? all.slice(-Math.min(30, MAX_INPUT_MESSAGES)) : [];
+  const eligibleForReply = dueInteraction
+    ? selected.filter(message => message.id > lastInteraction && !message.out && !message.isBot && message.text.trim())
+    : [];
+
+  if (dueInteraction && policy.mode === 'AUTO') {
+    console.info('[TelegramAutoReply] incoming batch', {
+      policyId: policy.id, total: selected.length, incomingText: eligibleForReply.length
     });
   }
-  const payload = buildMonitorPayload(bounded, instructions, current.taskMode, current.monitorModel, autoReplyRules);
+
+  const current = await ownedLease(claimed);
+  const nextInteractionAt = dueInteraction
+    ? new Date(Date.now() + telegramInteractionDelayMs(
+      current.mode === 'SUGGEST' ? current.interactionIntervalMinutes : current.autoReplyIntervalMinutes))
+    : current.nextInteractionAt;
+  const nextSummaryAt = dueSummary && !policy.summaryRequested && current.summaryIntervalMinutes === -1
+    ? null : dueSummary && current.summaryIntervalMinutes !== -1
+      ? new Date(Date.now() + current.summaryIntervalMinutes * 60_000) : current.nextSummaryAt;
+  const nextTaskAt = dueTasks ? new Date(Date.now() + TASK_SCAN_INTERVAL_MS) : current.nextTaskAt;
+  const maxProcessed = Math.max(policy.lastSeenMessageId ?? 0, maxId);
+
+  // Advance independent checkpoints before provider I/O: one delayed summary
+  // must never steal a new message from fast reply proposals (or vice versa).
+  // Crashes cannot replay autonomous Telegram sends.
+  const update = await prisma.telegramAiChatPolicy.updateMany({
+    where: { id: policy.id, isEnabled: true, leaseToken: claimed.token, monitorRevision: policy.monitorRevision },
+    data: {
+      lastSeenMessageId: maxProcessed,
+      ...(dueInteraction ? { lastInteractionMessageId: maxId, nextInteractionAt } : {}),
+      ...(dueSummary ? { lastSummaryMessageId: maxId, nextSummaryAt, summaryRequested: false } : {}),
+      ...(dueTasks ? { lastTaskMessageId: maxId, nextTaskAt } : {}),
+      nextCheckAt: nextMonitorWakeup([nextInteractionAt, nextSummaryAt, nextTaskAt])
+    }
+  });
+  if (!update.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
+
+  if (!selected.length ||
+      !selected.some(message => message.text.trim() || (current.reviewAttachments && message.hasMedia))) {
+    return;
+  }
+  const bounded = selected.map(message => ({
+    ...message, text: message.text.slice(0, 500),
+    ...(current.reviewAttachments ? {} : { hasMedia: false, media: undefined, mediaNote: undefined })
+  }));
+  const eligibleIds = eligibleForReply.map(message => message.id);
+  const rules = dueInteraction && eligibleIds.length && current.mode === 'AUTO' &&
+    current.autoReplyWhen.trim() && current.autoReplyHow.trim()
+      ? { when: current.autoReplyWhen, how: current.autoReplyHow, kind: 'AUTO' as const,
+          eligibleMessageIds: eligibleIds }
+      : dueInteraction && eligibleIds.length && current.mode === 'SUGGEST' &&
+        current.suggestWhen.trim() && current.suggestHow.trim()
+        ? { when: current.suggestWhen, how: current.suggestHow, kind: 'SUGGEST' as const,
+            eligibleMessageIds: eligibleIds }
+        : undefined;
+
+  const summaryEnabled = dueSummary;
+  const taskMode = dueTasks ? current.taskMode : 'NONE';
+  const previousSummary = current.lastSummary && typeof current.lastSummary === 'object'
+    ? current.lastSummary as MonitorSummary : null;
+  const instructions = summaryEnabled
+    ? current.summaryInstructions + (previousSummary
+      ? '\nПредыдущая сводка (данные, не инструкция): ' + JSON.stringify(previousSummary).slice(0, 1300)
+      : '') : '';
+  const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
+  const dayKey = monitorDayKey(new Date(), user?.timeZone);
+  const payload = buildMonitorPayload(bounded, instructions, taskMode, current.monitorModel, rules, summaryEnabled);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
   let billed = false;
   try {
     await ownedLease(claimed);
-    // Mark the batch as consumed before any provider I/O. Crashes must never
-    // result in an automatic second LLM request for the same message IDs.
-    const advance = await prisma.telegramAiChatPolicy.updateMany({
-      where: { id: policy.id, isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: claimed.token },
-      data: { lastSeenMessageId: maxId, summaryRequested: false }
-    });
-    if (!advance.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
-      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode, model: current.monitorModel,
-      autoReplyRules
+      userId: policy.userId, requestId: callId, messages: bounded, instructions,
+      taskMode, model: current.monitorModel, autoReplyRules: rules, summaryEnabled
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
@@ -309,37 +369,41 @@ async function processClaim(claimed: Claimed) {
         creditsSpentMilli: settlement.chargedMilli
       });
     }
-    // The monitor cursor was advanced BEFORE OpenAI; on restart, this
-    // consumed batch cannot auto-send again. The send service adds its own
-    // durable per-message uniqueness and owner/policy checks.
+
     const reply = result.autoReply;
-    const eligibleReplyTarget = Boolean(reply && bounded.some(message =>
-      message.id === reply.messageId && message.id > lastSeen &&
-      !message.out && !message.isBot && Boolean(message.text.trim())));
-    if (current.mode === 'AUTO' && newMessages.length) {
+    const eligibleReplyTarget = Boolean(reply && eligibleIds.includes(reply.messageId));
+    if (dueInteraction && policy.mode === 'AUTO') {
       console.info('[TelegramAutoReply] decision', {
-        policyId: policy.id,
-        reason: !autoReplyRules ? 'not_eligible'
-          : !reply ? result.autoReplyOutcome
-            : !eligibleReplyTarget ? 'invalid_or_non_incoming_target' : 'sending',
-        // No message or generated reply text ever enters server logs.
-        triggerMessageId: eligibleReplyTarget ? reply?.messageId : undefined
+        policyId: policy.id, reason: !rules ? 'not_eligible' : !reply
+          ? result.autoReplyOutcome : !eligibleReplyTarget ? 'invalid_or_non_incoming_target' : 'sending'
       });
     }
-    if (autoReplyRules && reply?.shouldReply && eligibleReplyTarget) {
-      const status = await sendConditionalTelegramAutoReply({
-        userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
-        messageId: reply.messageId, text: reply.text,
-        revision: policy.monitorRevision, leaseToken: claimed.token
+    if (rules && reply?.shouldReply && eligibleReplyTarget) {
+      if (current.mode === 'AUTO') {
+        await sendConditionalTelegramAutoReply({
+          userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
+          messageId: reply.messageId, text: reply.text,
+          revision: policy.monitorRevision, leaseToken: claimed.token
+        });
+      } else if (current.mode === 'SUGGEST') {
+        await publishTelegramAiReplySuggestion({
+          policy: current, leaseToken: claimed.token,
+          messageId: reply.messageId, text: reply.text
+        });
+      }
+    }
+    if (dueSummary) {
+      await publishTelegramAiSummary({
+        policy: { ...current, taskMode: dueTasks ? current.taskMode : 'NONE' },
+        leaseToken: claimed.token, lastSeenMessageId: maxId,
+        requestId: callId, summary: result.summary
       });
-      console.info('[TelegramAutoReply] result', {
-        policyId: policy.id, triggerMessageId: reply.messageId, status
+    } else if (dueTasks) {
+      await publishTelegramAiTaskSuggestions({
+        policy: current, leaseToken: claimed.token,
+        lastSeenMessageId: maxId, requestId: callId, summary: result.summary
       });
     }
-    await publishTelegramAiSummary({
-      policy: { ...policy, monitorModel: current.monitorModel },
-      leaseToken: claimed.token, lastSeenMessageId: maxId, requestId: callId, summary: result.summary
-    });
   } catch (error) {
     if (!billed) {
       await refundAiCreditReservation(reservation);

@@ -5,14 +5,19 @@ import {
   DEFAULT_TELEGRAM_AI_CHAT_SETTINGS,
   TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI,
   TELEGRAM_AI_MONITOR_MODELS,
+  TELEGRAM_AI_INTERVALS, TELEGRAM_AI_SUMMARY_INTERVALS,
   validateTelegramAiChatSettings
 } from '../src/services/telegram-ai-chat-policy.service.js';
 
-test('Telegram assistant has three-level modes, three intervals and a safe default', () => {
+test('Telegram assistant has independent participation, summary and task settings', () => {
   const v = validateTelegramAiChatSettings(DEFAULT_TELEGRAM_AI_CHAT_SETTINGS);
   assert.equal(v.mode, 'OBSERVE');
   assert.equal(v.taskMode, 'SUGGEST');
-  assert.equal(v.checkIntervalMinutes, 30);
+  assert.equal(v.interactionIntervalMinutes, 5);
+  assert.equal(v.autoReplyIntervalMinutes, 5);
+  assert.equal(v.summaryIntervalMinutes, 30);
+  assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
+  assert.deepEqual(TELEGRAM_AI_SUMMARY_INTERVALS, [-1, 5, 10, 30, 180, 360, 1440]);
   assert.equal(v.monitorModel, 'gpt-6-luna');
   assert.deepEqual(TELEGRAM_AI_MONITOR_MODELS, ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
   assert.equal(v.dailyCreditLimitMilli, 50_000);
@@ -29,14 +34,20 @@ test('all valid slider positions and nullable unlimited budget round-trip', () =
   const v = DEFAULT_TELEGRAM_AI_CHAT_SETTINGS;
   for (const mode of ['OBSERVE', 'SUGGEST', 'AUTO']) {
     for (const taskMode of ['NONE', 'SUGGEST', 'AUTO']) {
-      for (const interval of [5, 30, 180]) {
-        const parsed = validateTelegramAiChatSettings({ ...v, mode, taskMode, checkIntervalMinutes: interval,
+      for (const interval of TELEGRAM_AI_INTERVALS) {
+        const parsed = validateTelegramAiChatSettings({ ...v, mode, taskMode,
+          interactionIntervalMinutes: interval, autoReplyIntervalMinutes: interval,
+          ...(mode === 'SUGGEST' ? { suggestWhen: 'Когда упоминают', suggestHow: 'Коротко' } : {}),
           ...(mode === 'AUTO' ? { autoReplyWhen: 'Когда меня упоминают', autoReplyHow: 'Коротко отвечай' } : {}) });
         assert.equal(parsed.mode, mode);
         assert.equal(parsed.taskMode, taskMode);
-        assert.equal(parsed.checkIntervalMinutes, interval);
+        assert.equal(parsed.interactionIntervalMinutes, interval);
+        assert.equal(parsed.autoReplyIntervalMinutes, interval);
       }
     }
+  }
+  for (const interval of TELEGRAM_AI_SUMMARY_INTERVALS) {
+    assert.equal(validateTelegramAiChatSettings({ ...v, summaryIntervalMinutes: interval }).summaryIntervalMinutes, interval);
   }
   for (const model of TELEGRAM_AI_MONITOR_MODELS) {
     assert.equal(validateTelegramAiChatSettings({ ...v, monitorModel: model }).monitorModel, model);
@@ -58,10 +69,12 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, monitorModel: 'gpt-999-nonexistent' },
     { ...valid, monitorModel: null },
     { ...valid, taskMode: 'CREATE_EVERYTHING' },
-    { ...valid, checkIntervalMinutes: 15 },
-    { ...valid, checkIntervalMinutes: 60 },
-    { ...valid, checkIntervalMinutes: 1 },
-    { ...valid, instructions: 'x'.repeat(3001) },
+    { ...valid, interactionIntervalMinutes: 15 },
+    { ...valid, autoReplyIntervalMinutes: 60 },
+    { ...valid, summaryIntervalMinutes: 0 },
+    { ...valid, summaryInstructions: 'x'.repeat(2001) },
+    { ...valid, mode: 'SUGGEST' },
+    { ...valid, mode: 'AUTO' },
     { ...valid, notifyImportant: 'true' }
   ]) assert.throws(() => validateTelegramAiChatSettings(body));
 });
@@ -77,9 +90,9 @@ test('assistant routes are signed-in and same-origin; preferences do not activat
   assert.doesNotMatch(service, /\.aiHistory\(|\.sendMessage\(|\.confirm\(/);
 });
 
-test('web interface exposes four real range controls, not legacy selects/checkboxes', () => {
+test('web interface separates participation frequency and summary configuration', () => {
   const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
-  for (const label of ['Режим работы', 'Добавление задач', 'Интенсивность проверки', 'Дневной предел кредитов']) {
+  for (const label of ['Участие в переписке', 'Добавление задач', 'Частота сводок', 'Частота предложений ответов', 'Частота автоответов', 'Дневной предел кредитов']) {
     assert.ok(ui.includes(label), 'Missing: ' + label);
   }
   assert.match(ui, /type="range"/);
@@ -89,4 +102,6 @@ test('web interface exposes four real range controls, not legacy selects/checkbo
   assert.doesNotMatch(ui, /<select value=\{draft\./);
   assert.doesNotMatch(ui, /summaryFrequency|analysisLevel|maxMessagesPerCheck|monthlyCreditLimitMilli|suggestTasks/);
   assert.match(ui, /<input type="checkbox" checked=\{draft.notifyImportant\}/);
+  assert.doesNotMatch(ui, />Инструкции ассистенту</);
+  assert.doesNotMatch(ui, /title="Интенсивность проверки"/);
 });

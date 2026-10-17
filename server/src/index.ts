@@ -210,7 +210,7 @@ const runTelegramAiMonitor = () => telegramAiMonitorWorker.drain().catch(() => {
   console.warn('[TelegramMonitor] scheduler iteration failed');
 });
 setTimeout(runTelegramAiMonitor, 8_000).unref();
-setInterval(runTelegramAiMonitor, 30_000).unref();
+setInterval(runTelegramAiMonitor, 10_000).unref();
 
 // Durable outgoing summaries to the linked Telegram bot, distinct from
 // monitored peers. Each event is claimed at most once across replicas.

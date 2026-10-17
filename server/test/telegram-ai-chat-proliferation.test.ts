@@ -67,8 +67,8 @@ test('attachment review is enabled by default and disabled explicitly, including
   assert.equal(validateTelegramAiChatSettings(legacy).reviewAttachments, true);
   assert.throws(() => validateTelegramAiChatSettings({ ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS, reviewAttachments: 'false' }));
   const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
-  assert.match(worker, /policy\.reviewAttachments \? \(policy\.summaryRequested \? 0 : lastSeen\) : undefined/);
-  assert.match(worker, /policy\.reviewAttachments && m\.hasMedia/);
+  assert.match(worker, /policy\.reviewAttachments \? \(policy\.summaryRequested \? 0 : cutoff\) : undefined/);
+  assert.match(worker, /current\.reviewAttachments && message\.hasMedia/);
   const migration = source('../prisma/migrations/20261016170000_telegram_ai_media_opt_in/migration.sql');
   assert.match(migration, /DEFAULT true/);
 });

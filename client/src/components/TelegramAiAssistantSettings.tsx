@@ -8,26 +8,34 @@ type Props = { onClose: () => void };
 
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
-const CHECK_INTERVALS = [5, 30, 180] as const;
+const CHECK_INTERVALS = [0, 5, 10, 30, 180, 360, 1440] as const;
+const SUMMARY_INTERVALS = [-1, 5, 10, 30, 180, 360, 1440] as const;
 const DAILY_LIMITS = [50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, null] as const;
 
 const DEFAULTS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
-  checkIntervalMinutes: 30,
+  interactionIntervalMinutes: 5,
+  autoReplyIntervalMinutes: 5,
+  summaryIntervalMinutes: 30,
+  summaryInstructions: '',
+  suggestWhen: '',
+  suggestHow: '',
   monitorModel: 'gpt-6-luna',
   dailyCreditLimitMilli: 50_000,
-  instructions: '',
-  autoReplyWhen: '',
+   autoReplyWhen: '',
   autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true
 };
 const kindName = (kind: string) => kind === 'user' ? 'Личный чат' : kind === 'group' ? 'Группа' : 'Супергруппа';
 
-const MODE_NAMES = ['Наблюдение и сводки', 'Предлагать ответы', 'Автоответы'] as const;
+const MODE_NAMES = ['Не участвовать', 'Предлагать ответы', 'Автоответы'] as const;
 const TASK_NAMES = ['Не добавлять задачи', 'Предлагать задачи', 'Автодобавление задач'] as const;
-const CHECK_NAMES = ['Каждые 5 минут', 'Каждые 30 минут', 'Каждые 3 часа'] as const;
+const CHECK_NAMES = ['Сразу', 'Каждые 5 минут', 'Каждые 10 минут', 'Каждые 30 минут', 'Каждые 3 часа', 'Каждые 6 часов', 'Каждые 24 часа'] as const;
+const SUMMARY_NAMES = ['Не делать сводки', ...CHECK_NAMES.slice(1)] as const;
+const CHECK_SHORT = ['Сразу', '5м', '10м', '30м', '3ч', '6ч', '24ч'] as const;
+const SUMMARY_SHORT = ['Выкл.', '5м', '10м', '30м', '3ч', '6ч', '24ч'] as const;
 const CREDIT_NAMES = ['50', '100', '250', '500', '1 000', '2 500', '5 000', 'Без ограничения'] as const;
 
 function indexOfValue<T extends string | number | null>(options: readonly T[], value: string | number | null): number {
@@ -67,7 +75,7 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
         ))}
       </div>
       {shortLabels ? (
-        <div className="telegram-ai-slider-setting__labels" aria-hidden="true">
+        <div className="telegram-ai-slider-setting__labels" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${shortLabels.length}, minmax(0, 1fr))` }}>
           {shortLabels.map(label => <span key={label}>{label}</span>)}
         </div>
       ) : (
@@ -128,11 +136,15 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     setDraft(existing ? {
       mode: existing.mode,
       taskMode: existing.taskMode,
-      checkIntervalMinutes: existing.checkIntervalMinutes,
+      interactionIntervalMinutes: existing.interactionIntervalMinutes ?? 5,
+      autoReplyIntervalMinutes: existing.autoReplyIntervalMinutes ?? 5,
+      summaryIntervalMinutes: existing.summaryIntervalMinutes ?? 30,
+      summaryInstructions: existing.summaryInstructions ?? '',
+      suggestWhen: existing.suggestWhen ?? '',
+      suggestHow: existing.suggestHow ?? '',
       monitorModel: existing.monitorModel,
       dailyCreditLimitMilli: existing.dailyCreditLimitMilli,
-      instructions: existing.instructions,
-      autoReplyWhen: existing.autoReplyWhen ?? '',
+       autoReplyWhen: existing.autoReplyWhen ?? '',
       autoReplyHow: existing.autoReplyHow ?? '',
       notifyImportant: existing.notifyImportant,
       reviewAttachments: existing.reviewAttachments !== false
@@ -168,7 +180,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       setPolicies(list.policies);
       setNotice(action === 'start' ? 'Мониторинг включён. Новые сообщения будут проверяться по расписанию.' :
         action === 'stop' ? 'Мониторинг остановлен.' :
-          'Сводка поставлена в очередь. Результат появится после обработки.');
+          'Запрошена сводка. Результат появится после обработки.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось выполнить действие');
     } finally { setBusy(false); }
@@ -176,6 +188,10 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
 
   const save = async () => {
     if (!selectedId || busy) return;
+    if (draft.mode === 'SUGGEST' && (!draft.suggestWhen.trim() || !draft.suggestHow.trim())) {
+      setError('Заполните оба поля для предложений ответов');
+      return;
+    }
     if (draft.mode === 'AUTO' && (!draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) {
       setError('Заполните оба поля для автоответов');
       return;
@@ -236,7 +252,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
           <ShieldCheck size={17} className="mt-0.5 shrink-0"/>
           <div>
             <strong>Контроль остаётся за вами</strong>
-            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается при сохранении настроек конкретного чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. В режиме «Автоответы» ИИ может самостоятельно отправлять сообщения от вашего Telegram-аккаунта только в выбранную переписку. Автосоздание задач настраивается отдельно.</p>
+            <p className="integration-menu__muted mt-1 text-xs leading-relaxed">Мониторинг включается при сохранении настроек конкретного чата. ИИ анализирует новые сообщения, включая небольшие фотографии, PDF и текстовые вложения, и передаёт их OpenAI. Предложения ответов всегда требуют вашего подтверждения, а автоматическая отправка возможна только в режиме «Автоответы». Сводки и автосоздание задач настраиваются отдельно.</p>
           </div>
         </div>
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
@@ -324,10 +340,33 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       )}
                     </div>
                   )}
-                  <SettingSlider title="Режим работы" description="Как ассистент реагирует на сообщения"
+                  <SettingSlider title="Участие в переписке" description="Ассистент не участвует, предлагает ответ с подтверждением или отвечает автоматически"
                     index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
-                    shortLabels={['Наблюдение', 'Предлагать', 'Автоответы']}
+                    shortLabels={['Не участвовать', 'Предлагать', 'Автоответы']}
                     onChange={i => update('mode', MODES[i] ?? MODES[0])}/>
+                  {draft.mode === 'SUGGEST' && (
+                    <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
+                      <p className="text-sm font-semibold">Правила предложений ответов</p>
+                      <p className="integration-menu__muted text-xs">Ассистент предложит текст в соответствующем чате проекта «Телеграм ассистент». Без вашего нажатия «Отправить» сообщение в Telegram не уйдёт.</p>
+                      {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Чтобы отправлять одобренные предложения, необходимо разрешить отправку Telegram в интеграциях.</p>}
+                      <label className="block text-sm font-semibold">В каких случаях предлагать ответы
+                        <textarea rows={3} maxLength={2000} required value={draft.suggestWhen}
+                          onChange={event => update('suggestWhen', event.target.value)}
+                          placeholder="Например: когда меня спрашивают о сроках или упоминают через @мой_ник."
+                          className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
+                      </label>
+                      <label className="block text-sm font-semibold">Формат предлагаемых ответов
+                        <textarea rows={3} maxLength={2000} required value={draft.suggestHow}
+                          onChange={event => update('suggestHow', event.target.value)}
+                          placeholder="Например: коротко и вежливо от моего лица, без непроверенных обещаний."
+                          className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
+                      </label>
+                      <SettingSlider title="Частота предложений ответов" description="«Сразу» означает проверку при ближайшем цикле мониторинга"
+                        index={indexOfValue(CHECK_INTERVALS, draft.interactionIntervalMinutes)}
+                        options={CHECK_NAMES} shortLabels={CHECK_SHORT}
+                        onChange={i => update('interactionIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                    </div>
+                  )}
                   {draft.mode === 'AUTO' && (
                     <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
                       <p className="text-sm font-semibold">Правила автоматических ответов</p>
@@ -345,19 +384,31 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           placeholder="Например: отвечай кратко и дружелюбно от моего лица; если спрашивают о сроках, сообщай, что я уточню их позже. Ничего не обещай без подтверждения."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
+                      <SettingSlider title="Частота автоответов" description="«Сразу» означает проверку при ближайшем цикле мониторинга"
+                        index={indexOfValue(CHECK_INTERVALS, draft.autoReplyIntervalMinutes)}
+                        options={CHECK_NAMES} shortLabels={CHECK_SHORT}
+                        onChange={i => update('autoReplyIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
                     </div>
                   )}
                   <SettingSlider title="Добавление задач" description="Что делать с договорённостями и поручениями"
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
                     onChange={i => update('taskMode', TASK_MODES[i] ?? TASK_MODES[0])}/>
-                  <SettingSlider title="Интенсивность проверки" description="Как часто проверять новые сообщения"
-                    index={indexOfValue(CHECK_INTERVALS, draft.checkIntervalMinutes)} options={CHECK_NAMES}
-                    shortLabels={['5 минут', '30 минут', '3 часа']}
-                    onChange={i => update('checkIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                  <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки"
+                    index={indexOfValue(SUMMARY_INTERVALS, draft.summaryIntervalMinutes)} options={SUMMARY_NAMES}
+                    shortLabels={SUMMARY_SHORT}
+                    onChange={i => update('summaryIntervalMinutes', SUMMARY_INTERVALS[i] ?? SUMMARY_INTERVALS[0])}/>
+                  {draft.summaryIntervalMinutes !== -1 && (
+                    <label className="block text-sm font-semibold">Какие именно сводки делать
+                      <textarea rows={3} maxLength={2000} value={draft.summaryInstructions}
+                        onChange={e => update('summaryInstructions', e.target.value)}
+                        placeholder="Например: выделяй сроки, решения, договорённости и ответственных; не повторяй несущественное."
+                        className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
+                    </label>
+                  )}
                   <label className="block text-sm font-semibold">
                     Модель фонового мониторинга
-                    <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для автоматических сводок. Модель ручных запросов выбирается отдельно в самом чате с ИИ.</p>
+                    <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для фонового анализа, предложений ответов, автоответов, сводок и задач. Модель ручных запросов выбирается отдельно.</p>
                     <select className="telegram-integrations-modal__input mt-2 w-full rounded-xl border px-3 py-2 text-sm font-normal"
                       value={draft.monitorModel}
                       onChange={e => update('monitorModel', e.target.value as TelegramAiChatSettings['monitorModel'])}>
@@ -375,12 +426,6 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   {draft.taskMode === 'AUTO' && (
                     <p className="integration-menu__muted text-xs">Автодобавление задач работает по настройке «Добавление задач» и не зависит от автоответов.</p>
                   )}
-                  <label className="block text-sm font-semibold">Инструкции ассистенту
-                    <textarea rows={3} maxLength={3000} value={draft.instructions}
-                      onChange={e => update('instructions', e.target.value)}
-                      placeholder="Например: выделяй договорённости и сроки, не обещай скидки без моего разрешения."
-                      className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
-                  </label>
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
@@ -392,7 +437,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     </span>
                   </label>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && (!capability?.sendEnabled || !draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim()))}
+                    <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && (!capability?.sendEnabled || !draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) || (draft.mode === 'SUGGEST' && (!draft.suggestWhen.trim() || !draft.suggestHow.trim()))}
                       onClick={() => void save()}
                       className="integration-menu__action rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50">
                       {busy ? 'Сохраняем…' : selected ? 'Сохранить изменения' : 'Добавить переписку'}

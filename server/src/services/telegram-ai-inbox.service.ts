@@ -1,5 +1,9 @@
 import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
 import { Prisma, type TelegramAiChatPolicy } from '@prisma/client';
+import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
+import { parseTelegramSendTargetId, telegramSendTargetFromDialog } from './telegram-send-targets.service.js';
+import { connectedOwner, openClient } from './telegram-user-client-send.service.js';
+import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { telegramService } from './telegram.service.js';
 import { type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
@@ -40,7 +44,8 @@ export async function telegramAiInboxFeed(userId: string) {
     }),
     prisma.telegramAiInboxEvent.findMany({
       where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 250,
-      select: { id: true, policyId: true, taskModeAtPublish: true, content: true, createdAt: true, summary: true }
+      select: { id: true, policyId: true, taskModeAtPublish: true, content: true, createdAt: true, summary: true,
+        suggestedReplyMessageId: true, suggestedReplyText: true, suggestedReplyStatus: true }
     })
   ]);
   const approvals = events.length ? await prisma.telegramAiTaskApproval.findMany({
@@ -83,6 +88,11 @@ export async function telegramAiInboxFeed(userId: string) {
       role: 'assistant' as const, content: event.content,
       createdAt: event.createdAt.toISOString(),
       taskProposal: proposalByEvent.get(event.id) ?? null,
+      telegramSuggestedReply: event.suggestedReplyMessageId != null && event.suggestedReplyText
+        ? { eventId: event.id, messageId: event.suggestedReplyMessageId,
+          text: event.suggestedReplyText, status: event.suggestedReplyStatus,
+          chatTitle: policies.find(p => p.id === event.policyId)?.chatTitle ?? 'Telegram' }
+        : null,
       taskSuggestions: typeof event.summary === 'object' && event.summary && 'taskSuggestions' in event.summary
         ? (event.summary as { taskSuggestions?: unknown }).taskSuggestions : []
     }))
@@ -143,6 +153,161 @@ export async function publishTelegramAiSummary(input: {
     }
   }
   return published;
+}
+
+
+/** Publish an editable, owner-approved reply chip only to the matching managed AI thread. */
+export async function publishTelegramAiReplySuggestion(input: {
+  policy: TelegramAiChatPolicy; leaseToken: string; messageId: number; text: string;
+}) {
+  const { policy } = input;
+  if (!Number.isSafeInteger(input.messageId) || input.messageId <= 0 || !input.text.trim()) return false;
+  const eventId = 'telegram-ai-reply:' + policy.id + ':' + input.messageId;
+  return prisma.$transaction(async tx => {
+    const valid = await tx.telegramAiChatPolicy.findFirst({
+      where: { id: policy.id, userId: policy.userId, mode: 'SUGGEST',
+        isEnabled: true, monitorRevision: policy.monitorRevision, leaseToken: input.leaseToken },
+      select: { id: true }
+    });
+    if (!valid) return false;
+    await tx.telegramAiInboxEvent.upsert({
+      where: { id: eventId },
+      create: {
+        id: eventId, userId: policy.userId, policyId: policy.id, messageId: input.messageId,
+        taskModeAtPublish: 'NONE', botStatus: 'SKIPPED',
+        content: '💬 Предлагаю ответить в Telegram · ' + clip(policy.chatTitle, 90),
+        summary: { taskSuggestions: [] },
+        model: policy.monitorModel,
+        suggestedReplyMessageId: input.messageId, suggestedReplyText: input.text.trim().slice(0, 1000)
+      },
+      update: {}
+    });
+    await tx.systemNotification.upsert({
+      where: { eventKey: eventId },
+      create: { userId: policy.userId, eventKey: eventId,
+        content: '💬 ИИ предложил ответ в Telegram · ' + clip(policy.chatTitle, 90) },
+      update: {}
+    });
+    return true;
+  });
+}
+
+/** Task mode is independent of summary frequency: publish actual task suggestions
+ * even if summary output has been disabled by the owner. */
+export async function publishTelegramAiTaskSuggestions(input: {
+  policy: TelegramAiChatPolicy; leaseToken: string; lastSeenMessageId: number;
+  requestId: string; summary: MonitorSummary;
+}) {
+  const { policy, summary } = input;
+  if (policy.taskMode === 'NONE' || !summary.taskSuggestions.length) return false;
+  const eventId = 'telegram-ai-tasks:' + policy.id + ':' + input.requestId;
+  const written = await prisma.$transaction(async tx => {
+    const valid = await tx.telegramAiChatPolicy.findFirst({
+      where: { id: policy.id, userId: policy.userId, isEnabled: true,
+        monitorRevision: policy.monitorRevision, leaseToken: input.leaseToken },
+      select: { id: true }
+    });
+    if (!valid) return false;
+    await tx.telegramAiInboxEvent.upsert({
+      where: { id: eventId },
+      create: {
+        id: eventId, userId: policy.userId, policyId: policy.id,
+        messageId: input.lastSeenMessageId, taskModeAtPublish: policy.taskMode,
+        botStatus: 'SKIPPED',
+        content: '📌 Найдены новые возможные задачи · ' + clip(policy.chatTitle, 90),
+        summary: { taskSuggestions: summary.taskSuggestions },
+        model: policy.monitorModel
+      },
+      update: {}
+    });
+    return true;
+  });
+  if (written) await prepareTaskProposal({
+    userId: policy.userId, requestId: eventId, source: 'telegram_assistant',
+    actions: summary.taskSuggestions.slice(0, 4).map((title, index) => ({
+      type: 'telegram_suggestion', title: clip(title), eventId, index
+    })), autoApply: policy.taskMode === 'AUTO'
+  });
+  return written;
+}
+
+const suggestionSendLimiter = new FixedWindowRateLimiter(10, 60_000);
+
+/** A confirmed click from the owner is the only path from a proposal chip
+ * to Telegram. The destination is fixed by the stored policy, never by AI text. */
+export async function sendTelegramAiSuggestedReply(userId: string, eventId: string, rawText: unknown) {
+  if (typeof rawText !== 'string' || !rawText.trim() || rawText.trim().length > 1000 ||
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(rawText)) {
+    throw new TelegramUserClientError(400, 'Ответ должен содержать от 1 до 1000 символов');
+  }
+  if (!suggestionSendLimiter.consume(userId).allowed) {
+    throw new TelegramUserClientError(429, 'Слишком много попыток отправки');
+  }
+  const item = await prisma.telegramAiInboxEvent.findFirst({
+    where: { id: eventId, userId, suggestedReplyMessageId: { not: null },
+      suggestedReplyStatus: { in: ['PENDING', 'FAILED'] } },
+    include: { policy: true }
+  });
+  if (!item || !item.suggestedReplyMessageId ||
+      !item.policy.isEnabled || item.policy.mode !== 'SUGGEST') {
+    throw new TelegramUserClientError(409, 'Предложение недоступно или настройки ассистента изменились');
+  }
+  const access = await telegramUserChatCapability(userId);
+  if (!access.connected || !access.readEnabled || !access.sendEnabled) {
+    throw new TelegramUserClientError(403, 'Не разрешена отправка через личный Telegram');
+  }
+  const parsed = parseTelegramSendTargetId(item.policy.chatId);
+  if (!parsed) throw new TelegramUserClientError(400, 'Переписка Telegram недоступна');
+  const claim = await prisma.telegramAiInboxEvent.updateMany({
+    where: { id: item.id, userId, suggestedReplyStatus: { in: ['PENDING', 'FAILED'] } },
+    data: { suggestedReplyStatus: 'SENDING', suggestedReplyText: rawText.trim() }
+  });
+  if (!claim.count) throw new TelegramUserClientError(409, 'Это предложение уже отправляется');
+  let started = false;
+  let client: Awaited<ReturnType<typeof openClient>> | null = null;
+  try {
+    const owner = await connectedOwner(userId);
+    client = await openClient(owner);
+    const dialogs = await client.getDialogs({ limit: 150, ignoreMigrated: true });
+    const row = dialogs.find(dialog =>
+      telegramSendTargetFromDialog(dialog, owner.telegramAccountId)?.id === item.policy.chatId);
+    const target = row && telegramSendTargetFromDialog(row, owner.telegramAccountId);
+    if (!row || !target || target.kind !== parsed.kind) {
+      throw new TelegramUserClientError(404, 'Выбранная переписка не найдена');
+    }
+    const latest = await prisma.telegramAiInboxEvent.findFirst({
+      where: { id: eventId, userId, suggestedReplyStatus: 'SENDING', policy: {
+        mode: 'SUGGEST', isEnabled: true, chatId: item.policy.chatId } }
+    });
+    const fresh = await connectedOwner(userId);
+    const permission = await telegramUserChatCapability(userId);
+    if (!latest || !permission.readEnabled || !permission.sendEnabled ||
+        fresh.telegramAccountId !== owner.telegramAccountId ||
+        fresh.encryptedSession !== owner.encryptedSession) {
+      throw new TelegramUserClientError(409, 'Доступ к Telegram изменился');
+    }
+    started = true;
+    await client.sendMessage(row.inputEntity, {
+      message: rawText.trim(), replyTo: item.suggestedReplyMessageId,
+      formattingEntities: [], linkPreview: false
+    });
+    await prisma.telegramAiInboxEvent.updateMany({
+      where: { id: eventId, userId, suggestedReplyStatus: 'SENDING' },
+      data: { suggestedReplyStatus: 'SENT' }
+    });
+    return { ok: true, status: 'SENT' as const };
+  } catch (error) {
+    const status = started ? 'UNKNOWN' : 'FAILED';
+    await prisma.telegramAiInboxEvent.updateMany({
+      where: { id: eventId, userId, suggestedReplyStatus: 'SENDING' },
+      data: { suggestedReplyStatus: status }
+    }).catch(() => {});
+    console.warn('[TelegramSuggestedReply] delivery', { eventId, outcome: status });
+    if (started) return { ok: false, status: 'UNKNOWN' as const };
+    throw error;
+  } finally {
+    if (client) try { await client.disconnect(); } catch { /* best effort */ }
+  }
 }
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
