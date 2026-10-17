@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { Api, TelegramClient } from 'teleproto';
 import { StringSession } from 'teleproto/sessions';
 import { prisma } from '../db/prisma.js';
@@ -18,10 +20,111 @@ const MAX_VISIBLE_DIALOGS = 60;
 const MAX_SEND_TARGETS = 120;
 const HISTORY_LIMIT = 30;
 const MAX_MESSAGE_CHARS = 4096;
-const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
+// A user may load the recipient list and save several chat policies in one session.
+const listLimiter = new FixedWindowRateLimiter(30, 5 * 60_000);
 const historyLimiter = new FixedWindowRateLimiter(15, 5 * 60_000);
-const monitorLimiter = new FixedWindowRateLimiter(40, 5 * 60_000);
-const inFlight = new Set<string>();
+// Allows several 15-second chat polls per account while retaining a request ceiling.
+const monitorLimiter = new FixedWindowRateLimiter(120, 5 * 60_000);
+// Serialize reads per account. Interactive browsing/configuration queues behind an
+// active read; background monitoring never queues in front of a user action.
+const readTails = new Map<string, Promise<void>>();
+const INTERACTIVE_READ_WAIT_MS = 30_000;
+
+/** Keep MTProto reads serialized without returning spurious 409s to the owner UI. */
+export async function withTelegramReadSlot<T>(
+  userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>, waitMs = INTERACTIVE_READ_WAIT_MS
+): Promise<T> {
+  const previous = readTails.get(userId);
+  if (kind === 'monitor' && previous) {
+    throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
+  }
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  // Chain to the previous slot even if our own wait times out. This prevents
+  // a timed-out waiter from accidentally allowing two MTProto reads at once.
+  const tail = previous ? previous.then(() => gate) : gate;
+  readTails.set(userId, tail);
+  void tail.then(() => { if (readTails.get(userId) === tail) readTails.delete(userId); });
+  let acquired = !previous;
+  try {
+    if (previous) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new TelegramUserClientError(
+          503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд'
+        )), waitMs);
+        previous.then(() => { clearTimeout(timer); acquired = true; resolve(); },
+          error => { clearTimeout(timer); reject(error); });
+      });
+    }
+    return await work();
+  } finally {
+    if (acquired) {
+      release();
+    } else {
+      // On wait timeout, retain our queue position until the previous MTProto
+      // operation actually finishes. Otherwise the next read can overlap it.
+      void previous!.then(release, release);
+    }
+  }
+}
+// Lease is persisted across replicas, unlike the local read queue above.
+// Expiry recovers from crashed containers; a heartbeat extends active reads.
+const DISTRIBUTED_READ_LEASE_MS = 120_000;
+const DISTRIBUTED_READ_REFRESH_MS = 20_000;
+const DISTRIBUTED_READ_WAIT_MS = 30_000;
+
+async function tryClaimDistributedRead(userId: string, token: string): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + DISTRIBUTED_READ_LEASE_MS);
+  const updated = await prisma.telegramUserReadLease.updateMany({
+    where: { userId, expiresAt: { lt: new Date() } },
+    data: { token, expiresAt }
+  });
+  if (updated.count) return true;
+  try {
+    await prisma.telegramUserReadLease.create({ data: { userId, token, expiresAt } });
+    return true;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return false;
+    throw error;
+  }
+}
+
+async function withDistributedTelegramRead<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>): Promise<T> {
+  const token = randomUUID();
+  const deadline = Date.now() + DISTRIBUTED_READ_WAIT_MS;
+  while (!(await tryClaimDistributedRead(userId, token))) {
+    if (kind === 'monitor') {
+      // Defer the background poll instead of blocking this account's manual operations.
+      throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
+    }
+    if (Date.now() >= deadline) {
+      throw new TelegramUserClientError(503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд');
+    }
+    await new Promise<void>(resolve => setTimeout(resolve, 250));
+  }
+
+  let leaseLost = false;
+  const refresh = setInterval(() => {
+    void prisma.telegramUserReadLease.updateMany({
+      where: { userId, token },
+      data: { expiresAt: new Date(Date.now() + DISTRIBUTED_READ_LEASE_MS) }
+    }).then(result => {
+      if (!result.count) leaseLost = true;
+    }).catch(() => { leaseLost = true; });
+  }, DISTRIBUTED_READ_REFRESH_MS);
+  refresh.unref();
+  try {
+    const value = await work();
+    if (leaseLost) throw new TelegramUserClientError(503, 'Соединение с Telegram прервалось. Повторите действие');
+    return value;
+  } finally {
+    clearInterval(refresh);
+    // Failure to release is temporary: the expiration time eventually frees the lease.
+    await prisma.telegramUserReadLease.deleteMany({ where: { userId, token } })
+      .catch(() => console.warn('[TelegramUserClient] could not release read lease'));
+  }
+}
+
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
 
 export function isTelegramUserReadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -133,31 +236,31 @@ async function loadPersonalDialogs(client: TelegramClient, accountId: string) {
 }
 
 async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: (client: TelegramClient, owner: ReadOwner) => Promise<T>): Promise<T> {
-  if (inFlight.has(userId)) throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
-  const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
-  if (!limiter.consume(userId).allowed) {
-    throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
-  }
-  inFlight.add(userId);
-  let client: TelegramClient | null = null;
-  try {
-    const owner = await validOwner(userId);
-    client = await openReadClient(owner);
-    const data = await work(client, owner);
-    // Permission and session must still be valid when returning sensitive data.
-    const current = await validOwner(userId);
-    if (current.accountId !== owner.accountId || current.encryptedSession !== owner.encryptedSession) {
-      throw new TelegramUserClientError(403, 'Доступ к Telegram изменён во время чтения');
+  return withTelegramReadSlot(userId, kind, () => withDistributedTelegramRead(userId, kind, async () => {
+    // Rate limits apply only after acquiring a slot, not while an owner waits.
+    const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
+    if (!limiter.consume(userId).allowed) {
+      throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
     }
-    return data;
-  } catch (error) {
-    if (error instanceof TelegramUserClientError) throw error;
-    console.warn('[TelegramUserClient] manual Telegram read failed', { kind, category: 'network_or_mtproto' });
-    throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
-  } finally {
-    if (client) try { await client.disconnect(); } catch { /* best effort */ }
-    inFlight.delete(userId);
-  }
+    let client: TelegramClient | null = null;
+    try {
+      const owner = await validOwner(userId);
+      client = await openReadClient(owner);
+      const data = await work(client, owner);
+      // Permission and session must still be valid when returning sensitive data.
+      const current = await validOwner(userId);
+      if (current.accountId !== owner.accountId || current.encryptedSession !== owner.encryptedSession) {
+        throw new TelegramUserClientError(403, 'Доступ к Telegram изменён во время чтения');
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof TelegramUserClientError) throw error;
+      console.warn('[TelegramUserClient] Telegram read failed', { kind, category: 'network_or_mtproto' });
+      throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
+    } finally {
+      if (client) try { await client.disconnect(); } catch { /* best effort */ }
+    }
+  }));
 }
 
 export const telegramUserClientRead = {

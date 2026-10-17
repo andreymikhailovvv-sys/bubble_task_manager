@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { Api } from 'teleproto';
 import {
   isTelegramUserReadEnabled,
   requireTelegramReadOwner,
   validateTelegramDialogId,
   isReadablePersonalDialog,
-  safeTelegramMessage
+  safeTelegramMessage,
+  withTelegramReadSlot
 } from '../src/services/telegram-user-client-read.service.js';
 
 const current = { TELEGRAM_USER_CLIENT_ENABLED: 'true', TELEGRAM_USER_READ_ENABLED: 'true' };
@@ -67,4 +69,103 @@ test('history serializer sends only bounded text and safe metadata, not message 
   assert.equal(serialized.text.length, 4096);
   assert.equal(serialized.truncated, true);
   assert.equal(JSON.stringify(serialized).includes('secret'), false);
+});
+
+test('interactive Telegram reads queue behind active monitoring; another poll is skipped', async () => {
+  const userId = 'test-read-slot-owner';
+  const events: string[] = [];
+  let finishMonitor!: () => void;
+  const monitorGate = new Promise<void>(resolve => { finishMonitor = resolve; });
+  const monitor = withTelegramReadSlot(userId, 'monitor', async () => {
+    events.push('monitor-start');
+    await monitorGate;
+    events.push('monitor-finish');
+  });
+  const interactive = withTelegramReadSlot(userId, 'list', async () => {
+    events.push('list');
+    return 'loaded';
+  });
+  const nextInteractive = withTelegramReadSlot(userId, 'history', async () => {
+    events.push('history');
+    return 'loaded';
+  });
+  await assert.rejects(
+    withTelegramReadSlot(userId, 'monitor', async () => 'should not execute'),
+    (error: unknown) => error instanceof Error && error.message.includes('Предыдущий запрос Telegram')
+  );
+  assert.deepEqual(events, ['monitor-start']);
+  finishMonitor();
+  assert.equal(await interactive, 'loaded');
+  assert.equal(await nextInteractive, 'loaded');
+  await monitor;
+  assert.deepEqual(events, ['monitor-start', 'monitor-finish', 'list', 'history']);
+});
+
+test('Telegram read slots do not serialize independent accounts', async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const blocked = withTelegramReadSlot('read-slot-account-1', 'monitor', async () => {
+    await pending;
+  });
+  assert.equal(await withTelegramReadSlot('read-slot-account-2', 'list', async () => 42), 42);
+  finish();
+  await blocked;
+});
+
+test('timed-out interactive request does not release a still-running MTProto read', async () => {
+  const userId = 'test-timeout-reader';
+  const steps: string[] = [];
+  let finish!: () => void;
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  const first = withTelegramReadSlot(userId, 'monitor', async () => {
+    steps.push('first-start');
+    await gate;
+    steps.push('first-end');
+  });
+  const timedOut = withTelegramReadSlot(userId, 'list', async () => {
+    steps.push('timed-out-must-not-run');
+  }, 20);
+  const last = withTelegramReadSlot(userId, 'history', async () => {
+    steps.push('last-start');
+  }, 5000);
+  try {
+    await assert.rejects(timedOut, /Telegram занят дольше обычного/);
+    assert.deepEqual(steps, ['first-start']);
+    await assert.rejects(
+      withTelegramReadSlot(userId, 'monitor', async () => { steps.push('overlapping-monitor'); }),
+      /Предыдущий запрос Telegram ещё выполняется/
+    );
+  } finally {
+    finish();
+  }
+  await first;
+  await last;
+  assert.deepEqual(steps, ['first-start', 'first-end', 'last-start']);
+});
+
+test('multiple monitored dialogs on the same account never overlap at the read gate', async () => {
+  const userId = 'test-many-monitored-dialogs';
+  let unblock!: () => void;
+  const gate = new Promise<void>(resolve => { unblock = resolve; });
+  const first = withTelegramReadSlot(userId, 'monitor', async () => { await gate; });
+  await assert.rejects(
+    withTelegramReadSlot(userId, 'monitor', async () => 'another-chat'),
+    /Предыдущий запрос Telegram ещё выполняется/
+  );
+  unblock();
+  await first;
+  assert.equal(await withTelegramReadSlot(userId, 'monitor', async () => 'another-chat'), 'another-chat');
+});
+
+test('cross-replica Telegram reads use a renewable per-account database lease', () => {
+  const reader = readFileSync(new URL('../src/services/telegram-user-client-read.service.ts', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../prisma/migrations/20261017210000_telegram_user_read_lease/migration.sql', import.meta.url), 'utf8');
+  assert.match(migration, /CREATE TABLE "TelegramUserReadLease"/);
+  assert.match(migration, /PRIMARY KEY \("userId"\)/);
+  assert.match(reader, /prisma\.telegramUserReadLease\.updateMany/);
+  assert.match(reader, /where: \{ userId, expiresAt: \{ lt: new Date\(\) \} \}/);
+  assert.match(reader, /kind === 'monitor'/);
+  assert.match(reader, /refresh\.unref\(\)/);
+  assert.match(reader, /deleteMany\(\{ where: \{ userId, token \} \}\)/);
+  assert.match(reader, /withDistributedTelegramRead\(userId, kind/);
 });

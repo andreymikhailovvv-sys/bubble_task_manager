@@ -17,7 +17,7 @@ test('Telegram assistant has independent participation, summary and task setting
   assert.equal(v.autoReplyIntervalMinutes, 5);
   assert.equal(v.summaryIntervalMinutes, 30);
   assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
-  assert.deepEqual(TELEGRAM_AI_SUMMARY_INTERVALS, [-1, 5, 10, 30, 180, 360, 1440]);
+  assert.deepEqual(TELEGRAM_AI_SUMMARY_INTERVALS, [-1, 0, 5, 10, 30, 180, 360, 1440]);
   assert.equal(v.monitorModel, 'gpt-6-luna');
   assert.deepEqual(TELEGRAM_AI_MONITOR_MODELS, ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
   assert.equal(v.dailyCreditLimitMilli, 50_000);
@@ -71,7 +71,7 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, taskMode: 'CREATE_EVERYTHING' },
     { ...valid, interactionIntervalMinutes: 15 },
     { ...valid, autoReplyIntervalMinutes: 60 },
-    { ...valid, summaryIntervalMinutes: 0 },
+    { ...valid, summaryIntervalMinutes: -2 },
     { ...valid, summaryInstructions: 'x'.repeat(2001) },
     { ...valid, mode: 'SUGGEST' },
     { ...valid, mode: 'AUTO' },

@@ -220,7 +220,7 @@ export type TelegramAiChatSettings = {
   taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
   interactionIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
   autoReplyIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
-  summaryIntervalMinutes: -1 | 5 | 10 | 30 | 180 | 360 | 1440;
+  summaryIntervalMinutes: -1 | 0 | 5 | 10 | 30 | 180 | 360 | 1440;
   summaryInstructions: string;
   suggestWhen: string;
   suggestHow: string;
