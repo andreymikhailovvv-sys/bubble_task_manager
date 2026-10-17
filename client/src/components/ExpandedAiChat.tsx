@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Paperclip, Plus, SendHorizontal, Sparkles, Trash2, X } from 'lucide-react';
 import { AutoGrowingTextarea } from './AutoGrowingTextarea';
+import { AiAttachmentTiles } from './AiAttachmentTiles';
 import { CustomSelect } from './CustomSelect';
 import type { AiChatModel } from '../lib/types';
 
@@ -17,6 +18,7 @@ type Props = {
   pendingFiles: File[];
   loading: boolean;
   imageGenerating: boolean;
+  uploadProgress?: number | null;
   messageCount: number;
   messages: ReactNode;
   status: ReactNode;
@@ -34,7 +36,7 @@ type Props = {
   onSend: (draft: string) => void;
 };
 
-export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend }: Props) {
+export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activeProject, activeChat, quickChatId, model, modelOptions, pendingFiles, loading, imageGenerating, uploadProgress, messageCount, messages, status, onClose, onCreateProject, onCreateChat, onSelectProject, onSelectChat, onDeleteProject, onDeleteChat, onContextMenu, onModelChange, onAddFiles, onRemoveFile, onSend }: Props) {
   const [draft, setDraft] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
@@ -131,7 +133,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
-            {pendingFiles.length ? <div className="mb-2 flex flex-wrap gap-1.5">{pendingFiles.map((file) => <button key={`${file.name}-${file.size}`} type="button" onClick={() => onRemoveFile(file)} className="ai-chat-file-pill">📎 <span className="max-w-48 truncate">{file.name}</span> ×</button>)}</div> : null}
+            <AiAttachmentTiles files={pendingFiles} onRemove={onRemoveFile} busy={loading} uploadProgress={uploadProgress} />
             <div className="ai-chat-composer flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="max-h-32 min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-sm leading-6 focus:outline-none focus:ring-0" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder="Напишите сообщение…" /><input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={(event) => { onAddFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted" aria-label="Прикрепить файл" onClick={() => fileInputRef.current?.click()}><Paperclip size={17} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm hover:bg-violet-500 disabled:opacity-50" aria-label="Отправить" disabled={loading || (!draft.trim() && pendingFiles.length === 0)} onClick={submit}><SendHorizontal size={18} /></button></div>
           </div>
         </section>
