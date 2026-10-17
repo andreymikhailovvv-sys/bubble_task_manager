@@ -143,7 +143,7 @@ fun TaskEditorSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = { if (isNew) onBack() else commit(onBack) },
+        onDismissRequest = { if (isNew || title.isBlank()) onBack() else commit(onBack) },
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() },
     ) {
@@ -153,7 +153,7 @@ fun TaskEditorSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (isSubtask) {
-                    IconButton(onClick = { if (isNew) onBack() else commit(onBack) }, enabled = !busy) {
+                    IconButton(onClick = { if (isNew || title.isBlank()) onBack() else commit(onBack) }, enabled = !busy) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "К основной задаче")
                     }
                 }
