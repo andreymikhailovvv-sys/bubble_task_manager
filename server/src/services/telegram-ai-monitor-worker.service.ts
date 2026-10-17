@@ -61,7 +61,8 @@ export const telegramAiMonitorControl = {
         throw new TelegramUserClientError(403, 'Для автоответов необходимы обе инструкции и разрешённая отправка Telegram');
       }
     }
-    const history = await telegramUserClientRead.aiHistory(userId, chatId, 10, true);
+    // Explicit owner activation must wait in the interactive queue, not compete as a background poll.
+    const history = await telegramUserClientRead.aiHistory(userId, chatId, 10);
     const maxId = Math.max(0, ...history.messages.map(item => item.id));
     await permission(userId);
     const current = await prisma.telegramAiChatPolicy.updateMany({
