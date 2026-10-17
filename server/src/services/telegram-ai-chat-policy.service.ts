@@ -25,6 +25,8 @@ export type TelegramAiChatSettings = {
   checkIntervalMinutes: typeof INTERVALS[number];
   monitorModel: typeof TELEGRAM_AI_MONITOR_MODELS[number];
   instructions: string;
+  autoReplyWhen: string;
+  autoReplyHow: string;
   notifyImportant: boolean;
   reviewAttachments: boolean;
   dailyCreditLimitMilli: number | null;
@@ -36,6 +38,8 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   checkIntervalMinutes: 30,
   monitorModel: 'gpt-6-luna',
   instructions: '',
+  autoReplyWhen: '',
+  autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true,
   dailyCreditLimitMilli: 50_000
@@ -58,6 +62,17 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
       /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(p.instructions)) {
     throw new TelegramUserClientError(400, 'Инструкции должны быть текстом до 3000 символов');
   }
+  for (const field of ['autoReplyWhen', 'autoReplyHow'] as const) {
+    const value = p[field];
+    if (value !== undefined && (typeof value !== 'string' || value.length > 2000 ||
+        /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(value))) {
+      throw new TelegramUserClientError(400, 'Условия и стиль автоответов должны быть текстом до 2000 символов');
+    }
+  }
+  if (p.mode === 'AUTO' && (!(p.autoReplyWhen as string | undefined)?.trim() ||
+    !(p.autoReplyHow as string | undefined)?.trim())) {
+    throw new TelegramUserClientError(400, 'Для автоответов заполните оба поля: когда отвечать и как отвечать');
+  }
   if (p.reviewAttachments !== undefined && typeof p.reviewAttachments !== 'boolean') {
     throw new TelegramUserClientError(400, 'Настройка просмотра вложений должна быть логическим значением');
   }
@@ -73,6 +88,8 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     checkIntervalMinutes: oneOf(p.checkIntervalMinutes, INTERVALS, 'интенсивность проверки'),
     monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
     instructions: p.instructions.trim(),
+    autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
+    autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
     dailyCreditLimitMilli: p.dailyCreditLimitMilli as number | null
@@ -122,6 +139,9 @@ export const telegramAiChatPolicyService = {
     if (!target || target.kind !== parseTelegramSendTargetId(chatId)?.kind) {
       throw new TelegramUserClientError(404, 'Выбранный чат недоступен в вашем Telegram');
     }
+    if (settings.mode === 'AUTO' && !capability.sendEnabled) {
+      throw new TelegramUserClientError(403, 'Для автоответов разрешите отправку сообщений через подключённый Telegram');
+    }
     const current = await prisma.telegramAiChatPolicy.findUnique({
       where: { userId_chatId: { userId, chatId } },
       select: { id: true }
@@ -133,7 +153,7 @@ export const telegramAiChatPolicyService = {
 
     // If the Telegram connection is revoked during network I/O, deny saving.
     const fresh = await telegramUserChatCapability(userId);
-    if (!fresh.connected || !fresh.readEnabled) {
+    if (!fresh.connected || !fresh.readEnabled || (settings.mode === 'AUTO' && !fresh.sendEnabled)) {
       throw new TelegramUserClientError(403, 'Telegram был отключён во время сохранения');
     }
     const policy = await prisma.telegramAiChatPolicy.upsert({
