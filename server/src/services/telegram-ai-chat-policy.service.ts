@@ -12,7 +12,8 @@ const MAX_CHATS = 25;
 const saveLimiter = new FixedWindowRateLimiter(20, 60_000);
 const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
-const INTERVALS = [5, 30, 180] as const;
+export const TELEGRAM_AI_INTERVALS = [0, 5, 10, 30, 180, 360, 1440] as const;
+export const TELEGRAM_AI_SUMMARY_INTERVALS = [-1, 5, 10, 30, 180, 360, 1440] as const;
 export const TELEGRAM_AI_MONITOR_MODELS = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'] as const;
 // Exact values exposed by the fixed-step budget slider. NULL = no daily cap.
 export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
@@ -22,10 +23,14 @@ export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
 export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
   taskMode: typeof TASK_MODES[number];
-  checkIntervalMinutes: typeof INTERVALS[number];
+  interactionIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
+  autoReplyIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
+  summaryIntervalMinutes: typeof TELEGRAM_AI_SUMMARY_INTERVALS[number];
+  summaryInstructions: string;
+  suggestWhen: string;
+  suggestHow: string;
   monitorModel: typeof TELEGRAM_AI_MONITOR_MODELS[number];
-  instructions: string;
-  autoReplyWhen: string;
+   autoReplyWhen: string;
   autoReplyHow: string;
   notifyImportant: boolean;
   reviewAttachments: boolean;
@@ -35,10 +40,14 @@ export type TelegramAiChatSettings = {
 export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
-  checkIntervalMinutes: 30,
+  interactionIntervalMinutes: 5,
+  autoReplyIntervalMinutes: 5,
+  summaryIntervalMinutes: 30,
+  summaryInstructions: '',
+  suggestWhen: '',
+  suggestHow: '',
   monitorModel: 'gpt-6-luna',
-  instructions: '',
-  autoReplyWhen: '',
+    autoReplyWhen: '',
   autoReplyHow: '',
   notifyImportant: true,
   reviewAttachments: true,
@@ -58,16 +67,16 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     throw new TelegramUserClientError(400, 'Укажите настройки Telegram-ассистента');
   }
   const p = payload as Record<string, unknown>;
-  if (typeof p.instructions !== 'string' || p.instructions.length > 3000 ||
-      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(p.instructions)) {
-    throw new TelegramUserClientError(400, 'Инструкции должны быть текстом до 3000 символов');
-  }
-  for (const field of ['autoReplyWhen', 'autoReplyHow'] as const) {
+  for (const field of ['summaryInstructions', 'suggestWhen', 'suggestHow', 'autoReplyWhen', 'autoReplyHow'] as const) {
     const value = p[field];
     if (value !== undefined && (typeof value !== 'string' || value.length > 2000 ||
         /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value))) {
       throw new TelegramUserClientError(400, 'Условия и стиль автоответов должны быть текстом до 2000 символов');
     }
+  }
+  if (p.mode === 'SUGGEST' && (!(p.suggestWhen as string | undefined)?.trim() ||
+    !(p.suggestHow as string | undefined)?.trim())) {
+    throw new TelegramUserClientError(400, 'Для предложений ответов заполните оба поля');
   }
   if (p.mode === 'AUTO' && (!(p.autoReplyWhen as string | undefined)?.trim() ||
     !(p.autoReplyHow as string | undefined)?.trim())) {
@@ -85,10 +94,14 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
   return {
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
-    checkIntervalMinutes: oneOf(p.checkIntervalMinutes, INTERVALS, 'интенсивность проверки'),
+    interactionIntervalMinutes: oneOf(p.interactionIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота предложений ответов'),
+    autoReplyIntervalMinutes: oneOf(p.autoReplyIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота автоответов'),
+    summaryIntervalMinutes: oneOf(p.summaryIntervalMinutes, TELEGRAM_AI_SUMMARY_INTERVALS, 'частота сводок'),
+    summaryInstructions: typeof p.summaryInstructions === 'string' ? p.summaryInstructions.trim() : '',
+    suggestWhen: typeof p.suggestWhen === 'string' ? p.suggestWhen.trim() : '',
+    suggestHow: typeof p.suggestHow === 'string' ? p.suggestHow.trim() : '',
     monitorModel: oneOf(p.monitorModel, TELEGRAM_AI_MONITOR_MODELS, 'модель мониторинга'),
-    instructions: p.instructions.trim(),
-    autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
+     autoReplyWhen: typeof p.autoReplyWhen === 'string' ? p.autoReplyWhen.trim() : '',
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
