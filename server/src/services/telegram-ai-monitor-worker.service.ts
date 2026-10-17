@@ -15,7 +15,7 @@ const STALE_CALL_MS = 12 * 60_000;
 const MAX_JOBS_PER_TICK = 2;
 const MAX_INPUT_MESSAGES = 40;
 const TASK_SCAN_INTERVAL_MS = 30 * 60_000;
-const IMMEDIATE_POLL_MS = 15_000; // Near-immediate polling, no permanent MTProto listener.
+const IMMEDIATE_POLL_MS = 30_000; // Minimum per-chat polling interval; no permanent MTProto listener.
 
 export function telegramInteractionDelayMs(minutes: number) {
   return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
@@ -73,12 +73,12 @@ export const telegramAiMonitorControl = {
         nextInteractionAt: policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
           (policy.mode === 'SUGGEST' ? telegramInteractionDelayMs(policy.interactionIntervalMinutes)
             : telegramInteractionDelayMs(policy.autoReplyIntervalMinutes))),
-        nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + policy.summaryIntervalMinutes * 60_000),
+        nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
         nextTaskAt: policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS),
         nextCheckAt: nextMonitorWakeup([
           policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
             telegramInteractionDelayMs(policy.mode === 'SUGGEST' ? policy.interactionIntervalMinutes : policy.autoReplyIntervalMinutes)),
-          policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + policy.summaryIntervalMinutes * 60_000),
+          policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
           policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS)
         ]),
         lastError: null, leaseToken: null, leasedUntil: null, summaryRequested: false
@@ -131,12 +131,12 @@ async function claim(): Promise<Claimed | null> {
   return result.count ? { policy: candidate, token } : null;
 }
 
-async function release(claimed: Claimed, error: string | null = null) {
+async function release(claimed: Claimed, error: string | null = null, retryMs: number | null = null) {
   await prisma.telegramAiChatPolicy.updateMany({
     where: { id: claimed.policy.id, leaseToken: claimed.token },
     data: {
       leaseToken: null, leasedUntil: null,
-      ...(error ? { nextCheckAt: new Date(Date.now() + 60_000) } : {}),
+      ...(error || retryMs != null ? { nextCheckAt: new Date(Date.now() + (retryMs ?? 60_000)) } : {}),
       lastCheckedAt: new Date(),
       ...(error ? { lastError: error.slice(0, 160) } : { lastError: null })
     }
@@ -298,7 +298,7 @@ async function processClaim(claimed: Claimed) {
     : current.nextInteractionAt;
   const nextSummaryAt = dueSummary && !policy.summaryRequested && current.summaryIntervalMinutes === -1
     ? null : dueSummary && current.summaryIntervalMinutes !== -1
-      ? new Date(Date.now() + current.summaryIntervalMinutes * 60_000) : current.nextSummaryAt;
+      ? new Date(Date.now() + telegramInteractionDelayMs(current.summaryIntervalMinutes)) : current.nextSummaryAt;
   const nextTaskAt = dueTasks ? new Date(Date.now() + TASK_SCAN_INTERVAL_MS) : current.nextTaskAt;
   const maxProcessed = Math.max(policy.lastSeenMessageId ?? 0, maxId);
 
@@ -427,6 +427,13 @@ class TelegramAiMonitorWorker {
         if (!claimed) break;
         try { await processClaim(claimed); await release(claimed); }
         catch (error) {
+          if (error instanceof TelegramUserClientError && error.statusCode === 409 &&
+              error.message === 'Предыдущий запрос Telegram ещё выполняется') {
+            // An interactive Telegram read has priority. Retry without showing
+            // a false monitor error or advancing any message checkpoint.
+            await release(claimed, null, IMMEDIATE_POLL_MS);
+            continue;
+          }
           const safe = error instanceof TelegramUserClientError ? error.message.slice(0, 150) :
             'Ошибка обработки Telegram. Следующая проверка по расписанию.';
           await release(claimed, safe);
