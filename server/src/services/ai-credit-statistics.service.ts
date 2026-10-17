@@ -32,6 +32,7 @@ const MODEL_LABELS: Record<string, string> = {
   'gpt-4o-transcribe-diarize': 'GPT-4o Transcribe Diarize',
   'openai-web-search': 'Веб-поиск',
   'gpt-image-2': 'GPT Image 2',
+  'gpt-image-2.5-flare': 'GPT Image 2.5 Flare',
   'fixed-credit': 'Системная ИИ-функция'
 };
 

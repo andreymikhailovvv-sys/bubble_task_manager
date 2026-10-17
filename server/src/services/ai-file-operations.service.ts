@@ -3,7 +3,8 @@ import { taskAccessWhere } from '../lib/task-access.js';
 import { getOfficeDocumentPreview } from './ooxml-document-editor.js';
 import { sourceFormat, editUserDocumentIfRequested } from './ai-user-document-edit.service.js';
 import { validateUploadedImage } from './ai-user-image-input.js';
-import { generateAiImage } from './ai-image-generation.service.js';
+import { generateAiImage, AI_IMAGE_MAX_REFERENCE_FILES } from './ai-image-generation.service.js';
+import type { ValidatedImage } from './ai-user-image-input.js';
 import type { AiFileCatalog } from './ai-file-catalog.service.js';
 import type { GeneratedDocumentMeta } from './word-document.service.js';
 
@@ -14,8 +15,11 @@ export const AI_READ_FILE_TOOL = {
 } as const;
 export const AI_EDIT_FILE_TOOL = {
   type: 'function', name: 'edit_file', strict: true,
-  description: 'Изменить существующий файл из каталога. Вызывай ТОЛЬКО когда пользователь явно просит изменить файл, и ты установил однозначный fileId. Сначала прочитай файл через read_file, если изменения зависят от точного текста. Для Word/Excel разрешены лишь поддерживаемые сервером изменения. Для изображений инструкция описывает итоговое изображение. Для PDF редактирование пока недоступно.',
-  parameters: { type: 'object', additionalProperties: false, required: ['fileId', 'instruction'], properties: { fileId: { type: 'string' }, instruction: { type: 'string' } } }
+  description: 'Изменить существующий файл из каталога с точным fileId. Для изображений fileId — обязательное исходное изображение, а referenceFileIds — до 4 дополнительных изображений из каталога для вставки объектов/стиля. Для Word/Excel referenceFileIds оставь пустым. Не подбирай старые файлы автоматически и не угадывай ID. Для PDF редактирование недоступно.',
+  parameters: { type: 'object', additionalProperties: false, required: ['fileId', 'instruction', 'referenceFileIds'], properties: {
+    fileId: { type: 'string' }, instruction: { type: 'string' },
+    referenceFileIds: { type: 'array', items: { type: 'string' }, description: 'Точные fileId дополнительных изображений-референсов, максимум 4. Пустой массив, если не нужны.' }
+  } }
 } as const;
 
 type RawFile = { name: string; mimeType: string; size: number; contentBase64: string };
@@ -84,12 +88,40 @@ async function resolveFile(input: FileToolContext, fileId: unknown): Promise<Raw
   return null;
 }
 
-export function validateFileToolRequest(value: unknown, operation: 'read' | 'edit'): { fileId: string; instruction: string } | null {
+/** Resolve selected images through the same catalog and ownership checks as read_file.
+ * Catalog metadata alone never grants access. No guessed, unrelated or inaccessible
+ * file is silently discarded from a requested multi-image edit.
+ */
+export async function resolveCatalogImageReferences(input: FileToolContext, fileIds: string[]): Promise<ValidatedImage[]> {
+  if (!Array.isArray(fileIds) || fileIds.length > AI_IMAGE_MAX_REFERENCE_FILES ||
+      new Set(fileIds).size !== fileIds.length ||
+      fileIds.some((id) => typeof id !== 'string' || !input.catalog.items.some((entry) => entry.fileId === id))) {
+    throw new TypeError('Указаны некорректные или недоступные изображения-референсы.');
+  }
+  const images: ValidatedImage[] = [];
+  for (const id of fileIds) {
+    const metadata = input.catalog.items.find((entry) => entry.fileId === id);
+    if (!metadata || /\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(metadata.fileName) ||
+        (!metadata.mimeType.startsWith('image/') && !/\.(?:png|jpe?g|webp)$/i.test(metadata.fileName))) {
+      throw new TypeError('В списке референсов есть файл, который не является изображением.');
+    }
+    const file = await resolveFile(input, id);
+    if (!file) throw new TypeError('Изображение-референс недоступно или доступ отозван.');
+    images.push(validateUploadedImage(file));
+  }
+  return images;
+}
+
+export function validateFileToolRequest(value: unknown, operation: 'read' | 'edit'): { fileId: string; instruction: string; referenceFileIds: string[] } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const request = value as Record<string, unknown>;
   if (typeof request.fileId !== 'string' || request.fileId.length > 160) return null;
   if (operation === 'edit' && (typeof request.instruction !== 'string' || request.instruction.trim().length < 3 || request.instruction.length > 5000)) return null;
-  return { fileId: request.fileId, instruction: operation === 'edit' ? String(request.instruction) : '' };
+  const referenceFileIds = request.referenceFileIds === undefined ? [] : request.referenceFileIds;
+  if (!Array.isArray(referenceFileIds) || referenceFileIds.length >= AI_IMAGE_MAX_REFERENCE_FILES ||
+      referenceFileIds.some((id) => typeof id !== 'string' || id.length < 3 || id.length > 160) ||
+      new Set(referenceFileIds).size !== referenceFileIds.length || referenceFileIds.includes(request.fileId)) return null;
+  return { fileId: request.fileId, instruction: operation === 'edit' ? String(request.instruction) : '', referenceFileIds: referenceFileIds as string[] };
 }
 
 export async function executeAiFileTool(input: FileToolContext, operation: 'read' | 'edit', rawArgs: unknown): Promise<FileToolResult> {
@@ -124,6 +156,7 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
   }
 
   if (format) {
+    if (args.referenceFileIds.length) return { response: { ok: false, code: 'UNSUPPORTED_REFERENCES', message: 'Референсы изображений разрешены только при редактировании изображений.' } };
     const result = await editUserDocumentIfRequested({
       userId: input.userId, taskId: input.taskId, question: args.instruction,
       attachments: [file], apiKey: input.apiKey, model: input.model, explicitFileToolSelection: true
@@ -133,10 +166,11 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
       document: result.generatedDocument, creditsSpentMilli: result.billing.creditsSpentMilli };
   }
   if (/^image\//i.test(file.mimeType) || /\.(png|jpe?g|webp)$/i.test(file.name)) {
-    const validated = validateUploadedImage(file);
+    const imageSources = [validateUploadedImage(file), ...await resolveCatalogImageReferences(input, args.referenceFileIds)];
     const edited = await generateAiImage({
       userId: input.userId, taskId: input.taskId, actionId: input.actionId,
-      apiKey: input.apiKey, args: { prompt: args.instruction, size: 'auto' }, uploadedSourceImage: validated
+      apiKey: input.apiKey, args: { prompt: args.instruction, size: 'auto' },
+      sourceImages: imageSources
     });
     return { response: { ok: true, fileName: edited.document.fileName, fileId: args.fileId, format: 'image', message: 'Изображение изменено. Новая версия прикреплена к сообщению.' },
       document: edited.document, creditsSpentMilli: edited.creditsSpentMilli };

@@ -5,7 +5,7 @@ import { AI_IMAGE_MODEL, AI_IMAGE_TOOL, calculateImageCostNanoUsd, decodeGenerat
 import { providerNanoUsdToMilliCredits } from '../src/services/ai-usage-metering.service.js';
 
 test('image tool strictly validates prompt and dimensions', () => {
-  assert.equal(AI_IMAGE_MODEL, 'gpt-image-2');
+  assert.equal(AI_IMAGE_MODEL, 'gpt-image-2.5-flare');
   assert.equal(AI_IMAGE_TOOL.name, 'generate_image');
   assert.equal(validateImageToolArguments({ prompt: '  Космос  ', size: '1536x1024' }).prompt, 'Космос');
   assert.throws(() => validateImageToolArguments({ prompt: '', size: '1024x1024' }), /Промпт/);
@@ -52,5 +52,5 @@ test('general chat, task chat and focus path use the same image tool and downloa
   assert.match(controller, /generatedDocumentId: result\.generatedDocument\?\.id/);
   assert.match(button, /FileImage/);
   assert.match(stats, /image_generation: 'Генерация изображений'/);
-  assert.match(stats, /'gpt-image-2': 'GPT Image 2'/);
+  assert.match(stats, /'gpt-image-2.5-flare': 'GPT Image 2.5 Flare'/);
 });

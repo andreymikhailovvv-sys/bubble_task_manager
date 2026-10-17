@@ -10,8 +10,8 @@ import { refundAiCreditReservation, reserveAiCreditsMilli, type AiCreditReservat
 import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
-import { AI_IMAGE_TOOL, generateAiImage } from './ai-image-generation.service.js';
-import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, type FileToolContext } from './ai-file-operations.service.js';
+import { AI_IMAGE_TOOL, generateAiImage, validateImageToolArguments } from './ai-image-generation.service.js';
+import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalogImageReferences, type FileToolContext } from './ai-file-operations.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
 
@@ -564,7 +564,16 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'generate_image') {
           if (generatedDocument) return { ok: false, code: 'FILE_ALREADY_CREATED', message: 'За один запрос можно создать один файл.' };
           try {
-            const result = await generateAiImage({ userId: input.userId, actionId: requestId, apiKey: input.apiKey, args: value });
+            const args = validateImageToolArguments(value);
+            if (args.sourceFileIds.length && !input.fileTools) return { ok: false, code: 'NO_FILE_CONTEXT' };
+            // Resolve every selected file through the authenticated catalog before any
+            // image billing reservation or provider request is started.
+            const sourceImages = args.sourceFileIds.length
+              ? await resolveCatalogImageReferences(input.fileTools!, args.sourceFileIds) : [];
+            const result = await generateAiImage({
+              userId: input.userId, actionId: requestId, apiKey: input.apiKey, args,
+              sourceImages
+            });
             generatedDocument = result.document;
             imageCreditsSpentMilli += result.creditsSpentMilli;
             return { ok: true, image: { id: result.document.id, fileName: result.document.fileName, mimeType: result.document.mimeType } };
