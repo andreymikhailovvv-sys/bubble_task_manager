@@ -666,7 +666,13 @@ model TelegramAiChatPolicy {
   chatTitle               String
   mode                    String   @default("OBSERVE")
   taskMode                String   @default("SUGGEST")
-  checkIntervalMinutes    Int      @default(30)
+  checkIntervalMinutes    Int      @default(30) // Legacy: kept for backward compatibility
+  interactionIntervalMinutes Int   @default(5) // 0 = check on every worker tick
+  autoReplyIntervalMinutes Int   @default(5)
+  summaryIntervalMinutes  Int      @default(30) // -1 = summaries off
+  summaryInstructions     String   @default("") @db.Text
+  suggestWhen             String   @default("") @db.Text
+  suggestHow              String   @default("") @db.Text
   monitorModel            String   @default("gpt-6-luna")
   instructions            String   @default("") @db.Text
   autoReplyWhen          String   @default("") @db.Text
@@ -677,6 +683,12 @@ model TelegramAiChatPolicy {
   dailyCreditLimitMilli   Int?     @default(50000)
   isEnabled               Boolean  @default(false)
   lastSeenMessageId       Int?
+  lastInteractionMessageId Int?
+  lastSummaryMessageId    Int?
+  lastTaskMessageId       Int?
+  nextInteractionAt       DateTime?
+  nextSummaryAt           DateTime?
+  nextTaskAt              DateTime?
   lastCheckedAt           DateTime?
   nextCheckAt             DateTime?
   leaseToken              String?
@@ -747,6 +759,9 @@ model TelegramAiInboxEvent {
   messageId        Int
   content          String   @db.Text
   summary          Json
+  suggestedReplyMessageId Int?
+  suggestedReplyText      String? @db.Text
+  suggestedReplyStatus    String @default("PENDING")
   model            String
   botStatus        String   @default("PENDING")
   botClaimedAt     DateTime?
