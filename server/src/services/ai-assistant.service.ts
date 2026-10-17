@@ -22,10 +22,10 @@ import { taskService, computeNextRecurringDueDate } from './task.service.js';
 import { makeManualRecurrenceSchedule, type RecurrenceSchedule as StoredRecurrenceSchedule } from './recurrence-slots.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { loadAiFileCatalog, formatAiFileCatalog, type AiFileHistoryReference } from './ai-file-catalog.service.js';
-import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool } from './ai-file-operations.service.js';
+import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalogImageReferences } from './ai-file-operations.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
-import { AI_IMAGE_TOOL, generateAiImage, type AiImageGenerationResult } from './ai-image-generation.service.js';
+import { AI_IMAGE_TOOL, generateAiImage, validateImageToolArguments, type AiImageGenerationResult } from './ai-image-generation.service.js';
 import {
   creditsToMilli,
   currentAiCreditsPeriod,
@@ -2073,8 +2073,10 @@ export const aiAssistantService = {
       'Поддерживаемые action.type: reschedule_task (taskId, dueDate ISO), reschedule_subtask (subtaskId, dueDate ISO), create_subtask (parentTaskId, title, description?, dueDate?), rename_task (taskId, title), update_task (taskId, description?, importance?, urgency?, notifyBeforeMinutes?), rename_subtask (subtaskId, title), update_subtask (subtaskId, description?, dueDate?), complete_subtask (subtaskId), reopen_subtask (subtaskId), delete_subtask (subtaskId), change_task_sphere (taskId, sphereId|null).',
       `За один ответ можно вернуть до ${MAX_ASSISTANT_ACTIONS} actions. Если пользователь явно подтвердил создание списка подзадач, создай отдельный create_subtask для каждого пункта списка и не сокращай список.`,
       `Для taskId используй только ${task.id}. Для parentTaskId используй только ${task.id}.`,
-      'Если пользователь просит создать, нарисовать или сгенерировать изображение, используй generate_image. Передай подробный визуальный промпт; готовый PNG сервер добавит во вложения. Не говори об успешной генерации, пока инструмент не подтвердил её.',
-      'Не генерируй новое изображение по просьбе прочитать или изменить существующий документ, а также по местоимениям «его», «её», «это». Предыдущий PNG не считается автоматически выбранным. Для работы с файлом самостоятельно выбери fileId из КАТАЛОГА ФАЙЛОВ: вызови read_file для чтения и edit_file только при явной просьбе изменить. Не нужно повторно прикреплять старый файл, если он уже есть в каталоге и доступен через инструмент. При неоднозначности уточни конкретный файл, не вызывая редактора.',
+      'Для генерации изображения с нуля вызови generate_image с sourceFileIds: []. Для сборки из прикреплённых или сохранённых изображений используй sourceFileIds с точными fileId из КАТАЛОГА: первый файл — основа композиции, остальные — референсы. В промпте укажи, что сохранить и что перенести. Уточняй, когда источник неоднозначен.',
+      'Для редактирования существующего изображения вызови edit_file с точным fileId основы и referenceFileIds: [] или дополнительными fileId визуальных референсов. Не проси повторной загрузки доступных файлов. Не обещай идеальной попиксельной сохранности.',
+      'Не говори, что изображение создано или изменено, пока вызов инструмента не завершился успешно.',
+      'Не вызывай генератор картинки для чтения/правки текстовых документов. Для прошлых изображений используй явный fileId из КАТАЛОГА ФАЙЛОВ. По запросу «отредактируй изображение выше» можешь выбрать его однозначный generated_document fileId, но никогда не выбирай старый файл только по факту его наличия. Если выбор неоднозначен, уточни.',
       'Если пользователь явно просит отправить или переслать сообщение в Telegram (например, «подведи итог обсуждения задачи и отправь Ване»), сформируй законченный текст и вызови prepare_telegram_send с recipient и text. Инструмент ничего не отправляет: он только создаёт карточку Telegram под ответом, с текстом, выбранным контактом и кнопкой «Отправить». Пользователь подтвердит отправку сам. Не говори, что сообщение уже отправлено. Не угадывай Telegram ID. Если адресат не назван, сначала уточни.',
       'По явной просьбе пользователя прочитать Telegram-переписку с человеком или в группе вызови request_telegram_chat_read с точным именем чата. До отдельного согласия владельца содержимое Telegram недоступно; сообщи об ожидании разрешения. После согласия исходный запрос продолжится. Не имитируй чтение.',
       'Текст пользователю пиши только в answer.',
@@ -2350,7 +2352,15 @@ export const aiAssistantService = {
               } else {
                 input.onProgress?.('generating_image');
                 try {
-                  generatedImage = await generateAiImage({ userId: input.userId, taskId: input.taskId, actionId: requestId, apiKey, args });
+                  const imageArgs = validateImageToolArguments(args);
+                   const sourceImages = await resolveCatalogImageReferences({
+                     userId: input.userId, taskId: input.taskId, catalog: fileCatalog,
+                     uploads: input.attachments, model, apiKey, actionId: requestId, dynamicBilling
+                   }, imageArgs.sourceFileIds);
+                   generatedImage = await generateAiImage({
+                     userId: input.userId, taskId: input.taskId, actionId: requestId,
+                     apiKey, args: imageArgs, sourceImages
+                   });
                   providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: true, image: { id: generatedImage.document.id, fileName: generatedImage.document.fileName } }) });
                 } catch (error) {
                   providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'IMAGE_GENERATION_FAILED', message: error instanceof Error ? error.message : 'Не удалось создать изображение.' }) });
