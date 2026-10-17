@@ -21,7 +21,41 @@ const MAX_MESSAGE_CHARS = 4096;
 const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
 const historyLimiter = new FixedWindowRateLimiter(15, 5 * 60_000);
 const monitorLimiter = new FixedWindowRateLimiter(40, 5 * 60_000);
-const inFlight = new Set<string>();
+// Serialize reads per account. Interactive browsing/configuration queues behind an
+// active read; background monitoring never queues in front of a user action.
+const readTails = new Map<string, Promise<void>>();
+const INTERACTIVE_READ_WAIT_MS = 30_000;
+
+/** Keep MTProto reads serialized without returning spurious 409s to the owner UI. */
+export async function withTelegramReadSlot<T>(
+  userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>
+): Promise<T> {
+  const previous = readTails.get(userId);
+  if (kind === 'monitor' && previous) {
+    throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
+  }
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  // Chain to the previous slot even if our own wait times out. This prevents
+  // a timed-out waiter from accidentally allowing two MTProto reads at once.
+  const tail = previous ? previous.then(() => gate) : gate;
+  readTails.set(userId, tail);
+  void tail.then(() => { if (readTails.get(userId) === tail) readTails.delete(userId); });
+  try {
+    if (previous) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new TelegramUserClientError(
+          503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд'
+        )), INTERACTIVE_READ_WAIT_MS);
+        previous.then(() => { clearTimeout(timer); resolve(); },
+          error => { clearTimeout(timer); reject(error); });
+      });
+    }
+    return await work();
+  } finally {
+    release();
+  }
+}
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
 
 export function isTelegramUserReadEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -133,31 +167,31 @@ async function loadPersonalDialogs(client: TelegramClient, accountId: string) {
 }
 
 async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'monitor', work: (client: TelegramClient, owner: ReadOwner) => Promise<T>): Promise<T> {
-  if (inFlight.has(userId)) throw new TelegramUserClientError(409, 'Предыдущий запрос Telegram ещё выполняется');
-  const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
-  if (!limiter.consume(userId).allowed) {
-    throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
-  }
-  inFlight.add(userId);
-  let client: TelegramClient | null = null;
-  try {
-    const owner = await validOwner(userId);
-    client = await openReadClient(owner);
-    const data = await work(client, owner);
-    // Permission and session must still be valid when returning sensitive data.
-    const current = await validOwner(userId);
-    if (current.accountId !== owner.accountId || current.encryptedSession !== owner.encryptedSession) {
-      throw new TelegramUserClientError(403, 'Доступ к Telegram изменён во время чтения');
+  return withTelegramReadSlot(userId, kind, async () => {
+    // Rate limits apply only after acquiring a slot, not while an owner waits.
+    const limiter = kind === 'list' ? listLimiter : kind === 'monitor' ? monitorLimiter : historyLimiter;
+    if (!limiter.consume(userId).allowed) {
+      throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
     }
-    return data;
-  } catch (error) {
-    if (error instanceof TelegramUserClientError) throw error;
-    console.warn('[TelegramUserClient] manual Telegram read failed', { kind, category: 'network_or_mtproto' });
-    throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
-  } finally {
-    if (client) try { await client.disconnect(); } catch { /* best effort */ }
-    inFlight.delete(userId);
-  }
+    let client: TelegramClient | null = null;
+    try {
+      const owner = await validOwner(userId);
+      client = await openReadClient(owner);
+      const data = await work(client, owner);
+      // Permission and session must still be valid when returning sensitive data.
+      const current = await validOwner(userId);
+      if (current.accountId !== owner.accountId || current.encryptedSession !== owner.encryptedSession) {
+        throw new TelegramUserClientError(403, 'Доступ к Telegram изменён во время чтения');
+      }
+      return data;
+    } catch (error) {
+      if (error instanceof TelegramUserClientError) throw error;
+      console.warn('[TelegramUserClient] Telegram read failed', { kind, category: 'network_or_mtproto' });
+      throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
+    } finally {
+      if (client) try { await client.disconnect(); } catch { /* best effort */ }
+    }
+  });
 }
 
 export const telegramUserClientRead = {
