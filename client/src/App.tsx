@@ -357,7 +357,8 @@ export function mergeTelegramAiInbox(projects: AiChatProject[], feed: TelegramAi
     const messageMap = new Map<string, AiChatMessage>();
     for (const message of old?.messages ?? []) messageMap.set(message.id, message);
     for (const message of feed.messages) if (message.chatId === dialog.id) {
-      messageMap.set(message.id, { ...message, role: 'assistant', content: message.content });
+      messageMap.set(message.id, { ...message, role: 'assistant', content: message.content,
+        telegramSuggestedReply: message.telegramSuggestedReply ?? undefined });
     }
     // Keep existing consent cards in their original position; newly published
     // summaries append without re-sorting existing messages.
