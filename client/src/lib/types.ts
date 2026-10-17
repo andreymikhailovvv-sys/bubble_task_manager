@@ -105,6 +105,8 @@ export type ChatMessage = {
   createdAt?: string;
   role: 'user' | 'assistant';
   content: string;
+  /** Small optional display-only thumbnails, not original attachment bytes. */
+  attachmentPreviews?: Array<{ name: string; thumbnail?: string }>;
   creditsSpentMilli?: number;
   webSearchUsed?: boolean;
   webSources?: WebSource[];
