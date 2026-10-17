@@ -20,7 +20,8 @@ const HISTORY_LIMIT = 30;
 const MAX_MESSAGE_CHARS = 4096;
 const listLimiter = new FixedWindowRateLimiter(8, 5 * 60_000);
 const historyLimiter = new FixedWindowRateLimiter(15, 5 * 60_000);
-const monitorLimiter = new FixedWindowRateLimiter(40, 5 * 60_000);
+// Allows several 15-second chat polls per account while retaining a request ceiling.
+const monitorLimiter = new FixedWindowRateLimiter(120, 5 * 60_000);
 // Serialize reads per account. Interactive browsing/configuration queues behind an
 // active read; background monitoring never queues in front of a user action.
 const readTails = new Map<string, Promise<void>>();
@@ -41,19 +42,26 @@ export async function withTelegramReadSlot<T>(
   const tail = previous ? previous.then(() => gate) : gate;
   readTails.set(userId, tail);
   void tail.then(() => { if (readTails.get(userId) === tail) readTails.delete(userId); });
+  let acquired = !previous;
   try {
     if (previous) {
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new TelegramUserClientError(
           503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд'
         )), INTERACTIVE_READ_WAIT_MS);
-        previous.then(() => { clearTimeout(timer); resolve(); },
+        previous.then(() => { clearTimeout(timer); acquired = true; resolve(); },
           error => { clearTimeout(timer); reject(error); });
       });
     }
     return await work();
   } finally {
-    release();
+    if (acquired) {
+      release();
+    } else {
+      // On wait timeout, retain our queue position until the previous MTProto
+      // operation actually finishes. Otherwise the next read can overlap it.
+      void previous!.then(release, release);
+    }
   }
 }
 export type TelegramPrivateDialog = { id: string; name: string; username: string | null };
