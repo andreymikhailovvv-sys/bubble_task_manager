@@ -348,6 +348,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
                       <p className="text-sm font-semibold">Правила предложений ответов</p>
                       <p className="integration-menu__muted text-xs">Ассистент предложит текст в соответствующем чате проекта «Телеграм ассистент». Без вашего нажатия «Отправить» сообщение в Telegram не уйдёт.</p>
+                      {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Чтобы отправлять одобренные предложения, необходимо разрешить отправку Telegram в интеграциях.</p>
                       <label className="block text-sm font-semibold">В каких случаях предлагать ответы
                         <textarea rows={3} maxLength={2000} required value={draft.suggestWhen}
                           onChange={event => update('suggestWhen', event.target.value)}
@@ -407,7 +408,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   )}
                   <label className="block text-sm font-semibold">
                     Модель фонового мониторинга
-                    <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для автоматических сводок. Модель ручных запросов выбирается отдельно в самом чате с ИИ.</p>
+                    <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для фонового анализа, предложений ответов, автоответов, сводок и задач. Модель ручных запросов выбирается отдельно.</p>
                     <select className="telegram-integrations-modal__input mt-2 w-full rounded-xl border px-3 py-2 text-sm font-normal"
                       value={draft.monitorModel}
                       onChange={e => update('monitorModel', e.target.value as TelegramAiChatSettings['monitorModel'])}>
@@ -425,7 +426,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   {draft.taskMode === 'AUTO' && (
                     <p className="integration-menu__muted text-xs">Автодобавление задач работает по настройке «Добавление задач» и не зависит от автоответов.</p>
                   )}
-                   <label className="flex items-start gap-2 text-sm">
+                  <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
                   </label>
