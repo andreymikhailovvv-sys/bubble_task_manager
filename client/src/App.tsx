@@ -8023,7 +8023,7 @@ ${allContext}`,
           modelOptions={AI_CHAT_MODEL_SELECT_OPTIONS}
           pendingFiles={aiChatPendingFiles}
           loading={aiChatLoading}
-          imageGenerating={aiChatLoading && aiChatProgress === 'generating_image'}
+          imageGenerating={aiChatLoading && (aiChatProgress === 'generating_image' || aiChatProgress === 'editing_image')}
           messageCount={activeAiChat?.messages.length ?? 0}
           onClose={() => setIsAiChatOpen(false)}
           onCreateProject={openAiChatProjectDialog}
