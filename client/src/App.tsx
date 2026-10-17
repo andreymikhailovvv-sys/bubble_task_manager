@@ -28,6 +28,7 @@ import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { TaskAiProgress } from './components/TaskAiProgress';
 import { AiProgress } from './components/AiProgress';
+import { AiAttachmentTiles, AiMessageAttachments, splitAiMessageAttachments } from './components/AiAttachmentTiles';
 import { formatCreditsSpent } from './lib/credits';
 import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEPS, TourOverlay, type AiTourStep, type FeatureTourStep, type TaskTourStep, type WorkspaceTourStep } from './components/TourOverlay';
 import { useCreditPurchase } from './lib/useCreditPurchase';
@@ -588,10 +589,14 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
 });
 
 function renderAiMessageContent(content: string): ReactNode {
-  const normalizedContent = normalizeAiMessageContent(content);
-  return renderAiContentBlocks(normalizedContent, (text, key) => (
-    <div key={key} className="whitespace-pre-wrap">{renderInlineAiMarkup(text)}</div>
-  ));
+  const { text, names } = splitAiMessageAttachments(content);
+  const normalizedContent = normalizeAiMessageContent(text);
+  return <>
+    {renderAiContentBlocks(normalizedContent, (part, key) => (
+      <div key={key} className="whitespace-pre-wrap">{renderInlineAiMarkup(part)}</div>
+    ))}
+    <AiMessageAttachments names={names} />
+  </>;
 }
 
 function resolveAttachmentMimeType(file: File): string {
@@ -821,6 +826,7 @@ export default function App() {
   const [focusAiError, setFocusAiError] = useState<string | null>(null);
   const [focusAiModel, setFocusAiModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [focusAiPendingFiles, setFocusAiPendingFiles] = useState<File[]>([]);
+  const [focusAiUploadProgress, setFocusAiUploadProgress] = useState<number | null>(null);
   const [isFocusAiExpanded, setIsFocusAiExpanded] = useState(false);
   const [isFocusSessionFinished, setIsFocusSessionFinished] = useState(false);
   const [focusSphereFilterId, setFocusSphereFilterId] = useState('all');
@@ -1043,6 +1049,7 @@ export default function App() {
   const [isAiSubtasksPromptOpen, setIsAiSubtasksPromptOpen] = useState(false);
   const [aiSubtasksPrompt, setAiSubtasksPrompt] = useState('');
   const [aiPendingFiles, setAiPendingFiles] = useState<File[]>([]);
+  const [taskAiUploadProgress, setTaskAiUploadProgress] = useState<number | null>(null);
   const [isFocusedAiDragActive, setIsFocusedAiDragActive] = useState(false);
   const [focusedTaskAttachments, setFocusedTaskAttachments] = useState<TaskAttachment[]>([]);
   const [isUploadingTaskAttachment, setIsUploadingTaskAttachment] = useState(false);
@@ -1067,6 +1074,7 @@ export default function App() {
   const [lastGeneralAiUndoOperations, setLastGeneralAiUndoOperations] = useState<GeneralAiUndoOperation[]>([]);
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
+  const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
@@ -2252,7 +2260,7 @@ export default function App() {
     const nextDialog = [...previousDialog, { id: clientRequestId, role: 'user' as const, content: userContent, ...(focusedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: focusedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [taskId]: nextDialog }));
     setAiDraft('');
-    setAiPendingFiles([]);
+    setTaskAiUploadProgress(null);
     setAiError(null);
     setAiLoadingTaskId(taskId);
     setAiProgressByTask((current) => ({ ...current, [taskId]: 'analyzing_request' }));
@@ -2264,7 +2272,8 @@ export default function App() {
         userMessage: userContent,
         model: options?.modelOverride ?? focusedAiModel,
         attachments: attachmentsPayload
-      }, (status) => setAiProgressByTask((current) => ({ ...current, [taskId]: status })));
+      }, (status) => setAiProgressByTask((current) => ({ ...current, [taskId]: status })), setTaskAiUploadProgress);
+      setAiPendingFiles([]);
       const actionSummary = (result.actionReports?.length ?? 0) > 0
         ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
         : '';
@@ -2296,6 +2305,7 @@ export default function App() {
       }));
     } finally {
       setAiLoadingTaskId(null);
+      setTaskAiUploadProgress(null);
       setAiProgressByTask((current) => { const next = { ...current }; delete next[taskId]; return next; });
     }
   };
@@ -2634,13 +2644,14 @@ ${allContext}`,
     const clientRequestId = crypto.randomUUID();
     setFocusAiMessages((prev) => [...prev, { id: clientRequestId, role: 'user', content: userContent }]);
     setFocusAiDraft('');
-    setFocusAiPendingFiles([]);
+    setFocusAiUploadProgress(null);
     setFocusAiError(null);
     setFocusAiLoading(true);
     setFocusAiProgress('analyzing_request');
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
-      const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress);
+      const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
+      setFocusAiPendingFiles([]);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
       await refreshAiCredits();
     } catch (error) {
@@ -2651,6 +2662,7 @@ ${allContext}`,
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: message }]);
     } finally {
       setFocusAiLoading(false);
+      setFocusAiUploadProgress(null);
       setFocusAiProgress(null);
     }
   };
@@ -2918,8 +2930,8 @@ ${allContext}`,
       setQuickAiChatDraft('');
     } else {
       updateActiveAiChatMessages((messages) => [...messages, userMessage]);
-      setAiChatPendingFiles([]);
     }
+    setAiChatUploadProgress(null);
     setAiChatLoading(true);
     if (quick) setQuickAiChatLoading(true);
     setAiChatError(null);
@@ -2937,7 +2949,8 @@ ${allContext}`,
         chatId: quick ? QUICK_AI_CHAT_ID : activeAiChat?.id,
         clientSurface: 'web',
         attachments
-      }, { onStatus: setAiChatProgress });
+      }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
+      if (!quick) setAiChatPendingFiles([]);
       const actionReports = result.actionReports ?? [];
       const serviceReport = actionReports.length > 0
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
@@ -2964,6 +2977,7 @@ ${allContext}`,
         } : project));
       }
     } finally {
+      setAiChatUploadProgress(null);
       setAiChatLoading(false);
       if (quick) setQuickAiChatLoading(false);
     }
@@ -3960,8 +3974,8 @@ ${allContext}`,
     });
   };
 
-  const askTaskAssistant = async (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void) => {
-    const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus });
+  const askTaskAssistant = async (taskId: string, payload: { clientRequestId?: string; question: string; userMessage?: string; model: AiChatModel; attachments?: ChatAttachmentPayload[]; skipEfficiencyBonus?: boolean }, onStatus?: (status: TaskAiProgressStatus) => void, onUploadProgress?: (percent: number | null) => void) => {
+    const result = await api.askTaskAssistantStreaming(taskId, { ...payload, clientSurface: 'web' }, { onStatus, onUploadProgress });
     try {
       const me = await api.getMe();
       setCurrentUser(me.user);
@@ -5177,7 +5191,7 @@ ${allContext}`,
                 </div>
               </div>
               {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
-              {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
+              <AiAttachmentTiles files={focusAiPendingFiles} onRemove={(file) => removeFocusAiPendingFile(file.name)} busy={focusAiLoading} uploadProgress={focusAiUploadProgress} />
               <div className="ai-chat-composer mt-3 flex items-end gap-2 rounded-3xl border p-2"><AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} /><input ref={focusAiFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleFocusAiFileSelect} /><button className="surface-muted inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted disabled:opacity-50" title="Прикрепить файл" disabled={!isFocusTimerRunning || focusAiLoading} onClick={() => focusAiFileInputRef.current?.click()}><Paperclip size={16} /></button><button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" title="Отправить" disabled={!isFocusTimerRunning || focusAiLoading || (!focusAiDraft.trim() && focusAiPendingFiles.length === 0)} onClick={() => void sendFocusAiQuestion()}>{focusAiLoading ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button></div>
             </aside>
           </div>
@@ -6815,24 +6829,8 @@ ${allContext}`,
                 </div>
               </div>
               <div className="focused-task-ai-composer">
-              {aiPendingFiles.length > 0 ? (
-                <div className="mb-2 flex shrink-0 flex-wrap gap-1.5">
-                  {aiPendingFiles.map((file) => (
-                    <button
-                      key={`ai-file-${file.name}`}
-                      type="button"
-                      onClick={() => removePendingAiFile(file.name)}
-                      className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px]"
-                      title="Убрать файл"
-                    >
-                      <Paperclip size={10} />
-                      {file.name}
-                      <X size={10} />
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
+              <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => removePendingAiFile(file.name)} busy={aiLoadingTaskId === focusedTask.id} uploadProgress={taskAiUploadProgress} />
+                            {aiError ? <p className="mb-2 shrink-0 text-[11px] text-rose-300">{aiError}</p> : null}
               <div
                 className="task-ai-recipient-interaction"
                 onFocusCapture={() => setIsAiRecipientPickerVisible(true)}
@@ -7658,7 +7656,7 @@ ${allContext}`,
               {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
-            {aiPendingFiles.length ? <div className="mb-2 flex flex-wrap gap-2">{aiPendingFiles.map((file) => <button key={`expanded-ai-file-${file.name}`} type="button" onClick={() => removePendingAiFile(file.name)} className="secondary-button inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs" title="Убрать файл"><Paperclip size={12} />{file.name}<X size={12} /></button>)}</div> : null}
+            <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => removePendingAiFile(file.name)} busy={aiLoadingTaskId === focusedTask.id} uploadProgress={taskAiUploadProgress} />
             <div
               className="task-ai-recipient-interaction"
               onFocusCapture={() => setIsAiRecipientPickerVisible(true)}
@@ -8024,6 +8022,7 @@ ${allContext}`,
           pendingFiles={aiChatPendingFiles}
           loading={aiChatLoading}
           imageGenerating={aiChatLoading && (aiChatProgress === 'generating_image' || aiChatProgress === 'editing_image')}
+          uploadProgress={aiChatUploadProgress}
           messageCount={activeAiChat?.messages.length ?? 0}
           onClose={() => setIsAiChatOpen(false)}
           onCreateProject={openAiChatProjectDialog}
