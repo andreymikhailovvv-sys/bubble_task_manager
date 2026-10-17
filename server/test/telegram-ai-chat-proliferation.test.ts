@@ -55,6 +55,7 @@ test('authorized policy count, not browser list, controls Telegram assistant nav
   assert.match(mini, /activeAiChatProject\.id === 'telegram-ai-assistant-project'/);
   assert.match(mini, /chat\.id\.startsWith\('telegram-ai-assistant:'\)/);
   assert.match(mini, /project\.icon === 'telegram' \? <svg/);
+  assert.match(mini, /activeAiChatProject\?\.icon === 'telegram' \? <svg role="img" aria-label="Telegram"/);
   assert.match(web, /sanitizeCachedTelegramAssistantProjects\(normalized\)/);
 });
 
