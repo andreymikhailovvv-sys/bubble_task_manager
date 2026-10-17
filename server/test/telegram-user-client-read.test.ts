@@ -6,7 +6,8 @@ import {
   requireTelegramReadOwner,
   validateTelegramDialogId,
   isReadablePersonalDialog,
-  safeTelegramMessage
+  safeTelegramMessage,
+  withTelegramReadSlot
 } from '../src/services/telegram-user-client-read.service.js';
 
 const current = { TELEGRAM_USER_CLIENT_ENABLED: 'true', TELEGRAM_USER_READ_ENABLED: 'true' };
@@ -67,4 +68,45 @@ test('history serializer sends only bounded text and safe metadata, not message 
   assert.equal(serialized.text.length, 4096);
   assert.equal(serialized.truncated, true);
   assert.equal(JSON.stringify(serialized).includes('secret'), false);
+});
+
+test('interactive Telegram reads queue behind active monitoring; another poll is skipped', async () => {
+  const userId = 'test-read-slot-owner';
+  const events: string[] = [];
+  let finishMonitor!: () => void;
+  const monitorGate = new Promise<void>(resolve => { finishMonitor = resolve; });
+  const monitor = withTelegramReadSlot(userId, 'monitor', async () => {
+    events.push('monitor-start');
+    await monitorGate;
+    events.push('monitor-finish');
+  });
+  const interactive = withTelegramReadSlot(userId, 'list', async () => {
+    events.push('list');
+    return 'loaded';
+  });
+  const nextInteractive = withTelegramReadSlot(userId, 'history', async () => {
+    events.push('history');
+    return 'loaded';
+  });
+  await assert.rejects(
+    withTelegramReadSlot(userId, 'monitor', async () => 'should not execute'),
+    (error: unknown) => error instanceof Error && error.message.includes('Предыдущий запрос Telegram')
+  );
+  assert.deepEqual(events, ['monitor-start']);
+  finishMonitor();
+  assert.equal(await interactive, 'loaded');
+  assert.equal(await nextInteractive, 'loaded');
+  await monitor;
+  assert.deepEqual(events, ['monitor-start', 'monitor-finish', 'list', 'history']);
+});
+
+test('Telegram read slots do not serialize independent accounts', async () => {
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const blocked = withTelegramReadSlot('read-slot-account-1', 'monitor', async () => {
+    await pending;
+  });
+  assert.equal(await withTelegramReadSlot('read-slot-account-2', 'list', async () => 42), 42);
+  finish();
+  await blocked;
 });
