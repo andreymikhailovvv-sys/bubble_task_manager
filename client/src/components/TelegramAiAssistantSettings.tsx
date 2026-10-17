@@ -348,7 +348,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <div className="telegram-ai-monitor-status space-y-3 rounded-2xl border p-3">
                       <p className="text-sm font-semibold">Правила предложений ответов</p>
                       <p className="integration-menu__muted text-xs">Ассистент предложит текст в соответствующем чате проекта «Телеграм ассистент». Без вашего нажатия «Отправить» сообщение в Telegram не уйдёт.</p>
-                      {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Чтобы отправлять одобренные предложения, необходимо разрешить отправку Telegram в интеграциях.</p>
+                      {!capability?.sendEnabled && <p className="telegram-integrations-modal__warning text-xs">Чтобы отправлять одобренные предложения, необходимо разрешить отправку Telegram в интеграциях.</p>}
                       <label className="block text-sm font-semibold">В каких случаях предлагать ответы
                         <textarea rows={3} maxLength={2000} required value={draft.suggestWhen}
                           onChange={event => update('suggestWhen', event.target.value)}
