@@ -83,7 +83,7 @@ test('AUTO reply proposal requires a valid bounded response and an incoming Tele
     { id: 13, date: 1700000001, speaker: 'Коллега', out: false, text: '@alex есть новости?', hasMedia: false, truncated: false }
   ], '', 'SUGGEST', 'gpt-6-luna', rules);
   const sourcePayload = JSON.stringify(payload);
-  assert.match(sourcePayload, /"out":true/);
+  assert.match(JSON.parse(sourcePayload).input[1].content[0].text, /"out":true/);
   assert.match(sourcePayload, /Владелец ВКЛЮЧИЛ отправку автоответов/);
   assert.match(sourcePayload, /НЕДОВЕРЕННЫМИ ДАННЫМИ/);
   assert.match(sourcePayload, /"autoReply"/);
