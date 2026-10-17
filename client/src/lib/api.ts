@@ -107,6 +107,10 @@ export async function readTaskAssistantNdjson(stream: ReadableStream<Uint8Array>
   return result;
 }
 
+export function stripAiChatDisplayPreviews(history: ChatMessage[]): ChatMessage[] {
+  return history.map(({ attachmentPreviews: _preview, ...message }) => message);
+}
+
 /** XMLHttpRequest is used only for requests with actual files. Fetch does not
  * expose upload progress, whereas XHR reports transferred bytes of the JSON
  * request (which contains all encoded attachments). Responses stay NDJSON.
@@ -204,10 +208,10 @@ export async function readAiChatNdjson(stream: ReadableStream<Uint8Array>, onSta
 async function askAiChatStreaming(payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }, options?: { onStatus?: (status: AiChatProgressStatus) => void; onUploadProgress?: (percent: number | null) => void }) {
   if (payload.attachments?.length && options?.onUploadProgress && typeof XMLHttpRequest !== 'undefined') {
     return streamAiRequestWithUploadProgress<AiChatResult, AiChatProgressStatus>(
-      '/api/ai-chat', { ...payload, userTimeZone: resolveUserTimeZone() }, options
+      '/api/ai-chat', { ...payload, history: stripAiChatDisplayPreviews(payload.history), userTimeZone: resolveUserTimeZone() }, options
     );
   }
-  const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() }) });
+  const response = await fetch('/api/ai-chat', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' }, body: JSON.stringify({ ...payload, history: stripAiChatDisplayPreviews(payload.history), userTimeZone: resolveUserTimeZone() }) });
   if (response.status === 401) unauthorizedHandler?.(); if (!response.body) throw new Error(`HTTP ${response.status}`); return readAiChatNdjson(response.body, options?.onStatus);
 }
 
@@ -566,7 +570,7 @@ export const api = {
   askAiChat: (payload: { clientRequestId?: string; question: string; history: ChatMessage[]; model?: AiChatModel; projectTitle?: string; chatTitle?: string; projectId?: string; chatId?: string; clientSurface?: 'web' | 'miniapp'; attachments?: ChatAttachmentPayload[]; telegramRead?: TelegramReadApproval }) =>
     request<AiChatResult>('/api/ai-chat', {
       method: 'POST',
-      body: JSON.stringify({ ...payload, userTimeZone: resolveUserTimeZone() })
+      body: JSON.stringify({ ...payload, history: stripAiChatDisplayPreviews(payload.history), userTimeZone: resolveUserTimeZone() })
     }),
   askAiChatStreaming,
   getGeneralAssistantHistory: () =>
