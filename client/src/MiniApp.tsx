@@ -1,7 +1,7 @@
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
@@ -2609,14 +2609,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
 
   useEffect(() => {
-    persistAiChatProjectsCache(localStorage, AI_CHAT_STORAGE_KEY, aiChatProjects);
-    const snapshot = JSON.stringify(aiChatProjects);
+    const persistableProjects = stripAiChatProjectDisplayPreviews(aiChatProjects);
+    persistAiChatProjectsCache(localStorage, AI_CHAT_STORAGE_KEY, persistableProjects);
+    const snapshot = JSON.stringify(persistableProjects);
     if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
       aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
         aiChatProjectsSaveTimerRef.current = null;
         aiChatProjectsSaveInFlightRef.current = true;
-        void api.saveAiChatProjects(aiChatProjects)
+        void api.saveAiChatProjects(persistableProjects)
           .then(() => { aiChatProjectsRemoteSnapshotRef.current = snapshot; })
           .catch(error => console.error('[MiniApp AI chat] sync failed', error))
           .finally(() => { aiChatProjectsSaveInFlightRef.current = false; });
