@@ -30,7 +30,8 @@ test('all valid slider positions and nullable unlimited budget round-trip', () =
   for (const mode of ['OBSERVE', 'SUGGEST', 'AUTO']) {
     for (const taskMode of ['NONE', 'SUGGEST', 'AUTO']) {
       for (const interval of [5, 30, 180]) {
-        const parsed = validateTelegramAiChatSettings({ ...v, mode, taskMode, checkIntervalMinutes: interval });
+        const parsed = validateTelegramAiChatSettings({ ...v, mode, taskMode, checkIntervalMinutes: interval,
+          ...(mode === 'AUTO' ? { autoReplyWhen: 'Когда меня упоминают', autoReplyHow: 'Коротко отвечай' } : {}) });
         assert.equal(parsed.mode, mode);
         assert.equal(parsed.taskMode, taskMode);
         assert.equal(parsed.checkIntervalMinutes, interval);
