@@ -2316,7 +2316,7 @@ export const aiAssistantService = {
                 continue;
               }
               const editingImage = call.name === 'edit_file' && fileCatalog.items.some((item) =>
-                item.fileId === args.fileId &&
+                item.fileId === (args as unknown as { fileId?: string }).fileId &&
                 (item.mimeType.toLowerCase().startsWith('image/') || /\.(?:png|jpe?g|webp)$/i.test(item.fileName)));
               if (call.name === 'edit_file') input.onProgress?.(editingImage ? 'editing_image' : 'editing_document');
               try {
