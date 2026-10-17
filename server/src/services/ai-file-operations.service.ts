@@ -101,7 +101,8 @@ export async function resolveCatalogImageReferences(input: FileToolContext, file
   const images: ValidatedImage[] = [];
   for (const id of fileIds) {
     const metadata = input.catalog.items.find((entry) => entry.fileId === id);
-    if (!metadata || (!metadata.mimeType.startsWith('image/') && !/\.(?:png|jpe?g|webp)$/i.test(metadata.fileName))) {
+    if (!metadata || /\.(?:docx?|xlsx?|xlsm|pdf)$/i.test(metadata.fileName) ||
+        (!metadata.mimeType.startsWith('image/') && !/\.(?:png|jpe?g|webp)$/i.test(metadata.fileName))) {
       throw new TypeError('В списке референсов есть файл, который не является изображением.');
     }
     const file = await resolveFile(input, id);
