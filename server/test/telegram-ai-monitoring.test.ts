@@ -162,7 +162,7 @@ test('auto-reply diagnostics report safe decision and server skip reasons withou
 test('independent interaction, summary and task schedules preserve non-overlapping message cursors', () => {
   const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
   const migration = source('../prisma/migrations/20261017193000_telegram_ai_independent_schedules/migration.sql');
-  assert.equal(telegramInteractionDelayMs(0), 30_000);
+  assert.equal(telegramInteractionDelayMs(0), 15_000);
   assert.equal(telegramInteractionDelayMs(5), 300_000);
   assert.match(worker, /const history = await telegramUserClientRead\.aiHistory\(userId, chatId, 10\);/);
   assert.match(worker, /await release\(claimed, null, IMMEDIATE_POLL_MS\)/);
