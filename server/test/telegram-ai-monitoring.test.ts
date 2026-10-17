@@ -103,7 +103,7 @@ test('AUTO reply proposal requires a valid bounded response and an incoming Tele
   for (const text of ['Встреча в 15:30', 'Уточню у @user7', 'Ответ в 2026 году']) {
     assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text }))?.text, text);
   }
-  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'bad\\u0000text' })), null);
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'bad' + String.fromCharCode(0) + 'text' })), null);
   assert.equal(classifyMonitorAutoReply(make({ shouldReply: false, messageId: 0, text: '' })), 'model_declined');
   assert.equal(classifyMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'Встреча в 15:30' })), 'proposed');
   assert.equal(classifyMonitorAutoReply(make({ shouldReply: true, messageId: '13', text: 'Ответ' })), 'invalid_proposal');
