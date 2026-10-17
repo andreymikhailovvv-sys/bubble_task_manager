@@ -979,10 +979,23 @@ function extractUnexpectedTaskAssistantText(source: Record<string, unknown>): st
 }
 
 const TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN = /(?:^|[\s,.!?;:])(?:сейчас\s+)?(?:сделаю|сделал(?:а|и)?|выполню|выполняю|обновлю|обновляю|добавлю|добавляю|создам|создаю|изменю|изменяю|перенесу|переношу|переименую|переименовываю|удалю|удаляю|скопирую|копирую|сохраню|сохраняю)(?:[\s,.!?;:]|$)/iu;
+const TASK_MUTATION_COMMAND_PATTERN = /(?:^|[\s,.!?;:])(?:сделай|создай|создать|добавь|добавить|измени|изменить|обнови|обновить|перенеси|перенести|отложи|отложить|переименуй|переименовать|удали|удалить|заверши|завершить|закрой|закрыть|отметь|поставь|поставить|назначь|назначить|выполни|разбей|сохрани)(?=$|[\s,.!?;:])/iu;
+const TASK_MUTATION_TARGET_PATTERN = /(?:^|[\s,.!?;:])(?:задач[а-яё]*|подзадач[а-яё]*|напоминани[а-яё]*|дедлайн[а-яё]*|срок[а-яё]*|приоритет[а-яё]*|статус[а-яё]*|сфер[а-яё]*|сектор[а-яё]*|дат[а-яё]*|уведомлени[а-яё]*)(?=$|[\s,.!?;:])/iu;
+const TASK_MUTATION_CONFIRMATION_PATTERN = /^(?:да|делай|сделай|выполняй|подтверждаю|согласен|согласна|ок(?:ей)?|хорошо)[\s.!?]*$/iu;
+const TASK_MUTATION_OFFER_PATTERN = /(?:создать|изменить|обновить|удалить|переименовать|перенести|добавить|завершить|закрыть|поставить)[^\n.!?]{0,100}(?:задач[а-яё]*|подзадач[а-яё]*|напоминани[а-яё]*|дедлайн[а-яё]*|срок[а-яё]*|приоритет[а-яё]*)/iu;
 
-export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number, failedFileEditReason?: string | null): string {
+// A task chat also supports ordinary writing, brainstorming and conversation.
+// Only police missing task actions when the user actually requested a task mutation,
+// rather than scanning lyrics or edited prose for common verbs like "сделаю".
+export function expectsTaskMutationAction(question: string, previousAssistantAnswer?: string): boolean {
+  if (TASK_MUTATION_COMMAND_PATTERN.test(question) && TASK_MUTATION_TARGET_PATTERN.test(question)) return true;
+  return TASK_MUTATION_CONFIRMATION_PATTERN.test(question.trim())
+    && Boolean(previousAssistantAnswer && TASK_MUTATION_OFFER_PATTERN.test(previousAssistantAnswer));
+}
+
+export function normalizeTaskAssistantActionAnswer(answer: string, actionsCount: number, failedFileEditReason?: string | null, expectsTaskAction = true): string {
   const normalized = answer.trim();
-  if (actionsCount > 0 || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
+  if (actionsCount > 0 || !expectsTaskAction || !TASK_ACTION_CLAIM_WITHOUT_ACTION_PATTERN.test(normalized)) return normalized;
   // A document edit is not a task_action. If the editor reported a failure,
   // do not overwrite it with an unrelated "no task action" diagnostic.
   const admitsFailure = /(?:не\s+(?:удалось|получилось|выполнено|измен[её]н)|остал(?:ся|ась)\s+без\s+изменений|невозможно|не\s+смог)/iu.test(normalized);
@@ -2069,6 +2082,7 @@ export const aiAssistantService = {
       'Без длинных вступлений, повторов и лишних пояснений.',
       'По умолчанию давай 3-6 коротких пунктов или 2-4 предложения.',
       'Если вопрос простой — отвечай одной короткой репликой.',
+      'Если пользователь просит написать песню, стих, текст или другой творческий материал, дай полноценный запрошенный результат. Правила краткости для ответов о задачах к таким запросам не относятся. Не путай написание текста с изменением данных задачи.',
       'Если тема сложная — только ключевые шаги и конкретные действия.',
       'Для любых вычислений времени используй часовой пояс пользователя из контекста.',
       'Если ответ содержит сравнение или табличные данные, оформляй их как корректную Markdown-таблицу с заголовками, строкой разделителей | --- | и строками значений. Не заключай таблицу в блок кода.',
@@ -2505,7 +2519,9 @@ export const aiAssistantService = {
         const actionReports: string[] = [];
         const appliedActionsCount = taskProposal?.status === 'APPLIED' ? parsed.actions.length : 0;
 
-        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0), failedFileEditReason);
+        const previousAssistantAnswer = [...input.history].reverse().find((message) => message.role === 'assistant')?.content;
+        const expectsTaskAction = expectsTaskMutationAction(question, previousAssistantAnswer);
+        const actionAwareAnswer = normalizeTaskAssistantActionAnswer(parsed.answer, parsed.actions.length + (generatedDocument ? 1 : 0), failedFileEditReason, expectsTaskAction);
         const answer = taskProposal
           ? (taskProposal.status === 'APPLIED'
               ? 'Изменения автоматически применены. Подробности в карточке.'
