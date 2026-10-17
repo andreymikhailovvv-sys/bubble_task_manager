@@ -15,7 +15,7 @@ const STALE_CALL_MS = 12 * 60_000;
 const MAX_JOBS_PER_TICK = 2;
 const MAX_INPUT_MESSAGES = 40;
 const TASK_SCAN_INTERVAL_MS = 30 * 60_000;
-const IMMEDIATE_POLL_MS = 30_000; // Worker tick, not a new MTProto event subscription.
+const IMMEDIATE_POLL_MS = 15_000; // Near-immediate polling, no permanent MTProto listener.
 
 export function telegramInteractionDelayMs(minutes: number) {
   return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
