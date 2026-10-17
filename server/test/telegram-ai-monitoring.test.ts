@@ -179,3 +179,38 @@ test('independent interaction, summary and task schedules preserve non-overlappi
     assert.ok(migration.includes('"' + field + '"'), field);
   }
 });
+
+test('AUTO reply cycles evaluate owner-approved Telegram task suggestions immediately', () => {
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  const inbox = source('../src/services/telegram-ai-inbox.service.ts');
+  assert.match(worker, /policy\.taskMode !== 'NONE' &&\s*\(\(policy\.nextTaskAt != null && policy\.nextTaskAt <= now\) \|\| dueInteraction\)/);
+  assert.match(worker, /const taskMode = dueTasks \? current\.taskMode : 'NONE'/);
+  assert.match(worker, /lastTaskMessageId: maxId/);
+  assert.match(worker, /publishTelegramAiTaskSuggestions/);
+  assert.match(worker, /\[TelegramTaskSuggestion\] evaluated/);
+  assert.match(inbox, /prepareTaskProposal\(\{/);
+  assert.match(inbox, /autoApply: policy\.taskMode === 'AUTO'/);
+
+  const result = buildMonitorPayload([
+    { id: 53, date: 1792260000, speaker: 'Коллега', out: false, isBot: false,
+      text: 'Передай Андрею задачу проверить макет к пятнице', truncated: false, hasMedia: false }
+  ], '', 'SUGGEST', 'gpt-6-luna', {
+    kind: 'AUTO', when: 'Отвечай коллегам на просьбы', how: 'Кратко', eligibleMessageIds: [53]
+  }, false);
+  const instructions = JSON.stringify(result.input[0]);
+  assert.match(instructions, /ПРЕДЛОЖИТЬ задачу владельцу/);
+  assert.match(instructions, /Планировыче для подтверждения/);
+  assert.match(instructions, /НЕ утверждай, что задача уже создана/);
+  assert.doesNotMatch(instructions, /taskSuggestions всегда \[\]/);
+  assert.equal(result.tool_choice, 'none');
+});
+
+test('disabled Telegram task proposals remain disabled during reply scans', () => {
+  const result = buildMonitorPayload([
+    { id: 54, date: 1792260000, speaker: 'Собеседник', out: false,
+      text: 'Создай задачу', truncated: false, hasMedia: false }
+  ], '', 'NONE', 'gpt-6-luna', {
+    kind: 'AUTO', when: 'Отвечай на просьбы', how: 'Кратко', eligibleMessageIds: [54]
+  }, false);
+  assert.match(JSON.stringify(result.input[0]), /taskSuggestions всегда \[\]/);
+});
