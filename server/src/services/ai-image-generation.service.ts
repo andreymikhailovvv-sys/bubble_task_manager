@@ -5,24 +5,24 @@ import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditRes
 import type { GeneratedDocumentMeta } from './word-document.service.js';
 import type { ValidatedImage } from './ai-user-image-input.js';
 
-// The first iteration uses GPT Image 2 at low quality and a fixed pixel count.
-// Reserve up to $0.03 in user credits, then settle against the provider's actual
-// image output + text prompt token usage. Do not generate if the user cannot
-// afford the minimum reservation. Prices checked against the OpenAI API rate card.
-export const AI_IMAGE_MODEL = 'gpt-image-2';
-export const AI_IMAGE_QUALITY = 'low';
-export const AI_IMAGE_MIN_RESERVATION_MILLI = 15_000;
-export const AI_IMAGE_MAX_RESERVATION_MILLI = 50_000;
-export const AI_IMAGE_FALLBACK_COST_NANO_USD = 6_000_000n;
+// Image quality was previously hard-coded to "low". Image model and quality
+// are server-controlled; clients cannot override them or manipulate billing.
+export const AI_IMAGE_MODEL = 'gpt-image-2.5-flare';
+export const AI_IMAGE_QUALITY = 'high';
+export const AI_IMAGE_MIN_RESERVATION_MILLI = 30_000;
+export const AI_IMAGE_MAX_RESERVATION_MILLI = 350_000;
+export const AI_IMAGE_FALLBACK_COST_NANO_USD = 75_000_000n;
+export const AI_IMAGE_MAX_REFERENCE_FILES = 5;
 
 export const AI_IMAGE_TOOL = {
   type: 'function', name: 'generate_image', strict: true,
-  description: 'Создать изображение при явном запросе пользователя: нарисовать, сгенерировать, создать картинку. Передай законченный подробный визуальный промпт. За запрос можно создать только одно изображение. Сервер автоматически прикрепит результат.',
+  description: 'Создать изображение с нуля или собрать композицию по изображениям-референсам. Если пользователь просит использовать загруженные или ранее сохранённые изображения, передай точные fileId из КАТАЛОГА в sourceFileIds (до 5). Первое изображение является основой композиции, остальные визуальные референсы. Не угадывай ID; не выбирай старый файл без ясного указания пользователя. За запрос только одно изображение.',
   parameters: {
-    type: 'object', additionalProperties: false, required: ['prompt', 'size'],
+    type: 'object', additionalProperties: false, required: ['prompt', 'size', 'sourceFileIds'],
     properties: {
-      prompt: { type: 'string', description: 'Подробный промпт для генератора изображения.' },
-      size: { type: 'string', enum: ['1024x1024', '1024x1536', '1536x1024'] }
+      prompt: { type: 'string', description: 'Подробная инструкция: что сохранить из основы, что взять из каждого референса, что изменить.' },
+      size: { type: 'string', enum: ['1024x1024', '1024x1536', '1536x1024', 'auto'] },
+      sourceFileIds: { type: 'array', description: 'Точные fileId изображений из каталога в нужном порядке (пустой массив для генерации с нуля). Первый — основа; остальные — референсы.', items: { type: 'string' } }
     }
   }
 } as const;
@@ -48,13 +48,19 @@ export function calculateImageCostNanoUsd(usage: AiImageUsage | null | undefined
     + BigInt(imageOutput) * 15_000_000_000n + 999_999n) / 1_000_000n;
 }
 
-export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' | 'auto' } {
+export function validateImageToolArguments(raw: unknown): { prompt: string; size: '1024x1024' | '1024x1536' | '1536x1024' | 'auto'; sourceFileIds: string[] } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new TypeError('Некорректные параметры генерации изображения.');
   const source = raw as Record<string, unknown>;
   const prompt = typeof source.prompt === 'string' ? source.prompt.trim() : '';
   if (prompt.length < 3 || prompt.length > 3200) throw new TypeError('Промпт изображения должен содержать от 3 до 3200 символов.');
   if (source.size !== '1024x1024' && source.size !== '1024x1536' && source.size !== '1536x1024' && source.size !== 'auto') throw new TypeError('Недопустимый размер изображения.');
-  return { prompt, size: source.size };
+  const sourceFileIds = source.sourceFileIds === undefined ? [] : source.sourceFileIds;
+  if (!Array.isArray(sourceFileIds) || sourceFileIds.length > AI_IMAGE_MAX_REFERENCE_FILES
+    || sourceFileIds.some((id) => typeof id !== 'string' || id.length < 3 || id.length > 160)
+    || new Set(sourceFileIds).size !== sourceFileIds.length) {
+    throw new TypeError('Некорректный список изображений-референсов (максимум 5 уникальных файлов).');
+  }
+  return { prompt, size: source.size, sourceFileIds: sourceFileIds as string[] };
 }
 
 export function decodeGeneratedImage(data: unknown): Buffer {
@@ -69,10 +75,41 @@ export function decodeGeneratedImage(data: unknown): Buffer {
   return buffer;
 }
 
+/** Construct the provider payload only from image bytes resolved on the server.
+ * Source #1 is the edit target; other images provide additional visual references.
+ * The provider may still redraw pixels outside the requested region: a prompt
+ * is not an exact pixel-preservation mask.
+ */
+export function buildImageApiRequest(
+  prompt: string, size: '1024x1024' | '1024x1536' | '1536x1024' | 'auto',
+  sources: ValidatedImage[]
+) {
+  if (sources.length > AI_IMAGE_MAX_REFERENCE_FILES) throw new TypeError('Слишком много изображений-референсов.');
+  const editing = sources.length > 0;
+  const editPrompt = editing
+    ? [
+        'Редактирование существующего изображения с визуальными референсами.',
+        'Изображение №1 — основа результата. По возможности точно сохраняй его композицию, расположение и внешний вид неизменяемых элементов.',
+        'Изображения №2 и далее — дополнительные референсы: используй нужные объекты и детали только согласно запросу, не заменяй ими основную композицию.',
+        'Изменяй только то, что просит пользователь. Не добавляй незапрошенные объекты и надписи.',
+        prompt
+      ].join('\n')
+    : prompt;
+  const common = { model: AI_IMAGE_MODEL, prompt: editPrompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png' };
+  return editing
+    ? { endpoint: 'https://api.openai.com/v1/images/edits', payload: {
+        ...common, images: sources.map((image) => ({ image_url: `data:${image.mimeType};base64,${image.contentBase64}` }))
+      } }
+    : { endpoint: 'https://api.openai.com/v1/images/generations', payload: common };
+}
+
 export async function generateAiImage(input: {
-  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string; uploadedSourceImage?: ValidatedImage;
+  userId: string; taskId?: string; actionId: string; apiKey: string; args: unknown; sourceImageId?: string; uploadedSourceImage?: ValidatedImage; sourceImages?: ValidatedImage[];
 }): Promise<AiImageGenerationResult> {
-  const { prompt, size } = validateImageToolArguments(input.args);
+  const { prompt, size, sourceFileIds } = validateImageToolArguments(input.args);
+  if (sourceFileIds.length && input.sourceImages?.length !== sourceFileIds.length) {
+    throw new TypeError('Не удалось получить все выбранные изображения. Генерация отменена без списания.');
+  }
   if (input.taskId) {
     const allowed = await prisma.task.findFirst({
       where: { id: input.taskId, OR: [
@@ -98,25 +135,24 @@ export async function generateAiImage(input: {
     throw new Error('Размер исходного изображения не поддерживается.');
   }
 
+  const sources: ValidatedImage[] = input.sourceImages ?? (input.uploadedSourceImage
+    ? [input.uploadedSourceImage]
+    : sourceImage ? [{ mimeType: 'image/png', contentBase64: sourceImage.contentBase64 }] : []);
+  if (sources.length > AI_IMAGE_MAX_REFERENCE_FILES) throw new TypeError('Слишком много изображений-референсов.');
   const reservation = await reserveAiCreditsMilliUpTo(
     input.userId, AI_IMAGE_MIN_RESERVATION_MILLI, AI_IMAGE_MAX_RESERVATION_MILLI
   );
   let settled = false;
   try {
-    // The Images API accepts base64 data URLs in JSON images/edits input.
-    // Keep the same metering, proxy, PNG validation and document pipeline as
-    // generations; only the provider endpoint and payload change for edits.
-    const editing = Boolean(sourceImage || input.uploadedSourceImage);
-    const sourceMime = input.uploadedSourceImage?.mimeType ?? 'image/png';
-    const sourceBase64 = input.uploadedSourceImage?.contentBase64 ?? sourceImage?.contentBase64;
-    const imagePayload = editing
-      ? { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png',
-          images: [{ image_url: `data:${sourceMime};base64,${sourceBase64}` }] }
-      : { model: AI_IMAGE_MODEL, prompt, n: 1, quality: AI_IMAGE_QUALITY, size, output_format: 'png' };
-    const response = await openAiFetch(
-      editing ? 'https://api.openai.com/v1/images/edits' : 'https://api.openai.com/v1/images/generations',
+    const { endpoint, payload } = buildImageApiRequest(prompt, size, sources);
+    const editing = sources.length > 0;
+    console.info('[AI image] provider request', {
+      actionId: input.actionId, model: AI_IMAGE_MODEL, quality: AI_IMAGE_QUALITY,
+      editing, referenceCount: sources.length, size
+    });
+    const response = await openAiFetch(endpoint,
       { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` },
-        body: JSON.stringify(imagePayload) },
+        body: JSON.stringify(payload) },
       { requestId: `${input.actionId}:image`, model: AI_IMAGE_MODEL }
     );
     if (!response.ok) throw new Error(`OpenAI не смог ${editing ? 'изменить' : 'создать'} изображение (HTTP ${response.status}).`);
@@ -135,7 +171,7 @@ export async function generateAiImage(input: {
 
     const providerNanoUsd = calculateImageCostNanoUsd(result.usage);
     if (providerNanoUsd === null) {
-      console.warn('[AI image] provider usage missing; using published low-quality image price estimate', {
+      console.warn('[AI image] provider usage missing; using fallback image cost estimate', {
         actionId: input.actionId, model: AI_IMAGE_MODEL
       });
     }
