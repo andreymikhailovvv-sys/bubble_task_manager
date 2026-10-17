@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { Api } from 'teleproto';
 import {
   isTelegramUserReadEnabled,
@@ -154,4 +155,17 @@ test('multiple monitored dialogs on the same account never overlap at the read g
   unblock();
   await first;
   assert.equal(await withTelegramReadSlot(userId, 'monitor', async () => 'another-chat'), 'another-chat');
+});
+
+test('cross-replica Telegram reads use a renewable per-account database lease', () => {
+  const reader = readFileSync(new URL('../src/services/telegram-user-client-read.service.ts', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../prisma/migrations/20261017210000_telegram_user_read_lease/migration.sql', import.meta.url), 'utf8');
+  assert.match(migration, /CREATE TABLE "TelegramUserReadLease"/);
+  assert.match(migration, /PRIMARY KEY \("userId"\)/);
+  assert.match(reader, /prisma\.telegramUserReadLease\.updateMany/);
+  assert.match(reader, /where: \{ userId, expiresAt: \{ lt: new Date\(\) \} \}/);
+  assert.match(reader, /kind === 'monitor'/);
+  assert.match(reader, /refresh\.unref\(\)/);
+  assert.match(reader, /deleteMany\(\{ where: \{ userId, token \} \}\)/);
+  assert.match(reader, /withDistributedTelegramRead\(userId, kind/);
 });
