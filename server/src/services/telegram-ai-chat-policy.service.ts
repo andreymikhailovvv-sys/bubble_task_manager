@@ -65,7 +65,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
   for (const field of ['autoReplyWhen', 'autoReplyHow'] as const) {
     const value = p[field];
     if (value !== undefined && (typeof value !== 'string' || value.length > 2000 ||
-        /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/.test(value))) {
+        /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value))) {
       throw new TelegramUserClientError(400, 'Условия и стиль автоответов должны быть текстом до 2000 символов');
     }
   }
