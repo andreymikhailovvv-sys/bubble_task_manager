@@ -252,8 +252,12 @@ async function processClaim(claimed: Claimed) {
     policy.nextInteractionAt != null && policy.nextInteractionAt <= now;
   const dueSummary = policy.summaryRequested ||
     (policy.summaryIntervalMinutes !== -1 && policy.nextSummaryAt != null && policy.nextSummaryAt <= now);
+  // Piggyback task detection on an already-due reply/suggestion scan.
+  // Waiting for the independent 30-minute task timer makes a direct request
+  // ("поставь мне задачу") appear ignored while the assistant replies normally.
+  // The regular task timer remains as a fallback for OBSERVE-only policies.
   const dueTasks = policy.taskMode !== 'NONE' &&
-    policy.nextTaskAt != null && policy.nextTaskAt <= now;
+    ((policy.nextTaskAt != null && policy.nextTaskAt <= now) || dueInteraction);
 
   const lastInteraction = policy.lastInteractionMessageId ?? policy.lastSeenMessageId ?? 0;
   const lastSummary = policy.lastSummaryMessageId ?? policy.lastSeenMessageId ?? 0;
@@ -393,16 +397,27 @@ async function processClaim(claimed: Claimed) {
         });
       }
     }
+    let taskProposalsPublished = false;
     if (dueSummary) {
-      await publishTelegramAiSummary({
+      taskProposalsPublished = await publishTelegramAiSummary({
         policy: { ...current, taskMode: dueTasks ? current.taskMode : 'NONE' },
         leaseToken: claimed.token, lastSeenMessageId: maxId,
         requestId: callId, summary: result.summary
       });
     } else if (dueTasks) {
-      await publishTelegramAiTaskSuggestions({
+      taskProposalsPublished = await publishTelegramAiTaskSuggestions({
         policy: current, leaseToken: claimed.token,
         lastSeenMessageId: maxId, requestId: callId, summary: result.summary
+      });
+    }
+    if (dueTasks) {
+      // Metadata only. Useful for diagnosing missing proposals without
+      // storing conversation text or even the suggested task title in logs.
+      console.info('[TelegramTaskSuggestion] evaluated', {
+        policyId: policy.id,
+        taskMode: current.taskMode,
+        suggestionCount: result.summary.taskSuggestions.length,
+        published: taskProposalsPublished && result.summary.taskSuggestions.length > 0
       });
     }
   } catch (error) {
