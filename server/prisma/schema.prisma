@@ -669,6 +669,8 @@ model TelegramAiChatPolicy {
   checkIntervalMinutes    Int      @default(30)
   monitorModel            String   @default("gpt-6-luna")
   instructions            String   @default("") @db.Text
+  autoReplyWhen          String   @default("") @db.Text
+  autoReplyHow           String   @default("") @db.Text
   notifyImportant         Boolean  @default(true)
   reviewAttachments       Boolean  @default(true)
   // NULL means no per-chat DAILY cap. Global wallet balance always applies.
@@ -689,6 +691,7 @@ model TelegramAiChatPolicy {
   dailyReservedMilli      Int      @default(0)
   totalSpentMilli         Int      @default(0)
   monitorCalls            TelegramAiMonitorCall[]
+  autoReplyAttempts       TelegramAiAutoReplyAttempt[]
   inboxEvents             TelegramAiInboxEvent[]
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -715,6 +718,21 @@ model TelegramAiMonitorCall {
 
   @@index([state, createdAt])
   @@index([policyId, creditDayKey])
+}
+
+// Claim recorded BEFORE sending so a crash or a retry cannot duplicate an
+// outbound MTProto message. No Telegram text or credentials stored.
+model TelegramAiAutoReplyAttempt {
+  id            String   @id @default(cuid())
+  policyId      String
+  policy        TelegramAiChatPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  messageId     Int
+  status        String   @default("CLAIMED")
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  @@unique([policyId, messageId])
+  @@index([createdAt])
 }
 
 // Durable model-generated inbox messages, separate from browser-managed chat JSON.
