@@ -260,7 +260,7 @@ export async function sendTelegramAiSuggestedReply(userId: string, eventId: stri
   if (!parsed) throw new TelegramUserClientError(400, 'Переписка Telegram недоступна');
   const claim = await prisma.telegramAiInboxEvent.updateMany({
     where: { id: item.id, userId, suggestedReplyStatus: { in: ['PENDING', 'FAILED'] } },
-    data: { suggestedReplyStatus: 'SENDING' }
+    data: { suggestedReplyStatus: 'SENDING', suggestedReplyText: rawText.trim() }
   });
   if (!claim.count) throw new TelegramUserClientError(409, 'Это предложение уже отправляется');
   let started = false;
