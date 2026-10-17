@@ -49,7 +49,7 @@ test('image previews use short-lived signed links while downloads retain existin
   assert.match(styles, /ai-image-generation-sweep/);
   assert.match(styles, /prefers-reduced-motion: reduce/);
   assert.match(wordTests, /download=/);
-  assert.match(web, /imageGenerating=\{aiChatLoading && aiChatProgress === 'generating_image'\}/);
+  assert.match(web, /imageGenerating=\{aiChatLoading && \(aiChatProgress === 'generating_image' \|\| aiChatProgress === 'editing_image'\)\}/);
   assert.match(mini, /aiChatLoading, aiChatProgress, isAiChatOpen/);
   for (const source of [web, mini]) {
     assert.match(source, /AiGeneratedDocumentButton/);
