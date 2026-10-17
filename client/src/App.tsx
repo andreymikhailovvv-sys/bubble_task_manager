@@ -38,6 +38,7 @@ import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskPro
 import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
+import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
@@ -7922,7 +7923,7 @@ ${allContext}`,
                 <div key={`message-${item.message.id}`} className={`quick-ai-chat-message rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user ml-8' : 'quick-ai-chat-message-assistant mr-8'}`}>
                   <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content)}</CollapsibleUserMessage>}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}
-                  {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
+                  {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
                   <div className="mt-1 flex justify-end"><TelegramMessageQuickShare text={item.message.content} compact /></div>
                 </div>
               ))}
