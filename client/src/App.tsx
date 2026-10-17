@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -2795,20 +2795,21 @@ ${allContext}`,
   }, []);
 
   useEffect(() => {
-    persistAiChatProjectsCache(localStorage, 'btm:ai-chat-projects', aiChatProjects);
+    const persistableProjects = stripAiChatProjectDisplayPreviews(aiChatProjects);
+    persistAiChatProjectsCache(localStorage, 'btm:ai-chat-projects', persistableProjects);
     const quickChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
     try {
-      localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(quickChatMessages.slice(-20)));
+      localStorage.setItem(QUICK_AI_CHAT_STORAGE_KEY, JSON.stringify(stripAiChatDisplayPreviews(quickChatMessages).slice(-20)));
     } catch {
       // Full browser storage must not crash the AI chat or its consent cards.
     }
-    const snapshot = JSON.stringify(aiChatProjects);
+    const snapshot = JSON.stringify(persistableProjects);
     if (aiChatProjectsSyncReadyRef.current && aiChatProjectsRemoteSnapshotRef.current !== snapshot) {
       if (aiChatProjectsSaveTimerRef.current !== null) window.clearTimeout(aiChatProjectsSaveTimerRef.current);
       aiChatProjectsSaveTimerRef.current = window.setTimeout(() => {
         aiChatProjectsSaveTimerRef.current = null;
         aiChatProjectsSaveInFlightRef.current = true;
-        void api.saveAiChatProjects(aiChatProjects)
+        void api.saveAiChatProjects(persistableProjects)
           .then(() => { aiChatProjectsRemoteSnapshotRef.current = snapshot; })
           .catch((error) => console.error('[AI chat] sync failed', error))
           .finally(() => { aiChatProjectsSaveInFlightRef.current = false; });
