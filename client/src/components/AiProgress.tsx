@@ -20,7 +20,7 @@ export function AiProgress({ status }: { status: AiChatProgressStatus | TaskAiPr
         <span className="miniapp-ai-progress-dots" aria-hidden="true" />
       </div>
       {(status === 'generating_image' || status === 'editing_image') ? (
-        <div className="ai-image-generating-card" role="img" aria-label="Изображение создаётся">
+        <div className="ai-image-generating-card" role="img" aria-label={status === 'editing_image' ? 'Изображение редактируется' : 'Изображение создаётся'}>
           <div className="ai-image-generating-art" aria-hidden="true">
             <span className="ai-image-generating-orb ai-image-generating-orb-one" />
             <span className="ai-image-generating-orb ai-image-generating-orb-two" />

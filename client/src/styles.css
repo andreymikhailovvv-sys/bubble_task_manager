@@ -9081,3 +9081,31 @@ body[data-theme='light'] .miniapp-shell .miniapp-calendar-reminder-entry {
 body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card p {
   color: #075985;
 }
+
+
+/* Shared AI chat attachments: thumbnails for images, compact branded icons for files. */
+.ai-attachment-tiles { display: flex; flex-wrap: wrap; gap: .5rem; align-items: start; max-width: 100%; padding: .15rem 0 .3rem; }
+.ai-attachment-tile { width: 6rem; min-width: 0; color: var(--text-primary, inherit); }
+.ai-attachment-tile-visual { height: 5rem; width: 6rem; position: relative; border: 1px solid rgba(148,163,184,.27); border-radius: .9rem; overflow: hidden; background: rgba(148,163,184,.13); display: flex; align-items: center; justify-content: center; }
+.ai-attachment-tile-image { height: 100%; width: 100%; object-fit: cover; transition: filter .2s ease; }
+.ai-attachment-tile.is-loading .ai-attachment-tile-image { filter: blur(5px) brightness(.7); transform: scale(1.06); }
+.ai-attachment-tile-file-icon { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .12rem; }
+.ai-attachment-tile-file-icon > span { font-size: .57rem; letter-spacing: .06em; font-weight: 850; }
+.ai-attachment-kind-word .ai-attachment-tile-file-icon { color: #4383ec; }
+.ai-attachment-kind-excel .ai-attachment-tile-file-icon { color: #36a878; }
+.ai-attachment-kind-pdf .ai-attachment-tile-file-icon { color: #ec6464; }
+.ai-attachment-kind-image .ai-attachment-tile-file-icon { color: #b593ff; }
+.ai-attachment-kind-file .ai-attachment-tile-file-icon { color: #94a3b8; }
+.ai-attachment-tile-name { display: block; margin-top: .22rem; padding: 0 .12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .65rem; opacity: .83; }
+.ai-attachment-tile-remove { position: absolute; top: .18rem; right: .18rem; border-radius: 50%; width: 1.25rem; height: 1.25rem; background: rgba(15,23,42,.77); color: #fff; display: grid; place-items: center; z-index: 2; }
+.ai-attachment-tile-remove:hover { background: #e11d48; }
+.ai-attachment-tile-progress { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; background: rgba(15,23,42,.33); color: #fff; z-index: 1; font-size: .63rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ai-attachment-tile-progress svg { width: 2.7rem; height: 2.7rem; position: absolute; transform: rotate(-90deg); fill: none; stroke-width: 3.3; }
+.ai-attachment-ring-track { stroke: rgba(255,255,255,.22); }
+.ai-attachment-ring-value { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .16s ease; }
+.ai-attachment-ring-indeterminate { stroke: #fff; stroke-linecap: round; stroke-dasharray: 32 94; animation: ai-attachment-rotate 1.15s linear infinite; transform-origin: 50% 50%; }
+@keyframes ai-attachment-rotate { to { transform: rotate(360deg); } }
+.ai-attachment-tiles-history .ai-attachment-tile-visual { height: 4.1rem; }
+.ai-attachment-tiles-history .ai-attachment-tile { width: 5.4rem; }
+.ai-attachment-tiles-history .ai-attachment-tile-visual { width: 5.4rem; }
+@media (prefers-reduced-motion: reduce) { .ai-attachment-ring-indeterminate { animation: none; } .ai-attachment-tile-image { transition: none; } }
