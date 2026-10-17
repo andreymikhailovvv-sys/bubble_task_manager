@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
 import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs } from '../src/services/telegram-ai-monitor-worker.service.js';
 import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
+import { nextTelegramAutoReplyAllowedAt } from '../src/services/telegram-ai-auto-reply.service.js';
 
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
 
@@ -213,4 +214,41 @@ test('disabled Telegram task proposals remain disabled during reply scans', () =
     kind: 'AUTO', when: 'Отвечай на просьбы', how: 'Кратко', eligibleMessageIds: [54]
   }, false);
   assert.match(JSON.stringify(result.input[0]), /taskSuggestions всегда \[\]/);
+});
+
+test('auto-reply rate allowance is usable across several chats and reports exact next slot', () => {
+  const now = Date.parse('2026-10-17T21:05:00Z');
+  const at = (ageMs: number, policyId = 'chat-1') => ({
+    policyId, createdAt: new Date(now - ageMs)
+  });
+  // Old cap of 4/10min blocked the 5th reply across *all* chats.
+  assert.equal(nextTelegramAutoReplyAllowedAt([
+    at(10_000), at(25_000), at(45_000, 'chat-2'), at(70_000, 'chat-2')
+  ], 'chat-1', now), now);
+  assert.equal(nextTelegramAutoReplyAllowedAt([at(1_000)], 'chat-2', now), now + 2_001);
+  const chatAtLimit = Array.from({ length: 10 }, (_, i) => at(10_000 + i * 1_000));
+  assert.equal(nextTelegramAutoReplyAllowedAt(chatAtLimit, 'chat-1', now),
+    now - 19_000 + 10 * 60_000 + 1);
+  assert.equal(nextTelegramAutoReplyAllowedAt(chatAtLimit, 'chat-2', now), now);
+  const ownerAtLimit = Array.from({ length: 18 }, (_, i) => at(10_000 + i * 1_000, i % 2 ? 'chat-2' : 'chat-1'));
+  assert.equal(nextTelegramAutoReplyAllowedAt(ownerAtLimit, 'chat-3', now),
+    now - 27_000 + 10 * 60_000 + 1);
+  const dayAtLimit = Array.from({ length: 120 }, (_, i) => at(60 * 60_000 + i * 1_000, i % 2 ? 'chat-2' : 'chat-1'));
+  assert.equal(nextTelegramAutoReplyAllowedAt(dayAtLimit, 'chat-3', now),
+    now - (60 * 60_000 + 119_000) + 24 * 60 * 60_000 + 1);
+});
+
+test('rate-limited reply batches preserve their cursor and do not bill repeated scans', () => {
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  const sender = source('../src/services/telegram-ai-auto-reply.service.ts');
+  assert.match(worker, /interactionDeferred \? \{\} : \{ lastInteractionMessageId: maxId \}/);
+  assert.match(worker, /interactionDeferred && !dueSummary && !dueTasks/);
+  assert.match(worker, /!interactionDeferred && eligibleIds\.length/);
+  assert.match(worker, /telegramAutoReplyNextAllowedAt/);
+  assert.match(worker, /lastInteractionMessageId: lastInteraction/);
+  assert.match(worker, /outcome === 'RATE_LIMITED'/);
+  assert.match(worker, /attemptedIds\.has\(message\.id\)/);
+  assert.match(sender, /reason === 'rate_limit_reached' \? 'RATE_LIMITED'/);
+  assert.match(sender, /status: \{ not: 'FAILED' \}/);
+  assert.match(sender, /MAX_AUTO_REPLIES_PER_DAY = 120/);
 });
