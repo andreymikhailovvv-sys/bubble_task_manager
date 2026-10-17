@@ -361,7 +361,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           placeholder="Например: коротко и вежливо от моего лица, без непроверенных обещаний."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
-                      <SettingSlider title="Частота предложений ответов" description="«Сразу» означает проверку примерно раз в 30 секунд"
+                      <SettingSlider title="Частота предложений ответов" description="«Сразу» означает проверку примерно раз в 15 секунд"
                         index={indexOfValue(CHECK_INTERVALS, draft.interactionIntervalMinutes)}
                         options={CHECK_NAMES} shortLabels={CHECK_SHORT}
                         onChange={i => update('interactionIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
@@ -384,7 +384,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           placeholder="Например: отвечай кратко и дружелюбно от моего лица; если спрашивают о сроках, сообщай, что я уточню их позже. Ничего не обещай без подтверждения."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
-                      <SettingSlider title="Частота автоответов" description="«Сразу» означает проверку примерно раз в 30 секунд"
+                      <SettingSlider title="Частота автоответов" description="«Сразу» означает проверку примерно раз в 15 секунд"
                         index={indexOfValue(CHECK_INTERVALS, draft.autoReplyIntervalMinutes)}
                         options={CHECK_NAMES} shortLabels={CHECK_SHORT}
                         onChange={i => update('autoReplyIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
@@ -394,7 +394,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
                     onChange={i => update('taskMode', TASK_MODES[i] ?? TASK_MODES[0])}/>
-                  <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 30 секунд"
+                  <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
                     index={indexOfValue(SUMMARY_INTERVALS, draft.summaryIntervalMinutes)} options={SUMMARY_NAMES}
                     shortLabels={SUMMARY_SHORT}
                     onChange={i => update('summaryIntervalMinutes', SUMMARY_INTERVALS[i] ?? SUMMARY_INTERVALS[0])}/>
