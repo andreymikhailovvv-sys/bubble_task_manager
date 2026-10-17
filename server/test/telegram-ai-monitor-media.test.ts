@@ -51,8 +51,8 @@ test('media download is only enabled on owner-verified monitoring path, not manu
   const media = source('../src/services/telegram-ai-monitor-media.service.ts');
   assert.match(read, /monitoring && Number\.isSafeInteger\(mediaAfterId\)/);
   assert.match(read, /downloadTelegramMonitorMedia\(client, message/);
-  assert.match(worker, /policy\.summaryRequested \? 0 : lastSeen/);
-  assert.match(worker, /m\\.text\\.trim\\(\\) \\|\\| \\(policy\\.reviewAttachments && m\\.hasMedia\\)/);
+  assert.match(worker, /policy\.summaryRequested \? 0 : cutoff/);
+  assert.match(worker, /current\.reviewAttachments && message\.hasMedia/);
   assert.match(media, /MONITOR_MEDIA_MAX_BYTES/);
   assert.match(media, /MONITOR_MEDIA_MAX_TOTAL_BYTES/);
   assert.doesNotMatch(media, /\.writeFile\(|\.createWriteStream\(|axios\./);
