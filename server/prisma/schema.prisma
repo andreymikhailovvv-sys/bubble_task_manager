@@ -118,6 +118,7 @@ model User {
   aiConversationAttachments AiConversationAttachment[]
   telegramSessions TelegramSession[]
   telegramUserClientConnection TelegramUserClientConnection?
+  telegramUserReadLease TelegramUserReadLease?
   telegramUserClientSendAudits TelegramUserClientSendAudit[]
   telegramQuickSendJobs TelegramQuickSendJob[]
   telegramAiReadRequests TelegramAiReadRequest[]
@@ -589,6 +590,14 @@ model HabitCompletion {
 }
 
 // Independent MTProto user-client credentials. Never reuse TelegramSession (Bot API dialog state).
+// Cross-replica, account-scoped read lease. Contains no Telegram content or credentials.
+model TelegramUserReadLease {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String
+  expiresAt  DateTime
+}
+
 model TelegramUserClientConnection {
   userId            String   @id
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
