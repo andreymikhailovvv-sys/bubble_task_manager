@@ -17,14 +17,23 @@ export async function sendConditionalTelegramAutoReply(input: {
   userId: string; policyId: string; chatId: string;
   messageId: number; text: string; revision: number; leaseToken: string;
 }): Promise<'SENT' | 'SKIPPED'> {
+  const skip = (reason: string): 'SKIPPED' => {
+    // Do not log message or reply bodies, contacts, or authentication data.
+    console.info('[TelegramAutoReply] skipped', {
+      policyId: input.policyId, triggerMessageId: input.messageId, reason
+    });
+    return 'SKIPPED';
+  };
   if (!Number.isSafeInteger(input.messageId) || input.messageId <= 0 ||
       !parseTelegramSendTargetId(input.chatId) ||
       typeof input.text !== 'string' || !input.text.trim() ||
       input.text.length > MAX_REPLY_CHARS || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(input.text)) {
-    return 'SKIPPED';
+    return skip('invalid_reply_or_target');
   }
   const access = await telegramUserChatCapability(input.userId);
-  if (!access.connected || !access.readEnabled || !access.sendEnabled) return 'SKIPPED';
+  if (!access.connected || !access.readEnabled || !access.sendEnabled) {
+    return skip('telegram_send_or_read_permission_unavailable');
+  }
   const active = () => prisma.telegramAiChatPolicy.findFirst({
     where: { id: input.policyId, userId: input.userId, chatId: input.chatId,
       mode: 'AUTO', isEnabled: true, monitorRevision: input.revision,
@@ -32,7 +41,7 @@ export async function sendConditionalTelegramAutoReply(input: {
       autoReplyWhen: { not: '' }, autoReplyHow: { not: '' } }
   });
 
-  if (!await active()) return 'SKIPPED';
+  if (!await active()) return skip('policy_disabled_or_lease_changed');
 
   // A unique (policy, incoming message) slot prevents duplicate replies after
   // restarts, worker overlap, UI polling, or an ambiguous MTProto timeout.
@@ -67,10 +76,13 @@ export async function sendConditionalTelegramAutoReply(input: {
       });
       return attempt.id;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-  } catch {
-    // Unique constraint, conflict and rate cap are terminal for this message.
+  } catch (error) {
     // Never requeue an uncertain external send.
-    return 'SKIPPED';
+    const reason = error instanceof TelegramUserClientError
+      ? error.statusCode === 429 ? 'rate_limit_reached' : 'policy_changed_during_claim'
+      : error && typeof error === 'object' && 'code' in error && error.code === 'P2002'
+        ? 'already_attempted_this_message' : 'database_claim_failed';
+    return skip(reason);
   }
 
   let started = false;
@@ -117,7 +129,7 @@ export async function sendConditionalTelegramAutoReply(input: {
     console.warn('[TelegramAutoReply] delivery ended', {
       policyId: input.policyId, messageId: input.messageId, outcome: started ? 'UNKNOWN' : 'FAILED'
     });
-    return 'SKIPPED';
+    return skip(started ? 'telegram_send_outcome_unknown' : 'telegram_send_preflight_failed');
   } finally {
     if (client) try { await client.disconnect(); } catch { /* best effort */ }
   }

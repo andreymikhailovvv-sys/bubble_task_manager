@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
 import { availableMonitorBudget, monitorDayKey } from '../src/services/telegram-ai-monitor-worker.service.js';
-import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
+import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
 
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
 
@@ -98,6 +98,15 @@ test('AUTO reply proposal requires a valid bounded response and an incoming Tele
   assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: '13', text: 'Текст' })), null);
   assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: '' })), null);
   assert.equal(parseMonitorAutoReply({ output_text: 'не JSON' }), null);
+  // Previously a double-escaped regex interpreted digits/Latin letters as
+  // control characters and silently discarded perfectly valid Telegram replies.
+  for (const text of ['Встреча в 15:30', 'Уточню у @user7', 'Ответ в 2026 году']) {
+    assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text }))?.text, text);
+  }
+  assert.equal(parseMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'bad' + String.fromCharCode(0) + 'text' })), null);
+  assert.equal(classifyMonitorAutoReply(make({ shouldReply: false, messageId: 0, text: '' })), 'model_declined');
+  assert.equal(classifyMonitorAutoReply(make({ shouldReply: true, messageId: 13, text: 'Встреча в 15:30' })), 'proposed');
+  assert.equal(classifyMonitorAutoReply(make({ shouldReply: true, messageId: '13', text: 'Ответ' })), 'invalid_proposal');
 });
 
 test('auto-replies remain off without two explicit per-chat instructions', () => {
@@ -133,4 +142,19 @@ test('Telegram auto-reply sending requires owner, active lease, unique message s
   assert.match(ui, /draft\.mode === 'AUTO'/);
   assert.match(ui, /В каких случаях ассистент отвечает/);
   assert.match(ui, /Что именно должен отвечать ассистент/);
+});
+
+test('auto-reply diagnostics report safe decision and server skip reasons without reply text', () => {
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  const sender = source('../src/services/telegram-ai-auto-reply.service.ts');
+  assert.match(worker, /\[TelegramAutoReply\] incoming batch/);
+  assert.match(worker, /\[TelegramAutoReply\] decision/);
+  assert.match(worker, /result\.autoReplyOutcome/);
+  assert.match(worker, /\[TelegramAutoReply\] result/);
+  for (const reason of [
+    'invalid_reply_or_target', 'telegram_send_or_read_permission_unavailable',
+    'policy_disabled_or_lease_changed', 'rate_limit_reached',
+    'already_attempted_this_message', 'telegram_send_outcome_unknown'
+  ]) assert.ok(sender.includes(reason), reason);
+  assert.doesNotMatch(sender, /console\.(?:info|warn)\([^\n]*input\.text/);
 });
