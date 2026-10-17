@@ -29,7 +29,7 @@ const INTERACTIVE_READ_WAIT_MS = 30_000;
 
 /** Keep MTProto reads serialized without returning spurious 409s to the owner UI. */
 export async function withTelegramReadSlot<T>(
-  userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>
+  userId: string, kind: 'list' | 'history' | 'monitor', work: () => Promise<T>, waitMs = INTERACTIVE_READ_WAIT_MS
 ): Promise<T> {
   const previous = readTails.get(userId);
   if (kind === 'monitor' && previous) {
@@ -48,7 +48,7 @@ export async function withTelegramReadSlot<T>(
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => reject(new TelegramUserClientError(
           503, 'Telegram занят дольше обычного. Повторите действие через несколько секунд'
-        )), INTERACTIVE_READ_WAIT_MS);
+        )), waitMs);
         previous.then(() => { clearTimeout(timer); acquired = true; resolve(); },
           error => { clearTimeout(timer); reject(error); });
       });
