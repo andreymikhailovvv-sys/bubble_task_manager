@@ -242,7 +242,6 @@ export type TelegramAiAssistantInbox = {
 export type TelegramAiSuggestedReply = {
   eventId: string; text: string; messageId: number; status: 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'UNKNOWN'; chatTitle: string;
 };
-};
 export type TelegramMonitorSummary = {
   summary: string;
   decisions: string[];
