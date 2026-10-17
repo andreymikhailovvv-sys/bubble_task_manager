@@ -82,7 +82,8 @@ export function buildMonitorPayload(messages: MonitorMessage[], instructions: st
     model,
     store: false,
     tool_choice: 'none' as const,
-    max_output_tokens: TELEGRAM_MONITOR_OUTPUT_TOKENS,
+    // Extra output capacity only when the owner explicitly enabled auto-replies.
+    max_output_tokens: autoReplyRules ? 1650 : TELEGRAM_MONITOR_OUTPUT_TOKENS,
     text: { format: TEXT_FORMAT },
     input: [
       { role: 'system' as const, content: [
@@ -178,7 +179,7 @@ export async function countMonitorInputTokens(payload: ReturnType<typeof buildMo
     throw new Error('OpenAI monitor token count missing');
   }
   return calculateMaximumRequestCreditsMilli({
-    model: payload.model, inputTokens: result.input_tokens, maxOutputTokens: TELEGRAM_MONITOR_OUTPUT_TOKENS
+    model: payload.model, inputTokens: result.input_tokens, maxOutputTokens: payload.max_output_tokens
   }).totalCreditsMilli;
 }
 
