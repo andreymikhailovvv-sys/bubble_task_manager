@@ -25,6 +25,7 @@ import {
 } from "react";
 import type { ChatAttachmentPayload, Sphere, Task, TaskAttachment } from "../lib/types";
 import { DateTimePickerWithApply } from "./DateTimePickerWithApply";
+import { AiAttachmentTiles } from "./AiAttachmentTiles";
 import { api } from "../lib/api";
 import { LinkifiedText } from "./LinkifiedText";
 import { TaskDescriptionInput } from "./TaskDescriptionInput";
@@ -904,26 +905,10 @@ export function TaskEditor({
                 >
                   <Paperclip size={15} />
                 </button>
-                {aiPendingFiles.map((file) => (
-                  <button
-                    key={`${file.name}:${file.size}`}
-                    type="button"
-                    className="task-attachment-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]"
-                    onClick={() =>
-                      setAiPendingFiles((prev) =>
-                        prev.filter(
-                          (item) =>
-                            `${item.name}:${item.size}` !==
-                            `${file.name}:${file.size}`,
-                        ),
-                      )
-                    }
-                  >
-                    <Paperclip size={11} />
-                    <span className="truncate">{file.name}</span>
-                    <X size={11} />
-                  </button>
-                ))}
+                <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) =>
+                  setAiPendingFiles((prev) => prev.filter((item) => item !== file))
+                } busy={isGeneratingByAi} />
+
               </div>
               <CustomSelect
                 value={aiSphereSelection}
@@ -1050,26 +1035,10 @@ export function TaskEditor({
                 >
                   <Paperclip size={15} />
                 </button>
-                {aiPendingFiles.map((file) => (
-                  <button
-                    key={`${file.name}:${file.size}`}
-                    type="button"
-                    className="task-attachment-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]"
-                    onClick={() =>
-                      setAiPendingFiles((prev) =>
-                        prev.filter(
-                          (item) =>
-                            `${item.name}:${item.size}` !==
-                            `${file.name}:${file.size}`,
-                        ),
-                      )
-                    }
-                  >
-                    <Paperclip size={11} />
-                    <span className="truncate">{file.name}</span>
-                    <X size={11} />
-                  </button>
-                ))}
+                <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) =>
+                  setAiPendingFiles((prev) => prev.filter((item) => item !== file))
+                } busy={isGeneratingByAi} />
+
                 {isSubtask ? subtaskAttachments.map((attachment) => (
                   <div key={attachment.id} className="task-attachment-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]">
                     <a className="inline-flex min-w-0 items-center gap-1" href={api.getTaskAttachmentDownloadUrl(task!.id, attachment.id)} download={attachment.name}><Paperclip size={11} /><span className="truncate">{attachment.name}</span></a>
