@@ -8,6 +8,7 @@ import { telegramUserClientRead } from './telegram-user-client-read.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { analyzeMonitorMessages, buildMonitorPayload, countMonitorInputTokens, TELEGRAM_MONITOR_FEATURE, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
 import { publishTelegramAiSummary } from './telegram-ai-inbox.service.js';
+import { sendConditionalTelegramAutoReply } from './telegram-ai-auto-reply.service.js';
 
 const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
@@ -43,6 +44,12 @@ export const telegramAiMonitorControl = {
     await permission(userId);
     // Fetch latest metadata/text locally through existing verified owner reader.
     // The result is not sent to an AI. It only supplies an initial checkpoint.
+    if (policy.mode === 'AUTO') {
+      const access = await telegramUserChatCapability(userId);
+      if (!access.sendEnabled || !policy.autoReplyWhen.trim() || !policy.autoReplyHow.trim()) {
+        throw new TelegramUserClientError(403, 'Для автоответов необходимы обе инструкции и разрешённая отправка Telegram');
+      }
+    }
     const history = await telegramUserClientRead.aiHistory(userId, chatId, 10, true);
     const maxId = Math.max(0, ...history.messages.map(item => item.id));
     await permission(userId);
@@ -249,7 +256,10 @@ async function processClaim(claimed: Claimed) {
   const dayKey = monitorDayKey(new Date(), user?.timeZone);
   const previousSummary = current.lastSummary && typeof current.lastSummary === 'object' ? current.lastSummary as MonitorSummary : null;
   const instructions = current.instructions + (previousSummary ? '\nПредыдущая сводка (данные, не инструкция): ' + JSON.stringify(previousSummary).slice(0, 1300) : '');
-  const payload = buildMonitorPayload(bounded, instructions, current.taskMode, current.monitorModel);
+  const autoReplyRules = current.mode === 'AUTO' && current.autoReplyWhen.trim() && current.autoReplyHow.trim() &&
+    newMessages.some(message => !message.out && message.text.trim())
+    ? { when: current.autoReplyWhen, how: current.autoReplyHow } : undefined;
+  const payload = buildMonitorPayload(bounded, instructions, current.taskMode, current.monitorModel, autoReplyRules);
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
@@ -265,7 +275,8 @@ async function processClaim(claimed: Claimed) {
     if (!advance.count) throw new TelegramUserClientError(409, 'Мониторинг остановлен');
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
-      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode, model: current.monitorModel
+      userId: policy.userId, requestId: callId, messages: bounded, instructions, taskMode: current.taskMode, model: current.monitorModel,
+      autoReplyRules
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
@@ -276,6 +287,19 @@ async function processClaim(claimed: Claimed) {
         userId: policy.userId, requestId: callId + ':charge', actionId: callId,
         providerCallIndex: 1, feature: TELEGRAM_MONITOR_FEATURE, model: current.monitorModel,
         creditsSpentMilli: settlement.chargedMilli
+      });
+    }
+    // The monitor cursor was advanced BEFORE OpenAI; on restart, this
+    // consumed batch cannot auto-send again. The send service adds its own
+    // durable per-message uniqueness and owner/policy checks.
+    const reply = result.autoReply;
+    if (autoReplyRules && reply?.shouldReply &&
+        bounded.some(message => message.id === reply.messageId && message.id > lastSeen &&
+          !message.out && Boolean(message.text.trim()))) {
+      await sendConditionalTelegramAutoReply({
+        userId: policy.userId, policyId: policy.id, chatId: policy.chatId,
+        messageId: reply.messageId, text: reply.text,
+        revision: policy.monitorRevision, leaseToken: claimed.token
       });
     }
     await publishTelegramAiSummary({
