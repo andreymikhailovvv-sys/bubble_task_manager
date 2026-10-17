@@ -4,13 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.launch
 import ru.planirovych.app.data.model.*
 import ru.planirovych.app.data.repository.WorkspaceRepository
 import ru.planirovych.app.data.repository.userMessage
 import ru.planirovych.app.ui.theme.ThemePreferences
 
-data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false)
+data class HomeState(val loading: Boolean = true, val user: CurrentUser? = null, val spheres: List<Sphere> = emptyList(), val tasks: List<Task> = emptyList(), val habits: List<Habit> = emptyList(), val query: String = "", val error: String? = null, val authError: String? = null, val authBusy: Boolean = false, val taskBusy: Boolean = false, val taskError: String? = null)
 class HomeViewModel(private val repository: WorkspaceRepository, private val themes: ThemePreferences) : ViewModel() {
     private val mutable = MutableStateFlow(HomeState())
     val state = mutable.asStateFlow()
@@ -22,6 +23,42 @@ class HomeViewModel(private val repository: WorkspaceRepository, private val the
             .onSuccess { (user, workspace) -> mutable.value = HomeState(false, user, workspace.spheres, workspace.tasks, workspace.habits) }
             .onFailure { mutable.value = HomeState(loading=false, error=it.userMessage()) }
     }
+    fun clearTaskError() { mutable.update { it.copy(taskError = null) } }
+
+    private fun mutateTask(action: suspend () -> Unit, done: () -> Unit = {}) {
+        if (mutable.value.taskBusy) return
+        viewModelScope.launch {
+            mutable.update { it.copy(taskBusy = true, taskError = null) }
+            try {
+                action()
+                val updated = repository.loadTasks()
+                val profile = runCatching { repository.establishSession() }.getOrNull()
+                mutable.update { it.copy(tasks = updated, user = profile ?: it.user, taskBusy = false) }
+                done()
+            } catch (error: Throwable) {
+                mutable.update { it.copy(taskBusy = false, taskError = error.userMessage()) }
+            }
+        }
+    }
+
+    fun saveTask(id: String, changes: JsonObject, done: () -> Unit) =
+        mutateTask({ repository.updateTask(id, changes) }, done)
+
+    fun createSubtask(parentId: String, title: String, description: String, dueDate: String?, done: () -> Unit) {
+        val parent = mutable.value.tasks.find { it.id == parentId && it.parentTaskId == null }
+            ?: run {
+                mutable.update { it.copy(taskError = "Основная задача не найдена") }
+                return
+            }
+        mutateTask({ repository.createSubtask(parent, title, description, dueDate) }, done)
+    }
+
+    fun changeStatus(id: String, status: TaskStatus, done: () -> Unit = {}) =
+        mutateTask({ repository.updateStatus(id, status) }, done)
+
+    fun deleteTask(id: String, done: () -> Unit) =
+        mutateTask({ repository.deleteTask(id) }, done)
+
     fun search(value: String) { mutable.update { it.copy(query=value) } }
     fun setDark(value: Boolean) { viewModelScope.launch { themes.setDark(value) } }
     fun clearAuthError() { mutable.update { it.copy(authError=null) } }
