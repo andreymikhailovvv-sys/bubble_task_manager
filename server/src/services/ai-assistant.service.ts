@@ -2315,6 +2315,10 @@ export const aiAssistantService = {
                 providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'FILE_ALREADY_CREATED' }) });
                 continue;
               }
+              const editingImage = call.name === 'edit_file' && fileCatalog.items.some((item) =>
+                item.fileId === args.fileId &&
+                (item.mimeType.toLowerCase().startsWith('image/') || /\.(?:png|jpe?g|webp)$/i.test(item.fileName)));
+              if (call.name === 'edit_file') input.onProgress?.(editingImage ? 'editing_image' : 'editing_document');
               try {
                 const result = await executeAiFileTool({
                   userId: input.userId, taskId: input.taskId, catalog: fileCatalog,
@@ -2343,6 +2347,8 @@ export const aiAssistantService = {
                   ok: false, code: 'FILE_OPERATION_FAILED',
                   message: error instanceof Error ? error.message : 'Операция с файлом не выполнена.'
                 }) });
+              } finally {
+                if (call.name === 'edit_file') input.onProgress?.('forming_answer');
               }
               continue;
             }
