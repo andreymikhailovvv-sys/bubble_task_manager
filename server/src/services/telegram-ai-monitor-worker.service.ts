@@ -382,7 +382,7 @@ async function processClaim(claimed: Claimed) {
   // SAME task_action contract as interactive AI, without offering side-effect tools.
   // Owner task IDs never enter an outbound Telegram reply.
   const [sectors, tasks] = taskMode === 'NONE'
-    ? [[], []] as const
+    ? [[], []]
     : await Promise.all([
         prisma.sphere.findMany({
           where: { userId: policy.userId },
