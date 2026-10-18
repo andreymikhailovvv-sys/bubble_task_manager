@@ -191,7 +191,7 @@ test('AUTO reply cycles evaluate owner-approved Telegram task suggestions immedi
   assert.match(worker, /publishTelegramAiTaskSuggestions/);
   assert.match(worker, /\[TelegramTaskSuggestion\] evaluated/);
   assert.match(inbox, /prepareTaskProposal\(\{/);
-  assert.match(inbox, /autoApply: policy\.taskMode === 'AUTO'/);
+  assert.match(inbox, /autoApply: mode === 'AUTO'/);
 
   const result = buildMonitorPayload([
     { id: 53, date: 1792260000, speaker: 'Коллега', out: false, isBot: false,
