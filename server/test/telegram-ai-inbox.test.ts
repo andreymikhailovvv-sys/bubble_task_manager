@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { formatTelegramAiSummary, telegramAiThreadId, TELEGRAM_AI_PROJECT_ID } from '../src/services/telegram-ai-inbox.service.js';
+import { formatTelegramAiSummary, telegramAiThreadId, TELEGRAM_AI_PROJECT_ID, telegramTaskProposalBotText } from '../src/services/telegram-ai-inbox.service.js';
 import { buildMonitorPayload, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 
 const src = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
@@ -98,4 +98,23 @@ test('reply proposals appear only in the authorized Telegram assistant thread an
   assert.match(chip, /<textarea/);
   assert.match(chip, /onClick=\{\(\) => void submit\(\)\}/);
   assert.match(chip, /disabled=\{blocked \|\| !text\.trim\(\)\}/);
+});
+
+test('task proposals trigger unread system notifications and bot proposal cards', () => {
+  const inbox = src('../src/services/telegram-ai-inbox.service.ts');
+  const app = src('../../client/src/App.tsx');
+  assert.match(inbox, /eventKey: 'telegram-ai-task:' \+ eventId/);
+  assert.match(inbox, /telegramService\.notifyTelegramAiTaskProposal/);
+  assert.match(inbox, /await prepareTelegramProposal/);
+  assert.match(app, /telegram-ai-tasks:/);
+  assert.match(app, /unreadSystemNotificationCount > 0/);
+
+  const text = telegramTaskProposalBotText('Чат <команда>', [{
+    title: 'Встреча с коллегой', type: 'create_event',
+    dueDate: '2026-10-19T12:00:00.000Z', details: ['Сектор: Работа']
+  }]);
+  assert.match(text, /Чат &lt;команда&gt;/);
+  assert.match(text, /Встреча с коллегой/);
+  assert.match(text, /Сектор: Работа/);
+  assert.match(text, /19 октября 2026/);
 });
