@@ -33,15 +33,14 @@ test('Saved Messages leads the list without sticky scrolling', () => {
   assert.doesNotMatch(rule, /position:\s*sticky|top:\s*0/);
 });
 
-test('web and Mini App use the same circular Telegram action component and dimensions', () => {
+test('web and Mini App share the neutral forward arrow and integration picker', () => {
   assert.match(web, /TelegramMessageQuickShare text=\{.*?\} compact/);
   assert.match(mini, /TelegramMessageQuickShare text=\{.*?\} compact/);
-  assert.match(share, /className="telegram-quick-share__trigger"/);
-  assert.match(share, /data-telegram-share-trigger="true"/);
-  assert.match(shareCss, /button\.telegram-quick-share__trigger\s*\{/);
-  assert.match(shareCss, /border:\s*1px solid/);
-  assert.match(shareCss, /border-radius:\s*9999px/);
-  assert.match(shareCss, /width:\s*26px/);
-  assert.match(shareCss, /height:\s*26px/);
-  assert.match(shareCss, /body\[data-theme='dark'\] button\.telegram-quick-share__trigger/);
+  assert.match(share, /<CornerUpRight size=\{16\}/);
+  assert.match(share, /data-message-forward-trigger="true"/);
+  assert.match(share, /role="menu"/);
+  assert.match(share, /role="menuitem"/);
+  assert.match(share, /setMenuOpen\(false\); void show\(\)/);
+  assert.match(shareCss, /telegram-quick-share__platform-menu/);
+  assert.doesNotMatch(share, /data-telegram-share-trigger="true"/);
 });
