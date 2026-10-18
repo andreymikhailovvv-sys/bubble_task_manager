@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
 import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs } from '../src/services/telegram-ai-monitor-worker.service.js';
-import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply } from '../src/services/telegram-ai-monitor-summary.service.js';
+import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 import { nextTelegramAutoReplyAllowedAt } from '../src/services/telegram-ai-auto-reply.service.js';
 
 const source = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8');
@@ -43,7 +43,8 @@ test('structured summary keeps only short, bounded results', () => {
     important: true
   }) });
   assert.equal(parsed.important, true);
-  assert.deepEqual(parsed.taskSuggestions, ['Проверить готовность']);
+  assert.equal(parsed.taskSuggestions[0]?.operation, 'create_task');
+  assert.equal(parsed.taskSuggestions[0]?.title, 'Проверить готовность');
   assert.throws(() => parseMonitorSummary({ output_text: '{"summary":"a","important":true}' }));
 });
 
@@ -190,7 +191,7 @@ test('AUTO reply cycles evaluate owner-approved Telegram task suggestions immedi
   assert.match(worker, /publishTelegramAiTaskSuggestions/);
   assert.match(worker, /\[TelegramTaskSuggestion\] evaluated/);
   assert.match(inbox, /prepareTaskProposal\(\{/);
-  assert.match(inbox, /autoApply: policy\.taskMode === 'AUTO'/);
+  assert.match(inbox, /autoApply: mode === 'AUTO'/);
 
   const result = buildMonitorPayload([
     { id: 53, date: 1792260000, speaker: 'Коллега', out: false, isBot: false,
@@ -199,9 +200,9 @@ test('AUTO reply cycles evaluate owner-approved Telegram task suggestions immedi
     kind: 'AUTO', when: 'Отвечай коллегам на просьбы', how: 'Кратко', eligibleMessageIds: [53]
   }, false);
   const instructions = JSON.stringify(result.input[0]);
-  assert.match(instructions, /ПРЕДЛОЖИТЬ задачу владельцу/);
-  assert.match(instructions, /Планировыче для подтверждения/);
-  assert.match(instructions, /НЕ утверждай, что задача уже создана/);
+  assert.match(instructions, /ОБЫЧНОМ чипе изменений для подтверждения/);
+  assert.match(instructions, /create_event/);
+  assert.match(instructions, /dueDate/);
   assert.doesNotMatch(instructions, /taskSuggestions всегда \[\]/);
   assert.equal(result.tool_choice, 'none');
 });
@@ -251,4 +252,57 @@ test('rate-limited reply batches preserve their cursor and do not bill repeated 
   assert.match(sender, /reason === 'rate_limit_reached' \? 'RATE_LIMITED'/);
   assert.match(sender, /status: \{ not: 'FAILED' \}/);
   assert.match(sender, /MAX_AUTO_REPLIES_PER_DAY = 120/);
+});
+
+test('Telegram monitor builds the same structured planner action contract as interactive AI', () => {
+  const action = normalizeMonitorTaskAction({
+    operation: 'create_event', itemId: null, parentTaskId: null,
+    title: 'Обсудить презентацию', description: 'С коллегой',
+    dueDate: '2026-10-19T15:00:00+03:00',
+    sphereId: 'owner-sector-id', location: 'Офис',
+    notifyBeforeMinutes: 30, importance: 4, urgency: 3
+  });
+  assert.equal(action?.operation, 'create_event');
+  assert.equal(action?.dueDate, '2026-10-19T12:00:00.000Z');
+  assert.equal(action?.sphereId, 'owner-sector-id');
+  assert.equal(action?.notifyBeforeMinutes, 30);
+  assert.equal(action?.location, 'Офис');
+  assert.equal(action?.description, 'С коллегой');
+
+  const reminder = normalizeMonitorTaskAction({
+    operation: 'create_reminder', title: 'Позвонить', dueDate: null
+  });
+  assert.equal(reminder, null, 'time is mandatory for reminders');
+  assert.equal(normalizeMonitorTaskAction({ operation: 'delete', itemId: null }), null);
+  assert.equal(normalizeMonitorTaskAction('Старое предложение')?.title, 'Старое предложение');
+
+  const payload = buildMonitorPayload([{
+    id: 101, date: 1792382400, speaker: 'Коллега', text: 'Встреча завтра в 15:00',
+    out: false, hasMedia: false, truncated: false
+  }], '', 'SUGGEST', 'gpt-6-luna', undefined, false, {
+    timeZone: 'Europe/Moscow',
+    sectors: [{ id: 'sector-1', name: 'Работа' }],
+    tasks: [{ id: 'task-1', title: 'Проект А', taskType: 'TASK', dueDate: null }]
+  });
+  const schema = payload.text.format.schema.properties.taskSuggestions;
+  assert.equal(schema.items.properties.operation.enum.includes('create_event'), true);
+  assert.equal(schema.items.properties.operation.enum.includes('set_notification'), true);
+  assert.equal(schema.items.properties.operation.enum.includes('change_sphere'), true);
+  assert.match(JSON.stringify(payload.input[0]), /Europe\/Moscow/);
+  assert.match(JSON.stringify(payload.input[0]), /sector-1/);
+  assert.match(JSON.stringify(payload.input[0]), /task-1/);
+});
+
+test('Telegram proposals use normal planner action executor and retain old legacy chips', () => {
+  const inbox = source('../src/services/telegram-ai-inbox.service.ts');
+  const proposal = source('../src/services/ai-task-proposal.service.ts');
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  assert.match(inbox, /telegramProposalActions/);
+  assert.match(inbox, /type: 'telegram_suggestion'/);
+  assert.match(inbox, /autoApply: mode === 'AUTO'/);
+  assert.match(proposal, /row.source === 'telegram_assistant' && actions.every\(a => 'operation' in a\)/);
+  assert.match(proposal, /plannerToolsService.action/);
+  assert.match(proposal, /captureProposalAfter/);
+  assert.match(worker, /prisma.sphere.findMany/);
+  assert.match(worker, /prisma.task.findMany/);
 });

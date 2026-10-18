@@ -184,6 +184,9 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
             <span className="block break-words font-semibold">{item.title}</span>
             {item.parentTitle ? <span className="ai-task-proposal__muted block text-xs">В задаче «{item.parentTitle}»</span> : null}
             {humanDescription(item) ? <div className="ai-task-proposal__muted mt-1 break-words text-xs">{humanDescription(item)}</div> : null}
+            {item.details?.length ? <div className="ai-task-proposal__muted mt-1 space-y-0.5 break-words text-xs">
+              {item.details.map((detail, j) => <div key={j}>{detail}</div>)}
+            </div> : null}
           </div>
         ))}
         {proposal.operations.length > 4 && (

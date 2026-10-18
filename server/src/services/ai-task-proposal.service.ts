@@ -12,7 +12,7 @@ export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'tel
 export type TaskProposalAction = Record<string, unknown>;
 export type TaskProposalView = {
   id: string; status: string; source: string; autoApplied: boolean;
-  operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string }>;
+  operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[] }>;
   result: unknown; error: string | null;
 };
 
@@ -48,14 +48,16 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
     select: { id: true, title: true, description: true, dueDate: true, status: true, updatedAt: true, parentTaskId: true }
   }) : [];
   const byId = new Map(tasks.map(task => [task.id, task]));
+  const sphereNames = new Map<string, string>();
   // All existing references must remain reachable by the consenting actor.
   for (const action of actions) {
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');
     }
     if (action.sphereId && typeof action.sphereId === 'string') {
-      const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId }, select: { id: true } });
+      const sphere = await prisma.sphere.findFirst({ where: { id: action.sphereId, userId }, select: { id: true, name: true } });
       if (!sphere) throw new Error('Недоступный сектор.');
+      sphereNames.set(sphere.id, sphere.name);
     }
   }
   return {
@@ -68,7 +70,19 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
         before: target ? [target.title, target.dueDate?.toISOString(), target.status].filter(Boolean).join(' · ') : undefined,
         after: afterValue(action) || (['complete', 'complete_subtask', 'complete_task'].includes(label(action)) ? 'Выполнено' : undefined),
         dueDate: typeof action.dueDate === 'string' ? action.dueDate : null,
-        parentTitle: action.parentTaskId && target ? target.title : undefined
+        parentTitle: action.parentTaskId && target ? target.title : undefined,
+        details: isCreate(action) ? [
+          typeof action.description === 'string' && action.description.trim()
+            ? 'Описание: ' + action.description.trim().slice(0, 180) : null,
+          typeof action.sphereId === 'string' && sphereNames.has(action.sphereId)
+            ? 'Сектор: ' + sphereNames.get(action.sphereId) : null,
+          typeof action.notifyBeforeMinutes === 'number'
+            ? 'Уведомление: ' + (action.notifyBeforeMinutes === 0 ? 'в момент события' : 'за ' + action.notifyBeforeMinutes + ' мин.') : null,
+          typeof action.location === 'string' && action.location.trim()
+            ? 'Место: ' + action.location.trim().slice(0, 120) : null,
+          typeof action.importance === 'number' ? 'Важность: ' + action.importance + '/5' : null,
+          typeof action.urgency === 'number' ? 'Срочность: ' + action.urgency + '/5' : null
+        ].filter((v): v is string => v !== null) : undefined
       };
     })
   };
@@ -80,8 +94,12 @@ export async function prepareTaskProposal(input: {
   userTimeZone?: string; autoApply?: boolean;
 }) {
   if (!input.actions.length || input.actions.length > 100) throw new Error('Некорректное число изменений.');
-  const { snapshots, display } = input.source === 'telegram_assistant'
-    ? { snapshots: [], display: input.actions.map(a => ({ type: 'create_task', title: String(a.title ?? '').slice(0, 180) })) }
+  const legacyTelegram = input.source === 'telegram_assistant' &&
+    input.actions.every(a => label(a) === 'telegram_suggestion');
+  const { snapshots, display } = legacyTelegram
+    ? { snapshots: [], display: input.actions.map(a => ({
+        type: 'create_task', title: String(a.title ?? '').slice(0, 180)
+      })) }
     : await ownerSnapshot(input.userId, input.actions);
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: input.userId }, select: { aiTaskAutoApply: true }
@@ -123,7 +141,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
   const actions = row.operations as TaskProposalAction[];
   try {
     const snapshots = Array.isArray(row.snapshots) ? row.snapshots as Array<{ id: string; updatedAt: string }> : [];
-    if (row.source !== 'telegram_assistant') {
+    if (row.source !== 'telegram_assistant' || actions.some(a => 'operation' in a)) {
       // Recheck access AND optimistic version before writing anything.
       for (const snapshot of snapshots) {
         const task = await prisma.task.findFirst({
@@ -141,7 +159,12 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     const before = await captureProposalBefore(userId, actions);
     const reports: string[] = [];
     const createdIds: string[] = [];
-    if ((row.source === 'planner' || row.source === 'telegram_bot')) {
+    if (row.source === 'planner' || row.source === 'telegram_bot' ||
+        (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
+      if (row.source === 'telegram_assistant' && row.autoApplied &&
+          actions.some(a => !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(String(a.operation)))) {
+        throw new Error('Автоматический Telegram-ассистент не может изменять существующие задачи.');
+      }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
         const result = await plannerToolsService.action(

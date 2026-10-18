@@ -345,7 +345,7 @@ export type TelegramMonitorSummary = {
   obligations: string[];
   openQuestions: string[];
   risks: string[];
-  taskSuggestions: string[];
+  taskSuggestions: Array<string | { operation: string; title: string | null; dueDate?: string | null }>;
   important: boolean;
 };
 export type TelegramAiChatPolicy = TelegramAiChatSettings & {
