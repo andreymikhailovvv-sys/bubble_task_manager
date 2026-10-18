@@ -359,3 +359,14 @@ body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-s
   opacity: 1;
   background: rgba(128,128,128,.1);
 }
+
+body[data-theme='light'] .telegram-quick-share__platform-menu {
+  background: #ffffff;
+  color: #17253d;
+  border-color: #ced9e7;
+}
+body[data-theme='dark'] .telegram-quick-share__platform-menu {
+  background: #111b2e;
+  color: #f1f5f9;
+  border-color: #34455f;
+}
