@@ -371,7 +371,7 @@ export function telegramTaskProposalBotText(chatTitle: string, operations: Array
       lines.push(escapeHtml(detail.slice(0, 160)));
     }
   }
-  return lines.join('\\n').slice(0, 3800);
+  return lines.join('\n').slice(0, 3800);
 }
 
 let delivering = false;
