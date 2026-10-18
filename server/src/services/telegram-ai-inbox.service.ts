@@ -62,13 +62,30 @@ async function prepareTelegramProposal(userId: string, eventId: string, mode: st
   const actions = telegramProposalActions(raw, eventId, mode);
   if (!actions.length) return;
   const refs = actions.filter(a => typeof a.operation === 'string') as PlannerActionInput[];
-  await prepareTaskProposal({
+  const proposal = await prepareTaskProposal({
     userId, source: 'telegram_assistant', requestId: eventId,
     actions,
     resolvedItemIds: refs.flatMap(a => [a.itemId, a.parentTaskId].filter((id): id is string => !!id)),
     resolvedSphereIds: refs.flatMap(a => a.sphereId ? [a.sphereId] : []),
     autoApply: mode === 'AUTO'
   });
+  // Dedicated notification, including task-only cycles with summaries off.
+  const event = await prisma.telegramAiInboxEvent.findFirst({
+    where: { id: eventId, userId }, select: { policyId: true, policy: { select: { chatTitle: true } } }
+  });
+  if (event) {
+    await prisma.systemNotification.upsert({
+      where: { eventKey: 'telegram-ai-task:' + eventId },
+      create: {
+        userId, eventKey: 'telegram-ai-task:' + eventId,
+        content: '📌 Telegram-ассистент · ' + clip(event.policy.chatTitle, 60) +
+          ': ' + (proposal.status === 'APPLIED' ? 'добавлены задачи' : 'предложены изменения задач') +
+          ' (' + actions.length + '). ' +
+          actions.slice(0, 2).map(action => clip(String(action.title ?? ''), 70)).join('; ')
+      },
+      update: {}
+    });
+  }
 }
 
 export async function telegramAiInboxFeed(userId: string) {
@@ -236,8 +253,8 @@ export async function publishTelegramAiTaskSuggestions(input: {
       create: {
         id: eventId, userId: policy.userId, policyId: policy.id,
         messageId: input.lastSeenMessageId, taskModeAtPublish: policy.taskMode,
-        botStatus: 'SKIPPED',
-        content: '📌 Найдены новые возможные задачи · ' + clip(policy.chatTitle, 90),
+        botStatus: 'PENDING',
+        content: '📌 Telegram-ассистент предлагает задачи · ' + clip(policy.chatTitle, 90),
         summary: { taskSuggestions: summary.taskSuggestions },
         model: policy.monitorModel
       },
@@ -331,6 +348,32 @@ export async function sendTelegramAiSuggestedReply(userId: string, eventId: stri
 }
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Bot representation of the same durable chip; never parse model text as markup. */
+export function telegramTaskProposalBotText(chatTitle: string, operations: Array<{
+  title: string; type: string; dueDate?: string | null; details?: string[];
+}>, timeZone = 'Europe/Moscow'): string {
+  const kind: Record<string, string> = {
+    create_task: 'Задача', create_event: 'Событие', create_reminder: 'Напоминание',
+    create_subtask: 'Подзадача'
+  };
+  const lines = ['📌 <b>Telegram-ассистент предлагает изменения</b>',
+    'Чат: <b>' + escapeHtml(chatTitle.slice(0, 90)) + '</b>'];
+  for (const action of operations.slice(0, 4)) {
+    const date = action.dueDate ? new Date(action.dueDate) : null;
+    const deadline = date && Number.isFinite(date.getTime())
+      ? date.toLocaleString('ru-RU', { timeZone, day: 'numeric', month: 'long',
+          year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+    lines.push('', '• <b>' + escapeHtml(action.title.slice(0, 180)) + '</b>',
+      kind[action.type] ?? 'Изменение задачи');
+    if (deadline) lines.push('⏰ ' + escapeHtml(deadline));
+    for (const detail of (action.details ?? []).slice(0, 3)) {
+      lines.push(escapeHtml(detail.slice(0, 160)));
+    }
+  }
+  return lines.join('\\n').slice(0, 3800);
+}
+
 let delivering = false;
 
 /**
@@ -349,9 +392,22 @@ export async function deliverTelegramAiBotNotifications() {
     for (let i = 0; i < 5; i++) {
       const candidate = await prisma.telegramAiInboxEvent.findFirst({
         where: { botStatus: 'PENDING' }, orderBy: { createdAt: 'asc' },
-        select: { id: true, userId: true, content: true }
+        select: { id: true, userId: true, content: true,
+          summary: true, policyId: true, policy: { select: { chatTitle: true } } }
       });
       if (!candidate) break;
+      const hasSuggestions = Array.isArray((candidate.summary as { taskSuggestions?: unknown } | null)?.taskSuggestions) &&
+        ((candidate.summary as { taskSuggestions: unknown[] }).taskSuggestions).length > 0;
+      const proposal = hasSuggestions
+        ? await prisma.aiTaskProposal.findUnique({
+            where: { userId_requestId: { userId: candidate.userId, requestId: candidate.id } }
+          }) : null;
+      // Proposal creation happens AFTER the inbox event transaction. Wait for
+      // the durable chip before sending its buttons, not a premature plain text.
+      if (hasSuggestions && !proposal && candidate.id.startsWith('telegram-ai-') &&
+          Date.now() - (await prisma.telegramAiInboxEvent.findUnique({
+            where: { id: candidate.id }, select: { createdAt: true }
+          }))!.createdAt.getTime() < 300_000) break;
       const claimed = await prisma.telegramAiInboxEvent.updateMany({
         where: { id: candidate.id, botStatus: 'PENDING' },
         data: { botStatus: 'SENDING', botClaimedAt: new Date() }
@@ -367,10 +423,24 @@ export async function deliverTelegramAiBotNotifications() {
           });
           continue;
         }
-        // Bot DM to the linked account, never send into the monitored chat.
-        await telegramService.notifyDailyAiCheckup({
-          userId: candidate.userId, text: escapeHtml(candidate.content.slice(0, 2600))
-        });
+        // Bot DM to linked owner only, never to the monitored third-party chat.
+        if (proposal && candidate.policyId) {
+          const view = proposalView(proposal);
+          const ownerTimeZone = await prisma.user.findUnique({
+            where: { id: candidate.userId }, select: { timeZone: true }
+          });
+          const sent = await telegramService.notifyTelegramAiTaskProposal({
+            userId: candidate.userId, policyId: candidate.policyId, proposalId: proposal.id,
+            pending: view.status === 'PENDING',
+            text: telegramTaskProposalBotText(candidate.policy.chatTitle, view.operations,
+              ownerTimeZone?.timeZone ?? 'Europe/Moscow')
+          });
+          if (!sent) throw new Error('Telegram Bot API rejected task proposal message');
+        } else {
+          await telegramService.notifyDailyAiCheckup({
+            userId: candidate.userId, text: escapeHtml(candidate.content.slice(0, 2600))
+          });
+        }
         await prisma.telegramAiInboxEvent.update({
           where: { id: candidate.id },
           data: { botStatus: 'SENT', botDeliveredAt: new Date() }
