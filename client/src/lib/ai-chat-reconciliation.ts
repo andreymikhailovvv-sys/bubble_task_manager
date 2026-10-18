@@ -35,6 +35,42 @@ export function reconcileActiveAiChatMessages<T extends IdentifiedChatMessage>(
   return remote;
 }
 
+/**
+ * Historical project snapshots could copy one proposal chip into unrelated
+ * conversations. A proposal belongs to a single chat, not every chat.
+ * Keep its first occurrence (quick chat comes first in normalized projects)
+ * and remove only cross-chat repeats. Preserve independently authored text.
+ */
+export function isolateTaskProposalChips<
+  TMessage extends { content: string; taskProposal?: { id: string } | null },
+  TChat extends { id: string; messages: TMessage[] },
+  TProject extends { chats: TChat[] }
+>(projects: TProject[]): TProject[] {
+  const owner = new Map<string, { chatId: string; content: string }>();
+  let changed = false;
+  const next = projects.map(project => ({
+    ...project,
+    chats: project.chats.map(chat => ({
+      ...chat,
+      messages: chat.messages.flatMap(message => {
+        const proposalId = message.taskProposal?.id;
+        if (!proposalId) return [message];
+        const seen = owner.get(proposalId);
+        if (!seen) {
+          owner.set(proposalId, { chatId: chat.id, content: message.content });
+          return [message];
+        }
+        if (seen.chatId === chat.id) return [message];
+        changed = true;
+        if (seen.content === message.content) return [];
+        const { taskProposal: _duplicate, ...rest } = message;
+        return [rest as TMessage];
+      })
+    }))
+  }));
+  return changed ? next : projects;
+}
+
 export type AiChatProjectOutline = {
   id: string; title: string; color: string; icon: string;
   chats: Array<{ id: string; title: string }>;
