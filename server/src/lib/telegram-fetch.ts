@@ -1,9 +1,11 @@
-import { fetch, ProxyAgent } from 'undici';
+import tls from 'node:tls';
+import { fetch, ProxyAgent, Agent } from 'undici';
+import { connectTelegramSocks5, parseTelegramSocks5Proxy } from './telegram-socks5.js';
 
 type TelegramFetchInput = Parameters<typeof fetch>[0];
 type TelegramFetchInit = Parameters<typeof fetch>[1];
 
-let proxyAgent: ProxyAgent | undefined;
+let proxyAgent: ProxyAgent | Agent | undefined;
 let initialized = false;
 
 function initializeProxy(): void {
@@ -20,7 +22,7 @@ function initializeProxy(): void {
   try {
     parsedUrl = new URL(proxyUrl);
     if (
-      !['http:', 'https:'].includes(parsedUrl.protocol) ||
+      !['http:', 'https:', 'socks5:'].includes(parsedUrl.protocol) ||
       !parsedUrl.hostname ||
       parsedUrl.username ||
       parsedUrl.password ||
@@ -37,14 +39,65 @@ function initializeProxy(): void {
   const username = process.env.TELEGRAM_PROXY_USERNAME;
   const password = process.env.TELEGRAM_PROXY_PASSWORD;
   const authenticated = Boolean(username && password);
-  const token = authenticated
-    ? `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`
-    : undefined;
 
-  proxyAgent = new ProxyAgent({ uri: parsedUrl.origin, token });
+  if (parsedUrl.protocol === 'socks5:') {
+    let config: ReturnType<typeof parseTelegramSocks5Proxy>;
+    try {
+      config = parseTelegramSocks5Proxy(parsedUrl, username, password);
+    } catch {
+      throw new Error('TELEGRAM_PROXY_URL SOCKS5 configuration is invalid');
+    }
+    // The existing undici version has no SOCKS5 dispatcher. Use a TLS-verified
+    // per-origin Agent connector rather than silently sending bot tokens in cleartext.
+    proxyAgent = new Agent({
+      connect(options, callback) {
+        if (options.protocol !== 'https:') {
+          callback(new Error('Telegram SOCKS5 requires HTTPS target'), null);
+          return;
+        }
+        let finished = false;
+        const finish = (error: Error | null, socket: tls.TLSSocket | null) => {
+          if (finished) return;
+          finished = true;
+          callback(error, socket);
+        };
+        void connectTelegramSocks5(config, options.hostname, Number(options.port || 443))
+          .then((tunnel) => {
+            const secure = tls.connect({
+              socket: tunnel,
+              servername: options.servername || options.hostname,
+              rejectUnauthorized: true
+            });
+            const timer = setTimeout(() => secure.destroy(new Error('Telegram SOCKS5 TLS timeout')), 10_000);
+            const onError = (error: Error) => {
+              clearTimeout(timer);
+              secure.destroy();
+              finish(error, null);
+            };
+            secure.once('error', onError);
+            secure.once('secureConnect', () => {
+              clearTimeout(timer);
+              secure.off('error', onError);
+              finish(null, secure);
+            });
+            tunnel.resume();
+          })
+          .catch((error: unknown) => {
+            finish(error instanceof Error ? error : new Error('Telegram SOCKS5 connection failed'), null);
+          });
+      }
+    });
+  } else {
+    const token = authenticated
+      ? `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`
+      : undefined;
+    proxyAgent = new ProxyAgent({ uri: parsedUrl.origin, token });
+  }
+
   console.info('[Telegram] proxy enabled', {
+    protocol: parsedUrl.protocol.slice(0, -1),
     host: parsedUrl.hostname,
-    port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? '443' : '80'),
+    port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? '443' : parsedUrl.protocol === 'socks5:' ? '1080' : '80'),
     authenticated
   });
   initialized = true;
