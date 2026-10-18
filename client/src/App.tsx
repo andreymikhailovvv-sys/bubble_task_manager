@@ -2716,8 +2716,13 @@ ${allContext}`,
 
   const openSystemNotification = (notification: SystemNotification) => {
     const eventKey = notification.eventKey ?? '';
-    if (eventKey.startsWith('telegram-ai-summary:')) {
-      const remainder = eventKey.slice('telegram-ai-summary:'.length);
+    const telegramKey = eventKey.startsWith('telegram-ai-task:')
+      ? eventKey.slice('telegram-ai-task:'.length)
+      : eventKey;
+    const telegramEventPrefix = ['telegram-ai-summary:', 'telegram-ai-tasks:']
+      .find(prefix => telegramKey.startsWith(prefix));
+    if (telegramEventPrefix) {
+      const remainder = telegramKey.slice(telegramEventPrefix.length);
       const separator = remainder.lastIndexOf(':');
       if (separator > 0) {
         const policyId = remainder.slice(0, separator);
