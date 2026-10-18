@@ -309,3 +309,53 @@ body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-s
   opacity: 1 !important;
   pointer-events: none !important;
 }
+
+/* A neutral forwarding affordance, shared across web and Telegram Mini App. */
+.telegram-quick-share__menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.telegram-quick-share__platform-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  min-width: 182px;
+  z-index: 80;
+  padding: 6px;
+  background: var(--card-bg, var(--surface, #202532));
+  color: var(--text-primary, inherit);
+  border: 1px solid var(--border-color, rgba(144, 150, 165, .3));
+  border-radius: 13px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.19);
+}
+.telegram-quick-share__menu-caption {
+  padding: 5px 9px 7px;
+  font-size: 11px;
+  opacity: .58;
+}
+.telegram-quick-share__platform-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px;
+  border-radius: 9px;
+  text-align: left;
+  font-size: 13px;
+}
+.telegram-quick-share__platform-item span { flex: 1; }
+.telegram-quick-share__platform-item:hover,
+.telegram-quick-share__platform-item:focus-visible {
+  background: rgba(128,128,128,.12);
+}
+.telegram-quick-share__trigger[data-message-forward-trigger] {
+  color: var(--text-muted, #9299a6);
+  background: transparent;
+  opacity: .66;
+  border-radius: 8px;
+}
+.telegram-quick-share__trigger[data-message-forward-trigger]:hover,
+.telegram-quick-share__trigger[data-message-forward-trigger][aria-expanded="true"] {
+  opacity: 1;
+  background: rgba(128,128,128,.1);
+}
