@@ -396,6 +396,7 @@ async function processClaim(claimed: Claimed) {
       ]);
   const plannerContext = taskMode === 'NONE' ? undefined : {
     timeZone: user?.timeZone || 'Europe/Moscow',
+    taskCreationWhen: current.taskCreationWhen,
     sectors,
     tasks: tasks.map(item => ({
       id: item.id, title: item.title.slice(0, 100), taskType: item.taskType,
