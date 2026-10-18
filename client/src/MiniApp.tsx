@@ -863,9 +863,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const taskId = params.get('taskId')?.trim() || null;
     const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
     const openQuickAi = ['1', 'true', 'yes'].includes((params.get('openQuickAi') ?? '').toLowerCase());
+    const openTelegramAiChat = params.get('openTelegramAiChat')?.trim() || null;
     const commentTaskId = params.get('commentTaskId')?.trim() || null;
     const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
-    return { taskId, openAi, openQuickAi, commentTaskId, chatRecipientUserId };
+    return { taskId, openAi, openQuickAi, openTelegramAiChat, commentTaskId, chatRecipientUserId };
   }, []);
 
   const getTaskAiRecipientId = (task: Task) => {
@@ -1644,19 +1645,31 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (launchParams.commentTaskId) setPendingLaunchCommentTaskId(launchParams.commentTaskId);
   }, [launchParams, loading, openedTaskId, tasks]);
 
-  // Telegram inline Web App button deep link. Open only once after the
-  // account and server-backed chat projects have finished loading.
+  // Telegram Bot deep links to the EXACT monitored conversation, not quick AI.
+  const openedTelegramLinkRef = useRef(false);
   useEffect(() => {
-    if (!launchParams.openQuickAi || loading || !currentUser?.id || !aiChatProjectsSyncReadyRef.current) return;
-    const quickProject = aiChatProjects.find(project =>
-      project.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
-    if (!quickProject) return;
-    setActiveAiChatProjectId(quickProject.id);
-    setActiveAiChatId(QUICK_AI_CHAT_ID);
+    if (openedTelegramLinkRef.current || loading || !currentUser?.id ||
+        !aiChatProjectsSyncReadyRef.current) return;
+    const policyId = launchParams.openTelegramAiChat;
+    if (policyId) {
+      const chatId = 'telegram-ai-assistant:' + policyId;
+      const project = aiChatProjects.find(p => p.id === 'telegram-ai-assistant-project' &&
+        p.chats.some(chat => chat.id === chatId));
+      if (!project) return;
+      openedTelegramLinkRef.current = true;
+      setActiveAiChatProjectId(project.id);
+      setActiveAiChatId(chatId);
+    } else if (launchParams.openQuickAi) {
+      const project = aiChatProjects.find(p => p.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
+      if (!project) return;
+      openedTelegramLinkRef.current = true;
+      setActiveAiChatProjectId(project.id);
+      setActiveAiChatId(QUICK_AI_CHAT_ID);
+    } else return;
     setIsQuickCreateOpen(false);
     setIsAiChatMenuOpen(false);
     setIsAiChatOpen(true);
-  }, [launchParams.openQuickAi, loading, currentUser?.id]);
+  }, [launchParams.openQuickAi, launchParams.openTelegramAiChat, loading, currentUser?.id, aiChatProjects]);
 
   const closeTaskModal = () => {
     setOpenedTaskId(null);
