@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { formatTelegramAiSummary, telegramAiThreadId, TELEGRAM_AI_PROJECT_ID } from '../src/services/telegram-ai-inbox.service.js';
-import { buildMonitorPayload } from '../src/services/telegram-ai-monitor-summary.service.js';
+import { buildMonitorPayload, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 
 const src = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 const sample = {
   summary: 'Договорились подготовить документы.',
   decisions: ['Одобрена встреча'], obligations: ['Подготовить документы'],
   openQuestions: ['Согласовать дату'], risks: ['Срок переносится'],
-  taskSuggestions: ['Подготовить документы'], important: true
+  taskSuggestions: [normalizeMonitorTaskAction('Подготовить документы')!], important: true
 };
 
 test('Telegram monitor models are separate from chat reply selection and billing preflight', () => {
