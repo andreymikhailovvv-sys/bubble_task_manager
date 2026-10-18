@@ -91,7 +91,29 @@ export function canonicalizeTelegramAssistantProjects(
       return { id, title: policy.chatTitle, messages: messagesById.get(id) ?? [] };
     })
   };
-  // Return canonical managed project last, keeping the default personal
-  // project at index zero so quick requests never attach to Telegram chats.
-  return [...normal, assistantProject];
+  // Proposal chip IDs are globally unique commands. Old snapshots copied some
+  // of the same chip into every chat. Never redisplay that command elsewhere.
+  const seenProposalOwner = new Map<string, { chatId: string; content: string }>();
+  const isolated = [...normal, assistantProject].map(project => ({
+    ...project,
+    chats: (project.chats ?? []).map(chat => ({
+      ...chat,
+      messages: validMessages(chat.messages).flatMap(message => {
+        const id = isRecord(message.taskProposal) && typeof message.taskProposal.id === 'string'
+          ? message.taskProposal.id : null;
+        if (!id) return [message];
+        const existing = seenProposalOwner.get(id);
+        if (!existing) {
+          seenProposalOwner.set(id, { chatId: chat.id, content: message.content ?? '' });
+          return [message];
+        }
+        if (existing.chatId === chat.id) return [message];
+        if (existing.content === message.content) return [];
+        const { taskProposal: _repeated, ...withoutRepeatedChip } = message;
+        return [withoutRepeatedChip];
+      })
+    }))
+  }));
+  // Keep personal chat first, managed Telegram project last.
+  return isolated;
 }
