@@ -315,6 +315,7 @@ export type TelegramQuickSendJob = {
 export type TelegramAiChatSettings = {
   mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
   taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
+  taskCreationWhen: string;
   interactionIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
   autoReplyIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
   summaryIntervalMinutes: -1 | 0 | 5 | 10 | 30 | 180 | 360 | 1440;
