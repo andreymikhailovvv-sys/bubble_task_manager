@@ -59,7 +59,9 @@ function initializeProxy(): void {
         const finish = (error: Error | null, socket: tls.TLSSocket | null) => {
           if (finished) return;
           finished = true;
-          callback(error, socket);
+          if (error) callback(error, null);
+          else if (socket) callback(null, socket);
+          else callback(new Error('Telegram SOCKS5 TLS connection failed'), null);
         };
         void connectTelegramSocks5(config, options.hostname, Number(options.port || 443))
           .then((tunnel) => {
