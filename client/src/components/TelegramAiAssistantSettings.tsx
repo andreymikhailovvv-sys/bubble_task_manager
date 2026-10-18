@@ -333,7 +333,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           ] as const).filter(([, items]) => items.length).map(([heading, items]) => (
                             <div key={heading} className="mt-3">
                               <p className="text-xs font-semibold">{heading}</p>
-                              <ul className="mt-1 list-inside list-disc space-y-1 text-xs">{items.map((item, idx) => <li key={idx}>{item}</li>)}</ul>
+                              <ul className="mt-1 list-inside list-disc space-y-1 text-xs">{items.map((item, idx) => <li key={idx}>{typeof item === 'string' ? item : item.title || 'Действие над задачей'}</li>)}</ul>
                             </div>
                           ))}
                         </details>
