@@ -6,7 +6,8 @@ import { connectedOwner, openClient } from './telegram-user-client-send.service.
 import { telegramUserChatCapability } from './telegram-user-client-chat-access.service.js';
 import { prisma } from '../db/prisma.js';
 import { telegramService } from './telegram.service.js';
-import { type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
+import { normalizeMonitorTaskAction, type MonitorSummary } from './telegram-ai-monitor-summary.service.js';
+import type { PlannerActionInput } from './planner-tools.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 
 export const TELEGRAM_AI_PROJECT_ID = 'telegram-ai-assistant-project';
@@ -36,6 +37,37 @@ export function formatTelegramAiSummary(chatTitle: string, summary: MonitorSumma
   return text.slice(0, 3500);
 }
 
+// Old events keep string titles; new events contain validated planner actions.
+export function telegramProposalActions(rawSuggestions: unknown, eventId: string, mode: string) {
+  const values = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 4) : [];
+  return values.flatMap((value, index) => {
+    if (typeof value === 'string') {
+      const title = clip(value, 180);
+      return title ? [{ type: 'telegram_suggestion', title, eventId, index }] : [];
+    }
+    const action = normalizeMonitorTaskAction(value);
+    if (!action) return [];
+    // An automatic monitoring policy only grants permission to CREATE,
+    // never to mutate or delete existing tasks following a third-party chat.
+    if (mode === 'AUTO' &&
+      !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(action.operation)) return [];
+    return [action];
+  });
+}
+
+async function prepareTelegramProposal(userId: string, eventId: string, mode: string, raw: unknown) {
+  const actions = telegramProposalActions(raw, eventId, mode);
+  if (!actions.length) return;
+  const refs = actions.filter((a): a is PlannerActionInput => 'operation' in a);
+  await prepareTaskProposal({
+    userId, source: 'telegram_assistant', requestId: eventId,
+    actions,
+    resolvedItemIds: refs.flatMap(a => [a.itemId, a.parentTaskId].filter((id): id is string => !!id)),
+    resolvedSphereIds: refs.flatMap(a => a.sphereId ? [a.sphereId] : []),
+    autoApply: mode === 'AUTO'
+  });
+}
+
 export async function telegramAiInboxFeed(userId: string) {
   const [policies, events] = await Promise.all([
     prisma.telegramAiChatPolicy.findMany({
@@ -61,15 +93,7 @@ export async function telegramAiInboxFeed(userId: string) {
   for (const event of events) {
     if (event.taskModeAtPublish === 'NONE') continue;
     const summary = event.summary as { taskSuggestions?: unknown };
-    const titles = Array.isArray(summary?.taskSuggestions) ? summary.taskSuggestions.slice(0, 4) : [];
-    const actions = titles.map((title, index) => ({
-      type: 'telegram_suggestion', title: typeof title === 'string' ? title.trim().slice(0, 180) : '',
-      eventId: event.id, index
-    })).filter(action => action.title);
-    if (actions.length) {
-      await prepareTaskProposal({ userId, source: 'telegram_assistant', requestId: event.id,
-        actions, autoApply: event.taskModeAtPublish === 'AUTO' });
-    }
+    await prepareTelegramProposal(userId, event.id, event.taskModeAtPublish, summary?.taskSuggestions);
   }
   const pendingProposals = events.length ? await prisma.aiTaskProposal.findMany({
     where: { userId, source: 'telegram_assistant', requestId: { in: events.map(e => e.id) } }
@@ -94,7 +118,11 @@ export async function telegramAiInboxFeed(userId: string) {
           chatTitle: policies.find(p => p.id === event.policyId)?.chatTitle ?? 'Telegram' }
         : null,
       taskSuggestions: typeof event.summary === 'object' && event.summary && 'taskSuggestions' in event.summary
-        ? (event.summary as { taskSuggestions?: unknown }).taskSuggestions : []
+        ? (Array.isArray((event.summary as { taskSuggestions?: unknown }).taskSuggestions)
+            ? ((event.summary as { taskSuggestions: unknown[] }).taskSuggestions)
+              .map(item => typeof item === 'string' ? item :
+                item && typeof item === 'object' && 'title' in item ? String(item.title ?? '') : '')
+            : []) : []
     }))
   };
 }
@@ -142,15 +170,7 @@ export async function publishTelegramAiSummary(input: {
     return true;
   });
   if (published && policy.taskMode !== 'NONE') {
-    const actions = summary.taskSuggestions.slice(0, 4).map((title, index) => ({
-      type: 'telegram_suggestion', title: String(title).trim().slice(0, 180), eventId, index
-    })).filter(action => action.title);
-    if (actions.length) {
-      await prepareTaskProposal({
-        userId: policy.userId, requestId: eventId, source: 'telegram_assistant',
-        actions, autoApply: policy.taskMode === 'AUTO'
-      });
-    }
+    await prepareTelegramProposal(policy.userId, eventId, policy.taskMode, summary.taskSuggestions);
   }
   return published;
 }
@@ -222,12 +242,9 @@ export async function publishTelegramAiTaskSuggestions(input: {
     });
     return true;
   });
-  if (written) await prepareTaskProposal({
-    userId: policy.userId, requestId: eventId, source: 'telegram_assistant',
-    actions: summary.taskSuggestions.slice(0, 4).map((title, index) => ({
-      type: 'telegram_suggestion', title: clip(title), eventId, index
-    })), autoApply: policy.taskMode === 'AUTO'
-  });
+  if (written) await prepareTelegramProposal(
+    policy.userId, eventId, policy.taskMode, summary.taskSuggestions
+  );
   return written;
 }
 
