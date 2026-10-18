@@ -23,6 +23,7 @@ export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
 export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
   taskMode: typeof TASK_MODES[number];
+  taskCreationWhen: string;
   interactionIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
   autoReplyIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
   summaryIntervalMinutes: typeof TELEGRAM_AI_SUMMARY_INTERVALS[number];
@@ -40,6 +41,7 @@ export type TelegramAiChatSettings = {
 export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
+  taskCreationWhen: '',
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
   summaryIntervalMinutes: 30,
@@ -67,7 +69,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     throw new TelegramUserClientError(400, 'Укажите настройки Telegram-ассистента');
   }
   const p = payload as Record<string, unknown>;
-  for (const field of ['summaryInstructions', 'suggestWhen', 'suggestHow', 'autoReplyWhen', 'autoReplyHow'] as const) {
+  for (const field of ['summaryInstructions', 'suggestWhen', 'suggestHow', 'autoReplyWhen', 'autoReplyHow', 'taskCreationWhen'] as const) {
     const value = p[field];
     if (value !== undefined && (typeof value !== 'string' || value.length > 2000 ||
         /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value))) {
@@ -94,6 +96,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
   return {
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
+    taskCreationWhen: typeof p.taskCreationWhen === 'string' ? p.taskCreationWhen.trim() : '',
     interactionIntervalMinutes: oneOf(p.interactionIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота предложений ответов'),
     autoReplyIntervalMinutes: oneOf(p.autoReplyIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота автоответов'),
     summaryIntervalMinutes: oneOf(p.summaryIntervalMinutes, TELEGRAM_AI_SUMMARY_INTERVALS, 'частота сводок'),
