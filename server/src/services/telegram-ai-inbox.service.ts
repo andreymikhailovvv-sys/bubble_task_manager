@@ -381,7 +381,7 @@ export function telegramTaskProposalBotText(chatTitle: string, operations: Array
       lines.push(escapeHtml(detail.slice(0, 160)));
     }
   }
-  return lines.join('\n').slice(0, 3800);
+  return lines.join('\n').slice(0, 3250);
 }
 
 let delivering = false;
@@ -442,8 +442,10 @@ export async function deliverTelegramAiBotNotifications() {
           const sent = await telegramService.notifyTelegramAiTaskProposal({
             userId: candidate.userId, policyId: candidate.policyId, proposalId: proposal.id,
             pending: view.status === 'PENDING',
-            text: telegramTaskProposalBotText(candidate.policy.chatTitle, view.operations,
-              ownerTimeZone?.timeZone ?? 'Europe/Moscow')
+            text: (candidate.id.startsWith('telegram-ai-summary:')
+              ? escapeHtml(candidate.content.slice(0, 450)) + '\n\n' : '') +
+              telegramTaskProposalBotText(candidate.policy.chatTitle, view.operations,
+                ownerTimeZone?.timeZone ?? 'Europe/Moscow')
           });
           if (!sent) throw new Error('Telegram Bot API rejected task proposal message');
         } else {
