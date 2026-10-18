@@ -30,8 +30,21 @@ test('Telegram undo callback uses same owner-scoped reversal as the chip, withou
 test('Mini App deep link activates Quick requests after authentication, without changing task chat', () => {
   const mini = code('../../client/src/MiniApp.tsx');
   assert.match(mini, /const openQuickAi = \['1', 'true', 'yes'\]/);
-  assert.match(mini, /if \(!launchParams\.openQuickAi \|\| loading \|\| !currentUser\?\.id/);
+  assert.match(mini, /else if \(launchParams\.openQuickAi\)/);
+  assert.match(mini, /openTelegramAiChat/);
+  assert.match(mini, /telegram-ai-assistant:/);
   assert.match(mini, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
   assert.match(mini, /setIsAiChatOpen\(true\)/);
-  assert.match(mini, /\[launchParams\.openQuickAi, loading, currentUser\?\.id\]/);
+  assert.match(mini, /launchParams\.openTelegramAiChat, loading, currentUser\?\.id/);
+});
+
+test('Telegram assistant task proposal callbacks use owner-bound chip approval and specific chat link', () => {
+  const bot = code('../src/services/telegram.service.ts');
+  assert.match(bot, /callback_data: 'tgpa:' \+ proposalId/);
+  assert.match(bot, /callback_data: 'tgpr:' \+ proposalId/);
+  assert.match(bot, /action === 'tgpa' \|\| action === 'tgpr'/);
+  assert.match(bot, /source: 'telegram_assistant'/);
+  assert.match(bot, /await applyTaskProposal\(userId, taskId\)/);
+  assert.match(bot, /await rejectTaskProposal\(userId, taskId\)/);
+  assert.match(bot, /url\.searchParams\.set\('openTelegramAiChat', policyId\)/);
 });

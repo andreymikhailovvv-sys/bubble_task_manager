@@ -47,6 +47,33 @@ export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown):
  * Preserve messages on the correctly linked chat; do not erase interactive
  * Telegram consent cards or the user's manual replies.
  */
+function isolateCrossChatProposals(projects: JsonProject[]): JsonProject[] {
+  // Proposal chip IDs are globally unique commands. Old snapshots copied some
+  // of the same chip into every chat. Never redisplay that command elsewhere.
+  const seenProposalOwner = new Map<string, { chatId: string; content: string }>();
+  const isolated = projects.map(project => ({
+    ...project,
+    chats: (project.chats ?? []).map(chat => ({
+      ...chat,
+      messages: validMessages(chat.messages).flatMap(message => {
+        const id = isRecord(message.taskProposal) && typeof message.taskProposal.id === 'string'
+          ? message.taskProposal.id : null;
+        if (!id) return [message];
+        const existing = seenProposalOwner.get(id);
+        if (!existing) {
+          seenProposalOwner.set(id, { chatId: chat.id, content: message.content ?? '' });
+          return [message];
+        }
+        if (existing.chatId === chat.id) return [message];
+        if (existing.content === message.content) return [];
+        const { taskProposal: _repeated, ...withoutRepeatedChip } = message;
+        return [withoutRepeatedChip];
+      })
+    }))
+  }));
+  return isolated;
+}
+
 export const TELEGRAM_ASSISTANT_MANAGED_PROJECT = 'telegram-ai-assistant-project';
 const TG_PREFIX = 'telegram-ai-assistant:';
 type ManagedPolicy = { id: string; chatTitle: string };
@@ -67,7 +94,7 @@ export function canonicalizeTelegramAssistantProjects(
       (project.chats ?? []).some(chat => typeof chat?.id === 'string' && chat.id.startsWith(TG_PREFIX));
   };
   const normal = source.filter(project => !looksManaged(project));
-  if (policies.length === 0) return normal;
+  if (policies.length === 0) return isolateCrossChatProposals(normal);
   const managed = source.filter(looksManaged);
   const messagesById = new Map<string, JsonMessage[]>();
   for (const project of managed) {
@@ -91,7 +118,6 @@ export function canonicalizeTelegramAssistantProjects(
       return { id, title: policy.chatTitle, messages: messagesById.get(id) ?? [] };
     })
   };
-  // Return canonical managed project last, keeping the default personal
-  // project at index zero so quick requests never attach to Telegram chats.
-  return [...normal, assistantProject];
+  // Keep personal chat first, managed Telegram project last.
+  return isolateCrossChatProposals([...normal, assistantProject]);
 }

@@ -37,7 +37,7 @@ import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
+import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
@@ -441,7 +441,7 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
   const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100)) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
-  return sanitizeCachedTelegramAssistantProjects(normalized);
+  return isolateTaskProposalChips(sanitizeCachedTelegramAssistantProjects(normalized));
 }
 
 
@@ -2716,8 +2716,13 @@ ${allContext}`,
 
   const openSystemNotification = (notification: SystemNotification) => {
     const eventKey = notification.eventKey ?? '';
-    if (eventKey.startsWith('telegram-ai-summary:')) {
-      const remainder = eventKey.slice('telegram-ai-summary:'.length);
+    const telegramKey = eventKey.startsWith('telegram-ai-task:')
+      ? eventKey.slice('telegram-ai-task:'.length)
+      : eventKey;
+    const telegramEventPrefix = ['telegram-ai-summary:', 'telegram-ai-tasks:']
+      .find(prefix => telegramKey.startsWith(prefix));
+    if (telegramEventPrefix) {
+      const remainder = telegramKey.slice(telegramEventPrefix.length);
       const separator = remainder.lastIndexOf(':');
       if (separator > 0) {
         const policyId = remainder.slice(0, separator);

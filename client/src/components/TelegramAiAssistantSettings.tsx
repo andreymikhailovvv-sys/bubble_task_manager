@@ -15,6 +15,7 @@ const DAILY_LIMITS = [50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5
 const DEFAULTS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
+  taskCreationWhen: '',
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
   summaryIntervalMinutes: 30,
@@ -136,6 +137,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     setDraft(existing ? {
       mode: existing.mode,
       taskMode: existing.taskMode,
+      taskCreationWhen: existing.taskCreationWhen ?? '',
       interactionIntervalMinutes: existing.interactionIntervalMinutes ?? 5,
       autoReplyIntervalMinutes: existing.autoReplyIntervalMinutes ?? 5,
       summaryIntervalMinutes: existing.summaryIntervalMinutes ?? 30,
@@ -394,6 +396,19 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
                     onChange={i => update('taskMode', TASK_MODES[i] ?? TASK_MODES[0])}/>
+                  {draft.taskMode !== 'NONE' ? (
+                    <label className="block text-sm font-semibold">
+                      В каких случаях создавать или предлагать задачи
+                      <p className="integration-menu__muted mt-1 text-xs font-normal">
+                        Необязательно. Если поле пустое, ассистент сам определяет, какие договорённости и поручения заслуживают задачи.
+                      </p>
+                      <textarea rows={3} maxLength={2000}
+                        value={draft.taskCreationWhen}
+                        onChange={event => update('taskCreationWhen', event.target.value)}
+                        placeholder="Например: только когда меня прямо просят что-то сделать или мы согласовали встречу. Не создавать задачи из общих обсуждений."
+                        className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal" />
+                    </label>
+                  ) : null}
                   <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
                     index={indexOfValue(SUMMARY_INTERVALS, draft.summaryIntervalMinutes)} options={SUMMARY_NAMES}
                     shortLabels={SUMMARY_SHORT}

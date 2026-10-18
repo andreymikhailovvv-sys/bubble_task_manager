@@ -13,6 +13,14 @@ test('Telegram assistant has independent participation, summary and task setting
   const v = validateTelegramAiChatSettings(DEFAULT_TELEGRAM_AI_CHAT_SETTINGS);
   assert.equal(v.mode, 'OBSERVE');
   assert.equal(v.taskMode, 'SUGGEST');
+  assert.equal(v.taskCreationWhen, '');
+  assert.equal(validateTelegramAiChatSettings({ ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS,
+    taskCreationWhen: 'Только по конкретным просьбам' }).taskCreationWhen,
+    'Только по конкретным просьбам');
+  assert.throws(() => validateTelegramAiChatSettings({
+    ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS, taskCreationWhen: 'x'.repeat(2001)
+  }));
+
   assert.equal(v.interactionIntervalMinutes, 5);
   assert.equal(v.autoReplyIntervalMinutes, 5);
   assert.equal(v.summaryIntervalMinutes, 30);

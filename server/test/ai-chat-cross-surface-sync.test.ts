@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mergeChatProjectSnapshots } from '../src/lib/ai-chat-project-sync.js';
+import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../src/lib/ai-chat-project-sync.js';
 import { formatTelegramTaskChanges } from '../src/lib/telegram-task-change-receipt.js';
-import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from '../../client/src/lib/ai-chat-reconciliation.js';
+import { reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike, isolateTaskProposalChips } from '../../client/src/lib/ai-chat-reconciliation.js';
 
 const source = (relative: string) => readFileSync(new URL(relative, import.meta.url), 'utf8');
 
@@ -160,4 +160,24 @@ test('legacy duplicate folder with a generated UUID and text icon is excluded fr
   assert.equal(fixed[0].id, 'telegram-ai-assistant-project');
   assert.equal(fixed[0].icon, 'telegram');
   assert.equal(sanitizeCachedTelegramAssistantProjects(fixed), fixed);
+});
+
+test('cross-chat legacy proposal duplicates are excluded without deleting real independent dialogue', () => {
+  const duplicate = {
+    id: 'legacy-id', role: 'assistant', content: 'Предлагаю действия',
+    taskProposal: { id: 'same-proposal' }
+  };
+  const raw = [{ id: 'personal', chats: [
+    { id: 'quick-ai-requests', title: 'Быстрые запросы', messages: [duplicate] },
+    { id: 'another-chat', title: 'Новый чат', messages: [
+      { ...duplicate, id: 'copied-id' },
+      { id: 'different', role: 'user', content: 'Оригинальное сообщение' }
+    ] }
+  ] }];
+  const server = canonicalizeTelegramAssistantProjects(raw, []);
+  assert.deepEqual(server[0].chats?.[0].messages?.map(m => m.id), ['legacy-id']);
+  assert.deepEqual(server[0].chats?.[1].messages?.map(m => m.id), ['different']);
+  const client = isolateTaskProposalChips(raw);
+  assert.deepEqual(client[0].chats[0].messages.map(m => m.id), ['legacy-id']);
+  assert.deepEqual(client[0].chats[1].messages.map(m => m.id), ['different']);
 });
