@@ -161,13 +161,14 @@ export class HttpConnectTelegramSocket {
       throw new Error('Invalid Telegram DC destination');
     }
     if (this.socket || !this.closed) throw new Error('Socket already initialized');
-    if (this.proxy.protocol === 'socks5') {
-      const socket = await connectTelegramSocks5(this.proxy, ip, port);
+    const proxy = this.proxy;
+    if (proxy.protocol === 'socks5') {
+      const socket = await connectTelegramSocks5(proxy, ip, port);
       this.socket = socket;
       this.closed = false;
       socket.setNoDelay(true);
       socket.setKeepAlive(this.keepAliveInterval > 0, Math.max(0, this.keepAliveInterval));
-      socket.on('data', (chunk) => this.enqueue(chunk));
+      socket.on('data', (chunk) => this.enqueue(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
       socket.on('error', () => {
         this.closed = true;
         this.signalReaders(new Error('Telegram MTProto SOCKS5 socket error'));
@@ -179,9 +180,9 @@ export class HttpConnectTelegramSocket {
       socket.resume();
       return;
     }
-    const socket = this.proxy.tls
-      ? tls.connect({ host: this.proxy.hostname, port: this.proxy.port, servername: net.isIP(this.proxy.hostname) ? undefined : this.proxy.hostname, rejectUnauthorized: true })
-      : net.connect({ host: this.proxy.hostname, port: this.proxy.port });
+    const socket = proxy.tls
+      ? tls.connect({ host: proxy.hostname, port: proxy.port, servername: net.isIP(proxy.hostname) ? undefined : proxy.hostname, rejectUnauthorized: true })
+      : net.connect({ host: proxy.hostname, port: proxy.port });
     this.socket = socket;
 
     const endpoint = ip + ':' + port;
@@ -236,7 +237,7 @@ export class HttpConnectTelegramSocket {
             'CONNECT ' + endpoint + ' HTTP/1.1',
             'Host: ' + endpoint,
             'Proxy-Connection: Keep-Alive',
-            ...(this.proxy.authHeader ? ['Proxy-Authorization: ' + this.proxy.authHeader] : []),
+            ...(proxy.authHeader ? ['Proxy-Authorization: ' + proxy.authHeader] : []),
             '', ''
           ].join('\r\n');
           socket.write(request);
@@ -244,7 +245,7 @@ export class HttpConnectTelegramSocket {
         socket.on('error', onError);
         socket.on('close', onClose);
         socket.on('data', onData);
-        socket.once(this.proxy.tls ? 'secureConnect' : 'connect', onConnected);
+        socket.once(proxy.tls ? 'secureConnect' : 'connect', onConnected);
       });
     } catch (error) {
       await this.close();
