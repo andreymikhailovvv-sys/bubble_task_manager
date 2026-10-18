@@ -1,4 +1,4 @@
-import { prepareTaskProposal, proposalView } from './ai-task-proposal.service.js';
+import { prepareTaskProposal, proposalView, type TaskProposalAction } from './ai-task-proposal.service.js';
 import { Prisma, type TelegramAiChatPolicy } from '@prisma/client';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { parseTelegramSendTargetId, telegramSendTargetFromDialog } from './telegram-send-targets.service.js';
@@ -38,27 +38,30 @@ export function formatTelegramAiSummary(chatTitle: string, summary: MonitorSumma
 }
 
 // Old events keep string titles; new events contain validated planner actions.
-export function telegramProposalActions(rawSuggestions: unknown, eventId: string, mode: string) {
-  const values = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 4) : [];
-  return values.flatMap((value, index) => {
+export function telegramProposalActions(rawSuggestions: unknown, eventId: string, mode: string): TaskProposalAction[] {
+  const values: unknown[] = Array.isArray(rawSuggestions) ? rawSuggestions.slice(0, 4) : [];
+  const actions: TaskProposalAction[] = [];
+  values.forEach((value, index) => {
     if (typeof value === 'string') {
       const title = clip(value, 180);
-      return title ? [{ type: 'telegram_suggestion', title, eventId, index }] : [];
+      if (title) actions.push({ type: 'telegram_suggestion', title, eventId, index });
+      return;
     }
     const action = normalizeMonitorTaskAction(value);
-    if (!action) return [];
+    if (!action) return;
     // An automatic monitoring policy only grants permission to CREATE,
     // never to mutate or delete existing tasks following a third-party chat.
     if (mode === 'AUTO' &&
-      !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(action.operation)) return [];
-    return [action];
+      !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(action.operation)) return;
+    actions.push(action);
   });
+  return actions;
 }
 
 async function prepareTelegramProposal(userId: string, eventId: string, mode: string, raw: unknown) {
   const actions = telegramProposalActions(raw, eventId, mode);
   if (!actions.length) return;
-  const refs = actions.filter((a): a is PlannerActionInput => 'operation' in a);
+  const refs = actions.filter(a => typeof a.operation === 'string') as PlannerActionInput[];
   await prepareTaskProposal({
     userId, source: 'telegram_assistant', requestId: eventId,
     actions,
