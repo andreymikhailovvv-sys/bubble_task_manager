@@ -41,7 +41,7 @@ AI_CHAT_PLANNER_TOOLS_ENABLED=false
 # Telegram bot
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 # Опциональный исходящий прокси только для Telegram Bot API
-# TELEGRAM_PROXY_URL=http://1.2.3.4:8080
+# TELEGRAM_PROXY_URL=socks5://1.2.3.4:1080
 # TELEGRAM_PROXY_USERNAME=proxy_user
 # TELEGRAM_PROXY_PASSWORD=proxy_password
 # Username бота без @, используется для QR/deep-link подключения аккаунта
@@ -180,6 +180,12 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 4. Включите события `payment.succeeded` и `payment.canceled`.
 
 Если магазин требует передачу объекта чека, параметры receipt и НДС необходимо отдельно согласовать с бухгалтерией и настроить до включения production-платежей: эта интеграция намеренно не угадывает `vat_code` или систему налогообложения.
+
+### SOCKS5 для Telegram на Timeweb
+
+Если HTTP CONNECT к `api.telegram.org:443` отклоняется прокси (например, 403), используйте SOCKS5 **только для Telegram**: `TELEGRAM_PROXY_URL=socks5://HOST:PORT`, `TELEGRAM_PROXY_USERNAME` и `TELEGRAM_PROXY_PASSWORD`. Переменные `OPENAI_PROXY_*` независимы и могут продолжать использовать HTTP с тем же IP и портом. Пароль и логин **не включайте в URL**. Telegram User (MTProto, чтение и автоответы) наследует `TELEGRAM_PROXY_*`, если не заданы `TELEGRAM_USER_PROXY_*`; для отдельного SOCKS5 прокси можно задать `TELEGRAM_USER_PROXY_URL=socks5://HOST:PORT` и его учётные данные.
+
+SOCKS5 пересылает обычный TCP-трафик MTProto; это не специализированный MTProxy. Прокси должен допускать подключения к IP дата-центров Telegram, а успешный тест `api.telegram.org` сам по себе этого не гарантирует. После изменения секретов перезапустите приложение на Timeweb. Render лишь пересылает входящий webhook и не использует эти прокси.
 
 ### Relay webhook нового бота через Render
 

@@ -1,15 +1,17 @@
 import net from 'node:net';
 import tls from 'node:tls';
+import { connectTelegramSocks5, parseTelegramSocks5Proxy, type TelegramSocks5Proxy } from './telegram-socks5.js';
 
 // HTTP CONNECT for the Telegram *user* MTProto TCP stream. The existing
 // undici ProxyAgent only handles HTTP requests to the Bot API and cannot be
 // used for teleproto's raw TCP socket transport.
 type ProxyConfig = {
+  protocol: 'http';
   hostname: string;
   port: number;
   tls: boolean;
   authHeader?: string;
-};
+} | (TelegramSocks5Proxy & { protocol: 'socks5' });
 
 const CONNECT_TIMEOUT_MS = 10_000;
 const MAX_CONNECT_HEADER_BYTES = 8192;
@@ -31,14 +33,14 @@ function proxyConfig(env: NodeJS.ProcessEnv): ProxyConfig | null {
     throw new TelegramUserProxyConfigurationError();
   }
   if (
-    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    (url.protocol !== 'http:' && url.protocol !== 'https:' && url.protocol !== 'socks5:') ||
     !url.hostname || url.username || url.password ||
     (url.pathname !== '/' && url.pathname !== '') ||
     url.search || url.hash
   ) {
     throw new TelegramUserProxyConfigurationError();
   }
-  const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80;
+  const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : url.protocol === 'socks5:' ? 1080 : 80;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TelegramUserProxyConfigurationError();
   }
@@ -48,10 +50,17 @@ function proxyConfig(env: NodeJS.ProcessEnv): ProxyConfig | null {
     // Do not silently drop authentication for a partially configured proxy.
     throw new TelegramUserProxyConfigurationError();
   }
+  if (url.protocol === 'socks5:') {
+    try {
+      return { protocol: 'socks5', ...parseTelegramSocks5Proxy(url, username, password) };
+    } catch {
+      throw new TelegramUserProxyConfigurationError();
+    }
+  }
   const authHeader = username && password
     ? 'Basic ' + Buffer.from(username + ':' + password, 'utf8').toString('base64')
     : undefined;
-  return { hostname: url.hostname, port, tls: url.protocol === 'https:', authHeader };
+  return { protocol: 'http', hostname: url.hostname, port, tls: url.protocol === 'https:', authHeader };
 }
 
 export class HttpConnectTelegramSocket {
@@ -152,9 +161,28 @@ export class HttpConnectTelegramSocket {
       throw new Error('Invalid Telegram DC destination');
     }
     if (this.socket || !this.closed) throw new Error('Socket already initialized');
-    const socket = this.proxy.tls
-      ? tls.connect({ host: this.proxy.hostname, port: this.proxy.port, servername: net.isIP(this.proxy.hostname) ? undefined : this.proxy.hostname, rejectUnauthorized: true })
-      : net.connect({ host: this.proxy.hostname, port: this.proxy.port });
+    const proxy = this.proxy;
+    if (proxy.protocol === 'socks5') {
+      const socket = await connectTelegramSocks5(proxy, ip, port);
+      this.socket = socket;
+      this.closed = false;
+      socket.setNoDelay(true);
+      socket.setKeepAlive(this.keepAliveInterval > 0, Math.max(0, this.keepAliveInterval));
+      socket.on('data', (chunk) => this.enqueue(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      socket.on('error', () => {
+        this.closed = true;
+        this.signalReaders(new Error('Telegram MTProto SOCKS5 socket error'));
+      });
+      socket.on('close', () => {
+        this.closed = true;
+        this.signalReaders(new Error('Telegram MTProto SOCKS5 socket closed'));
+      });
+      socket.resume();
+      return;
+    }
+    const socket = proxy.tls
+      ? tls.connect({ host: proxy.hostname, port: proxy.port, servername: net.isIP(proxy.hostname) ? undefined : proxy.hostname, rejectUnauthorized: true })
+      : net.connect({ host: proxy.hostname, port: proxy.port });
     this.socket = socket;
 
     const endpoint = ip + ':' + port;
@@ -209,7 +237,7 @@ export class HttpConnectTelegramSocket {
             'CONNECT ' + endpoint + ' HTTP/1.1',
             'Host: ' + endpoint,
             'Proxy-Connection: Keep-Alive',
-            ...(this.proxy.authHeader ? ['Proxy-Authorization: ' + this.proxy.authHeader] : []),
+            ...(proxy.authHeader ? ['Proxy-Authorization: ' + proxy.authHeader] : []),
             '', ''
           ].join('\r\n');
           socket.write(request);
@@ -217,7 +245,7 @@ export class HttpConnectTelegramSocket {
         socket.on('error', onError);
         socket.on('close', onClose);
         socket.on('data', onData);
-        socket.once(this.proxy.tls ? 'secureConnect' : 'connect', onConnected);
+        socket.once(proxy.tls ? 'secureConnect' : 'connect', onConnected);
       });
     } catch (error) {
       await this.close();
@@ -241,8 +269,8 @@ export function telegramUserClientNetworkOptions(env: NodeJS.ProcessEnv = proces
 
 export function classifyTelegramUserNetworkError(error: unknown): 'proxy_rejected' | 'proxy_timeout' | 'network_timeout' | 'network_unavailable' | 'other' {
   const message = error instanceof Error ? error.message : '';
-  if (/proxy CONNECT rejected/.test(message)) return 'proxy_rejected';
-  if (/proxy CONNECT timeout/.test(message)) return 'proxy_timeout';
+  if (/proxy CONNECT rejected|SOCKS5 (?:connect rejected|authentication failed|authentication method rejected)/.test(message)) return 'proxy_rejected';
+  if (/proxy CONNECT timeout|SOCKS5 (?:connection timeout|TLS timeout)/.test(message)) return 'proxy_timeout';
   if (/timeout|timed out|ETIMEDOUT/i.test(message)) return 'network_timeout';
   if (/ECONN|ENETUNREACH|network|socket|proxy connection/i.test(message)) return 'network_unavailable';
   return 'other';
