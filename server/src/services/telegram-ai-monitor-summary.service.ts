@@ -179,7 +179,7 @@ export function normalizeMonitorTaskAction(raw: unknown): PlannerActionInput | n
   if (!creating && !itemId) return null;
   if (operation === 'create_subtask' && !parentTaskId) return null;
   const date = stringOrNull('dueDate', 45);
-  const dueDate = date && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,3})?)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(date) &&
+  const dueDate = date && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(date) &&
     Number.isFinite(Date.parse(date)) ? new Date(date).toISOString() : null;
   if ((operation === 'create_reminder' || operation === 'reschedule') && !dueDate) return null;
   const boundedNumber = (name: string, min: number, max: number) =>
