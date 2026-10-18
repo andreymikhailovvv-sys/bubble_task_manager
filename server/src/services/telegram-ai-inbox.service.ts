@@ -108,16 +108,26 @@ export async function telegramAiInboxFeed(userId: string) {
   for (const approval of approvals) {
     approvedByEvent.set(approval.eventId, [...(approvedByEvent.get(approval.eventId) ?? []), approval.itemIndex]);
   }
-  // Upgrade old published summaries lazily as well as those created by the monitor.
-  // Stable event ID means a retry never creates a second task proposal.
-  for (const event of events) {
-    if (event.taskModeAtPublish === 'NONE') continue;
-    const summary = event.summary as { taskSuggestions?: unknown };
-    await prepareTelegramProposal(userId, event.id, event.taskModeAtPublish, summary?.taskSuggestions);
-  }
-  const pendingProposals = events.length ? await prisma.aiTaskProposal.findMany({
+  // Fetch existing proposals FIRST. Inbox polling runs every 2.5 seconds;
+  // re-preparing 250 idempotent chips and notifications on every poll was
+  // unnecessary DB work, and could cause typing/scroll lag.
+  let pendingProposals = events.length ? await prisma.aiTaskProposal.findMany({
     where: { userId, source: 'telegram_assistant', requestId: { in: events.map(e => e.id) } }
   }) : [];
+  const preparedIds = new Set(pendingProposals.map(p => p.requestId));
+  let preparedNew = false;
+  for (const event of events) {
+    if (event.taskModeAtPublish === 'NONE' || preparedIds.has(event.id)) continue;
+    const summary = event.summary as { taskSuggestions?: unknown };
+    if (!Array.isArray(summary?.taskSuggestions) || !summary.taskSuggestions.length) continue;
+    await prepareTelegramProposal(userId, event.id, event.taskModeAtPublish, summary.taskSuggestions);
+    preparedNew = true;
+  }
+  if (preparedNew) {
+    pendingProposals = await prisma.aiTaskProposal.findMany({
+      where: { userId, source: 'telegram_assistant', requestId: { in: events.map(e => e.id) } }
+    });
+  }
   const proposalByEvent = new Map(pendingProposals.map(p => [p.requestId, proposalView(p)]));
   return {
     projectId: TELEGRAM_AI_PROJECT_ID, projectTitle: TELEGRAM_AI_PROJECT_TITLE,
