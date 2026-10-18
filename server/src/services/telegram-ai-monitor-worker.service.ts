@@ -378,7 +378,33 @@ async function processClaim(claimed: Claimed) {
       : '') : '';
   const user = await prisma.user.findUnique({ where: { id: policy.userId }, select: { timeZone: true } });
   const dayKey = monitorDayKey(new Date(), user?.timeZone);
-  const payload = buildMonitorPayload(bounded, instructions, taskMode, current.monitorModel, rules, summaryEnabled);
+  // A scoped read-only workspace snapshot lets the monitoring model use the
+  // SAME task_action contract as interactive AI, without offering side-effect tools.
+  // Owner task IDs never enter an outbound Telegram reply.
+  const [sectors, tasks] = taskMode === 'NONE'
+    ? [[], []] as const
+    : await Promise.all([
+        prisma.sphere.findMany({
+          where: { userId: policy.userId },
+          select: { id: true, name: true }, orderBy: { createdAt: 'asc' }, take: 50
+        }),
+        prisma.task.findMany({
+          where: { userId: policy.userId, status: { not: 'DONE' } },
+          select: { id: true, title: true, taskType: true, dueDate: true },
+          orderBy: { updatedAt: 'desc' }, take: 100
+        })
+      ]);
+  const plannerContext = taskMode === 'NONE' ? undefined : {
+    timeZone: user?.timeZone || 'Europe/Moscow',
+    sectors,
+    tasks: tasks.map(item => ({
+      id: item.id, title: item.title.slice(0, 100), taskType: item.taskType,
+      dueDate: item.dueDate?.toISOString() ?? null
+    }))
+  };
+  const payload = buildMonitorPayload(
+    bounded, instructions, taskMode, current.monitorModel, rules, summaryEnabled, plannerContext
+  );
   const desired = await countMonitorInputTokens(payload);
   if (desired <= 0) throw new Error('Invalid monitor maximum cost');
   const { reservation, callId } = await reserveForCall(claimed, desired, dayKey);
@@ -388,7 +414,7 @@ async function processClaim(claimed: Claimed) {
     await prisma.telegramAiMonitorCall.update({ where: { id: callId }, data: { state: 'STARTED' } });
     const result = await analyzeMonitorMessages({
       userId: policy.userId, requestId: callId, messages: bounded, instructions,
-      taskMode, model: current.monitorModel, autoReplyRules: rules, summaryEnabled
+      taskMode, model: current.monitorModel, autoReplyRules: rules, summaryEnabled, plannerContext
     });
     const settlement = await settleAiCreditReservation(reservation, result.actualMilli);
     billed = true;
