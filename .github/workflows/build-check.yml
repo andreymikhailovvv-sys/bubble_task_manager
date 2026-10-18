@@ -31,8 +31,8 @@ jobs:
         run: npm run build
       - name: Verify task chat answer preservation and immediate-action prompt
         run: node --import tsx --test --test-name-pattern="task assistant не подменяет творческий ответ|task assistant сохраняет инструкцию выполнять изменения" server/test/ai-assistant.service.test.ts
-      - name: Verify MTProto HTTP CONNECT proxy transport
-        run: node --import tsx --test server/test/telegram-user-client-network.test.ts
+      - name: Verify MTProto HTTP CONNECT and Telegram SOCKS5 proxy transport
+        run: node --import tsx --test server/test/telegram-user-client-network.test.ts server/test/telegram-socks5.test.ts
       - name: Verify manual Telegram send restrictions and limits
         run: node --import tsx --test server/test/telegram-user-client-manual-send.test.ts
       - name: Verify Telegram AI draft isolation and approval-only flow
