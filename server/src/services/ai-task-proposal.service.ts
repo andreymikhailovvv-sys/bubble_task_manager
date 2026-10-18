@@ -80,8 +80,12 @@ export async function prepareTaskProposal(input: {
   userTimeZone?: string; autoApply?: boolean;
 }) {
   if (!input.actions.length || input.actions.length > 100) throw new Error('Некорректное число изменений.');
-  const { snapshots, display } = input.source === 'telegram_assistant'
-    ? { snapshots: [], display: input.actions.map(a => ({ type: 'create_task', title: String(a.title ?? '').slice(0, 180) })) }
+  const legacyTelegram = input.source === 'telegram_assistant' &&
+    input.actions.every(a => label(a) === 'telegram_suggestion');
+  const { snapshots, display } = legacyTelegram
+    ? { snapshots: [], display: input.actions.map(a => ({
+        type: 'create_task', title: String(a.title ?? '').slice(0, 180)
+      })) }
     : await ownerSnapshot(input.userId, input.actions);
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: input.userId }, select: { aiTaskAutoApply: true }
@@ -123,7 +127,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
   const actions = row.operations as TaskProposalAction[];
   try {
     const snapshots = Array.isArray(row.snapshots) ? row.snapshots as Array<{ id: string; updatedAt: string }> : [];
-    if (row.source !== 'telegram_assistant') {
+    if (row.source !== 'telegram_assistant' || actions.some(a => 'operation' in a)) {
       // Recheck access AND optimistic version before writing anything.
       for (const snapshot of snapshots) {
         const task = await prisma.task.findFirst({
@@ -141,7 +145,12 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     const before = await captureProposalBefore(userId, actions);
     const reports: string[] = [];
     const createdIds: string[] = [];
-    if ((row.source === 'planner' || row.source === 'telegram_bot')) {
+    if (row.source === 'planner' || row.source === 'telegram_bot' ||
+        (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
+      if (row.source === 'telegram_assistant' && row.autoApplied &&
+          actions.some(a => !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(String(a.operation)))) {
+        throw new Error('Автоматический Telegram-ассистент не может изменять существующие задачи.');
+      }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
         const result = await plannerToolsService.action(
