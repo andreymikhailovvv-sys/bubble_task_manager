@@ -5,7 +5,7 @@ import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
-import { recordAppliedTelegramBotTask, undoTaskProposal, getTaskProposal } from './ai-task-proposal.service.js';
+import { recordAppliedTelegramBotTask, undoTaskProposal, getTaskProposal, applyTaskProposal, rejectTaskProposal } from './ai-task-proposal.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
 import { telegramFetch } from '../lib/telegram-fetch.js';
 import { FormData } from 'undici';
@@ -138,6 +138,23 @@ const buildMiniAppQuickAiUrl = () => {
   return url.toString();
 };
 
+
+const buildMiniAppTelegramAssistantChatUrl = (policyId: string) => {
+  const url = new URL(MINI_APP_URL, APP_URL || undefined);
+  url.searchParams.set('openTelegramAiChat', policyId);
+  return url.toString();
+};
+
+export const telegramAssistantProposalKeyboard = (proposalId: string, policyId: string, pending: boolean) => ({
+  inline_keyboard: [
+    ...(pending ? [[
+      { text: '✅ Принять', callback_data: 'tgpa:' + proposalId },
+      { text: '❌ Отклонить', callback_data: 'tgpr:' + proposalId }
+    ]] : []),
+    [{ text: '📱 Посмотреть в приложении',
+      web_app: { url: buildMiniAppTelegramAssistantChatUrl(policyId) } }]
+  ]
+});
 
 const formatDeadlineLeft = (dueDate: Date | null) => {
   if (!dueDate) return '⏳ Дедлайн не указан';
@@ -1490,6 +1507,55 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
   const userId = session.userId;
 
+  if (action === 'tgpa' || action === 'tgpr') {
+    // Callback data carries only a proposal identifier, never authority.
+    // Telegram session AND owner's linked bot chat must match.
+    const owner = await prisma.user.findFirst({
+      where: { id: userId, telegramChatId: chatId }, select: { id: true }
+    });
+    if (!owner || !taskId || taskId.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+      await answerCallback(callback.id, 'Предложение недоступно');
+      return;
+    }
+    try {
+      const existing = await prisma.aiTaskProposal.findFirst({
+        where: { id: taskId, userId, source: 'telegram_assistant' },
+        select: { id: true, status: true, requestId: true }
+      });
+      if (!existing) {
+        await answerCallback(callback.id, 'Предложение не найдено');
+        return;
+      }
+      const event = await prisma.telegramAiInboxEvent.findFirst({
+        where: { id: existing.requestId, userId },
+        select: { policyId: true }
+      });
+      if (!event) {
+        await answerCallback(callback.id, 'Переписка недоступна');
+        return;
+      }
+      const outcome = existing.status === 'PENDING'
+        ? action === 'tgpa' ? await applyTaskProposal(userId, taskId)
+          : await rejectTaskProposal(userId, taskId)
+        : await getTaskProposal(userId, taskId);
+      await answerCallback(callback.id,
+        outcome.status === 'APPLIED' ? 'Задачи созданы' :
+        outcome.status === 'REJECTED' ? 'Предложение отклонено' :
+        outcome.status === 'PENDING' ? 'Решение не применено' :
+        'Статус: ' + outcome.status);
+      // The old callback buttons may also exist on a second device. The
+      // compare-and-swap in applyTaskProposal/rejectTaskProposal prevents replay.
+      await telegramRequest('editMessageReplyMarkup', {
+        chat_id: chatId, message_id: messageId,
+        reply_markup: telegramAssistantProposalKeyboard(taskId, event.policyId, outcome.status === 'PENDING')
+      });
+    } catch (error) {
+      console.error('[Telegram] task proposal callback failed', error);
+      await answerCallback(callback.id, 'Не удалось выполнить действие');
+    }
+    return;
+  }
+
   if (action === 'aiundo') {
     // Telegram callback payloads are not an authentication credential. Only
     // the account linked to this private bot chat can reverse its own proposal.
@@ -2188,6 +2254,18 @@ export const telegramService = {
     if (!BOT_TOKEN) return;
     if (!input.aiMessage.trim()) return;
     await sendOverdueTaskNotification(input.taskId, input.userId, input.aiMessage, input.creditsSpentMilli);
+  },
+  async notifyTelegramAiTaskProposal(input: {
+    userId: string; proposalId: string; policyId: string; pending: boolean; text: string
+  }): Promise<boolean> {
+    if (!BOT_TOKEN || !input.text.trim()) return false;
+    const owner = await prisma.user.findUnique({
+      where: { id: input.userId }, select: { telegramChatId: true }
+    });
+    if (!owner?.telegramChatId) return false;
+    // All actions occur through the bot private chat linked to the same user.
+    return sendMessage(owner.telegramChatId, input.text,
+      telegramAssistantProposalKeyboard(input.proposalId, input.policyId, input.pending));
   },
   async notifyDailyAiCheckup(input: { userId: string; text: string }) {
     if (!BOT_TOKEN) return;
