@@ -125,7 +125,7 @@ test('web interface separates participation frequency and summary configuration'
   assert.match(ui, /minutes=\{draft\.taskIntervalMinutes\} months=\{draft\.taskIntervalMonths\}/);
   assert.equal((ui.match(/<details key=/g) ?? []).length, 4);
   assert.equal((ui.match(/<summary className="telegram-ai-settings-section__header">/g) ?? []).length, 4);
-  assert.doesNotMatch(ui, /<details key=[^\\n]+ open(?: |\\/>)/);
+  assert.doesNotMatch(ui, /<details key=[^\n]+ open\b/);
   for (const name of ['Участие в переписке', 'Добавление задач', 'Частота сводок', 'Общие параметры']) {
     assert.ok(ui.includes(name), name);
   }
