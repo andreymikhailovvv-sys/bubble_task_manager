@@ -1246,6 +1246,25 @@ apiRouter.post('/habits/:id/complete', requireAuth, asyncHandler(habitController
 apiRouter.post('/habits/:id/uncomplete', requireAuth, asyncHandler(habitController.uncomplete));
 apiRouter.post('/habits/:id/finish', requireAuth, asyncHandler(habitController.finish));
 apiRouter.delete('/habits/:id', requireAuth, asyncHandler(habitController.remove));
+// Download only the requesting user's still-retained chat uploads.
+apiRouter.get('/ai-chat/uploaded-attachments/:messageId/:ordinal/download', requireAuth, asyncHandler(async (req, res) => {
+  const ordinal = Number(req.params.ordinal);
+  if (!/^[0-9a-z_-]{8,128}$/i.test(req.params.messageId) || !Number.isInteger(ordinal) || ordinal < 0 || ordinal > 2) {
+    res.status(400).json({ error: 'Некорректный идентификатор вложения' }); return;
+  }
+  const file = await prisma.aiConversationAttachment.findFirst({
+    where: { userId: req.user!.id, messageId: req.params.messageId, ordinal },
+    select: { fileName: true, mimeType: true, contentBase64: true }
+  });
+  if (!file) { res.status(404).json({ error: 'Вложение больше не хранится на сервере. Прикрепите его заново.' }); return; }
+  const safeName = file.fileName.replace(/[^\\x20-\\x7e]|["\\\\]/g, '_') || 'attachment';
+  res.set({
+    'Content-Type': file.mimeType || 'application/octet-stream',
+    'Content-Disposition': `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+    'Cache-Control': 'private, no-store, max-age=0', 'X-Content-Type-Options': 'nosniff'
+  });
+  res.send(Buffer.from(file.contentBase64, 'base64'));
+}));
 apiRouter.get('/user/attachments/storage', requireAuth, asyncHandler(taskAttachmentController.storage));
 apiRouter.get('/user/attachments', requireAuth, asyncHandler(taskAttachmentController.listOwned));
 apiRouter.delete('/user/attachments/:attachmentId', requireAuth, asyncHandler(taskAttachmentController.removeOwned));
