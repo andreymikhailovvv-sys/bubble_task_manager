@@ -347,7 +347,7 @@ body[data-theme='light'] .telegram-ai-settings-section--general { --section-acce
 }
 .telegram-ai-settings-section__header::-webkit-details-marker { display: none; }
 .telegram-ai-settings-section__header:focus-visible {
-  outline: 2px solid var(--section-accent);
+  outline: 2px solid var(--integration-accent);
   outline-offset: -3px;
 }
 .telegram-ai-settings-section__header:hover { background: rgba(141, 160, 185, .075); }
