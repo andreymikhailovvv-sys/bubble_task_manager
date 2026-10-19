@@ -3102,8 +3102,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       for (const file of normalized) await api.createTaskAttachment(openedSubtask.id, await fileToAttachmentPayload(file));
       setSubtaskAttachments(await api.getTaskAttachments(openedSubtask.id));
+      setTasks(await api.getTasks());
       setError(null);
-      window.alert('Вы можете добавть вложение для подзадачи, но ИИ не увидит его. Если хотите, что ИИ прочитал вложение прикрепите его в чат');
+      // A successful upload should not open a blocking native alert.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к подзадаче');
     } finally {
@@ -3115,6 +3116,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!openedSubtask) return;
     await api.deleteTaskAttachment(openedSubtask.id, attachmentId);
     setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    setTasks(await api.getTasks());
   };
 
   const downloadAiGeneratedDocument = async (generatedDocument: GeneratedDocument) => {
@@ -4311,6 +4313,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                             </button>
                             <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
                               <span className={`min-w-0 flex-1 truncate font-medium ${subtask.status === 'DONE' ? 'opacity-60 line-through' : ''}`}>{subtask.title}</span>
+                              {(subtask.attachmentCount ?? 0) > 0 ? <Paperclip size={13} className="shrink-0 text-violet-400" aria-label="Есть вложения" /> : null}
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                               {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
                             </button>
