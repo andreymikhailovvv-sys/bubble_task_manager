@@ -2971,6 +2971,9 @@ ${allContext}`,
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
       if (!quick) setAiChatPendingFiles([]);
       const actionReports = result.actionReports ?? [];
+      if (actionReports.some((item) => item.startsWith('Изменена заметка'))) {
+        window.dispatchEvent(new Event('standalone-notes-updated'));
+      }
       const serviceReport = actionReports.length > 0
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
         : '';
