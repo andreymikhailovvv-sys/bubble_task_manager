@@ -22,7 +22,7 @@ type Reversal = {
   before: Stored[];
   after: Array<{ id: string; updatedAt: string }>;
   created: Array<{ id: string; updatedAt: string; attachments: string[]; comments: string[]; aiMessages: string[] }>;
-  notes?: { before: StoredNote[]; after: Array<{ id: string; updatedAt: string }> };
+  notes?: { before: StoredNote[]; after: Array<{ id: string; updatedAt: string }>; created?: Array<{ id: string; updatedAt: string }> };
 };
 
 async function loadTasks(userId: string, ids: string[]) {
@@ -56,7 +56,8 @@ export async function captureProposalBefore(userId: string, actions: Array<Recor
 
 export async function captureProposalAfter(
   userId: string, before: Stored[], createdIds: string[],
-  notesBefore: Array<{ id: string; title: string; content: string; groupId: string | null; updatedAt: Date }> = []
+  notesBefore: Array<{ id: string; title: string; content: string; groupId: string | null; updatedAt: Date }> = [],
+  createdNoteIds: string[] = []
 ): Promise<Reversal> {
   const previouslyKnown = before.map(item => item.id);
   const after = await prisma.task.findMany({
@@ -76,17 +77,22 @@ export async function captureProposalAfter(
     where: { userId, id: { in: notesBefore.map(note => note.id) } },
     select: { id: true, updatedAt: true }
   }) : [];
+  const createdNotes = createdNoteIds.length ? await prisma.standaloneNote.findMany({
+    where: { userId, id: { in: createdNoteIds } }, select: { id: true, updatedAt: true }
+  }) : [];
+  if (createdNotes.length !== createdNoteIds.length) throw new Error('Не удалось сохранить историю отмены созданных заметок.');
   if (notesAfter.length !== notesBefore.length) {
     throw new Error('Не удалось сохранить историю отмены заметки.');
   }
   return {
     before,
-    ...(notesBefore.length ? { notes: {
+    ...(notesBefore.length || createdNoteIds.length ? { notes: {
       before: notesBefore.map(note => ({
         id: note.id, title: note.title, content: note.content,
         groupId: note.groupId, updatedAt: note.updatedAt.toISOString()
       })),
-      after: notesAfter.map(note => ({ id: note.id, updatedAt: note.updatedAt.toISOString() }))
+      after: notesAfter.map(note => ({ id: note.id, updatedAt: note.updatedAt.toISOString() })),
+      created: createdNotes.map(note => ({ id: note.id, updatedAt: note.updatedAt.toISOString() }))
     } } : {}),
     after: after.map(item => ({ id: item.id, updatedAt: item.updatedAt.toISOString() })),
     created: [...new Map([...created, ...createdChildren].map(item => [item.id, item])).values()]
@@ -115,22 +121,23 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
         throw new Error('Некорректная история отмены.');
       }
       const noteHistory = saved.notes;
-      if (!saved.before.length && !saved.created.length && !noteHistory?.before.length) {
+      if (!saved.before.length && !saved.created.length && !noteHistory?.before.length && !noteHistory?.created?.length) {
         throw new Error('Недостаточно данных для безопасного возврата изменений.');
       }
       if (noteHistory && (
         !Array.isArray(noteHistory.before) || !Array.isArray(noteHistory.after) ||
-        noteHistory.before.length !== noteHistory.after.length
+        noteHistory.before.length !== noteHistory.after.length ||
+        (noteHistory.created !== undefined && !Array.isArray(noteHistory.created))
       )) {
         throw new Error('Некорректная история отмены заметок.');
       }
       if (noteHistory?.before.length) {
         const actual = await tx.standaloneNote.findMany({
-          where: { userId, id: { in: noteHistory.before.map(note => note.id) } },
+          where: { userId, id: { in: [...noteHistory.before, ...(noteHistory.created ?? [])].map(note => note.id) } },
           select: { id: true, updatedAt: true }
         });
         const versions = new Map(actual.map(note => [note.id, note.updatedAt.toISOString()]));
-        for (const note of noteHistory.after) {
+        for (const note of [...noteHistory.after, ...(noteHistory.created ?? [])]) {
           if (versions.get(note.id) !== note.updatedAt) {
             throw new Error('Заметка изменилась после действия ИИ. Возврат отменён.');
           }
@@ -225,6 +232,14 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
           }
         });
         if (!updated.count) throw new Error('Задача изменилась во время отката.');
+      }
+      // Reject a created-note deletion if anything has changed since the AI
+      // created it; never silently discard content the user subsequently edited.
+      for (const note of noteHistory?.created ?? []) {
+        const removed = await tx.standaloneNote.deleteMany({
+          where: { id: note.id, userId, updatedAt: new Date(note.updatedAt) }
+        });
+        if (removed.count !== 1) throw new Error('Созданная заметка изменилась. Отмена заблокирована.');
       }
       for (const note of noteHistory?.before ?? []) {
         const current = noteHistory!.after.find(item => item.id === note.id);
