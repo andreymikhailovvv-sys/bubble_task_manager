@@ -62,7 +62,7 @@ export function MiniWorkspaceTools({
     : timelineSphereId !== 'all');
 
   return (
-    <div className="miniapp-workspace-tools grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+    <div className={`miniapp-workspace-tools grid grid-cols-[1fr_auto_1fr] items-center gap-2 ${open ? 'is-filter-menu-open' : ''}`}>
       <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-notes justify-self-start"
         onClick={onNotesOpen} aria-label="Открыть заметки">
         <StickyNote size={17} aria-hidden="true" /><span>Заметки</span>

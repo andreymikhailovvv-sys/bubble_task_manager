@@ -43,6 +43,41 @@ test('one toolbar on both list and timeline offers notes, disabled optimize and 
   assert.doesNotMatch(mini, /isListSphereFilterOpen/);
 });
 
+test('workspace tools remain below dialogs and the credits popover on both compact surfaces', async () => {
+  const [mini, toolbar, css] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/components/MiniWorkspaceTools.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  const toolbarRule = css.match(/\.miniapp-workspace-tools \{([^}]+)\}/)?.[1] ?? '';
+  const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
+  const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
+  const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
+  const headerLayer = Number(mini.match(/sticky top-0 z-(\d+) rounded-xl/)?.[1]);
+  const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
+  assert.equal(normalLayer, 1);
+  assert.ok(normalLayer < openLayer && openLayer < headerLayer);
+  assert.ok(openLayer < createTaskLayer);
+  assert.match(mini, /miniapp-credit-popover absolute right-0 top-full z-\[60\]/);
+  assert.match(toolbar, /open \? 'is-filter-menu-open'/);
+  assert.match(toolbar, /miniapp-workspace-filter-panel absolute right-0[^"]*z-\[180\]/);
+});
+
+test('notes and filters are neutral; disabled optimize uses rose in both themes', async () => {
+  const [toolbar, css] = await Promise.all([
+    read('../../client/src/components/MiniWorkspaceTools.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.match(toolbar, /miniapp-workspace-tool-notes/);
+  assert.match(toolbar, /miniapp-workspace-tool-filter/);
+  assert.match(toolbar, /miniapp-workspace-tool-optimize/);
+  assert.match(toolbar, /disabled aria-disabled="true"/);
+  assert.match(css, /\.miniapp-workspace-tool \{[^}]*background: rgba\(100, 116, 139, \.16\);[^}]*color: #cbd5e1;/);
+  assert.match(css, /\.miniapp-workspace-tool-optimize \{[^}]*background: rgba\(244, 63, 94, \.15\);[^}]*color: #fda4af;/);
+  assert.match(css, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-workspace-tool,\s*\.miniapp-shell\.miniapp-light \.miniapp-workspace-tool \{[^}]*color: #475569;/);
+  assert.match(css, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-workspace-tool-optimize,\s*\.miniapp-shell\.miniapp-light \.miniapp-workspace-tool-optimize \{[^}]*color: #be123c;/);
+});
+
 test('compact and Telegram notes share web CRUD, grouping, autosave and rich-text editor', async () => {
   const [mini, board, group, notesApi] = await Promise.all([
     read('../../client/src/MiniApp.tsx'),
