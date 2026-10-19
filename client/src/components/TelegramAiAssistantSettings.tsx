@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, Check, CheckCircle2, Loader2, MessageCircle, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Bot, Check, CheckCircle2, ChevronDown, Loader2, MessageCircle, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type TelegramChatCapability, type TelegramSendTargetList } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
 import './TelegramMessageQuickShare.css';
@@ -82,7 +82,7 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
   const id = useId();
   const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
   return (
-    <div className="telegram-ai-slider-setting">
+    <div className={`telegram-ai-slider-setting ${shortLabels?.length === 3 ? 'telegram-ai-slider-setting--sparse' : shortLabels && shortLabels.length >= 8 ? 'telegram-ai-slider-setting--dense' : ''}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <label htmlFor={id} className="text-sm font-semibold">{title}</label>
         <span className="telegram-ai-slider-setting__value" aria-live="polite">{options[index]}</span>
@@ -102,7 +102,7 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
         ))}
       </div>
       {shortLabels ? (
-        <div className="telegram-ai-slider-setting__labels" aria-hidden="true">
+        <div className={`telegram-ai-slider-setting__labels ${shortLabels.length >= 8 ? 'telegram-ai-slider-setting__labels--dense' : ''}`} aria-hidden="true">
           {shortLabels.map((label, i) => <span key={label}
             style={{ left: `${i / Math.max(1, shortLabels.length - 1) * 100}%` }}>{label}</span>)}
         </div>
@@ -462,9 +462,12 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <p className="integration-menu__muted mt-1 text-xs">Передвигайте бегунки. Выбранное значение показано справа.</p>
                   </div>
                   {selected && (
-                    <div className="telegram-ai-monitor-status space-y-2 rounded-2xl border p-3">
+                    <div className={`telegram-ai-monitor-status telegram-ai-monitor-status--${selected.isEnabled ? 'active' : 'paused'} space-y-2 rounded-2xl border p-4`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-sm font-semibold">{selected.isEnabled ? '● Мониторинг включён' : '○ Мониторинг остановлен'}</span>
+                        <span role="status" aria-live="polite" className="telegram-ai-monitor-status__headline flex items-center gap-2 text-sm font-semibold">
+                          <span className="telegram-ai-monitor-status__indicator" aria-hidden="true"/>
+                          {selected.isEnabled ? 'Мониторинг включён' : 'Мониторинг приостановлен'}
+                        </span>
                         <span className="integration-menu__muted text-xs">Потрачено сегодня: {(selected.spentTodayMilli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} кр.</span>
                       </div>
                       <p className="integration-menu__muted text-xs">
@@ -488,7 +491,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       </div>
                       {!selected.isEnabled && <p className="integration-menu__muted text-xs">При сохранении настроек ассистент получит разрешение проверять новые сообщения этого конкретного чата и передавать их OpenAI для анализа. При обычной проверке старые сообщения автоматически не анализируются; кнопка «Обновить сводку» отдельно анализирует ограниченный фрагмент истории, включая поддерживаемые вложения.</p>}
                       {selected.lastSummary && (
-                        <details className="telegram-ai-monitor-summary rounded-xl border p-3" open>
+                        <details className="telegram-ai-monitor-summary rounded-xl border p-3">
                           <summary className="cursor-pointer text-sm font-semibold">Последняя сводка {selected.lastSummaryAt ? '· ' + new Date(selected.lastSummaryAt).toLocaleString('ru-RU') : ''}</summary>
                           <p className="mt-3 text-sm leading-relaxed">{selected.lastSummary.summary}</p>
                           {([
@@ -507,7 +510,15 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       )}
                     </div>
                   )}
-                  <section className="telegram-ai-settings-section" aria-label="Настройки участия в переписке">
+                  <details key={`${selectedId}-conversation`} className="telegram-ai-settings-section telegram-ai-settings-section--conversation" aria-label="Настройки участия в переписке">
+                    <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__header-copy">
+                        <span className="telegram-ai-settings-section__title">Участие в переписке</span>
+                        <span className="telegram-ai-settings-section__description">Когда ассистент предлагает ответы или отправляет их автоматически</span>
+                      </span>
+                      <ChevronDown size={19} className="telegram-ai-settings-section__chevron" aria-hidden="true"/>
+                    </summary>
+                    <div className="telegram-ai-settings-section__content">
                   <SettingSlider title="Участие в переписке" description="Ассистент не участвует, предлагает ответ с подтверждением или отвечает автоматически"
                     index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
                     shortLabels={['Не участвовать', 'Предлагать', 'Автоответы']}
@@ -559,8 +570,17 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         }))}/>
                     </div>
                   )}
-                  </section>
-                  <section className="telegram-ai-settings-section" aria-label="Настройки добавления задач">
+                    </div>
+                  </details>
+                  <details key={`${selectedId}-tasks`} className="telegram-ai-settings-section telegram-ai-settings-section--tasks" aria-label="Настройки добавления задач">
+                    <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__header-copy">
+                        <span className="telegram-ai-settings-section__title">Добавление задач</span>
+                        <span className="telegram-ai-settings-section__description">Предложения, автосоздание и частота проверки новых поручений</span>
+                      </span>
+                      <ChevronDown size={19} className="telegram-ai-settings-section__chevron" aria-hidden="true"/>
+                    </summary>
+                    <div className="telegram-ai-settings-section__content">
                   <SettingSlider title="Добавление задач" description="Что делать с договорённостями и поручениями"
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
@@ -585,8 +605,20 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         ...current, taskIntervalMinutes: minutes, taskIntervalMonths: months
                       }))}/>
                   )}
-                  </section>
-                  <section className="telegram-ai-settings-section" aria-label="Настройки сводок">
+                  {draft.taskMode === 'AUTO' && (
+                    <p className="integration-menu__muted text-xs">Автодобавление задач работает по настройке «Добавление задач» и не зависит от автоответов.</p>
+                  )}
+                    </div>
+                  </details>
+                  <details key={`${selectedId}-summaries`} className="telegram-ai-settings-section telegram-ai-settings-section--summaries" aria-label="Настройки сводок">
+                    <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__header-copy">
+                        <span className="telegram-ai-settings-section__title">Частота сводок</span>
+                        <span className="telegram-ai-settings-section__description">Когда собирать итоги переписки и что в них включать</span>
+                      </span>
+                      <ChevronDown size={19} className="telegram-ai-settings-section__chevron" aria-hidden="true"/>
+                    </summary>
+                    <div className="telegram-ai-settings-section__content">
                   <TimeFrequencySlider key={selectedId + '-summary'} title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
                     disabledOption minutes={draft.summaryIntervalMinutes} months={draft.summaryIntervalMonths}
                     onChange={(minutes, months) => setDraft(current => ({
@@ -600,7 +632,17 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                     </label>
                   )}
-                  </section>
+                    </div>
+                  </details>
+                  <details key={`${selectedId}-general`} className="telegram-ai-settings-section telegram-ai-settings-section--general" aria-label="Общие параметры ассистента">
+                    <summary className="telegram-ai-settings-section__header">
+                      <span className="telegram-ai-settings-section__header-copy">
+                        <span className="telegram-ai-settings-section__title">Общие параметры</span>
+                        <span className="telegram-ai-settings-section__description">Модель ИИ, дневной предел кредитов и уведомления</span>
+                      </span>
+                      <ChevronDown size={19} className="telegram-ai-settings-section__chevron" aria-hidden="true"/>
+                    </summary>
+                    <div className="telegram-ai-settings-section__content">
                   <label className="block text-sm font-semibold">
                     Модель фонового мониторинга
                     <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для фонового анализа, предложений ответов, автоответов, сводок и задач. Модель ручных запросов выбирается отдельно.</p>
@@ -617,9 +659,6 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                   <p className="integration-menu__muted text-xs leading-relaxed">
                     «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
                   </p>
-                  {draft.taskMode === 'AUTO' && (
-                    <p className="integration-menu__muted text-xs">Автодобавление задач работает по настройке «Добавление задач» и не зависит от автоответов.</p>
-                  )}
                   <label className="flex items-start gap-2 text-sm">
                     <input type="checkbox" checked={draft.notifyImportant} onChange={e => update('notifyImportant', e.target.checked)} className="mt-1"/>
                     Уведомлять о важных событиях и рисках
@@ -630,6 +669,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       <span className="integration-menu__muted mt-1 block text-xs">Фото, PDF и поддерживаемые документы будут анализироваться ИИ. Это увеличивает расход кредитов. По умолчанию включено.</span>
                     </span>
                   </label>
+                    </div>
+                  </details>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
                     <button type="button" disabled={busy || !canConfigure || (draft.mode === 'AUTO' && (!capability?.sendEnabled || !draft.autoReplyWhen.trim() || !draft.autoReplyHow.trim())) || (draft.mode === 'SUGGEST' && (!draft.suggestWhen.trim() || !draft.suggestHow.trim()))}
                       onClick={() => void save()}
