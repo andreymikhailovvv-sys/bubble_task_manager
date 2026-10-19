@@ -51,7 +51,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'update_note', strict: true,
-    description: 'Изменить существующую личную заметку только по явной просьбе пользователя. ОБЯЗАТЕЛЬНО сначала найти её через search_notes или search_workspace, затем прочитать через read_note. Использовать точный id из read_note. title=null оставляет название без изменений; content=null сохраняет содержание. Для content укажи contentMode=replace (полная замена по явной просьбе) либо append (добавление текста, сохраняющее исходный HTML). groupName=null сохраняет группу; пустая строка убирает из группы; непустая строка требует существующую группу. Не выдумывай содержимое заметки, не перезаписывай весь текст для маленькой правки, если достаточно append. Не называй запись изменённой до ok=true.',
+    description: 'Изменить существующую личную заметку только по явной просьбе пользователя. ОБЯЗАТЕЛЬНО сначала найти её через search_notes или search_workspace, затем прочитать через read_note. Использовать точный id из read_note. title=null оставляет название без изменений; content=null сохраняет содержание. Для content укажи contentMode=append только для добавления В КОНЕЦ заметки, либо contentMode=replace для полного обновлённого текста, в том числе вставок в середину (например аккорды перед строфами). При replace всегда сохраняй весь исходный текст и его порядок, не отправляй только вставляемые строки. Если пользователь не указал, перед какой именно частью вставить текст, задай уточняющий вопрос. groupName=null сохраняет группу; пустая строка убирает из группы; непустая строка требует существующую группу. Не выдумывай содержимое заметки, не перезаписывай весь текст для маленькой правки, если достаточно append. Не называй запись изменённой до ok=true.',
     parameters: { type: 'object', additionalProperties: false, required: ['id', 'title', 'content', 'contentMode', 'groupName'], properties: {
       id: { type: 'string' },
       title: nullable('string'), content: nullable('string'),
@@ -464,6 +464,12 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'update_note') {
           const id = (value as { id?: unknown }).id;
           if (typeof id !== 'string' || !resolvedNoteIds.has(id) || !readNoteIds.has(id)) {
+            console.warn('[AI tools] note update denied', {
+              requestId, userId: input.userId, reason: 'NOTE_NOT_READ',
+              noteIdProvided: typeof id === 'string',
+              searched: typeof id === 'string' && resolvedNoteIds.has(id),
+              read: typeof id === 'string' && readNoteIds.has(id)
+            });
             return { ok: false, code: 'NOTE_NOT_READ', message: 'Сначала найдите и прочитайте нужную заметку через search_notes и read_note.' };
           }
           if (updatedNoteIds.has(id)) {
@@ -475,9 +481,17 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
               updatedNoteIds.add(id);
               actionReports.push('Изменена заметка «' + (result.note?.title ?? 'Без названия') + '».');
               console.info('[AI tools] note updated', { requestId, userId: input.userId, noteId: id });
+            } else {
+              console.warn('[AI tools] note update rejected', {
+                requestId, userId: input.userId, noteId: id, code: result.code
+              });
             }
             return result;
           } catch (error) {
+            console.error('[AI tools] note update failed', {
+              requestId, userId: input.userId, noteId: id,
+              error: error instanceof Error ? error.name : 'unknown'
+            });
             return { ok: false, code: 'UPDATE_NOTE_FAILED',
               message: error instanceof TypeError ? error.message : 'Не удалось изменить заметку.' };
           }
@@ -519,6 +533,10 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             return { ok: false, code: 'NOTE_NOT_RESOLVED', message: 'Сначала найдите заметку через search_notes или search_workspace.' };
           const note = await personalNotesToolsService.read(input.userId, noteId);
           if (!note) return { ok: false, code: 'NOTE_NOT_FOUND', message: 'Заметка не найдена или недоступна.' };
+          // A successful, owner-scoped read authorizes an explicit edit of this
+          // same note during this request. Without this marker every update_note
+          // is rejected with NOTE_NOT_READ, even after search_notes + read_note.
+          readNoteIds.add(noteId);
           emitProgress('analyzing_retrieved_context');
           return { ok: true, note };
         }

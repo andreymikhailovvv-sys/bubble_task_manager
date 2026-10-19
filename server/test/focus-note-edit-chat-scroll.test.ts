@@ -93,3 +93,29 @@ test('tool requires search and read of same owner-scoped note before writing', a
   assert.match(mini, /generalAiChatNearBottomRef\.current = true;\s*updateActiveAiChatMessages/);
   assert.match(style, /body\[data-theme='dark'\] \.focused-task-inline-subtask-button/);
 });
+
+test('successful read_note authorizes update_note; failed and unsearched reads do not', async () => {
+  const [tools, notes] = await Promise.all([
+    readFile(new URL('../src/services/ai-chat-tools.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/personal-notes-tools.service.ts', import.meta.url), 'utf8')
+  ]);
+  const updateStart = tools.indexOf("if (name === 'update_note')");
+  const updateEnd = tools.indexOf("if (name === 'search_workspace')", updateStart);
+  const readStart = tools.indexOf("if (name === 'read_note')");
+  const readEnd = tools.indexOf("if (name === 'search_tasks')", readStart);
+  assert.ok(updateStart > 0 && updateEnd > updateStart && readStart > 0 && readEnd > readStart);
+  const updateBlock = tools.slice(updateStart, updateEnd);
+  const readBlock = tools.slice(readStart, readEnd);
+  assert.match(updateBlock, /!resolvedNoteIds\.has\(id\) \|\| !readNoteIds\.has\(id\)/);
+  assert.match(updateBlock, /aiPersonalNotesService\.update\(input\.userId, value\)/);
+  const resolved = readBlock.indexOf("!resolvedNoteIds.has(noteId)");
+  const fetched = readBlock.indexOf('personalNotesToolsService.read(input.userId, noteId)');
+  const notFound = readBlock.indexOf("if (!note) return { ok: false");
+  const authorized = readBlock.indexOf('readNoteIds.add(noteId)');
+  const success = readBlock.indexOf('return { ok: true, note }');
+  assert.ok(resolved >= 0 && fetched > resolved && notFound > fetched
+    && authorized > notFound && success > authorized,
+    'Must authorize only after successfully reading an owner-scoped, previously searched note');
+  assert.match(notes, /where: \{ id, userId \}/,
+    'read_note must scope its lookup to the authenticated note owner');
+});
