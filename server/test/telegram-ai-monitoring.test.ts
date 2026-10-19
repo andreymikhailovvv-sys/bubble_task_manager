@@ -187,8 +187,8 @@ test('Task suggestions respect their own frequency even during fast reply cycles
   const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
   const inbox = source('../src/services/telegram-ai-inbox.service.ts');
   assert.match(worker, /const dueTasks = telegramTaskScanDue\(policy, now\)/);
-  assert.match(worker, /telegramInteractionDelayMs\(policy\.taskIntervalMinutes\)/);
-  assert.match(worker, /telegramInteractionDelayMs\(current\.taskIntervalMinutes\)/);
+  assert.match(worker, /telegramMonitorNextAt\(policy\.taskIntervalMinutes, policy\.taskIntervalMonths\)/);
+  assert.match(worker, /telegramMonitorNextAt\(current\.taskIntervalMinutes, current\.taskIntervalMonths\)/);
   assert.doesNotMatch(worker, /\|\| dueInteraction\);/);
   const now = new Date('2026-10-19T12:00:00Z');
   assert.equal(telegramTaskScanDue({ taskMode: 'NONE', nextTaskAt: now }, now), false);
