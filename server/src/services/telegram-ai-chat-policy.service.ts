@@ -99,7 +99,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
     taskCreationWhen: typeof p.taskCreationWhen === 'string' ? p.taskCreationWhen.trim() : '',
-    taskIntervalMinutes: oneOf(p.taskIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота добавления задач'),
+    taskIntervalMinutes: p.taskIntervalMinutes === undefined ? 30 : oneOf(p.taskIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота добавления задач'),
     interactionIntervalMinutes: oneOf(p.interactionIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота предложений ответов'),
     autoReplyIntervalMinutes: oneOf(p.autoReplyIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота автоответов'),
     summaryIntervalMinutes: oneOf(p.summaryIntervalMinutes, TELEGRAM_AI_SUMMARY_INTERVALS, 'частота сводок'),
