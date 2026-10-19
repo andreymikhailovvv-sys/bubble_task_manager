@@ -122,7 +122,7 @@ test('web interface separates participation frequency and summary configuration'
   }
   assert.match(ui, /type="range"/);
   assert.match(ui, /draft\.taskMode !== 'NONE' && \(/);
-  assert.match(ui, /index=\{indexOfValue\(CHECK_INTERVALS, draft\.taskIntervalMinutes\)\}/);
+  assert.match(ui, /minutes=\{draft\.taskIntervalMinutes\} months=\{draft\.taskIntervalMonths\}/);
   assert.equal((ui.match(/className="telegram-ai-settings-section"/g) ?? []).length, 3);
   const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
   assert.match(css, /\.telegram-ai-settings-section/);
