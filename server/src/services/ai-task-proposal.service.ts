@@ -11,7 +11,7 @@ import type { Prisma } from '@prisma/client';
  */
 export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant';
 export type TaskProposalAction = Record<string, unknown>;
-export type NoteProposalAction = UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
+export type NoteProposalAction = Record<string, unknown> & UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
 function isNoteAction(action: TaskProposalAction): action is NoteProposalAction {
   return action.operation === 'update_note';
 }
