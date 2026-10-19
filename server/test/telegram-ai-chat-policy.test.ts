@@ -123,7 +123,12 @@ test('web interface separates participation frequency and summary configuration'
   assert.match(ui, /type="range"/);
   assert.match(ui, /draft\.taskMode !== 'NONE' && \(/);
   assert.match(ui, /minutes=\{draft\.taskIntervalMinutes\} months=\{draft\.taskIntervalMonths\}/);
-  assert.equal((ui.match(/className="telegram-ai-settings-section"/g) ?? []).length, 3);
+  assert.equal((ui.match(/<details key=\\{\`\\$\\{selectedId\\}-/g) ?? []).length, 4);
+  assert.equal((ui.match(/<summary className="telegram-ai-settings-section__header">/g) ?? []).length, 4);
+  assert.doesNotMatch(ui, /<details key=\\{\`\\$\\{selectedId\\}-(?:conversation|tasks|summaries|general)\`\\}[^>]*\\sopen(?:\\s|>)/);
+  for (const name of ['Участие в переписке', 'Добавление задач', 'Частота сводок', 'Общие параметры']) {
+    assert.ok(ui.includes(name), name);
+  }
   const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
   assert.match(css, /\.telegram-ai-settings-section/);
   assert.match(css, /background: var\(--integration-surface\)/);
@@ -173,4 +178,25 @@ test('wider Telegram settings put profile tags above one-column sliders and use 
   assert.match(css, /telegram-ai-slider-setting__marks span/);
   assert.match(css, /telegram-ai-slider-setting__labels span/);
   assert.match(css, /scrollbar-gutter: stable/);
+});
+
+test('Telegram assistant live monitor status colors and closed settings work in both themes', () => {
+  const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
+  assert.match(ui, /telegram-ai-monitor-status--\$\{selected\.isEnabled \? 'active' : 'paused'\}/);
+  assert.match(ui, /Мониторинг включён/);
+  assert.match(ui, /Мониторинг приостановлен/);
+  assert.match(ui, /<ChevronDown size=\{19\}/);
+  for (const key of ['conversation', 'tasks', 'summaries', 'general']) {
+    assert.ok(ui.includes('telegram-ai-settings-section--' + key), key);
+    assert.match(css, new RegExp('telegram-ai-settings-section--' + key));
+  }
+  for (const state of ['active', 'paused']) {
+    assert.match(css, new RegExp('telegram-ai-monitor-status--' + state));
+    assert.match(css, new RegExp("body\\[data-theme='light'\\] \\.telegram-ai-monitor-status--" + state));
+  }
+  assert.match(css, /\.telegram-ai-settings-section:not\(\[open\]\) > \.telegram-ai-settings-section__content/);
+  assert.match(css, /\.telegram-ai-slider-setting__labels--dense span:nth-child\(even\)/);
+  assert.match(css, /--slider-inset: 44px/);
+  assert.match(ui, /telegram-ai-slider-setting--dense/);
 });
