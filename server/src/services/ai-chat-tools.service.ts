@@ -2,7 +2,8 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
 import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
-import { aiPersonalNotesService } from './ai-create-note.service.js';
+import { aiPersonalNotesService, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
+import type { NoteProposalAction } from './ai-task-proposal.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -274,9 +275,10 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
-  const preparedTaskActions: PlannerActionInput[] = [];
+  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
   const readNoteIds = new Set<string>();
+  const readNoteVersions = new Map<string, string>();
   const updatedNoteIds = new Set<string>();
   let noteCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
@@ -464,36 +466,25 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
         if (name === 'update_note') {
           const id = (value as { id?: unknown }).id;
           if (typeof id !== 'string' || !resolvedNoteIds.has(id) || !readNoteIds.has(id)) {
-            console.warn('[AI tools] note update denied', {
-              requestId, userId: input.userId, reason: 'NOTE_NOT_READ',
-              noteIdProvided: typeof id === 'string',
-              searched: typeof id === 'string' && resolvedNoteIds.has(id),
-              read: typeof id === 'string' && readNoteIds.has(id)
-            });
             return { ok: false, code: 'NOTE_NOT_READ', message: 'Сначала найдите и прочитайте нужную заметку через search_notes и read_note.' };
           }
           if (updatedNoteIds.has(id)) {
-            return { ok: false, code: 'NOTE_ALREADY_UPDATED', message: 'Эта заметка уже изменена в текущем запросе.' };
+            return { ok: false, code: 'NOTE_ALREADY_PREPARED', message: 'Изменение этой заметки уже подготовлено.' };
+          }
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) {
+            return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           }
           try {
-            const result = await aiPersonalNotesService.update(input.userId, value);
-            if (result.ok) {
-              updatedNoteIds.add(id);
-              actionReports.push('Изменена заметка «' + (result.note?.title ?? 'Без названия') + '».');
-              console.info('[AI tools] note updated', { requestId, userId: input.userId, noteId: id });
-            } else {
-              console.warn('[AI tools] note update rejected', {
-                requestId, userId: input.userId, noteId: id, code: result.code
-              });
+            const edit = validateAiUpdateNoteArgs(value);
+            const expectedUpdatedAt = readNoteVersions.get(edit.id);
+            if (!expectedUpdatedAt) {
+              return { ok: false, code: 'NOTE_NOT_READ', message: 'Прочитайте заметку ещё раз перед изменением.' };
             }
-            return result;
+            preparedTaskActions.push({ operation: 'update_note', ...edit, expectedUpdatedAt });
+            updatedNoteIds.add(edit.id);
+            return { ok: true, status: 'prepared', message: 'Изменение заметки подготовлено. Оно появится в карточке подтверждения и не будет сохранено до принятия.' };
           } catch (error) {
-            console.error('[AI tools] note update failed', {
-              requestId, userId: input.userId, noteId: id,
-              error: error instanceof Error ? error.name : 'unknown'
-            });
-            return { ok: false, code: 'UPDATE_NOTE_FAILED',
-              message: error instanceof TypeError ? error.message : 'Не удалось изменить заметку.' };
+            return { ok: false, code: 'INVALID_NOTE_CHANGE', message: error instanceof TypeError ? error.message : 'Некорректное изменение заметки.' };
           }
         }
         if (name === 'search_workspace') {
@@ -537,6 +528,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           // same note during this request. Without this marker every update_note
           // is rejected with NOTE_NOT_READ, even after search_notes + read_note.
           readNoteIds.add(noteId);
+          readNoteVersions.set(noteId, note.updatedAt);
           emitProgress('analyzing_retrieved_context');
           return { ok: true, note };
         }
@@ -689,7 +681,7 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     return { answer: taskProposal
       ? (taskProposal.status === 'APPLIED'
         ? 'Изменения применены автоматически. Подробности в карточке.'
-        : 'Подготовил изменения задач. Просмотрите карточку и нажмите «Принять».')
+        : 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».')
       : loop.answer, telegramSendDraft, telegramReadDraft, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));
