@@ -83,6 +83,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-user-client-security.test.ts
       - name: Verify image edit animation and attachment previews
         run: node --import tsx --test server/test/ai-image-edit-attachment-ui.test.ts
+      - name: Verify mobile web and Telegram Mini App shared filters, notes and current HTML
+        run: node --import tsx --test server/test/mobile-workspace-parity.test.ts
       - name: Verify newest Focus subtasks, AI note editing, chat scrolling and themed calendar
         run: node --import tsx --test server/test/focus-note-edit-chat-scroll.test.ts
       - name: Verify image generation and document regressions

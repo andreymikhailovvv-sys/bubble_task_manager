@@ -75,8 +75,16 @@ const clientDist = process.env.CLIENT_DIST_PATH
   ? path.resolve(__dirname, process.env.CLIENT_DIST_PATH)
   : path.resolve(__dirname, '../../client/dist');
 
-app.use(express.static(clientDist));
+// HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
+// filenames carry content hashes and may keep their ordinary static caching.
+app.use(express.static(clientDist, {
+  index: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  }
+}));
 app.get('*', (_, res) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 

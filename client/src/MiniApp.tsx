@@ -5,6 +5,8 @@ import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChat
 import { NotesEditor } from './components/NotesEditor';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
+import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
+import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
@@ -668,7 +670,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
-  const [isListSphereFilterOpen, setIsListSphereFilterOpen] = useState(false);
+  const [isStandaloneNotesOpen, setIsStandaloneNotesOpen] = useState(false);
   const [miniThemeMode, setMiniThemeMode] = useState<ThemePreference>(() => {
     return loadThemePreference(localStorage, 'btm:miniapp-theme-mode');
   });
@@ -1326,10 +1328,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     });
     return result;
   }, [filteredTasks, listSelectedSphereIds, listSortMode, spheres.length]);
-
-  const listSphereFilterLabel = spheres.length === 0 || listSelectedSphereIds === null || listSelectedSphereIds.length === spheres.length
-    ? 'Все сектора'
-    : `Секторы: ${listSelectedSphereIds.length}`;
 
   const toggleListSphereSelection = (sphereId: string) => {
     setListSelectedSphereIds((current) => {
@@ -3671,45 +3669,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 Отложить
               </button>
             </div>
-            <div className="grid grid-cols-3 items-center gap-2">
-                <CustomSelect
-                  className="min-w-0"
-                  value={listSortMode}
-                  onChange={(value) => setListSortMode(value as ListSortMode)}
-                  options={[{ value: 'importance', label: 'По важности' }, { value: 'urgency', label: 'По срочности' }]}
-                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
-                  ariaLabel="Сортировка задач"
-                />
-                <CustomSelect
-                  className="min-w-0"
-                  value={timeFilter}
-                  onChange={(value) => setTimeFilter(value as TimeFilter)}
-                  options={[{ value: 'all', label: 'За все время' }, { value: 'today', label: 'Сегодня' }, { value: 'tomorrow', label: 'Завтра' }, { value: 'week', label: 'Неделя' }]}
-                  buttonClassName="miniapp-list-filter-button h-8 px-2 py-1 text-xs"
-                  ariaLabel="Фильтр по времени"
-                />
-              <div className="relative min-w-0">
-                <button type="button" className="miniapp-list-filter-button custom-select-trigger flex h-8 w-full items-center justify-between gap-1 rounded border px-2 py-1 text-left text-xs" onClick={() => setIsListSphereFilterOpen((open) => !open)} aria-haspopup="menu" aria-expanded={isListSphereFilterOpen} aria-label="Фильтр по секторам">
-                  <span className="truncate">{listSphereFilterLabel}</span>
-                  <ChevronDown size={14} className={`shrink-0 transition ${isListSphereFilterOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isListSphereFilterOpen ? (
-                  <div className="miniapp-sector-filter-menu custom-select-menu absolute right-0 top-[calc(100%+6px)] z-[170] w-[min(16rem,85vw)] rounded-xl border p-1.5 shadow-2xl backdrop-blur">
-                    <label className="custom-select-option flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm">
-                      <input type="checkbox" checked={listSelectedSphereIds === null || listSelectedSphereIds.length === spheres.length} onChange={(event) => setListSelectedSphereIds(event.target.checked ? null : [])} />
-                      <span>Все сектора</span>
-                    </label>
-                    {spheres.map((sphere) => (
-                      <label key={sphere.id} className="custom-select-option flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm">
-                        <input type="checkbox" checked={listSelectedSphereIds === null || listSelectedSphereIds.includes(sphere.id)} onChange={() => toggleListSphereSelection(sphere.id)} />
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: sphere.color }} />
-                        <span className="truncate">{sphere.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <MiniWorkspaceTools
+              mode={displayMode}
+              timeFilter={timeFilter}
+              onTimeFilterChange={setTimeFilter}
+              sortMode={listSortMode}
+              onSortChange={setListSortMode}
+              spheres={spheres}
+              selectedSphereIds={listSelectedSphereIds}
+              onSelectAllSpheres={(all) => setListSelectedSphereIds(all ? null : [])}
+              onToggleSphere={toggleListSphereSelection}
+              timelineSphereId={sphereFilter}
+              onTimelineSphereChange={setSphereFilter}
+              onNotesOpen={() => setIsStandaloneNotesOpen(true)}
+            />
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
             ) : null}
@@ -3822,6 +3795,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 Отложить
               </button>
             </div>
+            <MiniWorkspaceTools
+              mode={displayMode}
+              timeFilter={timeFilter}
+              onTimeFilterChange={setTimeFilter}
+              sortMode={listSortMode}
+              onSortChange={setListSortMode}
+              spheres={spheres}
+              selectedSphereIds={listSelectedSphereIds}
+              onSelectAllSpheres={(all) => setListSelectedSphereIds(all ? null : [])}
+              onToggleSphere={toggleListSphereSelection}
+              timelineSphereId={sphereFilter}
+              onTimelineSphereChange={setSphereFilter}
+              onNotesOpen={() => setIsStandaloneNotesOpen(true)}
+            />
             {timelineView === 'day' ? <div className="relative overflow-x-hidden">
               <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                 {timelineToday.hourTops.map((top, hour) => {
@@ -5161,6 +5148,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {isStandaloneNotesOpen && currentUser ? (
+        <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
+          mode="mobile" onClose={() => setIsStandaloneNotesOpen(false)} />
       ) : null}
 
       {isWebRuntime && authModalMode ? (
