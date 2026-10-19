@@ -323,10 +323,13 @@ export type TelegramAiChatSettings = {
   mode: 'OBSERVE' | 'SUGGEST' | 'AUTO';
   taskMode: 'NONE' | 'SUGGEST' | 'AUTO';
   taskCreationWhen: string;
-  taskIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
+  taskIntervalMinutes: number;
+  taskIntervalMonths: number | null;
   interactionIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
-  autoReplyIntervalMinutes: 0 | 5 | 10 | 30 | 180 | 360 | 1440;
-  summaryIntervalMinutes: -1 | 0 | 5 | 10 | 30 | 180 | 360 | 1440;
+  autoReplyIntervalMinutes: number;
+  autoReplyIntervalMonths: number | null;
+  summaryIntervalMinutes: number;
+  summaryIntervalMonths: number | null;
   summaryInstructions: string;
   suggestWhen: string;
   suggestHow: string;
