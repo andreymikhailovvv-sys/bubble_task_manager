@@ -50,7 +50,7 @@ test('indicator styling stays theme aware and does not alter Mini App', async ()
   assert.match(stylesheet, /\.task-card-meta-indicator \{/);
   assert.match(stylesheet, /color: var\(--text-muted\)/);
   assert.match(stylesheet, /\.task-card-meta-action:hover \{/);
-  assert.match(stylesheet, /background: color-mix\(in srgb, var\(--accent\)/);
+  assert.match(stylesheet, /background: color-mix\(in srgb, #8b5cf6/);
   assert.match(stylesheet, /body\[data-theme='dark'\][\s\S]*?--text-muted:/);
   assert.match(stylesheet, /body\[data-theme='light'\][\s\S]*?--text-muted:/);
   const miniAppSource = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
