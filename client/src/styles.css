@@ -9156,6 +9156,7 @@ body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-hist
 /* One compact toolbar for the mobile web workspace and Telegram Mini App. */
 .miniapp-workspace-tools {
   position: relative;
+  z-index: 90;
   isolation: isolate;
   min-height: 2.6rem;
   margin-top: 0.6rem;
