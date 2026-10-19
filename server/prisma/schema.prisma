@@ -677,10 +677,13 @@ model TelegramAiChatPolicy {
   taskMode                String   @default("SUGGEST")
   taskCreationWhen        String   @default("") @db.Text
   taskIntervalMinutes     Int      @default(30) // 0 = check about every 15 seconds
+  taskIntervalMonths      Int?     // custom frequency: actual calendar months
   checkIntervalMinutes    Int      @default(30) // Legacy: kept for backward compatibility
   interactionIntervalMinutes Int   @default(5) // 0 = near-immediate polling, minimum 15 seconds
   autoReplyIntervalMinutes Int   @default(5)
+  autoReplyIntervalMonths Int?     // custom calendar-month interval
   summaryIntervalMinutes  Int      @default(30) // -1 = summaries off
+  summaryIntervalMonths   Int?     // custom calendar-month interval
   summaryInstructions     String   @default("") @db.Text
   suggestWhen             String   @default("") @db.Text
   suggestHow              String   @default("") @db.Text
