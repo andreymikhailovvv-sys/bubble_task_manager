@@ -2848,7 +2848,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
       setAiChatPendingFiles([]);
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
+         window.dispatchEvent(new Event('standalone-notes-updated'));
+       }
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
