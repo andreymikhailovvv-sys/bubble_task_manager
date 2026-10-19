@@ -296,6 +296,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   const loadChats = async () => {
     if (!canConfigure || policies.length >= 25) return;
     setPickerOpen(true); setPickerError(''); setPickerChoice(null); setPickerSearch('');
+    setAvailable(null);
     setLoadingChats(true);
     try { setAvailable(await api.telegramChatSendTargets()); }
     catch (err) { setPickerError(err instanceof Error ? err.message : 'Не удалось загрузить переписки'); }
