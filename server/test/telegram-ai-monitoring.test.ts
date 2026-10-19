@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
-import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs } from '../src/services/telegram-ai-monitor-worker.service.js';
+import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs, telegramTaskScanDue } from '../src/services/telegram-ai-monitor-worker.service.js';
 import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 import { nextTelegramAutoReplyAllowedAt } from '../src/services/telegram-ai-auto-reply.service.js';
 
@@ -166,6 +166,7 @@ test('independent interaction, summary and task schedules preserve non-overlappi
   const migration = source('../prisma/migrations/20261017193000_telegram_ai_independent_schedules/migration.sql');
   assert.equal(telegramInteractionDelayMs(0), 15_000);
   assert.equal(telegramInteractionDelayMs(5), 300_000);
+  assert.equal(telegramInteractionDelayMs(1440), 86_400_000);
   assert.match(worker, /const history = await telegramUserClientRead\.aiHistory\(userId, chatId, 10\);/);
   assert.match(worker, /await release\(claimed, null, IMMEDIATE_POLL_MS\)/);
   assert.match(worker, /lastInteractionMessageId: maxId/);
@@ -182,10 +183,19 @@ test('independent interaction, summary and task schedules preserve non-overlappi
   }
 });
 
-test('AUTO reply cycles evaluate owner-approved Telegram task suggestions immediately', () => {
+test('Task suggestions respect their own frequency even during fast reply cycles', () => {
   const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
   const inbox = source('../src/services/telegram-ai-inbox.service.ts');
-  assert.match(worker, /policy\.taskMode !== 'NONE' &&\s*\(\(policy\.nextTaskAt != null && policy\.nextTaskAt <= now\) \|\| dueInteraction\)/);
+  assert.match(worker, /const dueTasks = telegramTaskScanDue\(policy, now\)/);
+  assert.match(worker, /telegramInteractionDelayMs\(policy\.taskIntervalMinutes\)/);
+  assert.match(worker, /telegramInteractionDelayMs\(current\.taskIntervalMinutes\)/);
+  assert.doesNotMatch(worker, /\|\| dueInteraction\);/);
+  const now = new Date('2026-10-19T12:00:00Z');
+  assert.equal(telegramTaskScanDue({ taskMode: 'NONE', nextTaskAt: now }, now), false);
+  assert.equal(telegramTaskScanDue({ taskMode: 'SUGGEST', nextTaskAt: new Date(now.getTime() + 60_000) }, now), false);
+  assert.equal(telegramTaskScanDue({ taskMode: 'SUGGEST', nextTaskAt: now }, now), true);
+  assert.equal(telegramTaskScanDue({ taskMode: 'AUTO', nextTaskAt: new Date(now.getTime() - 1_000) }, now), true);
+  assert.equal(telegramTaskScanDue({ taskMode: 'AUTO', nextTaskAt: null }, now), false);
   assert.match(worker, /const taskMode = dueTasks \? current\.taskMode : 'NONE'/);
   assert.match(worker, /lastTaskMessageId: maxId/);
   assert.match(worker, /publishTelegramAiTaskSuggestions/);

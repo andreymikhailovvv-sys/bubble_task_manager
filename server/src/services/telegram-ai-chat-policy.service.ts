@@ -24,6 +24,7 @@ export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
   taskMode: typeof TASK_MODES[number];
   taskCreationWhen: string;
+  taskIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
   interactionIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
   autoReplyIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
   summaryIntervalMinutes: typeof TELEGRAM_AI_SUMMARY_INTERVALS[number];
@@ -42,6 +43,7 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
   taskCreationWhen: '',
+  taskIntervalMinutes: 30,
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
   summaryIntervalMinutes: 30,
@@ -97,6 +99,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
     taskCreationWhen: typeof p.taskCreationWhen === 'string' ? p.taskCreationWhen.trim() : '',
+    taskIntervalMinutes: p.taskIntervalMinutes === undefined ? 30 : oneOf(p.taskIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота добавления задач'),
     interactionIntervalMinutes: oneOf(p.interactionIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота предложений ответов'),
     autoReplyIntervalMinutes: oneOf(p.autoReplyIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота автоответов'),
     summaryIntervalMinutes: oneOf(p.summaryIntervalMinutes, TELEGRAM_AI_SUMMARY_INTERVALS, 'частота сводок'),

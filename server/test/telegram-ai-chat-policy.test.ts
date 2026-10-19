@@ -13,6 +13,7 @@ test('Telegram assistant has independent participation, summary and task setting
   const v = validateTelegramAiChatSettings(DEFAULT_TELEGRAM_AI_CHAT_SETTINGS);
   assert.equal(v.mode, 'OBSERVE');
   assert.equal(v.taskMode, 'SUGGEST');
+  assert.equal(v.taskIntervalMinutes, 30);
   assert.equal(v.taskCreationWhen, '');
   assert.equal(validateTelegramAiChatSettings({ ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS,
     taskCreationWhen: 'Только по конкретным просьбам' }).taskCreationWhen,
@@ -24,6 +25,11 @@ test('Telegram assistant has independent participation, summary and task setting
   assert.equal(v.interactionIntervalMinutes, 5);
   assert.equal(v.autoReplyIntervalMinutes, 5);
   assert.equal(v.summaryIntervalMinutes, 30);
+  const oldClientPayload = { ...DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } as Partial<typeof DEFAULT_TELEGRAM_AI_CHAT_SETTINGS>;
+  delete oldClientPayload.taskIntervalMinutes;
+  assert.equal(validateTelegramAiChatSettings(oldClientPayload).taskIntervalMinutes, 30);
+  const migrationTaskFrequency = readFileSync(new URL('../prisma/migrations/20261019123000_telegram_ai_task_interval_minutes/migration.sql', import.meta.url), 'utf8');
+  assert.match(migrationTaskFrequency, /ADD COLUMN "taskIntervalMinutes" INTEGER NOT NULL DEFAULT 30/);
   assert.deepEqual(TELEGRAM_AI_INTERVALS, [0, 5, 10, 30, 180, 360, 1440]);
   assert.deepEqual(TELEGRAM_AI_SUMMARY_INTERVALS, [-1, 0, 5, 10, 30, 180, 360, 1440]);
   assert.equal(v.monitorModel, 'gpt-6-luna');
@@ -45,12 +51,14 @@ test('all valid slider positions and nullable unlimited budget round-trip', () =
       for (const interval of TELEGRAM_AI_INTERVALS) {
         const parsed = validateTelegramAiChatSettings({ ...v, mode, taskMode,
           interactionIntervalMinutes: interval, autoReplyIntervalMinutes: interval,
+          taskIntervalMinutes: interval,
           ...(mode === 'SUGGEST' ? { suggestWhen: 'Когда упоминают', suggestHow: 'Коротко' } : {}),
           ...(mode === 'AUTO' ? { autoReplyWhen: 'Когда меня упоминают', autoReplyHow: 'Коротко отвечай' } : {}) });
         assert.equal(parsed.mode, mode);
         assert.equal(parsed.taskMode, taskMode);
         assert.equal(parsed.interactionIntervalMinutes, interval);
         assert.equal(parsed.autoReplyIntervalMinutes, interval);
+        assert.equal(parsed.taskIntervalMinutes, interval);
       }
     }
   }
@@ -78,6 +86,9 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, monitorModel: null },
     { ...valid, taskMode: 'CREATE_EVERYTHING' },
     { ...valid, interactionIntervalMinutes: 15 },
+    { ...valid, taskIntervalMinutes: 15 },
+    { ...valid, taskIntervalMinutes: -1 },
+    { ...valid, taskIntervalMinutes: '5' },
     { ...valid, autoReplyIntervalMinutes: 60 },
     { ...valid, summaryIntervalMinutes: -2 },
     { ...valid, summaryInstructions: 'x'.repeat(2001) },
@@ -100,10 +111,16 @@ test('assistant routes are signed-in and same-origin; preferences do not activat
 
 test('web interface separates participation frequency and summary configuration', () => {
   const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
-  for (const label of ['Участие в переписке', 'Добавление задач', 'Частота сводок', 'Частота предложений ответов', 'Частота автоответов', 'Дневной предел кредитов']) {
+  for (const label of ['Участие в переписке', 'Добавление задач', 'Частота добавления задач', 'Частота сводок', 'Частота предложений ответов', 'Частота автоответов', 'Дневной предел кредитов']) {
     assert.ok(ui.includes(label), 'Missing: ' + label);
   }
   assert.match(ui, /type="range"/);
+  assert.match(ui, /draft\.taskMode !== 'NONE' && \(/);
+  assert.match(ui, /index=\{indexOfValue\(CHECK_INTERVALS, draft\.taskIntervalMinutes\)\}/);
+  assert.equal((ui.match(/className="telegram-ai-settings-section"/g) ?? []).length, 3);
+  const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
+  assert.match(css, /\.telegram-ai-settings-section/);
+  assert.match(css, /background: var\(--integration-surface\)/);
   assert.match(ui, /aria-valuetext=/);
   assert.match(ui, /DAILY_LIMITS = \[/);
   assert.match(ui, /null\] as const/);

@@ -16,6 +16,7 @@ const DEFAULTS: TelegramAiChatSettings = {
   mode: 'OBSERVE',
   taskMode: 'SUGGEST',
   taskCreationWhen: '',
+  taskIntervalMinutes: 30,
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
   summaryIntervalMinutes: 30,
@@ -138,6 +139,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       mode: existing.mode,
       taskMode: existing.taskMode,
       taskCreationWhen: existing.taskCreationWhen ?? '',
+      taskIntervalMinutes: existing.taskIntervalMinutes ?? 30,
       interactionIntervalMinutes: existing.interactionIntervalMinutes ?? 5,
       autoReplyIntervalMinutes: existing.autoReplyIntervalMinutes ?? 5,
       summaryIntervalMinutes: existing.summaryIntervalMinutes ?? 30,
@@ -342,6 +344,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       )}
                     </div>
                   )}
+                  <section className="telegram-ai-settings-section" aria-label="Настройки участия в переписке">
                   <SettingSlider title="Участие в переписке" description="Ассистент не участвует, предлагает ответ с подтверждением или отвечает автоматически"
                     index={indexOfValue(MODES, draft.mode)} options={MODE_NAMES}
                     shortLabels={['Не участвовать', 'Предлагать', 'Автоответы']}
@@ -392,6 +395,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         onChange={i => update('autoReplyIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
                     </div>
                   )}
+                  </section>
+                  <section className="telegram-ai-settings-section" aria-label="Настройки добавления задач">
                   <SettingSlider title="Добавление задач" description="Что делать с договорённостями и поручениями"
                     index={indexOfValue(TASK_MODES, draft.taskMode)} options={TASK_NAMES}
                     shortLabels={['Не добавлять', 'Предлагать', 'Автоматически']}
@@ -409,6 +414,14 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal" />
                     </label>
                   ) : null}
+                  {draft.taskMode !== 'NONE' && (
+                    <SettingSlider title="Частота добавления задач" description="Как часто искать новые поручения и договорённости. «Сразу» означает проверку примерно раз в 15 секунд"
+                      index={indexOfValue(CHECK_INTERVALS, draft.taskIntervalMinutes)}
+                      options={CHECK_NAMES} shortLabels={CHECK_SHORT}
+                      onChange={i => update('taskIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                  )}
+                  </section>
+                  <section className="telegram-ai-settings-section" aria-label="Настройки сводок">
                   <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
                     index={indexOfValue(SUMMARY_INTERVALS, draft.summaryIntervalMinutes)} options={SUMMARY_NAMES}
                     shortLabels={SUMMARY_SHORT}
@@ -421,6 +434,7 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                         className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                     </label>
                   )}
+                  </section>
                   <label className="block text-sm font-semibold">
                     Модель фонового мониторинга
                     <p className="integration-menu__muted mt-1 text-xs font-normal">Используется для фонового анализа, предложений ответов, автоответов, сводок и задач. Модель ручных запросов выбирается отдельно.</p>
