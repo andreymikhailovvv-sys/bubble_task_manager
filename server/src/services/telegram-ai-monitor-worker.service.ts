@@ -14,7 +14,6 @@ const LEASE_MS = 10 * 60_000;
 const STALE_CALL_MS = 12 * 60_000;
 const MAX_JOBS_PER_TICK = 2;
 const MAX_INPUT_MESSAGES = 40;
-const TASK_SCAN_INTERVAL_MS = 30 * 60_000;
 const IMMEDIATE_POLL_MS = 15_000; // Minimum per-chat polling interval; no permanent MTProto listener.
 
 export function telegramInteractionDelayMs(minutes: number) {
@@ -75,12 +74,12 @@ export const telegramAiMonitorControl = {
           (policy.mode === 'SUGGEST' ? telegramInteractionDelayMs(policy.interactionIntervalMinutes)
             : telegramInteractionDelayMs(policy.autoReplyIntervalMinutes))),
         nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
-        nextTaskAt: policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS),
+        nextTaskAt: policy.taskMode === 'NONE' ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.taskIntervalMinutes)),
         nextCheckAt: nextMonitorWakeup([
           policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
             telegramInteractionDelayMs(policy.mode === 'SUGGEST' ? policy.interactionIntervalMinutes : policy.autoReplyIntervalMinutes)),
           policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
-          policy.taskMode === 'NONE' ? null : new Date(Date.now() + TASK_SCAN_INTERVAL_MS)
+          policy.taskMode === 'NONE' ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.taskIntervalMinutes))
         ]),
         lastError: null, leaseToken: null, leasedUntil: null, summaryRequested: false
       }
@@ -252,12 +251,10 @@ async function processClaim(claimed: Claimed) {
     policy.nextInteractionAt != null && policy.nextInteractionAt <= now;
   const dueSummary = policy.summaryRequested ||
     (policy.summaryIntervalMinutes !== -1 && policy.nextSummaryAt != null && policy.nextSummaryAt <= now);
-  // Piggyback task detection on an already-due reply/suggestion scan.
-  // Waiting for the independent 30-minute task timer makes a direct request
-  // ("поставь мне задачу") appear ignored while the assistant replies normally.
-  // The regular task timer remains as a fallback for OBSERVE-only policies.
+  // Tasks have their own user-selected frequency. Reply proposals, auto-replies,
+  // and summaries never pull task analysis forward ahead of this timer.
   const dueTasks = policy.taskMode !== 'NONE' &&
-    ((policy.nextTaskAt != null && policy.nextTaskAt <= now) || dueInteraction);
+    policy.nextTaskAt != null && policy.nextTaskAt <= now;
 
   const lastInteraction = policy.lastInteractionMessageId ?? policy.lastSeenMessageId ?? 0;
   const lastSummary = policy.lastSummaryMessageId ?? policy.lastSeenMessageId ?? 0;
@@ -326,7 +323,9 @@ async function processClaim(claimed: Claimed) {
   const nextSummaryAt = dueSummary && !policy.summaryRequested && current.summaryIntervalMinutes === -1
     ? null : dueSummary && current.summaryIntervalMinutes !== -1
       ? new Date(Date.now() + telegramInteractionDelayMs(current.summaryIntervalMinutes)) : current.nextSummaryAt;
-  const nextTaskAt = dueTasks ? new Date(Date.now() + TASK_SCAN_INTERVAL_MS) : current.nextTaskAt;
+  const nextTaskAt = dueTasks
+    ? new Date(Date.now() + telegramInteractionDelayMs(current.taskIntervalMinutes))
+    : current.nextTaskAt;
   const maxProcessed = Math.max(policy.lastSeenMessageId ?? 0, maxId);
 
   // Advance independent checkpoints before provider I/O: one delayed summary
