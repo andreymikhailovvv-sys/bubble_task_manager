@@ -80,7 +80,7 @@ test('tool requires search and read of same owner-scoped note before writing', a
   assert.match(tools, /name: 'update_note', strict: true/);
   assert.match(tools, /resolvedNoteIds\.has\(id\) \|\| !readNoteIds\.has\(id\)/);
   assert.match(tools, /preparedTaskActions\.push\(\{ operation: 'update_note', \.\.\.edit, expectedUpdatedAt \}\)/);
-  assert.match(tools, /updatedNoteIds\.add\(id\)/);
+  assert.match(tools, /updatedNoteIds\.add\(edit\.id\)/);
   assert.match(assistant, /вызови update_note/);
   for (const source of [web, mini]) {
     assert.match(source, /newestFocusSubtaskFirst\(a, b\)/);
@@ -107,7 +107,7 @@ test('successful read_note authorizes update_note; failed and unsearched reads d
   const updateBlock = tools.slice(updateStart, updateEnd);
   const readBlock = tools.slice(readStart, readEnd);
   assert.match(updateBlock, /!resolvedNoteIds\.has\(id\) \|\| !readNoteIds\.has\(id\)/);
-  assert.match(updateBlock, /aiPersonalNotesService\.update\(input\.userId, value\)/);
+  assert.match(updateBlock, /preparedTaskActions\.push\(\{ operation: 'update_note', \.\.\.edit, expectedUpdatedAt \}\)/);
   const resolved = readBlock.indexOf("!resolvedNoteIds.has(noteId)");
   const fetched = readBlock.indexOf('personalNotesToolsService.read(input.userId, noteId)');
   const notFound = readBlock.indexOf("if (!note) return { ok: false");
