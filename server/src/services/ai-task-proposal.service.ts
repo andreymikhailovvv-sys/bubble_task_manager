@@ -2,7 +2,7 @@ import { captureProposalBefore, captureProposalAfter, undoStoredProposal } from 
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { plannerToolsService, type PlannerActionInput } from './planner-tools.service.js';
-import { aiPersonalNotesService, validateAiUpdateNoteArgs, type UpdatePersonalNoteArgs } from './ai-create-note.service.js';
+import { aiPersonalNotesService, validateAiCreateNoteArgs, validateAiUpdateNoteArgs, type CreatePersonalNoteArgs, type UpdatePersonalNoteArgs } from './ai-create-note.service.js';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -12,6 +12,10 @@ import type { Prisma } from '@prisma/client';
 export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant';
 export type TaskProposalAction = Record<string, unknown>;
 export type NoteProposalAction = Record<string, unknown> & UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
+export type CreateNoteProposalAction = Record<string, unknown> & CreatePersonalNoteArgs & { operation: 'create_note' };
+function isCreateNoteAction(action: TaskProposalAction): action is CreateNoteProposalAction {
+  return action.operation === 'create_note';
+}
 function isNoteAction(action: TaskProposalAction): action is NoteProposalAction {
   return action.operation === 'update_note';
 }
@@ -57,7 +61,18 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
     select: { id: true, title: true, description: true, dueDate: true, status: true, updatedAt: true, parentTaskId: true }
   }) : [];
   const byId = new Map(tasks.map(task => [task.id, task]));
+  const createdNoteActions = actions.filter(isCreateNoteAction);
   const noteActions = actions.filter(isNoteAction);
+  for (const action of createdNoteActions) {
+    const payload = validateAiCreateNoteArgs(action);
+    if (payload.groupName) {
+      const group = await prisma.standaloneNoteGroup.findFirst({
+        where: { userId, name: { equals: payload.groupName, mode: 'insensitive' } },
+        select: { id: true }
+      });
+      if (!group) throw new Error('Группа «' + payload.groupName + '» не найдена. Выберите существующую группу.');
+    }
+  }
   const noteIds = [...new Set(noteActions.map(action => action.id))];
   const notes = noteIds.length ? await prisma.standaloneNote.findMany({
     where: { id: { in: noteIds }, userId },
@@ -75,7 +90,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
   const sphereNames = new Map<string, string>();
   // All existing references must remain reachable by the consenting actor.
   for (const action of actions) {
-    if (isNoteAction(action)) continue;
+    if (isNoteAction(action) || isCreateNoteAction(action)) continue;
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');
     }
@@ -91,6 +106,14 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
       ...notes.map(note => ({ kind: 'note', id: note.id, updatedAt: note.updatedAt.toISOString() }))
     ],
     display: actions.map(action => {
+      if (isCreateNoteAction(action)) return {
+        type: 'create_note', title: action.title || 'Без названия',
+        details: [
+          action.groupName ? 'Группа: ' + action.groupName : 'Без группы',
+          action.content ? 'Текст: ' + action.content.replace(/\\s+/g, ' ').trim().slice(0, 240) +
+            (action.content.length > 240 ? '…' : '') : null
+        ].filter((part): part is string => part !== null)
+      };
       if (isNoteAction(action)) {
         const note = notesById.get(action.id)!;
         const details = [
@@ -218,6 +241,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     if (notesBefore.length !== noteIds.length) throw new Error('Заметка больше недоступна.');
     const reports: string[] = [];
     const createdIds: string[] = [];
+    const createdNoteIds: string[] = [];
     if (row.source === 'planner' || row.source === 'telegram_bot' ||
         (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
       if (row.source === 'telegram_assistant' && row.autoApplied &&
@@ -226,6 +250,13 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
+        if (isCreateNoteAction(action)) {
+          const result = await aiPersonalNotesService.create(userId, action);
+          if (!result.ok) throw new Error(result.message);
+          createdNoteIds.push(result.note.id);
+          reports.push('Создана заметка «' + result.note.title + '».');
+          continue;
+        }
         if (isNoteAction(action)) {
           const result = await aiPersonalNotesService.update(
             userId, noteActionPayload(action), action.expectedUpdatedAt
@@ -266,10 +297,10 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
         reports.push('Создана задача «' + String(action.title).slice(0, 180) + '».');
       }
     } else throw new Error('Неизвестный источник предложения.');
-    const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore);
+    const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore, createdNoteIds);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
       status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
-      result: { reports, createdIds } as Prisma.InputJsonValue
+      result: { reports, createdIds, createdNoteIds } as Prisma.InputJsonValue
     } });
   } catch (error) {
     // A failed command must never be retried automatically: the network/database
