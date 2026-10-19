@@ -7,6 +7,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -2540,12 +2541,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       .sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
-        if (openedTaskSubtaskFilterMode === 'urgency') {
-          const aDueDate = dueDateTimestamp(a);
-          const bDueDate = dueDateTimestamp(b);
-          if (aDueDate !== bDueDate) return aDueDate - bDueDate;
-          return createdAtTimestamp(a) - createdAtTimestamp(b);
-        }
+        if (openedTaskSubtaskFilterMode === 'none') return newestFocusSubtaskFirst(a, b);
+        if (openedTaskSubtaskFilterMode === 'urgency') return urgentFocusSubtaskFirst(a, b);
         if (openedTaskSubtaskFilterMode === 'importance') {
           const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
           if (importanceDiff !== 0) return importanceDiff;
