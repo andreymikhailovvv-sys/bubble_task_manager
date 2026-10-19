@@ -9151,3 +9151,156 @@ body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-hist
 .ai-attachment-tiles-history .ai-attachment-tile { width: 5.4rem; }
 .ai-attachment-tiles-history .ai-attachment-tile-visual { width: 5.4rem; }
 @media (prefers-reduced-motion: reduce) { .ai-attachment-ring-indeterminate { animation: none; } .ai-attachment-tile-image { transition: none; } }
+
+
+/* One compact toolbar for the mobile web workspace and Telegram Mini App. */
+.miniapp-workspace-tools {
+  position: relative;
+  isolation: isolate;
+  min-height: 2.6rem;
+  margin-top: 0.6rem;
+}
+.miniapp-workspace-tool {
+  display: inline-flex;
+  min-height: 2.45rem;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  padding: .45rem .65rem;
+  border: 1px solid rgba(139, 92, 246, .35);
+  border-radius: .8rem;
+  background: rgba(139, 92, 246, .12);
+  color: #ddd6fe;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.miniapp-workspace-tool:not(:disabled):hover,
+.miniapp-workspace-tool[aria-expanded='true'] {
+  background: rgba(139, 92, 246, .24);
+  border-color: rgba(167, 139, 250, .65);
+}
+.miniapp-workspace-tool-optimize {
+  opacity: .48;
+  cursor: not-allowed;
+}
+.miniapp-workspace-tool-filter {
+  position: relative;
+  width: 2.55rem;
+  padding: .45rem;
+}
+.miniapp-workspace-filter-dot {
+  position: absolute;
+  top: .35rem;
+  right: .35rem;
+  width: .35rem;
+  height: .35rem;
+  border-radius: 50%;
+  background: #fbbf24;
+}
+.miniapp-workspace-filter-panel {
+  isolation: isolate;
+  max-height: min(68dvh, 520px);
+  overflow-y: auto;
+  border-color: rgba(167, 139, 250, .38);
+  background: #1e293b;
+  color: #e2e8f0;
+  text-align: left;
+}
+.miniapp-workspace-filter-reset { color: #c4b5fd; }
+.miniapp-workspace-filter-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin-bottom: .8rem;
+  font-size: .75rem;
+  font-weight: 600;
+}
+.miniapp-workspace-filter-field select {
+  appearance: none;
+  width: 100%;
+  min-height: 2.4rem;
+  padding: .5rem 2rem .5rem .75rem;
+  border: 1px solid rgba(148, 163, 184, .4);
+  border-radius: .65rem;
+  background: #334155;
+  color: #f8fafc;
+}
+.miniapp-workspace-filter-field svg {
+  position: absolute;
+  right: .65rem;
+  bottom: .7rem;
+  pointer-events: none;
+}
+.miniapp-workspace-sphere-list { max-height: 10rem; overflow-y: auto; }
+.miniapp-workspace-sphere-option {
+  display: flex;
+  min-height: 2.2rem;
+  align-items: center;
+  gap: .55rem;
+  padding: .4rem .3rem;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.miniapp-workspace-sphere-option input { accent-color: #8b5cf6; }
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-tool,
+.miniapp-shell.miniapp-light .miniapp-workspace-tool {
+  border-color: rgba(109, 40, 217, .3);
+  color: #5b21b6;
+  background: rgba(237, 233, 254, .9);
+}
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-panel,
+.miniapp-shell.miniapp-light .miniapp-workspace-filter-panel {
+  border-color: rgba(109, 40, 217, .22);
+  color: #1e293b;
+  background: #fff;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-field select,
+.miniapp-shell.miniapp-light .miniapp-workspace-filter-field select {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #1e293b;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-reset,
+.miniapp-shell.miniapp-light .miniapp-workspace-filter-reset { color: #6d28d9; }
+
+/* The existing website notes board becomes a full-screen, touch-sized
+   workspace on compact screens. All group and rich-text features remain. */
+.standalone-notes-mobile {
+  padding: 0;
+  align-items: stretch;
+}
+.standalone-notes-mobile .standalone-notes-board {
+  height: 100dvh;
+  max-height: 100dvh;
+  width: 100%;
+  max-width: none;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+.standalone-notes-mobile .standalone-notes-board-header {
+  padding-top: max(.85rem, env(safe-area-inset-top));
+}
+.standalone-notes-mobile .standalone-notes-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.standalone-notes-mobile .standalone-notes-create {
+  min-width: 2.5rem;
+}
+@media (min-width: 640px) {
+  .standalone-notes-mobile { padding: 1rem; align-items: center; }
+  .standalone-notes-mobile .standalone-notes-board {
+    height: min(92dvh, 880px);
+    max-width: 740px;
+    border-radius: 1.5rem;
+    border: 1px solid var(--panel-border);
+  }
+  .standalone-notes-mobile .standalone-notes-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
