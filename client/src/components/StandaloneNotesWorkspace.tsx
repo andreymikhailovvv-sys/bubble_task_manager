@@ -6,14 +6,14 @@ import { noteHtmlToPlainText, noteValueToEditorHtml } from '../lib/notes';
 import { NotesEditor } from './NotesEditor';
 import { StandaloneNoteGroupManager, noteGroupStyle } from './StandaloneNoteGroupManager';
 
-type Props = { userId: string; requestedNote?: { id: string; serial: number } | null };
+type Props = { userId: string; requestedNote?: { id: string; serial: number } | null; mode?: 'widget' | 'mobile'; onClose?: () => void };
 const sortNotes = (items: StandaloneNote[]) =>
   [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id));
 const titleOf = (note: StandaloneNote) => note.title.trim() || 'Без названия';
 const summaryOf = (note: StandaloneNote) => noteHtmlToPlainText(note.content).replace(/\s+/g, ' ').trim();
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Не удалось сохранить заметку.';
 
-export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
+export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget', onClose }: Props) {
   const [notes, setNotes] = useState<StandaloneNote[]>([]);
   const [groups, setGroups] = useState<StandaloneNoteGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
@@ -23,7 +23,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
   const [groupPicker, setGroupPicker] = useState<{ noteId: string; top: number; left: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(mode === 'mobile');
   const [editing, setEditing] = useState<StandaloneNote | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,7 +59,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
     setGroupManager(null);
     setGroupCreateForNoteId(null);
     setGroupPicker(null);
-    setBoardOpen(false);
+    setBoardOpen(mode === 'mobile');
     setEditing(null);
     draftRef.current = null;
     dirtyRef.current = false;
@@ -69,7 +69,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
     return () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     };
-  }, [userId, reload]);
+  }, [userId, reload, mode]);
 
   // Refresh when the board is opened: notes may have been created by AI or
   // Telegram since the widget first loaded.
@@ -280,10 +280,16 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
   };
 
   const pickerNoteGroupId = groupPicker ? notes.find(note => note.id === groupPicker.noteId)?.groupId ?? null : null;
+  const closeBoard = () => {
+    if (editing) return;
+    setGroupPicker(null);
+    setBoardOpen(false);
+    if (mode === 'mobile') onClose?.();
+  };
 
   return (
     <>
-      <section className="workspace-widget-card standalone-notes-widget rounded-[1.35rem] border p-4" aria-label="Личные заметки">
+      {mode === 'widget' ? <section className="workspace-widget-card standalone-notes-widget rounded-[1.35rem] border p-4" aria-label="Личные заметки">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-base font-bold tracking-[-0.01em]">
             <StickyNote size={17} className="standalone-note-accent shrink-0" />
@@ -314,10 +320,10 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
             Показать все ({notes.length})
           </button>
         ) : null}
-      </section>
+      </section> : null}
       {boardOpen ? createPortal(
-        <div className="standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !editing) setBoardOpen(false);
+        <div className={`standalone-notes-backdrop fixed inset-0 z-[245] flex items-center justify-center p-3 sm:p-6 ${mode === 'mobile' ? 'standalone-notes-mobile' : ''}`} onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !editing) closeBoard();
         }}>
           <section className="standalone-notes-board flex h-[min(87dvh,880px)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border shadow-2xl" role="dialog" aria-modal="true" aria-label="Все заметки">
             <div className="standalone-notes-board-header flex flex-col gap-2 border-b p-4 sm:px-6">
@@ -328,7 +334,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-2">
                   <button type="button" className="standalone-notes-create inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold" disabled={creating} onClick={() => void createNote()}><Plus size={16} /> Новая заметка</button>
-                  <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={() => { setGroupPicker(null); setBoardOpen(false); }} aria-label="Закрыть список заметок"><X size={18} /></button>
+                  <button type="button" className="standalone-notes-icon-button rounded-xl border p-2" onClick={closeBoard} aria-label="Закрыть список заметок"><X size={18} /></button>
                 </div>
               </div>
               <div className="standalone-notes-board-filters flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
