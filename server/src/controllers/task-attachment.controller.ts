@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { taskAttachmentService } from '../services/task-attachment.service.js';
+import { taskAttachmentService, isQuotaError } from '../services/task-attachment.service.js';
+import { prisma } from '../db/prisma.js';
 import { signTaskAttachmentDownloadToken, verifyTaskAttachmentDownloadToken } from '../services/task-attachment-download.service.js';
 
 const publicAppUrl = (req: Request) => {
@@ -21,13 +22,42 @@ const sendAttachment = (res: Response, attachment: { name: string; mimeType: str
 };
 
 export const taskAttachmentController = {
+  storage: async (req: Request, res: Response) => {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await taskAttachmentService.storage(req.user!.id));
+  },
+  listOwned: async (req: Request, res: Response) => {
+    res.set('Cache-Control', 'private, no-store');
+    res.json(await taskAttachmentService.listOwned(req.user!.id));
+  },
+  removeOwned: async (req: Request, res: Response) => {
+    res.json(await taskAttachmentService.removeOwned(req.params.attachmentId, req.user!.id));
+  },
   list: async (req: Request, res: Response) => {
     const data = await taskAttachmentService.list(req.params.id, req.user!.id);
     res.json(data);
   },
   create: async (req: Request, res: Response) => {
-    const item = await taskAttachmentService.create(req.params.id, req.user!.id, req.body);
-    res.status(201).json(item);
+    try {
+      const item = await taskAttachmentService.create(req.params.id, req.user!.id, req.body);
+      res.status(201).json(item);
+    } catch (error) {
+      if (!isQuotaError(error)) throw error;
+      // Notification in the application's existing system notification feed.
+      // Deduplicated daily to avoid a flood when the user repeatedly retries.
+      const eventKey = 'attachment-quota:' + req.user!.id + ':' + new Date().toISOString().slice(0, 10);
+      try {
+        await prisma.systemNotification.upsert({
+          where: { eventKey },
+          update: { readAt: null },
+          create: { userId: req.user!.id, eventKey, content: 'Лимит вложений исчерпан. Удалите ненужные файлы или измените тариф. Подробнее в настройках личного кабинета.' }
+        });
+      } catch (notifyError) {
+        console.warn('[attachments] failed to issue quota notification', notifyError instanceof Error ? notifyError.name : 'Unknown');
+      }
+      res.status(413).json({ error: error.message, code: error.code,
+        usedBytes: error.usedBytes, limitBytes: error.limitBytes });
+    }
   },
   remove: async (req: Request, res: Response) => {
     await taskAttachmentService.remove(req.params.id, req.params.attachmentId, req.user!.id);
