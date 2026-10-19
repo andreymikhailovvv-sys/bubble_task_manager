@@ -42,6 +42,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   const [headerHidden, setHeaderHidden] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const threadContentRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const previousScrollTopRef = useRef(0);
@@ -80,6 +81,17 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
     if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
   }, []);
 
+  useEffect(() => {
+    const content = threadContentRef.current;
+    if (!content) return;
+    const observer = new ResizeObserver(() => {
+      const container = scrollRef.current;
+      if (container && nearBottomRef.current) container.scrollTop = container.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
   const handleScroll = useCallback(() => {
     if (scrollFrameRef.current !== null) return;
     scrollFrameRef.current = requestAnimationFrame(() => {
@@ -105,7 +117,12 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   const submit = () => {
     const value = draft.trim();
     if (loading || (!value && pendingFiles.length === 0)) return;
+    nearBottomRef.current = true;
     onSend(value);
+    requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
     setDraft('');
   };
 
@@ -128,8 +145,10 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
           {dragActive ? <div className="ai-chat-drop-overlay">Перетащите файл, чтобы прикрепить его</div> : null}
           <div ref={scrollRef} onScroll={handleScroll} className="ai-chat-expanded-thread">
             <div className="ai-chat-expanded-top-spacer" aria-hidden="true" />
-            {messageCount === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
-            {messages}{status}
+            <div ref={threadContentRef}>
+              {messageCount === 0 ? <p className="text-sm text-subtle">Начните диалог: задайте вопрос, обсудите идею или попросите помочь с задачами.</p> : null}
+              {messages}{status}
+            </div>
             <div className="ai-chat-expanded-bottom-spacer" aria-hidden="true" />
           </div>
           <div ref={composerRef} className="ai-chat-expanded-composer-wrap">
