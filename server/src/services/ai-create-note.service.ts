@@ -68,13 +68,16 @@ export function createAiPersonalNotesService(db: typeof prisma = prisma) {
       });
       return { ok: true as const, note: { ...created, groupName: group?.name ?? null } };
     },
-    async update(userId: string, raw: unknown) {
+    async update(userId: string, raw: unknown, expectedUpdatedAt?: string) {
       const input = validateAiUpdateNoteArgs(raw);
       const existing = await db.standaloneNote.findFirst({
         where: { id: input.id, userId },
         select: { id: true, title: true, content: true, groupId: true, updatedAt: true }
       });
       if (!existing) return { ok: false as const, code: 'NOTE_NOT_FOUND', message: 'Заметка не найдена или недоступна.' };
+      if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
+        return { ok: false as const, code: 'NOTE_CHANGED', message: 'Заметка изменилась после чтения. Подготовьте предложение заново.' };
+      }
       const group = input.groupName && input.groupName.length
         ? await db.standaloneNoteGroup.findFirst({
           where: { userId, name: { equals: input.groupName, mode: 'insensitive' } },

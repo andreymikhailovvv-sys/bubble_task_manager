@@ -22,7 +22,8 @@ const LABELS: Record<string, string> = {
   complete_subtask: 'Завершение', delete: 'Удаление', delete_subtask: 'Удаление',
   set_priority: 'Приоритет', update_task: 'Изменение', update_subtask: 'Изменение',
   change_sphere: 'Сектор', change_task_sphere: 'Сектор', clear_due_date: 'Удаление срока',
-  reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления'
+  reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления',
+  update_note: 'Изменение заметки'
 };
 
 type ProposalItem = AiTaskProposal['operations'][number];
@@ -94,6 +95,15 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
   const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
+  const hasNotes = proposal.operations.some(item => item.type === 'update_note');
+  const onlyNotes = proposal.operations.every(item => item.type === 'update_note');
+  // Auto-applied edits arrive in the response with APPLIED already set,
+  // bypassing the manual approve handler. Refresh the notes board in that case.
+  useEffect(() => {
+    if (initial.status === 'APPLIED' && initial.operations.some(item => item.type === 'update_note')) {
+      window.dispatchEvent(new Event('standalone-notes-updated'));
+    }
+  }, [initial.id]);
   useEffect(() => {
     let active = true;
     void api.aiTaskProposal(initial.id).then(value => { if (active) setProposal(value); }).catch(() => {});
@@ -118,6 +128,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       setProposal(result);
       if (result.status === 'APPLIED') {
         window.dispatchEvent(new Event(proposalAppliedEvent));
+        if (hasNotes) window.dispatchEvent(new Event('standalone-notes-updated'));
         onApplied?.();
       }
     } catch (cause) {
@@ -127,6 +138,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
         setProposal(actual);
         if (actual.status === 'APPLIED') {
           window.dispatchEvent(new Event(proposalAppliedEvent));
+          if (hasNotes) window.dispatchEvent(new Event('standalone-notes-updated'));
           onApplied?.();
         }
         else setError(cause instanceof Error ? cause.message : 'Не удалось проверить состояние');
@@ -143,6 +155,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       setProposal(value);
       if (value.status === 'UNDONE') {
         window.dispatchEvent(new Event(proposalAppliedEvent));
+        if (hasNotes) window.dispatchEvent(new Event('standalone-notes-updated'));
         onApplied?.();
       }
     } catch (cause) {
@@ -171,7 +184,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       <div className="flex items-center gap-2">
         <span className="ai-task-proposal__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"><ClipboardCheck size={17} /></span>
         <div className="min-w-0 flex-1">
-          <strong className="block">Изменения задач</strong>
+          <strong className="block">{onlyNotes ? 'Изменения заметки' : hasNotes ? 'Изменения задач и заметок' : 'Изменения задач'}</strong>
           <span className="ai-task-proposal__muted text-xs">{proposal.operations.length} действий · {STATUS[proposal.status]}</span>
         </div>
         {isApplied ? <CheckCircle2 size={18} className="text-emerald-500" /> : null}
