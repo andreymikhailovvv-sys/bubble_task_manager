@@ -97,6 +97,13 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
   const hasNotes = proposal.operations.some(item => item.type === 'update_note');
   const onlyNotes = proposal.operations.every(item => item.type === 'update_note');
+  // Auto-applied edits arrive in the response with APPLIED already set,
+  // bypassing the manual approve handler. Refresh the notes board in that case.
+  useEffect(() => {
+    if (initial.status === 'APPLIED' && initial.operations.some(item => item.type === 'update_note')) {
+      window.dispatchEvent(new Event('standalone-notes-updated'));
+    }
+  }, [initial.id]);
   useEffect(() => {
     let active = true;
     void api.aiTaskProposal(initial.id).then(value => { if (active) setProposal(value); }).catch(() => {});
