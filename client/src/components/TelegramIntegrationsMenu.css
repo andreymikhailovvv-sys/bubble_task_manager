@@ -96,6 +96,35 @@ body[data-theme='light'] .telegram-integrations-modal {
   user-select: text;
 }
 
+/* One quiet surface groups the mode, its conditional rules and frequency.
+   No loud accent backgrounds and no nested-card frames on each slider. */
+.telegram-ai-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--integration-border);
+  border-radius: 18px;
+  background: var(--integration-surface);
+}
+.telegram-ai-settings-section > .telegram-ai-slider-setting {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+.telegram-ai-settings-section > .telegram-ai-slider-setting + .telegram-ai-slider-setting {
+  padding-top: 14px;
+  border-top: 1px solid var(--integration-border);
+}
+.telegram-ai-settings-section > .telegram-ai-monitor-status {
+  background: var(--integration-bg);
+}
+@media (max-width: 480px) {
+  .telegram-ai-settings-section { padding: 12px; gap: 12px; border-radius: 15px; }
+}
+
 /* Accessible, touch-friendly stepped sliders for the Telegram AI assistant. */
 .telegram-ai-slider-setting {
   border: 1px solid var(--integration-border);
