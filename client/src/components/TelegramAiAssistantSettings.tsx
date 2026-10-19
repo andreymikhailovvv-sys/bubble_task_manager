@@ -393,11 +393,13 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     } finally { setBusy(false); }
   };
 
-  return createPortal(
+  return <>
+    {createPortal(
     <div className="telegram-integrations-modal fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm" onClick={onClose}>
       <section role="dialog" aria-modal="true" aria-label="ИИ-ассистент Telegram"
-        className="telegram-integrations-modal__panel max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-3xl border p-5 shadow-2xl"
+        className="telegram-integrations-modal__panel flex max-h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={e => e.stopPropagation()}>
+        <div className="telegram-ai-settings-scroll min-h-0 overflow-y-auto px-5 py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="telegram-integrations-modal__accent flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"><Bot size={15}/> Интеграции</p>
@@ -416,33 +418,28 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
         {loading && <p className="mt-4 flex items-center gap-2 text-sm"><Loader2 className="animate-spin" size={16}/> Загружаем настройки…</p>}
         {!loading && <>
           {!canConfigure && <p role="status" className="telegram-integrations-modal__warning mt-4 text-sm">Для выбора чатов сначала подключите личный Telegram в «Интеграции → Отправка в Telegram» и разрешите чтение на сервере.</p>}
-          <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
-            <aside className="space-y-2">
-              <p className="text-sm font-semibold">Переписки ({policies.length}/25)</p>
-              <button type="button" disabled={!canConfigure || loadingChats}
-                className="integration-menu__action flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-50"
-                onClick={() => void loadChats()}>
-                {loadingChats ? <Loader2 size={15} className="animate-spin"/> : <Plus size={15}/>}
-                {available ? 'Обновить список' : 'Выбрать переписку'}
-              </button>
-              {policies.map(policy => (
-                <button key={policy.chatId} type="button" onClick={() => pick(policy.chatId)}
-                  aria-pressed={selectedId === policy.chatId}
-                  className={`telegram-ai-profile w-full rounded-xl border p-3 text-left text-sm ${selectedId === policy.chatId ? 'telegram-ai-profile--active' : ''}`}>
-                  <span className="block truncate font-semibold">{policy.chatTitle}</span>
-                  <span className="integration-menu__muted mt-1 block text-xs">{kindName(policy.chatKind)} · {policy.isEnabled ? 'Мониторинг включён' : 'Остановлен'}</span>
+          <div className="mt-5 space-y-5">
+            <nav aria-label="Ассистенты по перепискам" className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-semibold">Переписки ({policies.length}/25)</p>
+                <p className="integration-menu__muted text-xs">Выберите ассистента для настройки</p>
+              </div>
+              <div className="telegram-ai-profile-list">
+                {policies.map(policy => (
+                  <button key={policy.chatId} type="button" onClick={() => pick(policy.chatId)}
+                    aria-pressed={selectedId === policy.chatId}
+                    className={`telegram-ai-profile telegram-ai-profile--tag min-w-0 rounded-xl border px-4 py-3 text-left text-sm ${selectedId === policy.chatId ? 'telegram-ai-profile--active' : ''}`}>
+                    <span className="block truncate font-semibold">{policy.chatTitle}</span>
+                    <span className="integration-menu__muted mt-1 block truncate text-xs">{kindName(policy.chatKind)} · {policy.isEnabled ? 'Мониторинг включён' : 'Остановлен'}</span>
+                  </button>
+                ))}
+                <button type="button" disabled={!canConfigure || loadingChats || policies.length >= 25}
+                  className="telegram-ai-add-profile inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold disabled:opacity-50"
+                  onClick={() => void loadChats()}>
+                  <Plus size={17} /> Добавить переписку
                 </button>
-              ))}
-              {available && <>
-                <label className="integration-menu__muted block text-xs" htmlFor="telegram-ai-chat-choice">Доступные чаты Telegram</label>
-                <select id="telegram-ai-chat-choice" className="telegram-integrations-modal__input w-full rounded-xl border px-2 py-2 text-sm"
-                  value={selectedId ?? ''} onChange={event => pick(event.target.value)}>
-                  <option value="" disabled>Выберите переписку</option>
-                  {available.dialogs.map(dialog => <option key={dialog.id} value={dialog.id}>{dialog.name} · {kindName(dialog.kind)}</option>)}
-                </select>
-                {available.limited && <p className="integration-menu__muted text-xs">Telegram вернул ограниченный список чатов.</p>}
-              </>}
-            </aside>
+              </div>
+            </nav>
             <div className="min-w-0">
               {!selectedId ? (
                 <div className="integration-menu__instructions rounded-2xl border p-5 text-sm">Выберите переписку. Открытие списка не передаёт её сообщения ИИ.</div>
@@ -636,7 +633,59 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
         </>}
         {error && <p role="alert" className="telegram-integrations-modal__warning mt-4 text-sm">{error}</p>}
         {notice && <p role="status" className="telegram-integrations-modal__success mt-4 flex items-center gap-1.5 text-sm"><CheckCircle2 size={15}/>{notice}</p>}
+        </div>
       </section>
-    </div>, document.body
-  );
+    </div>, document.body)}
+    {pickerOpen && createPortal(
+      <div className="telegram-quick-share fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm"
+        onClick={event => { event.stopPropagation(); if (!pickerBusy) setPickerOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-label="Выбрать переписку для Telegram-ассистента"
+          className="telegram-quick-share__dialog flex max-h-[88dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl"
+          onClick={event => event.stopPropagation()}>
+          <header className="telegram-quick-share__header flex shrink-0 items-center justify-between border-b px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <MessageCircle size={18} className="text-sky-400"/> Выбрать переписку
+            </h3>
+            <button type="button" aria-label="Закрыть выбор переписки" disabled={pickerBusy}
+              onClick={() => setPickerOpen(false)} className="telegram-quick-share__close rounded-xl p-2 disabled:opacity-40">
+              <X size={17}/>
+            </button>
+          </header>
+          <div className="min-h-0 flex flex-col gap-3 overflow-hidden p-4">
+            <label className="telegram-quick-share__search flex shrink-0 items-center gap-2 rounded-xl border px-3">
+              <Search size={16} className="text-slate-400"/>
+              <input autoFocus value={pickerSearch} onChange={event => setPickerSearch(event.target.value)}
+                placeholder="Поиск человека или беседы" aria-label="Поиск по перепискам Telegram"
+                className="telegram-quick-share__search-input min-w-0 w-full bg-transparent py-3 text-sm outline-none"/>
+            </label>
+            <p className="telegram-quick-share__muted shrink-0 text-xs">Переписки в порядке активности Telegram</p>
+            <div className="telegram-quick-share__recipients min-h-0 flex-1 space-y-1 overflow-y-auto">
+              {loadingChats ? <p role="status" className="telegram-quick-share__muted flex items-center gap-2 p-3 text-sm"><Loader2 size={16} className="animate-spin"/> Загружаем чаты…</p> : null}
+              {!loadingChats && pickerDialogs.map(dialog => (
+                <button type="button" key={dialog.id} onClick={() => setPickerChoice(dialog.id)}
+                  aria-pressed={pickerChoice === dialog.id}
+                  className="telegram-quick-share__recipient flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm">
+                  <span className={`telegram-quick-share__check flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${pickerChoice === dialog.id ? 'telegram-quick-share__check--selected' : ''}`}>
+                    {pickerChoice === dialog.id ? <Check size={13}/> : null}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {dialog.name}
+                    <span className="telegram-quick-share__muted block truncate text-[11px]">
+                      {kindName(dialog.kind)}{dialog.username ? ' · ' + dialog.username : ''}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {!loadingChats && pickerDialogs.length === 0 && <p className="telegram-quick-share__muted p-3 text-sm">Подходящих переписок не найдено.</p>}
+            </div>
+            {available?.limited && <p className="telegram-quick-share__muted shrink-0 text-xs">Telegram вернул ограниченный список чатов.</p>}
+            {pickerError && <p role="alert" className="telegram-quick-share__error shrink-0 rounded-xl border p-3 text-xs">{pickerError}</p>}
+            <button type="button" disabled={!pickerChoice || loadingChats || pickerBusy} onClick={() => void addAssistant()}
+              className="telegram-quick-share__primary shrink-0 rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-40">
+              {pickerBusy ? 'Добавляем…' : 'Добавить ассистента'}
+            </button>
+          </div>
+        </section>
+      </div>, document.body)}
+    </>;
 }
