@@ -110,7 +110,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
         type: 'create_note', title: action.title || 'Без названия',
         details: [
           action.groupName ? 'Группа: ' + action.groupName : 'Без группы',
-          action.content ? 'Текст: ' + action.content.replace(/\\s+/g, ' ').trim().slice(0, 240) +
+          action.content ? 'Текст: ' + action.content.replace(/\s+/g, ' ').trim().slice(0, 240) +
             (action.content.length > 240 ? '…' : '') : null
         ].filter((part): part is string => part !== null)
       };
