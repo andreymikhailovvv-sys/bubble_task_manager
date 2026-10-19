@@ -44,3 +44,53 @@ test('user sees undo action and human-friendly localized dates', () => {
   assert.match(component, /Вернуть\s*<\/button>/);
   assert.doesNotMatch(component, /<span>\{item\.before\}<\/span>/);
 });
+
+test('note edits are displayed in the shared proposal on web and Mini App, not committed during AI tool execution', () => {
+  const tools = source('../src/services/ai-chat-tools.service.ts');
+  const proposal = source('../src/services/ai-task-proposal.service.ts');
+  const undo = source('../src/services/ai-task-proposal-undo.service.ts');
+  const card = source('../../client/src/components/AiTaskProposalCard.tsx');
+  const web = source('../../client/src/App.tsx');
+  const mini = source('../../client/src/MiniApp.tsx');
+  const noteBlock = tools.slice(tools.indexOf("if (name === 'update_note')"), tools.indexOf("if (name === 'search_workspace')"));
+  assert.match(noteBlock, /validateAiUpdateNoteArgs\(value\)/);
+  assert.match(noteBlock, /preparedTaskActions\.push\(\{ operation: 'update_note', \.\.\.edit, expectedUpdatedAt \}\)/);
+  assert.doesNotMatch(noteBlock, /aiPersonalNotesService\.update\(/);
+  assert.match(tools, /readNoteVersions\.set\(noteId, note\.updatedAt\)/);
+  assert.match(proposal, /kind: 'note', id: note\.id, updatedAt:/);
+  assert.match(proposal, /if \(snapshot\.kind === 'note'\)/);
+  assert.match(proposal, /aiPersonalNotesService\.update\(/);
+  assert.match(proposal, /const notesBefore = noteIds\.length/);
+  assert.match(proposal, /captureProposalAfter\(userId, before, createdIds, notesBefore\)/);
+  assert.match(undo, /notes\?: \{ before: StoredNote\[\]; after:/);
+  assert.match(undo, /tx\.standaloneNote\.updateMany/);
+  assert.match(undo, /noteHistory\.before\.length/);
+  assert.match(card, /Изменения заметки/);
+  assert.match(card, /update_note: 'Изменение заметки'/);
+  assert.match(card, /standalone-notes-updated/);
+  assert.match(card, /api\.undoAiTaskProposal/);
+  for (const component of [web, mini]) {
+    assert.match(component, /<AiTaskProposalCard/);
+  }
+});
+
+test('queued note edit rechecks the original read version before applying and cannot overwrite later edits', async () => {
+  const { createAiPersonalNotesService } = await import('../src/services/ai-create-note.service.js');
+  const version = new Date('2026-10-19T08:00:00.000Z');
+  const newer = new Date('2026-10-19T08:01:00.000Z');
+  let writes = 0;
+  const db = {
+    standaloneNote: {
+      findFirst: async () => ({ id: 'note', userId: 'owner', title: 'Кавказская песня', content: '<p>Куплет</p>', groupId: null, updatedAt: newer }),
+      updateMany: async () => { writes += 1; return { count: 1 }; }
+    }
+  };
+  const service = createAiPersonalNotesService(db as unknown as Parameters<typeof createAiPersonalNotesService>[0]);
+  const result = await service.update('owner', {
+    id: 'note', title: null, content: 'Bm A Em D\\nКуплет',
+    contentMode: 'replace', groupName: null
+  }, version.toISOString());
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'NOTE_CHANGED');
+  assert.equal(writes, 0, 'Confirmation must not overwrite a newer version of the note');
+});
