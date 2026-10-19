@@ -9,32 +9,35 @@ const expanded = read('components/ExpandedAiChat.tsx');
 const web = read('App.tsx');
 const mini = read('MiniApp.tsx');
 
-test('one Telegram message action is shared by website and Mini App', () => {
+test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(action, /className="telegram-quick-share__trigger"/);
+  assert.match(action, /<Forward size=\{19\}/);
   assert.match(web, /<TelegramMessageQuickShare text=\{/);
   assert.match(mini, /<TelegramMessageQuickShare text=\{/);
-  assert.match(css, /width:\s*26px\s*!important/);
-  assert.match(css, /height:\s*26px\s*!important/);
+  assert.match(css, /width:\s*28px\s*!important/);
+  assert.match(css, /height:\s*25px\s*!important/);
   assert.match(css, /place-items:\s*center\s*!important/);
-  assert.match(css, /transform:\s*translate\(-50%, -50%\)/);
-  assert.match(css, /fill:\s*currentColor\s*!important/);
+  assert.match(css, /transform:\s*none\s*!important/);
+  assert.match(css, /fill:\s*none\s*!important/);
+  assert.match(css, /stroke:\s*currentColor\s*!important/);
 });
 
-test('light Mini App global white-button override cannot win over Telegram action styles', () => {
-  assert.match(css, /body\[data-theme\] \.miniapp-shell \.miniapp-ai-chat-message button\.telegram-quick-share__trigger/);
-  assert.match(css, /\.miniapp-shell\.miniapp-light \.miniapp-ai-chat-message button\.telegram-quick-share__trigger/);
-  assert.match(css, /background:\s*rgba\(14, 165, 233, \.12\)\s*!important/);
-  assert.match(css, /color:\s*#0369a1\s*!important/);
+test('light Mini App button overrides cannot add a white box around the arrow', () => {
+  assert.match(css, /body\[data-theme\] \.miniapp-shell \.ai-message-forward-actions button\.telegram-quick-share__trigger/);
+  assert.match(css, /\.miniapp-shell\.miniapp-light \.ai-message-forward-actions button\.telegram-quick-share__trigger/);
+  assert.match(css, /background:\s*transparent\s*!important/);
+  assert.match(css, /border:\s*0\s*!important/);
+  assert.match(css, /color:\s*#737c8b\s*!important/);
   assert.match(css, /background-image:\s*none\s*!important/);
 });
 
-test('icons on user blue bubbles use high-contrast white glyphs in both themes', () => {
-  for (const container of [
-    '.ai-chat-message-user', '.quick-ai-chat-message-user',
-    '.chat-message-user', '.miniapp-ai-chat-message-user'
-  ]) assert.ok(css.includes(container + ' button.telegram-quick-share__trigger'));
-  assert.match(css, /color:\s*#ffffff\s*!important/);
-  assert.match(css, /background:\s*rgba\(7, 35, 77, \.74\)\s*!important/);
+test('arrow is below the message in a separate action row, never on a saturated bubble', () => {
+  assert.match(css, /\.ai-message-forward-group\s*\{/);
+  assert.match(css, /\.ai-message-forward-actions\s*\{/);
+  assert.equal((web.match(/className="ai-message-forward-actions"/g) ?? []).length, 6);
+  assert.equal((mini.match(/className="ai-message-forward-actions"/g) ?? []).length, 2);
+  assert.doesNotMatch(css, /background:\s*rgba\(7, 35, 77, \.74\)\s*!important/);
+  assert.doesNotMatch(css, /border-radius:\s*9999px\s*!important/);
 });
 
 test('obsolete header Telegram button and entire old chat panel are gone, current flows remain', () => {

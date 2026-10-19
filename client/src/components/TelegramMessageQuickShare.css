@@ -199,113 +199,84 @@ body[data-theme] .telegram-quick-share__textarea:focus {
   }
 }
 
-/* One shared Telegram action across web and Mini App.
-   Mini App's light theme applies a global !important rule to *every* button
-   in an AI message. Match and exceed that specificity so it cannot replace
-   the circular icon with a white square or black glyph. */
-body[data-theme] button.telegram-quick-share__trigger,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-message button.telegram-quick-share__trigger {
+/* Actions are siblings BELOW the chat bubble, not a footer inside it. */
+.ai-message-forward-group {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+.ai-message-forward-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 27px;
+  padding: 2px 2px 0;
+  line-height: 1;
+}
+
+/* Deliberately neutral, borderless control, like copy/edit actions.
+   Override the old Mini App global !important button rules without reusing
+   the circular Telegram-specific affordance. */
+body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger,
+body[data-theme] .miniapp-shell .ai-message-forward-actions button.telegram-quick-share__trigger,
+.miniapp-shell.miniapp-light .ai-message-forward-actions button.telegram-quick-share__trigger,
+.miniapp-shell:not(.miniapp-light) .ai-message-forward-actions button.telegram-quick-share__trigger {
   -webkit-appearance: none !important;
   appearance: none !important;
   display: grid !important;
   place-items: center !important;
   position: relative !important;
   box-sizing: border-box !important;
-  width: 26px !important;
-  height: 26px !important;
-  min-width: 26px !important;
-  min-height: 26px !important;
-  max-width: 26px !important;
-  max-height: 26px !important;
+  width: 28px !important;
+  height: 25px !important;
+  min-width: 28px !important;
+  min-height: 25px !important;
   padding: 0 !important;
   margin: 0 !important;
-  flex: 0 0 26px !important;
-  border: 1px solid rgba(2, 132, 199, .52) !important;
-  border-radius: 9999px !important;
-  background: rgba(14, 165, 233, .12) !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
   background-image: none !important;
-  color: #0369a1 !important;
-  opacity: 1 !important;
+  color: #737c8b !important;
   box-shadow: none !important;
-  line-height: 0 !important;
-  text-align: center !important;
-  vertical-align: middle !important;
-  transition: background-color 140ms ease, border-color 140ms ease !important;
+  opacity: .85 !important;
+  line-height: 1 !important;
+  transition: background-color 120ms ease, color 120ms ease !important;
 }
-
-body[data-theme] button.telegram-quick-share__trigger:hover,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover {
-  border-color: #0284c7 !important;
-  background: rgba(14, 165, 233, .24) !important;
-  color: #075985 !important;
+body[data-theme='dark'] .ai-message-forward-actions button.telegram-quick-share__trigger,
+.miniapp-shell:not(.miniapp-light) .ai-message-forward-actions button.telegram-quick-share__trigger {
+  color: #a1aab7 !important;
 }
-
-/* Dark messages keep their previous cool blue accent. */
-body[data-theme='dark'] button.telegram-quick-share__trigger,
-body[data-theme='dark'] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger,
-.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message button.telegram-quick-share__trigger {
-  color: #7dd3fc !important;
-  border-color: rgba(125, 211, 252, .58) !important;
-  background: rgba(14, 165, 233, .15) !important;
+body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger:hover,
+body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger[aria-expanded='true'],
+.miniapp-shell .ai-message-forward-actions button.telegram-quick-share__trigger:hover {
+  color: #414956 !important;
+  background: rgba(127, 136, 150, .12) !important;
+  opacity: 1 !important;
 }
-
-body[data-theme='dark'] button.telegram-quick-share__trigger:hover,
-body[data-theme='dark'] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover,
-.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message button.telegram-quick-share__trigger:hover {
-  background: rgba(14, 165, 233, .28) !important;
-  color: #e0f2fe !important;
+body[data-theme='dark'] .ai-message-forward-actions button.telegram-quick-share__trigger:hover,
+.miniapp-shell:not(.miniapp-light) .ai-message-forward-actions button.telegram-quick-share__trigger:hover {
+  color: #e0e4e9 !important;
 }
-
-/* User-authored bubbles can be saturated blue or custom participant colors.
-   A translucent deep-navy circle with white glyph reads against any of them.
-   Keep this last so light Mini App's blanket white-button rule cannot win. */
-body[data-theme] .ai-chat-message-user button.telegram-quick-share__trigger,
-body[data-theme] .quick-ai-chat-message-user button.telegram-quick-share__trigger,
-body[data-theme] .chat-message-user button.telegram-quick-share__trigger,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message-user button.telegram-quick-share__trigger,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user button.telegram-quick-share__trigger,
-.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user button.telegram-quick-share__trigger {
-  background: rgba(7, 35, 77, .74) !important;
-  background-image: none !important;
-  color: #ffffff !important;
-  border-color: rgba(255, 255, 255, .76) !important;
+body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger:focus-visible {
+  outline: 2px solid #7f8da3 !important;
+  outline-offset: 1px !important;
 }
-body[data-theme] .ai-chat-message-user button.telegram-quick-share__trigger:hover,
-body[data-theme] .quick-ai-chat-message-user button.telegram-quick-share__trigger:hover,
-body[data-theme] .chat-message-user button.telegram-quick-share__trigger:hover,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover,
-.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover,
-.miniapp-shell:not(.miniapp-light) .miniapp-ai-chat-message-user button.telegram-quick-share__trigger:hover {
-  background: rgba(2, 22, 54, .95) !important;
-  color: #ffffff !important;
-}
-
-body[data-theme] button.telegram-quick-share__trigger:focus-visible,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger:focus-visible {
-  outline: 2px solid #38bdf8 !important;
-  outline-offset: 2px !important;
-}
-
-/* Position the same filled SVG optically at the circle's center regardless
-   of button line-height and icon styles imposed by Mini App. */
-button.telegram-quick-share__trigger svg,
-body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-share__trigger svg {
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
+body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger svg,
+.miniapp-shell .ai-message-forward-actions button.telegram-quick-share__trigger svg {
+  position: static !important;
   display: block !important;
-  width: 16px !important;
-  height: 16px !important;
-  min-width: 16px !important;
-  min-height: 16px !important;
-  margin: 0 !important;
+  width: 19px !important;
+  height: 19px !important;
+  min-width: 19px !important;
+  min-height: 19px !important;
   padding: 0 !important;
-  transform: translate(-50%, -50%) translate(.5px, .5px) !important;
-  flex: none !important;
-  fill: currentColor !important;
-  stroke: none !important;
+  margin: 0 !important;
+  transform: none !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 1.75 !important;
   opacity: 1 !important;
   pointer-events: none !important;
 }
@@ -348,18 +319,6 @@ body[data-theme] .miniapp-shell .miniapp-ai-chat-message button.telegram-quick-s
 .telegram-quick-share__platform-item:focus-visible {
   background: rgba(128,128,128,.12);
 }
-.telegram-quick-share__trigger[data-message-forward-trigger] {
-  color: var(--text-muted, #9299a6);
-  background: transparent;
-  opacity: .66;
-  border-radius: 8px;
-}
-.telegram-quick-share__trigger[data-message-forward-trigger]:hover,
-.telegram-quick-share__trigger[data-message-forward-trigger][aria-expanded="true"] {
-  opacity: 1;
-  background: rgba(128,128,128,.1);
-}
-
 body[data-theme='light'] .telegram-quick-share__platform-menu {
   background: #ffffff;
   color: #17253d;
