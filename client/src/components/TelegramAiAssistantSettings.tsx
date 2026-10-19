@@ -1,8 +1,9 @@
 import { useEffect, useId, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Bot, CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Bot, Check, CheckCircle2, Loader2, MessageCircle, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { api, type TelegramAiChatPolicy, type TelegramAiChatSettings, type TelegramChatCapability, type TelegramSendTargetList } from '../lib/api';
 import './TelegramIntegrationsMenu.css';
+import './TelegramMessageQuickShare.css';
 
 type Props = { onClose: () => void };
 
@@ -17,9 +18,12 @@ const DEFAULTS: TelegramAiChatSettings = {
   taskMode: 'SUGGEST',
   taskCreationWhen: '',
   taskIntervalMinutes: 30,
+  taskIntervalMonths: null,
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
+  autoReplyIntervalMonths: null,
   summaryIntervalMinutes: 30,
+  summaryIntervalMonths: null,
   summaryInstructions: '',
   suggestWhen: '',
   suggestHow: '',
@@ -39,6 +43,26 @@ const SUMMARY_NAMES = ['Не делать сводки', ...CHECK_NAMES] as cons
 const CHECK_SHORT = ['Сразу', '5м', '10м', '30м', '3ч', '6ч', '24ч'] as const;
 const SUMMARY_SHORT = ['Выкл.', 'Сразу', '5м', '10м', '30м', '3ч', '6ч', '24ч'] as const;
 const CREDIT_NAMES = ['50', '100', '250', '500', '1 000', '2 500', '5 000', 'Без ограничения'] as const;
+const CUSTOM_OPTION = 'Своё';
+const CUSTOM_MAX_MINUTES = 5_256_000;
+const CUSTOM_MAX_MONTHS = 120;
+const CUSTOM_MAX_CREDITS = 100_000;
+type TimeUnit = 'minutes' | 'hours' | 'days' | 'months';
+const TIME_UNITS: Array<{ value: TimeUnit; label: string; multiplier: number }> = [
+  { value: 'minutes', label: 'мин', multiplier: 1 },
+  { value: 'hours', label: 'часы', multiplier: 60 },
+  { value: 'days', label: 'дни', multiplier: 1440 },
+  { value: 'months', label: 'месяцы', multiplier: 43_200 }
+];
+function unitForInterval(minutes: number, months: number | null): TimeUnit {
+  if (months !== null) return 'months';
+  if (minutes > 0 && minutes % 1440 === 0) return 'days';
+  if (minutes > 0 && minutes % 60 === 0) return 'hours';
+  return 'minutes';
+}
+function numberForInterval(minutes: number, months: number | null, unit: TimeUnit): number {
+  return unit === 'months' ? months ?? 1 : Math.max(1, minutes / (TIME_UNITS.find(v => v.value === unit)?.multiplier ?? 1));
+}
 
 function indexOfValue<T extends string | number | null>(options: readonly T[], value: string | number | null): number {
   const found = options.findIndex(option => option === value);
@@ -87,6 +111,94 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
       )}
     </div>
   );
+}
+
+type TimeFrequencySliderProps = {
+  title: string; description: string; minutes: number; months: number | null;
+  disabledOption?: boolean; onChange: (minutes: number, months: number | null) => void;
+};
+function TimeFrequencySlider({ title, description, minutes, months, disabledOption = false, onChange }: TimeFrequencySliderProps) {
+  const fixed = disabledOption ? SUMMARY_INTERVALS : CHECK_INTERVALS;
+  const names: string[] = disabledOption ? [...SUMMARY_NAMES, CUSTOM_OPTION] : [...CHECK_NAMES, CUSTOM_OPTION];
+  const labels: string[] = disabledOption ? [...SUMMARY_SHORT, CUSTOM_OPTION] : [...CHECK_SHORT, CUSTOM_OPTION];
+  const selected = months == null ? fixed.findIndex(v => v === minutes) : -1;
+  const custom = selected === -1;
+  const [unit, setUnit] = useState<TimeUnit>(() => unitForInterval(minutes, months));
+  const [entry, setEntry] = useState(() => String(numberForInterval(minutes, months, unitForInterval(minutes, months))));
+  const apply = (raw: string, nextUnit: TimeUnit) => {
+    setEntry(raw); setUnit(nextUnit);
+    const amount = Number(raw.replace(',', '.'));
+    const multiplier = TIME_UNITS.find(v => v.value === nextUnit)?.multiplier ?? 1;
+    if (!Number.isSafeInteger(amount) || amount < 1 || (nextUnit === 'months'
+      ? amount > CUSTOM_MAX_MONTHS : amount * multiplier > CUSTOM_MAX_MINUTES)) return;
+    if (nextUnit === 'months') onChange(amount * 43_200, amount);
+    else onChange(amount * multiplier, null);
+  };
+  return <div className="telegram-ai-custom-control">
+    <SettingSlider title={title} description={description} options={names} shortLabels={labels}
+      index={custom ? fixed.length : selected}
+      onChange={index => {
+        if (index === fixed.length) {
+          if (!custom) apply(entry && Number(entry) > 0 ? entry : '1', unit);
+        } else {
+          onChange(fixed[index] ?? fixed[0], null);
+        }
+      }} />
+    {custom && <div className="telegram-ai-custom-input" role="group" aria-label={title + ': своё значение'}>
+      <label className="text-xs font-semibold">Интервал
+        <input className="telegram-integrations-modal__input mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+          aria-label={title + ': число'} type="number" min={1}
+          max={unit === 'months' ? CUSTOM_MAX_MONTHS : CUSTOM_MAX_MINUTES}
+          step={1} value={entry} onChange={event => apply(event.target.value, unit)}/>
+      </label>
+      <label className="text-xs font-semibold">Единица
+        <select className="telegram-integrations-modal__input mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+          aria-label={title + ': единица'} value={unit}
+          onChange={event => {
+            const next = event.target.value as TimeUnit;
+            const preset = unit === 'months' ? (months ?? 1) * 43_200 : minutes;
+            const multiplier = TIME_UNITS.find(v => v.value === next)?.multiplier ?? 1;
+            apply(String(Math.max(1, Math.round(preset / multiplier))), next);
+          }}>
+          {TIME_UNITS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+      </label>
+      <p className="integration-menu__muted col-span-full text-xs">Месяцы считаются по календарю. Для коротких месяцев выбирается последний доступный день.</p>
+    </div>}
+  </div>;
+}
+function CreditLimitSlider({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
+  const preset = DAILY_LIMITS.findIndex(v => v === value);
+  const custom = preset < 0;
+  const [entry, setEntry] = useState(String(custom && value != null ? value / 1000 : 25));
+  const apply = (raw: string) => {
+    setEntry(raw);
+    const amount = Number(raw.replace(',', '.'));
+    const milli = Math.round(amount * 1000);
+    if (!Number.isFinite(amount) || amount < 0.001 || amount > CUSTOM_MAX_CREDITS ||
+        !Number.isSafeInteger(milli) || Math.abs(milli / 1000 - amount) > 0.000001) return;
+    onChange(milli);
+  };
+  return <div className="telegram-ai-custom-control">
+    <SettingSlider title="Дневной предел кредитов" description="Максимальный расход ИИ по этой переписке за день"
+      index={custom ? DAILY_LIMITS.length : preset}
+      options={[...CREDIT_NAMES, CUSTOM_OPTION]}
+      shortLabels={[...CREDIT_NAMES.map(s => s === 'Без ограничения' ? '∞' : s.replaceAll(' ', '')), CUSTOM_OPTION]}
+      onChange={index => {
+        if (index === DAILY_LIMITS.length) {
+          if (!custom) apply(entry);
+        } else onChange(DAILY_LIMITS[index] ?? null);
+      }}/>
+    {custom && <div className="telegram-ai-custom-input telegram-ai-custom-input--credits">
+      <label className="text-xs font-semibold">Кредитов в день
+        <input className="telegram-integrations-modal__input mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+          type="number" min={0.001} max={CUSTOM_MAX_CREDITS} step={0.001}
+          value={entry} onChange={event => apply(event.target.value)}
+          aria-label="Своё количество кредитов" />
+      </label>
+      <p className="integration-menu__muted text-xs">От 0,001 до 100 000 кредитов.</p>
+    </div>}
+  </div>;
 }
 
 export function TelegramAiAssistantSettings({ onClose }: Props) {
