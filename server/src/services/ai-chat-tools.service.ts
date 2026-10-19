@@ -1,5 +1,6 @@
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
+import { normalizePlannerDueDate } from './planner-due-date.service.js';
 import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
 import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
@@ -274,6 +275,8 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
+  // Freeze relative dates when the user's request starts, not on later approval.
+  const dateResolutionNow = new Date(startedAt);
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
@@ -558,7 +561,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           const spheres = await plannerToolsService.listSpheres(input.userId); spheres.forEach((sphere: { id: string }) => resolvedSphereIds.add(sphere.id)); return spheres;
         }
         if (name === 'task_action') {
-          const action = value as PlannerActionInput;
+          const original = value as PlannerActionInput;
+          const action: PlannerActionInput = { ...original,
+            dueDate: normalizePlannerDueDate(original.dueDate, input.userTimeZone, dateResolutionNow) };
           if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS) {
             return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           }
@@ -576,7 +581,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
             if (!PLANNER_BATCH_OPERATIONS.includes(action.operation)) return { ok: false, code: 'INVALID_BATCH_OPERATION' };
           }
           const actions = batch.map(action => ({
-            ...action, parentTaskId: null, title: null, description: null, location: null
+            ...action, dueDate: normalizePlannerDueDate(action.dueDate, input.userTimeZone, dateResolutionNow),
+            parentTaskId: null, title: null, description: null, location: null
           } as PlannerActionInput));
           preparedTaskActions.push(...actions);
           batchActionsRequested += actions.length;
@@ -682,7 +688,9 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
     return { answer: taskProposal
       ? (taskProposal.status === 'APPLIED'
         ? 'Изменения применены автоматически. Подробности в карточке.'
-        : 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».')
+        : taskProposal.status === 'PENDING'
+          ? 'Подготовил изменения. Просмотрите карточку и нажмите «Принять».'
+          : 'Изменения не применены: ' + (taskProposal.error || 'Не удалось выполнить операцию.') + ' Задача не создана, повторно подтверждать нечего.')
       : loop.answer, telegramSendDraft, telegramReadDraft, taskProposal, model: input.model, taskDataChanged: taskProposal?.status === 'APPLIED', actionReports, undoOperations, generatedDocument, imageCreditsSpentMilli: imageCreditsSpentMilli + fileEditCreditsSpentMilli, webSearchUsed, webSources, webCitations, billing: { mode: input.dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli }, workflowDiagnostics: { providerStreaming: true, webSearchProgressObserved, providerCalls: loop.providerCalls, toolCalls: loop.toolCalls, toolOperations, batchToolCalls, batchActionsRequested, batchActionsSucceeded, batchActionsFailed, inputTokensTotal, outputTokensTotal, webSearchUsed, webSearchCallsActual, webSearchCallsBilled, webSearchLimit: MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchLimitExceeded: webSearchCallsActual > MAX_WEB_SEARCH_CALLS_PER_USER_REQUEST, webSearchDuplicateItems, webSearchSearchItemsRaw, webSearchCreditsMilliBilled, providerWebSearchCostMilli, webSearchCalls: webSearchCallsActual, webSearchCreditsMilli: webSearchCreditsMilliBilled, webSourceCount: webSources.length } };
   } catch (error) {
     await Promise.all(dynamicCalls.map((call) => refundDynamicResponsesCall(call)));

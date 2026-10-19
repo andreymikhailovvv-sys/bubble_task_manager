@@ -1202,6 +1202,8 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
       // One conversation across Telegram, Mini App and the website.
       // In-memory chat state is not authoritative and is lost on server restarts.
       const history = (await aiAssistantService.listGeneralDialog({ userId: session.userId })).slice(-20);
+      const owner = await prisma.user.findUnique({ where: { id: session.userId }, select: { timeZone: true } });
+      const userTimeZone = owner?.timeZone || MOSCOW_TIMEZONE;
       const result = await aiAssistantService.askAiChat({
         userId: session.userId,
         question: transcript,
@@ -1209,6 +1211,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
         model: 'gpt-6-luna',
         projectTitle: 'Личный проект',
         chatTitle: 'Быстрые запросы',
+        userTimeZone,
         autoApplyTaskActions: true,
         requestId: `telegram-voice:${chatId}:${updateMessage.message_id ?? crypto.randomUUID()}`
       });
