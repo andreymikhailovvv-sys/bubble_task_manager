@@ -316,62 +316,24 @@ body[data-theme='light'] .telegram-integrations-modal {
   .telegram-ai-custom-input { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Quiet accordion surfaces in the existing light/dark integration palette. */
+/* Neutral accordion cards. Only their narrow left indicator has a section color. */
 .telegram-ai-settings-section {
-  --section-accent: #91beff;
-  --section-surface: #172945;
-  --section-border: #36537b;
-  --section-caption: #c0d0e5;
+  --section-accent: #74afe1;
   display: block;
   padding: 0;
   min-width: 0;
   overflow: hidden;
-  border-color: var(--section-border);
-  background: var(--section-surface);
+  border-color: var(--integration-border);
+  background: var(--integration-surface);
   color: var(--integration-text);
 }
-.telegram-ai-settings-section--tasks {
-  --section-accent: #ceb2fa;
-  --section-surface: #26223a;
-  --section-border: #55466e;
-  --section-caption: #d3c7e6;
-}
-.telegram-ai-settings-section--summaries {
-  --section-accent: #8ee0d4;
-  --section-surface: #183536;
-  --section-border: #376560;
-  --section-caption: #b8dcd6;
-}
-.telegram-ai-settings-section--general {
-  --section-accent: #e6cc9d;
-  --section-surface: #302c30;
-  --section-border: #625548;
-  --section-caption: #ded1c1;
-}
-body[data-theme='light'] .telegram-ai-settings-section--conversation {
-  --section-accent: #2364a3;
-  --section-surface: #eef5fd;
-  --section-border: #c4d7ec;
-  --section-caption: #4c627c;
-}
-body[data-theme='light'] .telegram-ai-settings-section--tasks {
-  --section-accent: #7450a9;
-  --section-surface: #f4f0fc;
-  --section-border: #ddd0ef;
-  --section-caption: #655477;
-}
-body[data-theme='light'] .telegram-ai-settings-section--summaries {
-  --section-accent: #1b746d;
-  --section-surface: #eef9f7;
-  --section-border: #b7dcd6;
-  --section-caption: #496e67;
-}
-body[data-theme='light'] .telegram-ai-settings-section--general {
-  --section-accent: #866326;
-  --section-surface: #fbf8f0;
-  --section-border: #e5dac2;
-  --section-caption: #6f624e;
-}
+.telegram-ai-settings-section--tasks { --section-accent: #ae9acb; }
+.telegram-ai-settings-section--summaries { --section-accent: #79bba9; }
+.telegram-ai-settings-section--general { --section-accent: #c2a67f; }
+body[data-theme='light'] .telegram-ai-settings-section--conversation { --section-accent: #3c7cae; }
+body[data-theme='light'] .telegram-ai-settings-section--tasks { --section-accent: #8465a7; }
+body[data-theme='light'] .telegram-ai-settings-section--summaries { --section-accent: #398b7f; }
+body[data-theme='light'] .telegram-ai-settings-section--general { --section-accent: #9c7643; }
 .telegram-ai-settings-section__header {
   display: flex;
   align-items: center;
@@ -385,7 +347,7 @@ body[data-theme='light'] .telegram-ai-settings-section--general {
 }
 .telegram-ai-settings-section__header::-webkit-details-marker { display: none; }
 .telegram-ai-settings-section__header:focus-visible {
-  outline: 2px solid var(--section-accent);
+  outline: 2px solid var(--integration-accent);
   outline-offset: -3px;
 }
 .telegram-ai-settings-section__header:hover { background: rgba(141, 160, 185, .075); }
@@ -402,13 +364,13 @@ body[data-theme='light'] .telegram-ai-settings-section--general {
   line-height: 1.35;
 }
 .telegram-ai-settings-section__description {
-  color: var(--section-caption);
+  color: var(--integration-muted);
   font-size: 12px;
   line-height: 1.45;
 }
 .telegram-ai-settings-section__chevron {
   flex-shrink: 0;
-  color: var(--section-accent);
+  color: var(--integration-muted);
   transition: transform 160ms ease;
 }
 .telegram-ai-settings-section[open] .telegram-ai-settings-section__chevron {
@@ -420,7 +382,7 @@ body[data-theme='light'] .telegram-ai-settings-section--general {
   gap: 16px;
   min-width: 0;
   padding: 16px 18px 18px;
-  border-top: 1px solid var(--section-border);
+  border-top: 1px solid var(--integration-border);
 }
 .telegram-ai-settings-section:not([open]) > .telegram-ai-settings-section__content {
   display: none;
@@ -434,9 +396,6 @@ body[data-theme='light'] .telegram-ai-settings-section--general {
 }
 .telegram-ai-settings-section__content > .telegram-ai-monitor-status {
   background: var(--integration-bg);
-}
-.telegram-ai-settings-section__content .telegram-ai-slider-setting__value {
-  color: var(--section-accent);
 }
 /* Color is reserved for the live state panel, not every setting or button. */
 .telegram-ai-monitor-status--active {

@@ -200,3 +200,18 @@ test('Telegram assistant live monitor status colors and closed settings work in 
   assert.match(css, /--slider-inset: 44px/);
   assert.match(ui, /telegram-ai-slider-setting--dense/);
 });
+
+test('Telegram assistant colored accordion surfaces use standard theme colors except for left accent bars', () => {
+  const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
+  const section = css.slice(css.indexOf('/* Neutral accordion cards.'), css.indexOf('/* Color is reserved for the live state panel'));
+  assert.match(section, /background: var\(--integration-surface\)/);
+  assert.match(section, /border-color: var\(--integration-border\)/);
+  assert.match(section, /color: var\(--integration-text\)/);
+  assert.match(section, /box-shadow: inset 3px 0 0 var\(--section-accent\)/);
+  assert.match(section, /color: var\(--integration-muted\)/);
+  assert.doesNotMatch(section, /--section-(?:surface|border|caption)/);
+  assert.doesNotMatch(section, /color: var\(--section-accent\)/);
+  for (const state of ['active', 'paused']) {
+    assert.match(css, new RegExp('\\.telegram-ai-monitor-status--' + state + ' \\{'));
+  }
+});
