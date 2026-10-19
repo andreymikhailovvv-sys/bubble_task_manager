@@ -79,7 +79,7 @@ test('tool requires search and read of same owner-scoped note before writing', a
   ]);
   assert.match(tools, /name: 'update_note', strict: true/);
   assert.match(tools, /resolvedNoteIds\.has\(id\) \|\| !readNoteIds\.has\(id\)/);
-  assert.match(tools, /aiPersonalNotesService\.update\(input\.userId, value\)/);
+  assert.match(tools, /preparedTaskActions\.push\(\{ operation: 'update_note', \.\.\.edit, expectedUpdatedAt \}\)/);
   assert.match(tools, /updatedNoteIds\.add\(id\)/);
   assert.match(assistant, /вызови update_note/);
   for (const source of [web, mini]) {
