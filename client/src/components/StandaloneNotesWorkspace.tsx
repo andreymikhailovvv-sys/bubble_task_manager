@@ -77,6 +77,14 @@ export function StandaloneNotesWorkspace({ userId, requestedNote }: Props) {
     if (boardOpen && !editing) void reload();
   }, [boardOpen, reload]);
 
+  useEffect(() => {
+    const handleAiNoteUpdate = () => {
+      if (!editing) void reload();
+    };
+    window.addEventListener('standalone-notes-updated', handleAiNoteUpdate);
+    return () => window.removeEventListener('standalone-notes-updated', handleAiNoteUpdate);
+  }, [editing, reload]);
+
   const saveChanges = useCallback(async () => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
