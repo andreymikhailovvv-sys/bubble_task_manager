@@ -2420,6 +2420,7 @@ export default function App() {
       }
       const next = await api.getTaskAttachments(focusedTask.id);
       setFocusedTaskAttachments(next);
+      await load();
       setAiError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось загрузить файл к задаче';
@@ -2441,6 +2442,7 @@ export default function App() {
     try {
       await api.deleteTaskAttachment(focusedTask.id, attachmentId);
       setFocusedTaskAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+      await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось удалить файл';
       setAiError(message);
@@ -5238,6 +5240,7 @@ ${allContext}`,
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {(subtask.attachmentCount ?? 0) > 0 ? <Paperclip size={13} className="shrink-0 text-violet-500" title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" /> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusActiveTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
@@ -7542,6 +7545,7 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
+                      {(subtask.attachmentCount ?? 0) > 0 ? <Paperclip size={13} className="shrink-0 text-violet-500" title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" /> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusedTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
