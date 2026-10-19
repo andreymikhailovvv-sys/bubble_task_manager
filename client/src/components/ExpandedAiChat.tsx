@@ -48,6 +48,8 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
   const previousScrollTopRef = useRef(0);
   const headerHiddenRef = useRef(false);
   const nearBottomRef = useRef(true);
+  const awaitAssistantReplyRef = useRef(false);
+  const previousLoadingRef = useRef(loading);
   const scrollFrameRef = useRef<number | null>(null);
   const previousChatIdRef = useRef<string | undefined>(undefined);
 
@@ -66,6 +68,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
     const container = scrollRef.current;
     if (!container) return;
     if (previousChatIdRef.current !== activeChat?.id) {
+      awaitAssistantReplyRef.current = false;
       container.scrollTop = container.scrollHeight;
       previousScrollTopRef.current = container.scrollTop;
       nearBottomRef.current = true;
@@ -74,7 +77,15 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
       previousChatIdRef.current = activeChat?.id;
       return;
     }
-    if (nearBottomRef.current) container.scrollTop = container.scrollHeight;
+    // When a response to our own send arrives, show it even if layout growth
+    // had previously moved the bottom outside the 120px stickiness threshold.
+    if (awaitAssistantReplyRef.current && previousLoadingRef.current && !loading) {
+      nearBottomRef.current = true;
+      awaitAssistantReplyRef.current = false;
+      container.scrollTop = container.scrollHeight;
+      requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; });
+    } else if (nearBottomRef.current) container.scrollTop = container.scrollHeight;
+    previousLoadingRef.current = loading;
   }, [activeChat?.id, messageCount, loading, imageGenerating]);
 
   useEffect(() => () => {
@@ -118,6 +129,7 @@ export const ExpandedAiChat = memo(function ExpandedAiChat({ projects, activePro
     const value = draft.trim();
     if (loading || (!value && pendingFiles.length === 0)) return;
     nearBottomRef.current = true;
+    awaitAssistantReplyRef.current = true;
     onSend(value);
     requestAnimationFrame(() => {
       const container = scrollRef.current;

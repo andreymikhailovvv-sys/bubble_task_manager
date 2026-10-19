@@ -68,8 +68,13 @@ test('general AI and Telegram voice share create_note, return confirmation and a
   assert.match(tools, /name: 'create_note', strict: true/);
   assert.match(tools, /if \(name === 'create_note'\)/);
   assert.match(tools, /if \(noteCreated\)/);
-  assert.match(tools, /aiPersonalNotesService\.create\(input\.userId, value\)/);
-  assert.match(tools, /actionReports\.push\('Создана заметка/);
+  // Creation must now be staged, never committed before user confirmation.
+  const createBlock = tools.slice(tools.indexOf("if (name === 'create_note')"), tools.indexOf("if (name === 'update_note')"));
+  assert.match(createBlock, /preparedTaskActions\.push\(\{ operation: 'create_note', \.\.\.note \}\)/);
+  assert.doesNotMatch(createBlock, /aiPersonalNotesService\.create\(/);
+  const proposal = await readFile(new URL('../src/services/ai-task-proposal.service.ts', import.meta.url), 'utf8');
+  assert.match(proposal, /aiPersonalNotesService\.create\(userId, action\)/);
+  assert.match(proposal, /reports\.push\('Создана заметка/);
   assert.match(assistant, /requiresNoteCreation\(question\) \? 'create_note'/);
   assert.match(assistant, /Для явного создания самостоятельной заметки вызывай create_note/);
   const transcriptHandler = voice.slice(voice.indexOf('const transcript = transcription.text'), voice.indexOf('const nextHistory:', voice.indexOf('const transcript = transcription.text')));

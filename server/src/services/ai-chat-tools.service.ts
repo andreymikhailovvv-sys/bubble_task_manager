@@ -2,8 +2,8 @@ import { openAiFetch } from '../lib/openai-fetch.js';
 import { prepareTaskProposal } from './ai-task-proposal.service.js';
 import { plannerToolsService, PLANNER_OPERATIONS, PLANNER_BATCH_OPERATIONS, type PlannerActionInput, type PlannerBatchActionInput, type PlannerSearchInput, type PlannerListInput } from './planner-tools.service.js';
 import { personalNotesToolsService, mergeTaskAndNoteSearchResults, validateNoteSearchInput } from './personal-notes-tools.service.js';
-import { aiPersonalNotesService, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
-import type { NoteProposalAction } from './ai-task-proposal.service.js';
+import { validateAiCreateNoteArgs, validateAiUpdateNoteArgs } from './ai-create-note.service.js';
+import type { NoteProposalAction, CreateNoteProposalAction } from './ai-task-proposal.service.js';
 import { providerNanoUsdToMilliCredits, recordAiCreditCharge, recordOpenAiUsageShadow, type OpenAiUsage } from './ai-usage-metering.service.js';
 import { refundDynamicResponsesCall, runDynamicResponsesCall, settleDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../config/openai-pricing.js';
@@ -45,7 +45,7 @@ export const AI_CHAT_OPENAI_TOOLS = [
   },
   {
     type: 'function', name: 'create_note', strict: true,
-    description: 'Создать новую самостоятельную личную заметку пользователя, доступную на сайте и в Mini App. Используй только по явной просьбе пользователя «создай заметку», «запиши в заметки», «сохрани как заметку». title — краткое название; content — записываемый текст, без HTML; groupName — точное название существующей группы либо null. Не создавай заметку без содержания и названия. После выполнения не утверждай, что сохранил её, если инструмент не подтвердил успех. За один запрос не создавай дубликаты.',
+    description: 'Подготовить создание новой самостоятельной заметки в чипе подтверждения изменений (сайт и Mini App). Не сохраняй заметку до подтверждения или настройки автоприменения. Используй только по явной просьбе пользователя «создай заметку», «запиши в заметки», «сохрани как заметку». title — краткое название; content — записываемый текст, без HTML; groupName — точное название существующей группы, названной пользователем, либо null, если группу не просили. Обязательно передавай её при просьбе сохранить заметку в конкретную группу; не подменяй null. Не создавай заметку без содержания и названия. Возврат prepared означает, что заметка ещё не создана: попроси подтвердить чип, не утверждай, что уже сохранил её. За один запрос не создавай дубликаты.',
     parameters: { type: 'object', additionalProperties: false, required: ['title', 'content', 'groupName'], properties: {
       title: { type: 'string' }, content: { type: 'string' }, groupName: nullable('string')
     } }
@@ -275,7 +275,7 @@ export async function runAiChatToolLoop(options: ToolLoopOptions) {
 export async function askAiChatWithTools(input: { userId: string; model: string; messages: unknown[]; userTimeZone: string; apiKey: string; actionRequestId: string; autoApplyTaskActions?: boolean; dynamicBilling?: boolean; fileTools?: FileToolContext; requiredLookupTool?: 'search_workspace' | 'search_notes' | 'create_note'; onProgress?: (status: import('./ai-chat-progress.js').AiChatProgressStatus) => void }) {
   const requestId = input.actionRequestId; const startedAt = Date.now();
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
-  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction> = [];
+  const preparedTaskActions: Array<PlannerActionInput | NoteProposalAction | CreateNoteProposalAction> = [];
   const resolvedNoteIds = new Set<string>();
   const readNoteIds = new Set<string>();
   const readNoteVersions = new Map<string, string>();
@@ -449,18 +449,19 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           return result;
         }
         if (name === 'create_note') {
-          if (noteCreated) return { ok: false, code: 'NOTE_ALREADY_CREATED', message: 'За один запрос уже создана заметка.' };
+          if (noteCreated) return { ok: false, code: 'NOTE_ALREADY_PREPARED', message: 'Предложение создания заметки уже подготовлено.' };
+          if (preparedTaskActions.length >= MAX_BATCH_TASK_ACTIONS)
+            return { ok: false, code: 'TOO_MANY_ACTIONS', message: 'Лимит предложений изменений исчерпан.' };
           try {
-            const result = await aiPersonalNotesService.create(input.userId, value);
-            if (result.ok) {
-              noteCreated = true;
-              actionReports.push('Создана заметка «' + result.note.title + '».');
-              console.info('[AI tools] note created', { requestId, userId: input.userId, noteId: result.note.id });
-            }
-            return result;
+            const note = validateAiCreateNoteArgs(value);
+            // The proposal service checks ownership of the named group before
+            // displaying the chip; the database write happens only on approval.
+            preparedTaskActions.push({ operation: 'create_note', ...note });
+            noteCreated = true;
+            return { ok: true, status: 'prepared', message: 'Создание заметки подготовлено и ожидает подтверждения в карточке изменений. Заметка ещё не сохранена.' };
           } catch (error) {
             return { ok: false, code: 'CREATE_NOTE_FAILED',
-              message: error instanceof TypeError ? error.message : 'Не удалось создать заметку.' };
+              message: error instanceof TypeError ? error.message : 'Не удалось подготовить заметку.' };
           }
         }
         if (name === 'update_note') {

@@ -9118,6 +9118,35 @@ body[data-theme='light'] .miniapp-shell .miniapp-timeline-reminder-card p {
 .ai-attachment-ring-value { stroke: #fff; stroke-linecap: round; transition: stroke-dashoffset .16s ease; }
 .ai-attachment-ring-indeterminate { stroke: #fff; stroke-linecap: round; stroke-dasharray: 32 94; animation: ai-attachment-rotate 1.15s linear infinite; transform-origin: 50% 50%; }
 @keyframes ai-attachment-rotate { to { transform: rotate(360deg); } }
+
+/* The original user bubble is blue in light mode. Attachment glyphs must not
+   inherit pale violet tones that disappear against the message background. */
+body[data-theme='light'] .ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-visual,
+body[data-theme='light'] .quick-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-visual,
+body[data-theme='light'] .chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-visual,
+body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-visual,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-visual {
+  background: rgba(15, 23, 42, .22);
+  border-color: rgba(255, 255, 255, .5);
+}
+body[data-theme='light'] .ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-file-icon,
+body[data-theme='light'] .quick-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-file-icon,
+body[data-theme='light'] .chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-file-icon,
+body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-file-icon,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-file-icon {
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .3));
+}
+body[data-theme='light'] .ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-name,
+body[data-theme='light'] .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-name,
+.miniapp-shell.miniapp-light .miniapp-ai-chat-message-user .ai-attachment-tiles-history .ai-attachment-tile-name {
+  color: #fff;
+  opacity: 1;
+}
+/* Forward actions below ordinary messages reserve this much room. Give system
+   notifications equivalent breathing space without a fake forward control. */
+.ai-system-notification-spacing { margin-bottom: 27px; }
+
 .ai-attachment-tiles-history .ai-attachment-tile-visual { height: 4.1rem; }
 .ai-attachment-tiles-history .ai-attachment-tile { width: 5.4rem; }
 .ai-attachment-tiles-history .ai-attachment-tile-visual { width: 5.4rem; }

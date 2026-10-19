@@ -2835,6 +2835,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setAiChatError(null);
     try {
       setAiChatProgress('analyzing_request');
+      setAiChatPendingFiles([]); // Attachment bytes are already prepared.
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
         question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
@@ -2847,12 +2848,16 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
-      setAiChatPendingFiles([]);
+      generalAiChatNearBottomRef.current = true;
       if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
          window.dispatchEvent(new Event('standalone-notes-updated'));
        }
        const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+       window.requestAnimationFrame(() => {
+         const scroll = aiChatDialogContainerRef.current;
+         if (scroll) scroll.scrollTop = scroll.scrollHeight;
+       });
       refreshAiCredits();
       if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } catch (e) {
@@ -3306,6 +3311,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     taskAiDraftValueRef.current = '';
     taskAiComposerRef.current?.clearDraft();
     setTaskAiUploadProgress(null);
+    setAiPendingFiles([]); // Files are encoded and attached to the sent message.
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
         clientRequestId,
@@ -3316,7 +3322,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })), onUploadProgress: setTaskAiUploadProgress });
-      setAiPendingFiles([]);
       const actionSummary = (result.actionReports?.length ?? 0) > 0
         ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
         : '';

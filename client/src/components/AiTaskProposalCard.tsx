@@ -23,7 +23,7 @@ const LABELS: Record<string, string> = {
   set_priority: 'Приоритет', update_task: 'Изменение', update_subtask: 'Изменение',
   change_sphere: 'Сектор', change_task_sphere: 'Сектор', clear_due_date: 'Удаление срока',
   reopen: 'Возобновление', reopen_subtask: 'Возобновление', set_notification: 'Уведомления',
-  update_note: 'Изменение заметки'
+  create_note: 'Создание заметки', update_note: 'Изменение заметки'
 };
 
 type ProposalItem = AiTaskProposal['operations'][number];
@@ -55,6 +55,7 @@ function humanDescription(item: ProposalItem): string | null {
       ? (previousDate ? `${formatHumanDate(previousDate)} → ${formatHumanDate(currentDate)}` : `Новый срок: ${formatHumanDate(currentDate)}`)
       : 'Срок изменён';
   }
+  if (type === 'create_note') return null;
   if (['create_task', 'create_event', 'create_reminder', 'create_subtask', 'telegram_suggestion'].includes(type)) {
     return currentDate ? `Срок: ${formatHumanDate(currentDate)}` : null;
   }
@@ -95,12 +96,12 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
   const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
-  const hasNotes = proposal.operations.some(item => item.type === 'update_note');
-  const onlyNotes = proposal.operations.every(item => item.type === 'update_note');
+  const hasNotes = proposal.operations.some(item => ['update_note', 'create_note'].includes(item.type));
+  const onlyNotes = proposal.operations.every(item => ['update_note', 'create_note'].includes(item.type));
   // Auto-applied edits arrive in the response with APPLIED already set,
   // bypassing the manual approve handler. Refresh the notes board in that case.
   useEffect(() => {
-    if (initial.status === 'APPLIED' && initial.operations.some(item => item.type === 'update_note')) {
+    if (initial.status === 'APPLIED' && initial.operations.some(item => ['update_note', 'create_note'].includes(item.type))) {
       window.dispatchEvent(new Event('standalone-notes-updated'));
     }
   }, [initial.id]);

@@ -88,7 +88,7 @@ test('tool requires search and read of same owner-scoped note before writing', a
   }
   assert.match(web, /quickAiFollowBottomRef\.current = true/);
   assert.match(web, /new ResizeObserver/);
-  assert.match(expanded, /nearBottomRef\.current = true;\s*onSend\(value\)/);
+  assert.match(expanded, /nearBottomRef\.current = true;\s*awaitAssistantReplyRef\.current = true;\s*onSend\(value\)/);
   assert.match(expanded, /new ResizeObserver/);
   assert.match(mini, /generalAiChatNearBottomRef\.current = true;\s*updateActiveAiChatMessages/);
   assert.match(style, /body\[data-theme='dark'\] \.focused-task-inline-subtask-button/);
