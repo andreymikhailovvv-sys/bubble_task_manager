@@ -189,7 +189,7 @@ function CreditLimitSlider({ value, onChange }: { value: number | null; onChange
     <SettingSlider title="Дневной предел кредитов" description="Максимальный расход ИИ по этой переписке за день"
       index={custom ? DAILY_LIMITS.length : preset}
       options={[...CREDIT_NAMES, CUSTOM_OPTION]}
-      shortLabels={[...CREDIT_NAMES.map(s => s === 'Без ограничения' ? '∞' : s.replaceAll(' ', '')), CUSTOM_OPTION]}
+      shortLabels={[...CREDIT_NAMES.map(s => s === 'Без ограничения' ? '∞' : s.replace(/ /g, '')), CUSTOM_OPTION]}
       onChange={index => {
         if (index === DAILY_LIMITS.length) {
           setEditingCustom(true);
