@@ -108,7 +108,8 @@ const SUPPORTED_AI_FILE_TYPES = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
-  'image/gif'
+  'image/gif',
+  'text/plain'
 ]);
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
@@ -2364,9 +2365,9 @@ export default function App() {
       return;
     }
 
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     if (normalized.length !== selectedFiles.length) {
-      setAiError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+      setAiError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     }
 
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
@@ -2391,18 +2392,18 @@ export default function App() {
   };
 
   const addAiChatFiles = (files: File[]) => {
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) { setAiChatError(`Файл ${oversized.name} превышает лимит 8MB.`); return; }
-    if (normalized.length !== files.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения.');
+    if (normalized.length !== files.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения.');
     setAiChatPendingFiles((previous) => [...previous, ...normalized].slice(0, MAX_AI_ATTACHMENTS));
   };
 
   const uploadFocusedTaskFiles = async (files: File[]) => {
     if (!focusedTask || files.length === 0) return;
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     if (normalized.length !== files.length) {
-      setAiError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+      setAiError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX, TXT и изображения.');
     }
     if (normalized.length === 0) return;
 
@@ -2696,8 +2697,8 @@ ${allContext}`,
   const handleFocusAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== selectedFiles.length) setFocusAiError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setFocusAiError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) {
       setFocusAiError(`Файл ${oversized.name} превышает лимит 8MB.`);
@@ -6977,7 +6978,7 @@ ${allContext}`,
               <input
                 ref={focusedAiFileInputRef}
                 type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
@@ -7230,7 +7231,7 @@ ${allContext}`,
                   <input
                     ref={focusedTaskAttachmentInputRef}
                     type="file"
-                    accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                    accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                     multiple
                     className="hidden"
                     onChange={handleTaskAttachmentFileSelect}
@@ -7792,7 +7793,7 @@ ${allContext}`,
             {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
-              <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
+              <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
               <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
