@@ -244,12 +244,13 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (pickerOpen) setPickerOpen(false);
-      else onClose();
+      if (pickerOpen) {
+        if (!pickerBusy) setPickerOpen(false);
+      } else onClose();
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [onClose, pickerOpen]);
+  }, [onClose, pickerOpen, pickerBusy]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
