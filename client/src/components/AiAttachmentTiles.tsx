@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileImage, FileSpreadsheet, FileText, FileType2, File as FileIcon, X } from 'lucide-react';
+import { FileImage, FileSpreadsheet, FileText, FileType2, File as FileIcon, Download, X } from 'lucide-react';
 
 export type AiAttachmentKind = 'image' | 'word' | 'excel' | 'pdf' | 'file';
 
@@ -132,7 +132,26 @@ export async function makeAiAttachmentPreviews(files: File[]): Promise<AiAttachm
  * Display appropriately styled file cards rather than pretending those bytes
  * are available after a reload. Never turn an untrusted filename into a URL.
  */
-export function AiMessageAttachments({ names, previews }: { names: string[]; previews?: AiAttachmentPreview[] }) {
+export function AiMessageAttachments({ names, previews, messageId }: { names: string[]; previews?: AiAttachmentPreview[]; messageId?: string }) {
+  const [downloadError, setDownloadError] = useState('');
+  const download = async (index: number, name: string) => {
+    if (!messageId) return;
+    setDownloadError('');
+    try {
+      const response = await fetch(`/api/ai-chat/uploaded-attachments/${encodeURIComponent(messageId)}/${index}/download`, { credentials: 'include' });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Вложение больше не доступно. Прикрепите файл заново.' }));
+        throw new Error(typeof error.error === 'string' ? error.error : 'Не удалось скачать вложение');
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = url; link.download = name;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Не удалось скачать файл');
+    }
+  };
   if (!names.length) return null;
   return <div className="ai-attachment-tiles ai-attachment-tiles-history" aria-label="Вложения сообщения">
     {names.map((name, i) => {
@@ -148,8 +167,10 @@ export function AiMessageAttachments({ names, previews }: { names: string[]; pre
           </span>}
         </div>
         <span className="ai-attachment-tile-name">{name}</span>
+        {messageId ? <button type="button" className="inline-flex items-center justify-center gap-1 rounded-md px-1 py-0.5 text-[10px] text-violet-500 hover:underline" title="Скачать, если файл ещё хранится в чате" onClick={() => void download(i, name)}><Download size={11} /> Скачать</button> : null}
       </div>;
     })}
+    {downloadError ? <p role="alert" className="w-full text-xs text-rose-500">{downloadError}</p> : null}
   </div>;
 }
 
