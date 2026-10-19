@@ -141,9 +141,9 @@ body[data-theme='light'] .telegram-integrations-modal {
   --slider-progress: 0%;
   --slider-track: var(--integration-border);
   display: block;
-  width: 100%;
+  width: calc(100% - 24px);
   height: 24px;
-  margin: 12px 0 0;
+  margin: 12px 12px 0;
   padding: 0;
   border: 0;
   outline: none;
@@ -202,7 +202,7 @@ body[data-theme='light'] .telegram-integrations-modal {
 .telegram-ai-slider-setting__marks {
   position: relative;
   height: 5px;
-  margin: -1px 10px 0;
+  margin: -1px 22px 0;
   pointer-events: none;
 }
 .telegram-ai-slider-setting__marks span {
@@ -222,7 +222,7 @@ body[data-theme='light'] .telegram-integrations-modal {
 .telegram-ai-slider-setting__labels {
   position: relative;
   height: 18px;
-  margin: 8px 10px 0;
+  margin: 8px 22px 0;
   color: var(--integration-muted);
   font-size: 11px;
   line-height: 1.25;
@@ -234,8 +234,7 @@ body[data-theme='light'] .telegram-integrations-modal {
   transform: translateX(-50%);
   text-align: center;
 }
-.telegram-ai-slider-setting__labels span:first-child { transform: none; }
-.telegram-ai-slider-setting__labels span:last-child { transform: translateX(-100%); }
+/* All labels, including edge labels, are centered exactly under their tick marks. */
 .telegram-ai-slider-setting__ends {
   display: flex;
   justify-content: space-between;
@@ -256,7 +255,7 @@ body[data-theme='light'] .telegram-integrations-modal {
 }
 .telegram-ai-settings-scroll {
   scrollbar-gutter: stable;
-  margin-right: 5px;
+  margin: 7px 5px 7px 0;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--integration-border) transparent;
@@ -307,7 +306,7 @@ body[data-theme='light'] .telegram-integrations-modal {
 .telegram-ai-custom-input input, .telegram-ai-custom-input select { min-width: 0; }
 @media (max-width: 560px) {
   .telegram-ai-profile--tag { width: calc(50% - 5px); min-width: 0; }
-  .telegram-ai-settings-scroll { margin-right: 3px; padding: 14px !important; }
+  .telegram-ai-settings-scroll { margin: 6px 3px 6px 0; padding: 14px !important; }
   .telegram-ai-custom-input--credits { grid-template-columns: minmax(0, 1fr); }
   .telegram-ai-slider-setting__labels { font-size: 9px; }
 }
