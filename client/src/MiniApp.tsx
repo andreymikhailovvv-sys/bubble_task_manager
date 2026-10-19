@@ -3311,6 +3311,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     taskAiDraftValueRef.current = '';
     taskAiComposerRef.current?.clearDraft();
     setTaskAiUploadProgress(null);
+    setAiPendingFiles([]); // Files are encoded and attached to the sent message.
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
         clientRequestId,
@@ -3321,7 +3322,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientSurface,
         attachments: attachmentsPayload
       }, { onStatus: (status) => setAiProgressByTask((current) => ({ ...current, [openedTask.id]: status })), onUploadProgress: setTaskAiUploadProgress });
-      setAiPendingFiles([]);
       const actionSummary = (result.actionReports?.length ?? 0) > 0
         ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
         : '';
