@@ -210,6 +210,11 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadingChats, setLoadingChats] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerChoice, setPickerChoice] = useState<string | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerBusy, setPickerBusy] = useState(false);
+  const [pickerError, setPickerError] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -227,10 +232,14 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (pickerOpen) setPickerOpen(false);
+      else onClose();
+    };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
+  }, [onClose, pickerOpen]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -252,9 +261,12 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
       taskMode: existing.taskMode,
       taskCreationWhen: existing.taskCreationWhen ?? '',
       taskIntervalMinutes: existing.taskIntervalMinutes ?? 30,
+      taskIntervalMonths: existing.taskIntervalMonths ?? null,
       interactionIntervalMinutes: existing.interactionIntervalMinutes ?? 5,
       autoReplyIntervalMinutes: existing.autoReplyIntervalMinutes ?? 5,
+      autoReplyIntervalMonths: existing.autoReplyIntervalMonths ?? null,
       summaryIntervalMinutes: existing.summaryIntervalMinutes ?? 30,
+      summaryIntervalMonths: existing.summaryIntervalMonths ?? null,
       summaryInstructions: existing.summaryInstructions ?? '',
       suggestWhen: existing.suggestWhen ?? '',
       suggestHow: existing.suggestHow ?? '',
@@ -272,18 +284,48 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
     setDraft(current => ({ ...current, [key]: value }));
 
   const loadChats = async () => {
-    setLoadingChats(true); setError(''); setNotice('');
-    try {
-      const targets = await api.telegramChatSendTargets();
-      setAvailable(targets);
-      if (!selectedId && targets.dialogs.length > 0) {
-        const first = targets.dialogs.find(dialog => !policies.some(p => p.chatId === dialog.id));
-        if (first) pick(first.id);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Не удалось получить список чатов');
-    } finally { setLoadingChats(false); }
+    if (!canConfigure || policies.length >= 25) return;
+    setPickerOpen(true); setPickerError(''); setPickerChoice(null); setPickerSearch('');
+    setLoadingChats(true);
+    try { setAvailable(await api.telegramChatSendTargets()); }
+    catch (err) { setPickerError(err instanceof Error ? err.message : 'Не удалось загрузить переписки'); }
+    finally { setLoadingChats(false); }
   };
+
+  const addAssistant = async () => {
+    if (!pickerChoice || pickerBusy || policies.some(p => p.chatId === pickerChoice)) return;
+    setPickerBusy(true); setPickerError('');
+    try {
+      // The add button is an explicit opt-in. Use the same save+start path
+      // as the existing settings form, not an unsaved placeholder profile.
+      await api.telegramAssistantSavePolicy(pickerChoice, { ...DEFAULTS });
+      try {
+        await api.telegramAssistantStart(pickerChoice);
+      } catch (startError) {
+        const updated = await api.telegramAssistantPolicies();
+        setPolicies(updated.policies);
+        pick(pickerChoice);
+        setPickerOpen(false);
+        setError('Ассистент добавлен, но мониторинг не включён: ' +
+          (startError instanceof Error ? startError.message : 'ошибка Telegram'));
+        return;
+      }
+      const updated = await api.telegramAssistantPolicies();
+      setPolicies(updated.policies);
+      pick(pickerChoice);
+      setPickerOpen(false);
+      setNotice('Ассистент добавлен. Настройки можно изменить ниже.');
+      window.dispatchEvent(new Event('telegram-ai-assistant-updated'));
+    } catch (err) {
+      setPickerError(err instanceof Error ? err.message : 'Не удалось добавить ассистента');
+    } finally { setPickerBusy(false); }
+  };
+  const pickerDialogs = (available?.dialogs ?? [])
+    .filter(dialog => !policies.some(p => p.chatId === dialog.id))
+    .filter(dialog => (dialog.name + ' ' + (dialog.username ?? '')).toLocaleLowerCase('ru-RU')
+      .includes(pickerSearch.trim().toLocaleLowerCase('ru-RU')));
+  // Do not alphabetize. Telegram sends dialogs by recent activity, and
+  // this is the same order as the existing forwarding dialog.
 
   const monitorAction = async (action: 'start' | 'stop' | 'summarize') => {
     if (!selectedId || busy) return;
