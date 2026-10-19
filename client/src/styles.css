@@ -1236,6 +1236,42 @@ body[data-theme='light'] .backdrop-blur-sm {
     accent-color: var(--accent-strong);
   }
 
+  /* A shared, unobtrusive 28px indicator for task/subtask comments and files.
+     Tokens keep the same contrast in light and dark themes. */
+  .task-card-meta-indicator {
+    display: inline-flex;
+    flex: 0 0 1.75rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--text-muted);
+    line-height: 1;
+  }
+
+  .task-card-meta-indicator svg {
+    flex-shrink: 0;
+    stroke-width: 1.85;
+  }
+
+  .task-card-meta-action {
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  .task-card-meta-action:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  }
+
+  .task-card-meta-action:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .list-task-coefficient-badge {
     border-color: rgba(255, 255, 255, 0.46);
     color: #ffffff;
