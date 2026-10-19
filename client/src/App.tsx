@@ -2956,6 +2956,9 @@ ${allContext}`,
     setAiChatError(null);
     try {
       const attachments = quick ? [] : await Promise.all(aiChatPendingFiles.map((file) => fileToAttachmentPayload(file, true)));
+      // The files now belong to the sent message; free the composer immediately,
+      // not after the model finishes answering (which left a 100% upload ring).
+      if (!quick) setAiChatPendingFiles([]);
       setAiChatProgress('analyzing_request');
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
@@ -2969,7 +2972,8 @@ ${allContext}`,
         clientSurface: 'web',
         attachments
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
-      if (!quick) setAiChatPendingFiles([]);
+      // A completed response should always be visible after the user's request.
+      if (quick) quickAiFollowBottomRef.current = true;
       const actionReports = result.actionReports ?? [];
       if (actionReports.some((item) => item.startsWith('Изменена заметка'))) {
         window.dispatchEvent(new Event('standalone-notes-updated'));
@@ -2980,6 +2984,7 @@ ${allContext}`,
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
       else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      if (quick) window.requestAnimationFrame(scrollQuickAiChatToBottom);
       if (result.taskDataChanged) await load();
       await refreshAiCredits();
     } catch (error) {
@@ -3001,7 +3006,10 @@ ${allContext}`,
     } finally {
       setAiChatUploadProgress(null);
       setAiChatLoading(false);
-      if (quick) setQuickAiChatLoading(false);
+      if (quick) {
+        setQuickAiChatLoading(false);
+        window.requestAnimationFrame(scrollQuickAiChatToBottom);
+      }
     }
   };
 
@@ -7946,7 +7954,7 @@ ${allContext}`,
               }}>
               <div ref={quickAiContentRef} className="space-y-2">
               {quickAiChatTimeline.slice(-30).map((item) => item.kind === 'notification' ? (
-                <div key={`notification-${item.notification.id}`} className="system-notification-message mr-6 rounded-2xl border px-3 py-2 shadow-sm">
+                <div key={`notification-${item.notification.id}`} className="system-notification-message ai-system-notification-spacing mr-6 rounded-2xl border px-3 py-2 shadow-sm">
                   <b className="system-notification-label mb-0.5 block text-[10px] uppercase tracking-wide">⚙️ Системное уведомление</b>
                   <SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} />
                 </div>
@@ -8070,7 +8078,7 @@ ${allContext}`,
           onAddFiles={addAiChatFiles}
           onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
           onSend={(draft) => void sendAiChatQuestion(false, draft)}
-          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && !item.message.taskProposal && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
+          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="ai-system-notification-spacing flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && !item.message.taskProposal && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {item.message.taskSuggestions.map((suggestion, index) => (
                 <button key={index} type="button" title={suggestion}
