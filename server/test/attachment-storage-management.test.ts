@@ -72,6 +72,27 @@ test('все поверхности отмечают вложения подза
   assert.match(operations, /format: 'txt'/);
 });
 
+
+test('чат-вложения имеют защищённое скачивание и сохраняют связь с исходным сообщением задачи', async () => {
+  const [routes, assistant, controller, tiles, web, mini] = await Promise.all([
+    readFile(new URL('../src/routes/api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/ai.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/AiAttachmentTiles.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(routes, /\/ai-chat\/uploaded-attachments\/:messageId\/:ordinal\/download/);
+  assert.match(routes, /where: \{ userId: req\.user!\.id, messageId: req\.params\.messageId, ordinal \}/);
+  assert.match(routes, /Вложение больше не хранится на сервере/);
+  assert.match(assistant, /clientRequestId\?: string/);
+  assert.match(assistant, /id: message\.id/);
+  assert.match(controller, /clientRequestId: req\.body\?\.clientRequestId/);
+  assert.match(tiles, /messageId/);
+  assert.match(web, /messageId=\{messageId\}/);
+  assert.match(mini, /messageId=\{messageId\}/);
+});
+
 test('старые chat uploads очищаются отдельно от постоянных task attachments', async () => {
   const migration = await readFile(new URL('../prisma/migrations/20261019160000_prune_old_ai_chat_uploads/migration.sql', import.meta.url), 'utf8');
   assert.match(migration, /PARTITION BY "userId"/);
