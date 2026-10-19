@@ -67,6 +67,8 @@ jobs:
         run: node --import tsx --test server/test/timeline-reminders.test.ts server/test/ai-chat-navigation-reminders-ui.test.ts
       - name: Verify Telegram task change action buttons and quick-chat deep link
         run: node --import tsx --test server/test/telegram-ai-action-buttons.test.ts
+      - name: Verify AI weekday task due dates and failed proposal receipts
+        run: node --import tsx --test server/test/planner-due-date.test.ts
       - name: Verify Telegram bot auto-apply and task proposal undo
         run: node --import tsx --test server/test/ai-task-proposal-undo.test.ts
       - name: Verify Telegram assistant project deduplication and media setting
