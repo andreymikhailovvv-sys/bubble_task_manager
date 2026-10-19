@@ -36,11 +36,24 @@ test('Saved Messages leads the list without sticky scrolling', () => {
 test('web and Mini App share the neutral forward arrow and integration picker', () => {
   assert.match(web, /TelegramMessageQuickShare text=\{.*?\} compact/);
   assert.match(mini, /TelegramMessageQuickShare text=\{.*?\} compact/);
-  assert.match(share, /<CornerUpRight size=\{16\}/);
+  assert.match(share, /<Forward size=\{19\} strokeWidth=\{1\.75\}/);
   assert.match(share, /data-message-forward-trigger="true"/);
   assert.match(share, /role="menu"/);
   assert.match(share, /role="menuitem"/);
   assert.match(share, /setMenuOpen\(false\); void show\(\)/);
   assert.match(shareCss, /telegram-quick-share__platform-menu/);
   assert.doesNotMatch(share, /data-telegram-share-trigger="true"/);
+});
+
+test('forward actions render below each bubble on site and Mini App, never inside it', () => {
+  assert.equal((web.match(/<TelegramMessageQuickShare/g) ?? []).length, 6);
+  assert.equal((mini.match(/<TelegramMessageQuickShare/g) ?? []).length, 2);
+  assert.equal((web.match(/className="ai-message-forward-actions"/g) ?? []).length, 6);
+  assert.equal((mini.match(/className="ai-message-forward-actions"/g) ?? []).length, 2);
+  assert.match(shareCss, /\.ai-message-forward-group\s*\{/);
+  assert.match(shareCss, /\.ai-message-forward-actions\s*\{/);
+  assert.match(shareCss, /border:\s*0 !important/);
+  assert.match(shareCss, /fill:\s*none !important/);
+  assert.doesNotMatch(shareCss, /border-radius:\s*9999px !important/);
+  assert.doesNotMatch(shareCss, /stroke:\s*none !important/);
 });
