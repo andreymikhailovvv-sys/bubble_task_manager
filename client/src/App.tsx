@@ -17,6 +17,7 @@ import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
@@ -1796,11 +1797,10 @@ export default function App() {
       acc[parentId] = [...items].sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
-        if (subtaskFilterMode === 'none') return 0;
-        if (subtaskFilterMode === 'importance') {
-          const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
-          if (importanceDiff !== 0) return importanceDiff;
-        }
+        if (subtaskFilterMode === 'none') return newestFocusSubtaskFirst(a, b);
+        if (subtaskFilterMode === 'urgency') return urgentFocusSubtaskFirst(a, b);
+        const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
+        if (importanceDiff !== 0) return importanceDiff;
         return toDeadlineTimestamp(a) - toDeadlineTimestamp(b);
       });
       return acc;
