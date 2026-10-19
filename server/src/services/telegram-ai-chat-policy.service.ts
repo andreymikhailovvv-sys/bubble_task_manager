@@ -14,6 +14,9 @@ const MODES = ['OBSERVE', 'SUGGEST', 'AUTO'] as const;
 const TASK_MODES = ['NONE', 'SUGGEST', 'AUTO'] as const;
 export const TELEGRAM_AI_INTERVALS = [0, 5, 10, 30, 180, 360, 1440] as const;
 export const TELEGRAM_AI_SUMMARY_INTERVALS = [-1, 0, 5, 10, 30, 180, 360, 1440] as const;
+export const TELEGRAM_AI_CUSTOM_MAX_MINUTES = 5_256_000; // up to ten 365-day years
+export const TELEGRAM_AI_CUSTOM_MAX_MONTHS = 120;
+export const TELEGRAM_AI_CUSTOM_MAX_CREDIT_MILLI = 100_000_000; // 100,000 credits
 export const TELEGRAM_AI_MONITOR_MODELS = ['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol'] as const;
 // Exact values exposed by the fixed-step budget slider. NULL = no daily cap.
 export const TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI = [
@@ -24,10 +27,13 @@ export type TelegramAiChatSettings = {
   mode: typeof MODES[number];
   taskMode: typeof TASK_MODES[number];
   taskCreationWhen: string;
-  taskIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
+  taskIntervalMinutes: number;
+  taskIntervalMonths: number | null;
   interactionIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
-  autoReplyIntervalMinutes: typeof TELEGRAM_AI_INTERVALS[number];
-  summaryIntervalMinutes: typeof TELEGRAM_AI_SUMMARY_INTERVALS[number];
+  autoReplyIntervalMinutes: number;
+  autoReplyIntervalMonths: number | null;
+  summaryIntervalMinutes: number;
+  summaryIntervalMonths: number | null;
   summaryInstructions: string;
   suggestWhen: string;
   suggestHow: string;
@@ -44,9 +50,12 @@ export const DEFAULT_TELEGRAM_AI_CHAT_SETTINGS: TelegramAiChatSettings = {
   taskMode: 'SUGGEST',
   taskCreationWhen: '',
   taskIntervalMinutes: 30,
+  taskIntervalMonths: null,
   interactionIntervalMinutes: 5,
   autoReplyIntervalMinutes: 5,
+  autoReplyIntervalMonths: null,
   summaryIntervalMinutes: 30,
+  summaryIntervalMonths: null,
   summaryInstructions: '',
   suggestWhen: '',
   suggestHow: '',
@@ -64,6 +73,35 @@ const oneOf = <T extends string | number>(value: unknown, choices: readonly T[],
   }
   return value as T;
 };
+
+export function validateTelegramScanInterval(
+  value: unknown, field: string, disabledAllowed = false
+): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) ||
+      (value !== 0 && (!disabledAllowed || value !== -1) && value < 1) ||
+      value > TELEGRAM_AI_CUSTOM_MAX_MINUTES) {
+    throw new TelegramUserClientError(400, 'Недопустимая частота: ' + field);
+  }
+  return value;
+}
+
+export function validateTelegramScanMonths(value: unknown, field: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) ||
+      value < 1 || value > TELEGRAM_AI_CUSTOM_MAX_MONTHS) {
+    throw new TelegramUserClientError(400, 'Недопустимое количество месяцев: ' + field);
+  }
+  return value;
+}
+
+export function validateTelegramCreditLimit(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) ||
+      value < 1 || value > TELEGRAM_AI_CUSTOM_MAX_CREDIT_MILLI) {
+    throw new TelegramUserClientError(400, 'Дневной лимит должен быть от 0,001 до 100 000 кредитов');
+  }
+  return value;
+}
 
 /** Strict full payload: no hidden flags and no client-supplied identity or activation. */
 export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChatSettings {
@@ -92,17 +130,23 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
   if (typeof p.notifyImportant !== 'boolean') {
     throw new TelegramUserClientError(400, 'Настройка уведомлений должна быть логическим значением');
   }
-  if (!TELEGRAM_AI_DAILY_CREDIT_TIERS_MILLI.some(tier => tier === p.dailyCreditLimitMilli)) {
-    throw new TelegramUserClientError(400, 'Выберите дневной лимит из предложенных значений');
+  const taskIntervalMonths = validateTelegramScanMonths(p.taskIntervalMonths, 'добавление задач');
+  const autoReplyIntervalMonths = validateTelegramScanMonths(p.autoReplyIntervalMonths, 'автоответы');
+  const summaryIntervalMonths = validateTelegramScanMonths(p.summaryIntervalMonths, 'сводки');
+  if (summaryIntervalMonths !== null && p.summaryIntervalMinutes === -1) {
+    throw new TelegramUserClientError(400, 'Отключённые сводки не могут иметь месячную частоту');
   }
   return {
     mode: oneOf(p.mode, MODES, 'режим работы'),
     taskMode: oneOf(p.taskMode, TASK_MODES, 'добавление задач'),
     taskCreationWhen: typeof p.taskCreationWhen === 'string' ? p.taskCreationWhen.trim() : '',
-    taskIntervalMinutes: p.taskIntervalMinutes === undefined ? 30 : oneOf(p.taskIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота добавления задач'),
+    taskIntervalMinutes: validateTelegramScanInterval(p.taskIntervalMinutes === undefined ? 30 : p.taskIntervalMinutes, 'добавление задач'),
+    taskIntervalMonths,
     interactionIntervalMinutes: oneOf(p.interactionIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота предложений ответов'),
-    autoReplyIntervalMinutes: oneOf(p.autoReplyIntervalMinutes, TELEGRAM_AI_INTERVALS, 'частота автоответов'),
-    summaryIntervalMinutes: oneOf(p.summaryIntervalMinutes, TELEGRAM_AI_SUMMARY_INTERVALS, 'частота сводок'),
+    autoReplyIntervalMinutes: validateTelegramScanInterval(p.autoReplyIntervalMinutes, 'автоответы'),
+    autoReplyIntervalMonths,
+    summaryIntervalMinutes: validateTelegramScanInterval(p.summaryIntervalMinutes, 'сводки', true),
+    summaryIntervalMonths,
     summaryInstructions: typeof p.summaryInstructions === 'string' ? p.summaryInstructions.trim() : '',
     suggestWhen: typeof p.suggestWhen === 'string' ? p.suggestWhen.trim() : '',
     suggestHow: typeof p.suggestHow === 'string' ? p.suggestHow.trim() : '',
@@ -111,7 +155,7 @@ export function validateTelegramAiChatSettings(payload: unknown): TelegramAiChat
     autoReplyHow: typeof p.autoReplyHow === 'string' ? p.autoReplyHow.trim() : '',
     notifyImportant: p.notifyImportant,
     reviewAttachments: p.reviewAttachments !== false,
-    dailyCreditLimitMilli: p.dailyCreditLimitMilli as number | null
+    dailyCreditLimitMilli: validateTelegramCreditLimit(p.dailyCreditLimitMilli)
   };
 }
 

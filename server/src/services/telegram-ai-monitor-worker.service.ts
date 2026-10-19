@@ -20,6 +20,20 @@ export function telegramInteractionDelayMs(minutes: number) {
   return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
 }
 
+/** Custom months preserve the calendar day or clamp to month end. */
+export function telegramMonitorNextAt(
+  minutes: number, months: number | null | undefined, now = new Date()
+): Date {
+  if (months != null && months > 0) {
+    const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months, 1,
+      now.getUTCHours(), now.getUTCMinutes(), now.getUTCSeconds(), now.getUTCMilliseconds()));
+    const monthEnd = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(now.getUTCDate(), monthEnd));
+    return target;
+  }
+  return new Date(now.getTime() + telegramInteractionDelayMs(minutes));
+}
+
 /** Task proposals follow their own timer, independent of reply and summary scans. */
 export function telegramTaskScanDue(
   policy: Pick<TelegramAiChatPolicy, 'taskMode' | 'nextTaskAt'>,
@@ -79,16 +93,19 @@ export const telegramAiMonitorControl = {
         isEnabled: true, monitorRevision: { increment: 1 },
         lastSeenMessageId: maxId, lastCheckedAt: new Date(),
         lastInteractionMessageId: maxId, lastSummaryMessageId: maxId, lastTaskMessageId: maxId,
-        nextInteractionAt: policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
-          (policy.mode === 'SUGGEST' ? telegramInteractionDelayMs(policy.interactionIntervalMinutes)
-            : telegramInteractionDelayMs(policy.autoReplyIntervalMinutes))),
-        nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
-        nextTaskAt: policy.taskMode === 'NONE' ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.taskIntervalMinutes)),
+        nextInteractionAt: policy.mode === 'OBSERVE' ? null : policy.mode === 'SUGGEST'
+          ? telegramMonitorNextAt(policy.interactionIntervalMinutes, null)
+          : telegramMonitorNextAt(policy.autoReplyIntervalMinutes, policy.autoReplyIntervalMonths),
+        nextSummaryAt: policy.summaryIntervalMinutes === -1 ? null
+          : telegramMonitorNextAt(policy.summaryIntervalMinutes, policy.summaryIntervalMonths),
+        nextTaskAt: policy.taskMode === 'NONE' ? null : telegramMonitorNextAt(policy.taskIntervalMinutes, policy.taskIntervalMonths),
         nextCheckAt: nextMonitorWakeup([
-          policy.mode === 'OBSERVE' ? null : new Date(Date.now() +
-            telegramInteractionDelayMs(policy.mode === 'SUGGEST' ? policy.interactionIntervalMinutes : policy.autoReplyIntervalMinutes)),
-          policy.summaryIntervalMinutes === -1 ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.summaryIntervalMinutes)),
-          policy.taskMode === 'NONE' ? null : new Date(Date.now() + telegramInteractionDelayMs(policy.taskIntervalMinutes))
+          policy.mode === 'OBSERVE' ? null : policy.mode === 'SUGGEST'
+            ? telegramMonitorNextAt(policy.interactionIntervalMinutes, null)
+            : telegramMonitorNextAt(policy.autoReplyIntervalMinutes, policy.autoReplyIntervalMonths),
+          policy.summaryIntervalMinutes === -1 ? null
+            : telegramMonitorNextAt(policy.summaryIntervalMinutes, policy.summaryIntervalMonths),
+          policy.taskMode === 'NONE' ? null : telegramMonitorNextAt(policy.taskIntervalMinutes, policy.taskIntervalMonths)
         ]),
         lastError: null, leaseToken: null, leasedUntil: null, summaryRequested: false
       }
@@ -325,14 +342,15 @@ async function processClaim(claimed: Claimed) {
   const nextInteractionAt = dueInteraction
     ? new Date(interactionDeferred
       ? Math.max(allowedAt, Date.now() + IMMEDIATE_POLL_MS)
-      : Date.now() + telegramInteractionDelayMs(
-        current.mode === 'SUGGEST' ? current.interactionIntervalMinutes : current.autoReplyIntervalMinutes))
+      : telegramMonitorNextAt(
+          current.mode === 'SUGGEST' ? current.interactionIntervalMinutes : current.autoReplyIntervalMinutes,
+          current.mode === 'SUGGEST' ? null : current.autoReplyIntervalMonths).getTime())
     : current.nextInteractionAt;
   const nextSummaryAt = dueSummary && !policy.summaryRequested && current.summaryIntervalMinutes === -1
     ? null : dueSummary && current.summaryIntervalMinutes !== -1
-      ? new Date(Date.now() + telegramInteractionDelayMs(current.summaryIntervalMinutes)) : current.nextSummaryAt;
+      ? telegramMonitorNextAt(current.summaryIntervalMinutes, current.summaryIntervalMonths) : current.nextSummaryAt;
   const nextTaskAt = dueTasks
-    ? new Date(Date.now() + telegramInteractionDelayMs(current.taskIntervalMinutes))
+    ? telegramMonitorNextAt(current.taskIntervalMinutes, current.taskIntervalMonths)
     : current.nextTaskAt;
   const maxProcessed = Math.max(policy.lastSeenMessageId ?? 0, maxId);
 

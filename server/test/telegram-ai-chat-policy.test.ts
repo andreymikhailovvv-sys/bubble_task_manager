@@ -78,7 +78,7 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
   for (const body of [
     { ...valid, dailyCreditLimitMilli: -1000 },
     { ...valid, dailyCreditLimitMilli: 0 },
-    { ...valid, dailyCreditLimitMilli: 300_000 },
+    { ...valid, dailyCreditLimitMilli: -100 },
     { ...valid, dailyCreditLimitMilli: 'unlimited' },
     { ...valid, dailyCreditLimitMilli: Number.POSITIVE_INFINITY },
     { ...valid, mode: 'SUPER_AUTO' },
@@ -86,11 +86,17 @@ test('Telegram assistant rejects arbitrary budgets, intervals and extra automati
     { ...valid, monitorModel: null },
     { ...valid, taskMode: 'CREATE_EVERYTHING' },
     { ...valid, interactionIntervalMinutes: 15 },
-    { ...valid, taskIntervalMinutes: 15 },
+    { ...valid, taskIntervalMinutes: -9 },
     { ...valid, taskIntervalMinutes: -1 },
     { ...valid, taskIntervalMinutes: '5' },
-    { ...valid, autoReplyIntervalMinutes: 60 },
+    { ...valid, autoReplyIntervalMinutes: -4 },
     { ...valid, summaryIntervalMinutes: -2 },
+    { ...valid, taskIntervalMonths: -3 },
+    { ...valid, taskIntervalMonths: 121 },
+    { ...valid, autoReplyIntervalMonths: '1' },
+    { ...valid, summaryIntervalMonths: 2, summaryIntervalMinutes: -1 },
+    { ...valid, dailyCreditLimitMilli: 100_000_001 },
+    { ...valid, dailyCreditLimitMilli: 10.5 },
     { ...valid, summaryInstructions: 'x'.repeat(2001) },
     { ...valid, mode: 'SUGGEST' },
     { ...valid, mode: 'AUTO' },
@@ -116,7 +122,7 @@ test('web interface separates participation frequency and summary configuration'
   }
   assert.match(ui, /type="range"/);
   assert.match(ui, /draft\.taskMode !== 'NONE' && \(/);
-  assert.match(ui, /index=\{indexOfValue\(CHECK_INTERVALS, draft\.taskIntervalMinutes\)\}/);
+  assert.match(ui, /minutes=\{draft\.taskIntervalMinutes\} months=\{draft\.taskIntervalMonths\}/);
   assert.equal((ui.match(/className="telegram-ai-settings-section"/g) ?? []).length, 3);
   const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
   assert.match(css, /\.telegram-ai-settings-section/);
@@ -129,4 +135,42 @@ test('web interface separates participation frequency and summary configuration'
   assert.match(ui, /<input type="checkbox" checked=\{draft.notifyImportant\}/);
   assert.doesNotMatch(ui, />Инструкции ассистенту</);
   assert.doesNotMatch(ui, /title="Интенсивность проверки"/);
+});
+
+test('Telegram assistant custom values preserve minutes, calendar months and milli-credit caps', () => {
+  const base = DEFAULT_TELEGRAM_AI_CHAT_SETTINGS;
+  const custom = validateTelegramAiChatSettings({
+    ...base,
+    taskIntervalMinutes: 90, taskIntervalMonths: null,
+    autoReplyIntervalMinutes: 43200, autoReplyIntervalMonths: 1,
+    summaryIntervalMinutes: 1440, summaryIntervalMonths: 2,
+    dailyCreditLimitMilli: 375_125
+  });
+  assert.equal(custom.taskIntervalMinutes, 90);
+  assert.equal(custom.autoReplyIntervalMonths, 1);
+  assert.equal(custom.summaryIntervalMonths, 2);
+  assert.equal(custom.dailyCreditLimitMilli, 375_125);
+  assert.equal(validateTelegramAiChatSettings({
+    ...base, taskIntervalMonths: undefined, autoReplyIntervalMonths: undefined,
+    summaryIntervalMonths: undefined
+  }).taskIntervalMonths, null);
+  const schema = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  const migration = readFileSync(new URL('../prisma/migrations/20261019195000_telegram_assistant_custom_month_intervals/migration.sql', import.meta.url), 'utf8');
+  for (const name of ['taskIntervalMonths', 'autoReplyIntervalMonths', 'summaryIntervalMonths']) {
+    assert.match(schema, new RegExp(name));
+    assert.match(migration, new RegExp(name));
+  }
+});
+test('wider Telegram settings put profile tags above one-column sliders and use matching recipient modal', () => {
+  const ui = readFileSync(new URL('../../client/src/components/TelegramAiAssistantSettings.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../client/src/components/TelegramIntegrationsMenu.css', import.meta.url), 'utf8');
+  for (const fragment of ['telegram-ai-profile-list', 'Добавить переписку', 'Добавить ассистента',
+    'pickerDialogs', 'pickerSearch', 'telegram-quick-share__recipients', 'TimeFrequencySlider',
+    'CreditLimitSlider', 'CUSTOM_OPTION', 'aria-label="Поиск по перепискам Telegram"']) {
+    assert.ok(ui.includes(fragment), fragment);
+  }
+  assert.ok(ui.indexOf('telegram-ai-profile-list') < ui.indexOf('aria-label="Настройки участия в переписке"'));
+  assert.match(css, /telegram-ai-slider-setting__marks span/);
+  assert.match(css, /telegram-ai-slider-setting__labels span/);
+  assert.match(css, /scrollbar-gutter: stable/);
 });

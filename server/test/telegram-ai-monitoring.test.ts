@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
-import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs, telegramTaskScanDue } from '../src/services/telegram-ai-monitor-worker.service.js';
+import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs, telegramTaskScanDue, telegramMonitorNextAt } from '../src/services/telegram-ai-monitor-worker.service.js';
 import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 import { nextTelegramAutoReplyAllowedAt } from '../src/services/telegram-ai-auto-reply.service.js';
 
@@ -187,8 +187,8 @@ test('Task suggestions respect their own frequency even during fast reply cycles
   const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
   const inbox = source('../src/services/telegram-ai-inbox.service.ts');
   assert.match(worker, /const dueTasks = telegramTaskScanDue\(policy, now\)/);
-  assert.match(worker, /telegramInteractionDelayMs\(policy\.taskIntervalMinutes\)/);
-  assert.match(worker, /telegramInteractionDelayMs\(current\.taskIntervalMinutes\)/);
+  assert.match(worker, /telegramMonitorNextAt\(policy\.taskIntervalMinutes, policy\.taskIntervalMonths\)/);
+  assert.match(worker, /telegramMonitorNextAt\(current\.taskIntervalMinutes, current\.taskIntervalMonths\)/);
   assert.doesNotMatch(worker, /\|\| dueInteraction\);/);
   const now = new Date('2026-10-19T12:00:00Z');
   assert.equal(telegramTaskScanDue({ taskMode: 'NONE', nextTaskAt: now }, now), false);
@@ -315,4 +315,21 @@ test('Telegram proposals use normal planner action executor and retain old legac
   assert.match(proposal, /captureProposalAfter/);
   assert.match(worker, /prisma.sphere.findMany/);
   assert.match(worker, /prisma.task.findMany/);
+});
+
+test('Custom Telegram month frequency clamps shorter months instead of assuming 30 days', () => {
+  assert.equal(telegramMonitorNextAt(30, null, new Date('2026-10-19T19:25:00.000Z')).toISOString(),
+    '2026-10-19T19:55:00.000Z');
+  assert.equal(telegramMonitorNextAt(0, null, new Date('2026-10-19T19:25:00.000Z')).toISOString(),
+    '2026-10-19T19:25:15.000Z');
+  assert.equal(telegramMonitorNextAt(43_200, 1, new Date('2027-01-31T16:00:00.000Z')).toISOString(),
+    '2027-02-28T16:00:00.000Z');
+  assert.equal(telegramMonitorNextAt(43_200, 1, new Date('2028-01-31T16:00:00.000Z')).toISOString(),
+    '2028-02-29T16:00:00.000Z');
+  assert.equal(telegramMonitorNextAt(43_200, 2, new Date('2026-11-30T16:00:00.000Z')).toISOString(),
+    '2027-01-30T16:00:00.000Z');
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  assert.match(worker, /current\.autoReplyIntervalMonths/);
+  assert.match(worker, /current\.summaryIntervalMonths/);
+  assert.match(worker, /current\.taskIntervalMonths/);
 });
