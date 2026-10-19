@@ -152,6 +152,13 @@ export const taskService = {
       orderBy: { createdAt: 'desc' }
     });
     const visibleItems = items.filter((task) => !task.collaboration || !task.collaboration.members.find((member) => member.userId === userId)?.isHidden);
+    // One aggregate query for all visible tasks, never send file bytes in task listings.
+    const attachmentCounts = visibleItems.length ? await prisma.taskAttachment.groupBy({
+      by: ['taskId'],
+      where: { taskId: { in: visibleItems.map((task) => task.id) } },
+      _count: { _all: true }
+    }) : [];
+    const attachmentsByTaskId = new Map(attachmentCounts.map((item) => [item.taskId, item._count._all]));
     const collaborativeSubtaskIds = visibleItems
       .filter((task) => Boolean(task.parentTaskId && task.collaborationId))
       .map((task) => task.id);
@@ -197,6 +204,7 @@ export const taskService = {
         : (rootCommentStats.get(task.id) ?? { total: 0, unread: 0 });
       return ({
       ...task,
+      attachmentCount: attachmentsByTaskId.get(task.id) ?? 0,
       commentCount: taskCommentStats.total,
       unreadCommentCount: taskCommentStats.unread,
       sphereId: !task.parentTaskId && collaboration ? (ownMembership?.sphereId ?? null) : task.sphereId,
