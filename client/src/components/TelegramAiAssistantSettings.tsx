@@ -124,7 +124,8 @@ function TimeFrequencySlider({ title, description, minutes, months, disabledOpti
   const names: string[] = disabledOption ? [...SUMMARY_NAMES, CUSTOM_OPTION] : [...CHECK_NAMES, CUSTOM_OPTION];
   const labels: string[] = disabledOption ? [...SUMMARY_SHORT, CUSTOM_OPTION] : [...CHECK_SHORT, CUSTOM_OPTION];
   const selected = months == null ? fixed.findIndex(v => v === minutes) : -1;
-  const custom = selected === -1;
+  const [editingCustom, setEditingCustom] = useState(false);
+  const custom = selected === -1 || editingCustom;
   const [unit, setUnit] = useState<TimeUnit>(() => unitForInterval(minutes, months));
   const [entry, setEntry] = useState(() => String(numberForInterval(minutes, months, unitForInterval(minutes, months))));
   const apply = (raw: string, nextUnit: TimeUnit) => {
@@ -141,8 +142,10 @@ function TimeFrequencySlider({ title, description, minutes, months, disabledOpti
       index={custom ? fixed.length : selected}
       onChange={index => {
         if (index === fixed.length) {
-          if (!custom) apply(entry && Number(entry) > 0 ? entry : '1', unit);
+          setEditingCustom(true);
+          if (!custom) apply('1', 'minutes');
         } else {
+          setEditingCustom(false);
           onChange(fixed[index] ?? fixed[0], null);
         }
       }} />
@@ -171,7 +174,8 @@ function TimeFrequencySlider({ title, description, minutes, months, disabledOpti
 }
 function CreditLimitSlider({ value, onChange }: { value: number | null; onChange: (value: number | null) => void }) {
   const preset = DAILY_LIMITS.findIndex(v => v === value);
-  const custom = preset < 0;
+  const [editingCustom, setEditingCustom] = useState(false);
+  const custom = preset < 0 || editingCustom;
   const [entry, setEntry] = useState(String(custom && value != null ? value / 1000 : 25));
   const apply = (raw: string) => {
     setEntry(raw);
@@ -188,8 +192,12 @@ function CreditLimitSlider({ value, onChange }: { value: number | null; onChange
       shortLabels={[...CREDIT_NAMES.map(s => s === 'Без ограничения' ? '∞' : s.replaceAll(' ', '')), CUSTOM_OPTION]}
       onChange={index => {
         if (index === DAILY_LIMITS.length) {
-          if (!custom) apply(entry);
-        } else onChange(DAILY_LIMITS[index] ?? null);
+          setEditingCustom(true);
+          if (!custom) apply('25');
+        } else {
+          setEditingCustom(false);
+          onChange(DAILY_LIMITS[index] ?? null);
+        }
       }}/>
     {custom && <div className="telegram-ai-custom-input telegram-ai-custom-input--credits">
       <label className="text-xs font-semibold">Кредитов в день
