@@ -7,6 +7,16 @@ type UploadScope = { userId: string; messageId?: string; taskId?: string; projec
 const MAX_UPLOADS = 3;
 const MAX_BYTES = 8 * 1024 * 1024;
 export const AI_CHAT_ATTACHMENT_RETENTION_BYTES = 10 * 1024 * 1024;
+export function getExpiredAiChatUploadIds(recordsNewestFirst: Array<{ id: string; size: number }>, maxBytes = AI_CHAT_ATTACHMENT_RETENTION_BYTES): string[] {
+  let used = 0;
+  const expired: string[] = [];
+  for (const record of recordsNewestFirst) {
+    if (used + record.size <= maxBytes) used += record.size;
+    else expired.push(record.id);
+  }
+  return expired;
+}
+
 const isUuid = (value: unknown) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const scopedId = (value: unknown) => typeof value === 'string' && value.length > 0 && value.length <= 128;
 
@@ -63,12 +73,7 @@ export async function saveConversationUploads(input: UploadScope & { files?: Con
           select: { id: true, size: true },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }]
         });
-        let used = 0;
-        const expired: string[] = [];
-        for (const record of records) {
-          if (used + record.size <= AI_CHAT_ATTACHMENT_RETENTION_BYTES) used += record.size;
-          else expired.push(record.id);
-        }
+        const expired = getExpiredAiChatUploadIds(records);
         if (expired.length) await tx.aiConversationAttachment.deleteMany({
           where: { userId: input.userId, id: { in: expired } }
         });
