@@ -109,7 +109,8 @@ const SUPPORTED_AI_FILE_TYPES = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
-  'image/gif'
+  'image/gif',
+  'text/plain'
 ]);
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
@@ -546,13 +547,13 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { cont
   ));
 }
 
-function renderMiniAiMessageContent(content: string, previews?: AiAttachmentPreview[]) {
+function renderMiniAiMessageContent(content: string, previews?: AiAttachmentPreview[], messageId?: string) {
   const { text, names } = splitAiMessageAttachments(content);
   return <>
     {renderAiContentBlocks(normalizeMiniAiMessageContent(text), (part, key) => (
       <div key={key}>{renderMiniAiText(part)}</div>
     ))}
-    <AiMessageAttachments names={names} previews={previews} />
+    <AiMessageAttachments names={names} previews={previews} messageId={messageId} />
   </>;
 }
 
@@ -2879,8 +2880,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const handleAiChatFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== selectedFiles.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) {
       setAiChatError(`Файл ${oversized.name} превышает лимит 8MB.`);
@@ -3000,9 +3001,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const uploadTaskAttachmentFiles = async (files: File[]) => {
     if (!openedTask || files.length === 0) return;
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     if (normalized.length !== files.length) {
-      setError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+      setError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX, TXT и изображения.');
     }
     if (normalized.length === 0) return;
 
@@ -3092,8 +3093,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const uploadSubtaskAttachmentFiles = async (files: File[]) => {
     if (!openedSubtask || files.length === 0) return;
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== files.length) setError('Для подзадачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== files.length) setError('Для подзадачи можно прикреплять только PDF, DOCX, XLS/XLSX, TXT и изображения.');
     if (normalized.length === 0) return;
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) { setError(`Файл ${oversized.name} превышает лимит 8MB.`); return; }
@@ -3101,8 +3102,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       for (const file of normalized) await api.createTaskAttachment(openedSubtask.id, await fileToAttachmentPayload(file));
       setSubtaskAttachments(await api.getTaskAttachments(openedSubtask.id));
+      setTasks(await api.getTasks());
       setError(null);
-      window.alert('Вы можете добавть вложение для подзадачи, но ИИ не увидит его. Если хотите, что ИИ прочитал вложение прикрепите его в чат');
+      // A successful upload should not open a blocking native alert.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить файл к подзадаче');
     } finally {
@@ -3114,6 +3116,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!openedSubtask) return;
     await api.deleteTaskAttachment(openedSubtask.id, attachmentId);
     setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    setTasks(await api.getTasks());
   };
 
   const downloadAiGeneratedDocument = async (generatedDocument: GeneratedDocument) => {
@@ -3353,8 +3356,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const handleAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== selectedFiles.length) setError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) {
       setError(`Файл ${oversized.name} превышает лимит 8MB.`);
@@ -4176,7 +4179,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <Paperclip size={15} />
                   </button>
                 </div>
-                <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
+                <input ref={taskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleTaskAttachmentFileSelect} />
                 {taskAttachments.length > 0 ? (
                   <div className="mt-2 flex flex-wrap items-start gap-2">
                     {taskAttachments.map((attachment) => (
@@ -4310,6 +4313,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                             </button>
                             <button type="button" onClick={() => openSubtaskModal(subtask)} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-left">
                               <span className={`min-w-0 flex-1 truncate font-medium ${subtask.status === 'DONE' ? 'opacity-60 line-through' : ''}`}>{subtask.title}</span>
+                              {(subtask.attachmentCount ?? 0) > 0 ? <Paperclip size={13} className="shrink-0 text-violet-400" aria-label="Есть вложения" /> : null}
                               {subtask.dueDate ? <span className={`shrink-0 text-xs font-semibold ${isOverdue(subtask) ? 'text-rose-500' : 'text-violet-500'}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                               {openedTask.isCollaborative && subtask.creatorName ? <span className="miniapp-collaboration-author shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }} title={subtask.creatorName}>{getCreatorInitial(subtask.creatorName)}</span> : null}
                             </button>
@@ -4417,7 +4421,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 <Maximize2 size={15} />
               </button>
               {openedSubtask ? <button type="button" className="miniapp-focus-icon-button" disabled={isUploadingSubtaskAttachment} onClick={() => subtaskAttachmentInputRef.current?.click()} title="Добавить вложение" aria-label="Добавить вложение к подзадаче"><Paperclip size={15} /></button> : null}
-              {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
+              {openedSubtask ? <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt" multiple className="hidden" onChange={(event) => { void uploadSubtaskAttachmentFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} /> : null}
               {subtaskAttachments.map((attachment) => (
                 <div key={attachment.id} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
                   <button
@@ -4534,7 +4538,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 {openedTaskAiDialog.map((message, index) => (
                   <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}</div>
+                    <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}
@@ -4552,7 +4556,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
@@ -4682,7 +4686,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               {(activeAiChat?.messages ?? []).map((message) => (
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}</div>
+                  <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
                   {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}

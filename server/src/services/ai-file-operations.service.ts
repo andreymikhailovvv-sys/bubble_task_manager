@@ -139,6 +139,11 @@ export async function executeAiFileTool(input: FileToolContext, operation: 'read
   const format = sourceFormat(file.name, file.mimeType);
 
   if (operation === 'read') {
+    if (file.mimeType === 'text/plain' || /\.txt$/i.test(file.name)) {
+      const text = bytes.toString('utf8').replace(/\u0000/g, '');
+      return { response: { ok: true, fileName: metadata.fileName, fileId: args.fileId,
+        format: 'txt', text: text.slice(0, maxReadCharacters), truncated: text.length > maxReadCharacters } };
+    }
     if (format) {
       try {
         const preview = getOfficeDocumentPreview(bytes, format);

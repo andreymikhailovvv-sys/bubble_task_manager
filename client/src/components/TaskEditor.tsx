@@ -80,6 +80,7 @@ const SUPPORTED_AI_FILE_TYPES = new Set([
   "image/jpeg",
   "image/webp",
   "image/gif",
+  "text/plain",
 ]);
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: "application/pdf",
@@ -91,6 +92,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   jpeg: "image/jpeg",
   webp: "image/webp",
   gif: "image/gif",
+  txt: "text/plain",
 };
 const NOTIFY_PRESETS = [
   { value: "null", label: "Не уведомлять" },
@@ -552,9 +554,15 @@ export function TaskEditor({
   ): Promise<ChatAttachmentPayload> => ({
     name: file.name,
     mimeType: resolveAttachmentMimeType(file),
-    contentBase64: await file
-      .arrayBuffer()
-      .then((buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)))),
+    contentBase64: await file.arrayBuffer().then((buffer) => {
+      const bytes = new Uint8Array(buffer);
+      const chunks: string[] = [];
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+      }
+      return btoa(chunks.join(""));
+    }),
     size: file.size,
   });
 
@@ -564,10 +572,10 @@ export function TaskEditor({
     const normalized = selectedFiles.filter(
       (file) =>
         SUPPORTED_AI_FILE_TYPES.has(file.type) ||
-        /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name),
+        /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name),
     );
     if (normalized.length === 0) {
-      setAiError("Разрешены PDF, DOCX, XLS/XLSX и изображения.");
+      setAiError("Разрешены PDF, DOCX, XLS/XLSX, TXT и изображения.");
       return;
     }
     const oversized = normalized.find(
@@ -594,8 +602,8 @@ export function TaskEditor({
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     if (!task?.id || !isSubtask || files.length === 0) return;
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== files.length) { setAiError("Для подзадачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения."); return; }
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== files.length) { setAiError("Для подзадачи можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения."); return; }
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) { setAiError(`Файл "${oversized.name}" превышает лимит 8MB.`); return; }
     setIsUploadingSubtaskAttachment(true);
@@ -603,7 +611,7 @@ export function TaskEditor({
       for (const file of normalized) await api.createTaskAttachment(task.id, await fileToAttachmentPayload(file));
       setSubtaskAttachments(await api.getTaskAttachments(task.id));
       setAiError(null);
-      window.alert("Вы можете добавть вложение для подзадачи, но ИИ не увидит его. Если хотите, что ИИ прочитал вложение прикрепите его в чат");
+      // Subtask attachment upload is complete; no disruptive blocking alert.
     } catch (error) {
       setAiError(error instanceof Error ? error.message : "Не удалось загрузить файл к подзадаче");
     } finally {
@@ -891,7 +899,7 @@ export function TaskEditor({
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
@@ -1049,12 +1057,12 @@ export function TaskEditor({
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
               />
-              <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif" multiple className="hidden" onChange={uploadSubtaskAttachments} />
+              <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt" multiple className="hidden" onChange={uploadSubtaskAttachments} />
               {isSubtask && parentTaskTitle && onOpenParentTask ? (
                 <button
                   type="button"

@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -108,7 +108,8 @@ const SUPPORTED_AI_FILE_TYPES = new Set([
   'image/png',
   'image/jpeg',
   'image/webp',
-  'image/gif'
+  'image/gif',
+  'text/plain'
 ]);
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
@@ -590,14 +591,14 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
   ));
 });
 
-function renderAiMessageContent(content: string, previews?: AiAttachmentPreview[]): ReactNode {
+function renderAiMessageContent(content: string, previews?: AiAttachmentPreview[], messageId?: string): ReactNode {
   const { text, names } = splitAiMessageAttachments(content);
   const normalizedContent = normalizeAiMessageContent(text);
   return <>
     {renderAiContentBlocks(normalizedContent, (part, key) => (
       <div key={key} className="whitespace-pre-wrap">{renderInlineAiMarkup(part)}</div>
     ))}
-    <AiMessageAttachments names={names} previews={previews} />
+    <AiMessageAttachments names={names} previews={previews} messageId={messageId} />
   </>;
 }
 
@@ -1142,6 +1143,27 @@ export default function App() {
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }, []);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [attachmentStorage, setAttachmentStorage] = useState<AttachmentStorage | null>(null);
+  const [accountAttachments, setAccountAttachments] = useState<AccountAttachment[]>([]);
+  const [areAccountAttachmentsOpen, setAreAccountAttachmentsOpen] = useState(false);
+  const [accountAttachmentsLoading, setAccountAttachmentsLoading] = useState(false);
+  const [quotaToast, setQuotaToast] = useState('');
+  useEffect(() => {
+    const handleLimit = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message || 'Достигнут лимит вложений. Подробнее в личном кабинете.';
+      setQuotaToast(message);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification('Планировыч: лимит вложений', { body: message }); } catch { /* Some browsers block native notifications */ }
+      }
+    };
+    window.addEventListener(ATTACHMENT_STORAGE_LIMIT_EVENT, handleLimit);
+    return () => window.removeEventListener(ATTACHMENT_STORAGE_LIMIT_EVENT, handleLimit);
+  }, []);
+  useEffect(() => {
+    if (!quotaToast) return;
+    const timeout = window.setTimeout(() => setQuotaToast(''), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [quotaToast]);
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
@@ -2343,9 +2365,9 @@ export default function App() {
       return;
     }
 
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     if (normalized.length !== selectedFiles.length) {
-      setAiError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+      setAiError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     }
 
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
@@ -2370,18 +2392,18 @@ export default function App() {
   };
 
   const addAiChatFiles = (files: File[]) => {
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) { setAiChatError(`Файл ${oversized.name} превышает лимит 8MB.`); return; }
-    if (normalized.length !== files.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения.');
+    if (normalized.length !== files.length) setAiChatError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения.');
     setAiChatPendingFiles((previous) => [...previous, ...normalized].slice(0, MAX_AI_ATTACHMENTS));
   };
 
   const uploadFocusedTaskFiles = async (files: File[]) => {
     if (!focusedTask || files.length === 0) return;
-    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
+    const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
     if (normalized.length !== files.length) {
-      setAiError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX и изображения.');
+      setAiError('Для задачи можно прикреплять только PDF, DOCX, XLS/XLSX, TXT и изображения.');
     }
     if (normalized.length === 0) return;
 
@@ -2398,6 +2420,7 @@ export default function App() {
       }
       const next = await api.getTaskAttachments(focusedTask.id);
       setFocusedTaskAttachments(next);
+      await load();
       setAiError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось загрузить файл к задаче';
@@ -2419,6 +2442,7 @@ export default function App() {
     try {
       await api.deleteTaskAttachment(focusedTask.id, attachmentId);
       setFocusedTaskAttachments((prev) => prev.filter((item) => item.id !== attachmentId));
+      await load();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось удалить файл';
       setAiError(message);
@@ -2675,8 +2699,8 @@ ${allContext}`,
   const handleFocusAiFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(event.target.files ?? []);
     if (selectedFiles.length === 0) return;
-    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif)$/i.test(file.name));
-    if (normalized.length !== selectedFiles.length) setFocusAiError('Можно прикреплять PDF, DOCX, XLS/XLSX и изображения (PNG/JPG/WEBP/GIF).');
+    const normalized = selectedFiles.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
+    if (normalized.length !== selectedFiles.length) setFocusAiError('Можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения (PNG/JPG/WEBP/GIF).');
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) {
       setFocusAiError(`Файл ${oversized.name} превышает лимит 8MB.`);
@@ -4066,7 +4090,32 @@ ${allContext}`,
     setProfileNewPassword('');
     setProfileError(null);
     setProfileSaved(false);
+    setAreAccountAttachmentsOpen(false);
+    setAccountAttachments([]);
+    setAttachmentStorage(null);
     setIsProfileModalOpen(true);
+    void api.getAttachmentStorage().then(setAttachmentStorage).catch(() => setProfileError('Не удалось загрузить данные хранилища.'));
+  };
+
+  const toggleAccountAttachments = async () => {
+    if (areAccountAttachmentsOpen) { setAreAccountAttachmentsOpen(false); return; }
+    setAreAccountAttachmentsOpen(true);
+    setAccountAttachmentsLoading(true);
+    try { setAccountAttachments(await api.listAccountAttachments()); }
+    catch (error) { setProfileError(error instanceof Error ? error.message : 'Не удалось загрузить список вложений'); }
+    finally { setAccountAttachmentsLoading(false); }
+  };
+
+  const deleteAccountAttachment = async (attachment: AccountAttachment) => {
+    if (!window.confirm(`Удалить вложение «${attachment.name}»? Это действие нельзя отменить.`)) return;
+    try {
+      await api.deleteAccountAttachment(attachment.id);
+      setAccountAttachments((files) => files.filter((file) => file.id !== attachment.id));
+      setAttachmentStorage(await api.getAttachmentStorage());
+      await load();
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Не удалось удалить вложение');
+    }
   };
 
   const closeProfileModal = () => {
@@ -5191,6 +5240,7 @@ ${allContext}`,
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
+                      {(subtask.attachmentCount ?? 0) > 0 ? <span title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" className="inline-flex shrink-0"><Paperclip size={13} className="text-violet-500" /></span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusActiveTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
@@ -5214,7 +5264,7 @@ ${allContext}`,
               <div className="relative mt-3 min-h-0 flex-1">
                 <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
                 <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
-                  {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                  {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div></div>)}
                   {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
@@ -5243,7 +5293,7 @@ ${allContext}`,
             <div className="relative min-h-0 flex-1">
               <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
               <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-                {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div></div>)}
                 {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
@@ -5460,6 +5510,13 @@ ${allContext}`,
         </div>
       ) : null}
 
+      {quotaToast ? (
+        <div role="alert" className="fixed right-4 top-5 z-[250] flex max-w-sm items-start gap-3 rounded-xl border border-amber-400/50 bg-amber-950 px-4 py-3 text-sm text-white shadow-2xl">
+          <BellRing size={17} className="mt-0.5 shrink-0 text-amber-300" />
+          <span>{quotaToast} Подробнее в настройках личного кабинета.</span>
+          <button type="button" aria-label="Закрыть уведомление" onClick={() => setQuotaToast('')}><X size={15}/></button>
+        </div>
+      ) : null}
       {isProfileModalOpen && hasAccount ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfileModal(); }}>
           <section className="profile-modal surface-popover w-full max-w-md rounded-2xl border p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
@@ -5470,7 +5527,40 @@ ${allContext}`,
               </div>
               <button type="button" className="profile-modal-close" onClick={closeProfileModal} aria-label="Закрыть настройки профиля"><X size={17} /></button>
             </div>
-            <div className="space-y-3">
+            <div className="max-h-[min(74vh,650px)] space-y-3 overflow-y-auto pr-1">
+              <section className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-3" aria-label="Хранилище вложений">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-primary">Вложения</span>
+                  <span className="text-xs tabular-nums text-muted">{attachmentStorage ? `${formatStorageMiB(attachmentStorage.usedBytes)} из ${formatStorageMiB(attachmentStorage.limitBytes)}` : 'Загрузка…'}</span>
+                </div>
+                {attachmentStorage ? (
+                  <>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-400/20" role="progressbar" aria-valuenow={Math.min(100, Math.round(100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes))} aria-valuemin={0} aria-valuemax={100}>
+                      <div className={`h-full rounded-full ${attachmentStorage.overLimit ? 'bg-rose-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, 100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes)}%` }} />
+                    </div>
+                    {attachmentStorage.usedBytes >= attachmentStorage.limitBytes ? <p className="mt-1.5 text-xs text-amber-600">Лимит достигнут. Старые файлы сохранены; новые можно загрузить после освобождения места.</p> : null}
+                  </>
+                ) : null}
+                <button type="button" className="profile-cancel-button mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs" onClick={() => void toggleAccountAttachments()}>
+                  <Paperclip size={13}/>{areAccountAttachmentsOpen ? 'Скрыть вложения' : 'Посмотреть вложения'}
+                  <ChevronDown size={12} className={areAccountAttachmentsOpen ? 'rotate-180' : ''}/>
+                </button>
+                {areAccountAttachmentsOpen ? (
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                    {accountAttachmentsLoading ? <p className="text-xs text-muted">Загрузка вложений…</p> : null}
+                    {!accountAttachmentsLoading && accountAttachments.length === 0 ? <p className="text-xs text-muted">Вложений пока нет.</p> : null}
+                    {accountAttachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center gap-2 rounded-lg border border-violet-400/15 p-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-xs text-primary">{attachment.parentTaskTitle ? `Подзадача «${attachment.taskTitle}» → основная задача «${attachment.parentTaskTitle}»` : `Задача «${attachment.taskTitle}»`}</p>
+                          <a className="mt-1 block break-all text-xs text-violet-500 hover:underline" href={api.getTaskAttachmentDownloadUrl(attachment.taskId, attachment.id)} download={attachment.name}>{attachment.name} · {formatStorageMiB(attachment.size)}</a>
+                        </div>
+                        <button type="button" aria-label={`Удалить вложение ${attachment.name}`} title="Удалить файл" className="shrink-0 rounded-md p-1.5 text-rose-500 hover:bg-rose-500/10" onClick={() => void deleteAccountAttachment(attachment)}><Trash2 size={15}/></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
               <label className="profile-field-label">Имя
                 <input className="profile-field" value={profileName} maxLength={100} autoComplete="name" onChange={(event) => setProfileName(event.target.value)} />
               </label>
@@ -6850,7 +6940,7 @@ ${allContext}`,
                     style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
-                    <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}</div>
+                    <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                     {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
@@ -6891,7 +6981,7 @@ ${allContext}`,
               <input
                 ref={focusedAiFileInputRef}
                 type="file"
-                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                 multiple
                 className="hidden"
                 onChange={handleAiFileSelect}
@@ -7144,7 +7234,7 @@ ${allContext}`,
                   <input
                     ref={focusedTaskAttachmentInputRef}
                     type="file"
-                    accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
+                    accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif"
                     multiple
                     className="hidden"
                     onChange={handleTaskAttachmentFileSelect}
@@ -7455,6 +7545,7 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
+                      {(subtask.attachmentCount ?? 0) > 0 ? <span title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" className="inline-flex shrink-0"><Paperclip size={13} className="text-violet-500" /></span> : null}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusedTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
@@ -7681,7 +7772,7 @@ ${allContext}`,
                   style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
-                  <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews)}</CollapsibleUserMessage>}</div>
+                  <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
                   {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                     {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
@@ -7706,7 +7797,7 @@ ${allContext}`,
             {isAiRecipientPickerVisible ? renderTaskAiRecipientPicker(focusedTask) : null}
             <div className="ai-chat-composer flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-0" placeholder="Напишите сообщение…" value={aiDraft} onChange={(event) => setAiDraft(event.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusedAiQuestion(); } }} />
-              <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
+              <input ref={expandedAiFileInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/png,image/jpeg,image/webp,image/gif" multiple className="hidden" onChange={handleAiFileSelect} />
               <button className="focused-task-ai-attach-button inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40" type="button" title={getTaskAiRecipientId(focusedTask) === 'ai' ? 'Прикрепить файл' : 'Вложения доступны только при отправке ИИ'} disabled={getTaskAiRecipientId(focusedTask) !== 'ai'} onClick={() => expandedAiFileInputRef.current?.click()}><Paperclip size={16} /></button>
               <button className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg disabled:opacity-50" disabled={aiLoadingTaskId === focusedTask.id || (!aiDraft.trim() && aiPendingFiles.length === 0)} onClick={() => void sendFocusedAiQuestion()} title="Отправить">{aiLoadingTaskId === focusedTask.id ? <Loader2 className="animate-spin" size={16} /> : <SendHorizontal size={16} />}</button>
             </div>
@@ -7960,7 +8051,7 @@ ${allContext}`,
                 </div>
               ) : (
                 <div key={`message-${item.message.id}`} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user' : 'quick-ai-chat-message-assistant'}`}>
-                  <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews)}</CollapsibleUserMessage>}
+                  <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}
                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
                 </div>
@@ -8078,7 +8169,7 @@ ${allContext}`,
           onAddFiles={addAiChatFiles}
           onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
           onSend={(draft) => void sendAiChatQuestion(false, draft)}
-          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="ai-system-notification-spacing flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && !item.message.taskProposal && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
+          messages={(activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatTimeline : (activeAiChat?.messages ?? []).map((message, index) => ({ kind: 'message' as const, timestamp: index, message }))).map((item) => item.kind === 'notification' ? <div key={`notification-${item.notification.id}`} className="ai-system-notification-spacing flex justify-start"><div className="system-notification-message max-w-[86%] rounded-3xl rounded-bl-lg border px-4 py-3"><p className="system-notification-label mb-1 text-[11px] font-semibold uppercase tracking-wide">⚙️ Системное уведомление</p><div className="text-sm leading-relaxed"><SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} /></div></div></div> : <div key={`message-${item.message.id}`} className={`flex ${item.message.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className="ai-message-forward-group w-fit max-w-[86%]"><div className={`ai-chat-message-bubble w-full rounded-3xl px-4 py-3 ${item.message.role === 'user' ? 'ai-chat-message-user rounded-br-lg' : 'ai-chat-message-assistant rounded-bl-lg'}`}><div className="mb-1 flex items-center justify-between gap-3"><p className={`text-[11px] font-semibold uppercase tracking-wide ${item.message.role === 'user' ? 'ai-chat-message-label-user' : 'ai-chat-message-label-assistant'}`}>{item.message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{item.message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`ai-chat-${item.message.id}`, item.message.content)} className="chat-message-copy rounded-full p-1 hover:bg-violet-100" title="Копировать ответ">{copiedAiMessageKey === `ai-chat-${item.message.id}` ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}</button> : null}</div><div className="text-sm leading-relaxed">{item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}</div>{item.message.role === 'assistant' && !item.message.taskProposal && item.message.taskSuggestions?.length && activeAiChat?.id.startsWith(TELEGRAM_AI_MANAGED_CHAT_PREFIX) ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {item.message.taskSuggestions.map((suggestion, index) => (
                 <button key={index} type="button" title={suggestion}

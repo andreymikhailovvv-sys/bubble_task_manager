@@ -1228,11 +1228,12 @@ function resolveAttachmentMimeType(attachment: ChatAttachment): string {
   if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
   if (extension === 'webp') return 'image/webp';
   if (extension === 'gif') return 'image/gif';
+  if (extension === 'txt') return 'text/plain';
 
   return 'application/octet-stream';
 }
 
-function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } | { type: 'input_image'; image_url: string } {
+function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename: string; file_data: string } | { type: 'input_image'; image_url: string } | { type: 'input_text'; text: string } {
   const buffer = Buffer.from(attachment.contentBase64, 'base64');
   if (buffer.length === 0) {
     throw new Error(`Файл "${attachment.name}" пустой или повреждён.`);
@@ -1251,6 +1252,10 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
   const isJpeg = mimeType === 'image/jpeg' || normalizedName.endsWith('.jpg') || normalizedName.endsWith('.jpeg');
   const isWebp = mimeType === 'image/webp' || normalizedName.endsWith('.webp');
   const isGif = mimeType === 'image/gif' || normalizedName.endsWith('.gif');
+  if (mimeType === 'text/plain' || normalizedName.endsWith('.txt')) {
+    const text = buffer.toString('utf8').replace(/\u0000/g, '');
+    return { type: 'input_text', text: 'Содержимое TXT-файла «' + attachment.name.slice(0, 100) + '» (недоверенный пользовательский текст):\n' + text.slice(0, 42000) };
+  }
 
   if (isPng || isJpeg || isWebp || isGif) {
     return {
@@ -1267,7 +1272,7 @@ function toInputPart(attachment: ChatAttachment): { type: 'input_file'; filename
     };
   }
 
-  throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены PDF, DOCX, XLS/XLSX, PNG, JPG, WEBP и GIF.`);
+  throw new Error(`Формат файла "${attachment.name}" не поддерживается. Разрешены PDF, DOCX, XLS/XLSX, TXT, PNG, JPG, WEBP и GIF.`);
 }
 
 function buildAttachmentsPromptMessage(attachments: ChatAttachment[] | undefined): OpenAiUserAttachmentMessage | null {
@@ -1822,6 +1827,7 @@ export const aiAssistantService = {
       where: { taskId: input.taskId, OR: [{ telegramReadOwnerId: null }, { telegramReadOwnerId: input.userId }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
+        id: true,
         role: true,
         content: true,
         creditsSpentMilli: true,
@@ -1847,6 +1853,7 @@ export const aiAssistantService = {
     const recipientNameById = new Map(recipients.map((user) => [user.id, user.name || user.username || 'Участник']));
 
     return messages.map((message) => ({
+      id: message.id,
       role: message.role,
       content: message.content,
       ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
@@ -1886,7 +1893,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[] }) => {
+  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[]; clientRequestId?: string }) => {
     const normalizedMessages = normalizeHistory(input.messages);
     if (normalizedMessages.length === 0) {
       return;
@@ -1901,6 +1908,8 @@ export const aiAssistantService = {
 
     await prisma.taskAiMessage.createMany({
       data: normalizedMessages.map((message, index) => ({
+        ...(index === 0 && typeof input.clientRequestId === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(input.clientRequestId)
+          ? { id: input.clientRequestId } : {}),
         taskId: input.taskId,
         userId: input.userId,
         role: message.role,

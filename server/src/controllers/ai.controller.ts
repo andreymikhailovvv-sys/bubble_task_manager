@@ -354,7 +354,8 @@ export const aiController = {
         await aiAssistantService.appendTaskDialogMessages({
           userId: req.user!.id,
           taskId: req.params.id,
-          messages: [{ role: 'user', content: normalizedUserMessage }]
+          messages: [{ role: 'user', content: normalizedUserMessage }],
+          clientRequestId: req.body?.clientRequestId
         });
       }
       await aiAssistantService.appendTaskDialogAssistantMessage({

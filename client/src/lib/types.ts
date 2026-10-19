@@ -35,6 +35,7 @@ export type Task = {
   collaborationColor?: string;
   collaborationOwner?: boolean;
   collaborationMembers?: CollaborationMember[];
+  attachmentCount?: number;
   commentCount?: number;
   unreadCommentCount?: number;
 };

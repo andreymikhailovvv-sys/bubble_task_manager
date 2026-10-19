@@ -1,6 +1,10 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type ApiError = Error & { status?: number; code?: string };
+export type AttachmentStorage = { usedBytes: number; limitBytes: number; count: number; overLimit: boolean; plan: string };
+export type AccountAttachment = { id: string; taskId: string; name: string; mimeType: string; size: number; createdAt: string; taskTitle: string; parentTaskId: string | null; parentTaskTitle: string | null };
+export const formatStorageMiB = (bytes: number) => (bytes / 1024 / 1024).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' МБ';
+export const ATTACHMENT_STORAGE_LIMIT_EVENT = 'planirovych:attachment-storage-limit';
 type UnauthorizedHandler = () => void;
 export type AiBilling = { mode: 'dynamic' | 'legacy'; creditsSpentMilli: number };
 export type AiChatProgressStatus = 'analyzing_request' | 'using_chat_history' | 'searching_workspace' | 'searching_notes' | 'reading_note' | 'searching_tasks' | 'listing_tasks' | 'reading_task' | 'checking_sectors' | 'analyzing_retrieved_context' | 'applying_changes' | 'reading_attachment' | 'searching_web' | 'analyzing_web_results' | 'forming_answer' | 'generating_image' | 'editing_image' | 'editing_document';
@@ -73,6 +77,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     const error = new Error(errorMessage) as ApiError;
     error.status = response.status;
     error.code = errorCode;
+    if (errorCode === 'ATTACHMENT_STORAGE_LIMIT' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(ATTACHMENT_STORAGE_LIMIT_EVENT, { detail: { message: errorMessage } }));
+    }
     if (response.status === 401) {
       unauthorizedHandler?.();
     }
@@ -526,6 +533,9 @@ export const api = {
     request<{ ok: true; finishedAt: string }>(`/api/habits/${id}/finish`, { method: 'POST' }),
   deleteHabit: (id: string) => request<{ ok: true }>(`/api/habits/${id}`, { method: 'DELETE' }),
   getInsights: () => request<{ id: string; text: string }[]>('/api/dashboard/insights'),
+  getAttachmentStorage: () => request<AttachmentStorage>('/api/user/attachments/storage'),
+  listAccountAttachments: () => request<AccountAttachment[]>('/api/user/attachments'),
+  deleteAccountAttachment: (id: string) => request<{ ok: true }>(`/api/user/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getTaskAttachments: (taskId: string) => request<TaskAttachment[]>(`/api/tasks/${taskId}/attachments`),
   getTaskAttachmentDownloadUrl: (taskId: string, attachmentId: string) => `/api/tasks/${taskId}/attachments/${attachmentId}/download`,
   createTaskAttachmentDownloadLink: (taskId: string, attachmentId: string) =>
