@@ -1827,6 +1827,7 @@ export const aiAssistantService = {
       where: { taskId: input.taskId, OR: [{ telegramReadOwnerId: null }, { telegramReadOwnerId: input.userId }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       select: {
+        id: true,
         role: true,
         content: true,
         creditsSpentMilli: true,
@@ -1852,6 +1853,7 @@ export const aiAssistantService = {
     const recipientNameById = new Map(recipients.map((user) => [user.id, user.name || user.username || 'Участник']));
 
     return messages.map((message) => ({
+      id: message.id,
       role: message.role,
       content: message.content,
       ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
@@ -1891,7 +1893,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[] }) => {
+  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[]; clientRequestId?: string }) => {
     const normalizedMessages = normalizeHistory(input.messages);
     if (normalizedMessages.length === 0) {
       return;
@@ -1906,6 +1908,8 @@ export const aiAssistantService = {
 
     await prisma.taskAiMessage.createMany({
       data: normalizedMessages.map((message, index) => ({
+        ...(index === 0 && typeof input.clientRequestId === 'string' && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(input.clientRequestId)
+          ? { id: input.clientRequestId } : {}),
         taskId: input.taskId,
         userId: input.userId,
         role: message.role,
