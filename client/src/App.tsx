@@ -8,7 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { CustomSelect } from './components/CustomSelect';
-import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
+import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
 import { resolveSphereIcon } from './lib/sphereIcons';
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, Habit, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
@@ -1142,6 +1142,27 @@ export default function App() {
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }, []);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [attachmentStorage, setAttachmentStorage] = useState<AttachmentStorage | null>(null);
+  const [accountAttachments, setAccountAttachments] = useState<AccountAttachment[]>([]);
+  const [areAccountAttachmentsOpen, setAreAccountAttachmentsOpen] = useState(false);
+  const [accountAttachmentsLoading, setAccountAttachmentsLoading] = useState(false);
+  const [quotaToast, setQuotaToast] = useState('');
+  useEffect(() => {
+    const handleLimit = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message || 'Достигнут лимит вложений. Подробнее в личном кабинете.';
+      setQuotaToast(message);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification('Планировыч: лимит вложений', { body: message }); } catch { /* Some browsers block native notifications */ }
+      }
+    };
+    window.addEventListener(ATTACHMENT_STORAGE_LIMIT_EVENT, handleLimit);
+    return () => window.removeEventListener(ATTACHMENT_STORAGE_LIMIT_EVENT, handleLimit);
+  }, []);
+  useEffect(() => {
+    if (!quotaToast) return;
+    const timeout = window.setTimeout(() => setQuotaToast(''), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [quotaToast]);
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
   const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
@@ -4066,7 +4087,32 @@ ${allContext}`,
     setProfileNewPassword('');
     setProfileError(null);
     setProfileSaved(false);
+    setAreAccountAttachmentsOpen(false);
+    setAccountAttachments([]);
+    setAttachmentStorage(null);
     setIsProfileModalOpen(true);
+    void api.getAttachmentStorage().then(setAttachmentStorage).catch(() => setProfileError('Не удалось загрузить данные хранилища.'));
+  };
+
+  const toggleAccountAttachments = async () => {
+    if (areAccountAttachmentsOpen) { setAreAccountAttachmentsOpen(false); return; }
+    setAreAccountAttachmentsOpen(true);
+    setAccountAttachmentsLoading(true);
+    try { setAccountAttachments(await api.listAccountAttachments()); }
+    catch (error) { setProfileError(error instanceof Error ? error.message : 'Не удалось загрузить список вложений'); }
+    finally { setAccountAttachmentsLoading(false); }
+  };
+
+  const deleteAccountAttachment = async (attachment: AccountAttachment) => {
+    if (!window.confirm(`Удалить вложение «${attachment.name}»? Это действие нельзя отменить.`)) return;
+    try {
+      await api.deleteAccountAttachment(attachment.id);
+      setAccountAttachments((files) => files.filter((file) => file.id !== attachment.id));
+      setAttachmentStorage(await api.getAttachmentStorage());
+      await load();
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : 'Не удалось удалить вложение');
+    }
   };
 
   const closeProfileModal = () => {
@@ -5460,6 +5506,13 @@ ${allContext}`,
         </div>
       ) : null}
 
+      {quotaToast ? (
+        <div role="alert" className="fixed right-4 top-5 z-[250] flex max-w-sm items-start gap-3 rounded-xl border border-amber-400/50 bg-amber-950 px-4 py-3 text-sm text-white shadow-2xl">
+          <BellRing size={17} className="mt-0.5 shrink-0 text-amber-300" />
+          <span>{quotaToast} Подробнее в настройках личного кабинета.</span>
+          <button type="button" aria-label="Закрыть уведомление" onClick={() => setQuotaToast('')}><X size={15}/></button>
+        </div>
+      ) : null}
       {isProfileModalOpen && hasAccount ? (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) closeProfileModal(); }}>
           <section className="profile-modal surface-popover w-full max-w-md rounded-2xl border p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
@@ -5470,7 +5523,40 @@ ${allContext}`,
               </div>
               <button type="button" className="profile-modal-close" onClick={closeProfileModal} aria-label="Закрыть настройки профиля"><X size={17} /></button>
             </div>
-            <div className="space-y-3">
+            <div className="max-h-[min(74vh,650px)] space-y-3 overflow-y-auto pr-1">
+              <section className="rounded-xl border border-violet-400/20 bg-violet-500/5 p-3" aria-label="Хранилище вложений">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-primary">Вложения</span>
+                  <span className="text-xs tabular-nums text-muted">{attachmentStorage ? `${formatStorageMiB(attachmentStorage.usedBytes)} из ${formatStorageMiB(attachmentStorage.limitBytes)}` : 'Загрузка…'}</span>
+                </div>
+                {attachmentStorage ? (
+                  <>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-400/20" role="progressbar" aria-valuenow={Math.min(100, Math.round(100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes))} aria-valuemin={0} aria-valuemax={100}>
+                      <div className={`h-full rounded-full ${attachmentStorage.overLimit ? 'bg-rose-500' : 'bg-violet-500'}`} style={{ width: `${Math.min(100, 100 * attachmentStorage.usedBytes / attachmentStorage.limitBytes)}%` }} />
+                    </div>
+                    {attachmentStorage.usedBytes >= attachmentStorage.limitBytes ? <p className="mt-1.5 text-xs text-amber-600">Лимит достигнут. Старые файлы сохранены; новые можно загрузить после освобождения места.</p> : null}
+                  </>
+                ) : null}
+                <button type="button" className="profile-cancel-button mt-3 inline-flex items-center gap-2 px-3 py-1.5 text-xs" onClick={() => void toggleAccountAttachments()}>
+                  <Paperclip size={13}/>{areAccountAttachmentsOpen ? 'Скрыть вложения' : 'Посмотреть вложения'}
+                  <ChevronDown size={12} className={areAccountAttachmentsOpen ? 'rotate-180' : ''}/>
+                </button>
+                {areAccountAttachmentsOpen ? (
+                  <div className="mt-2 max-h-56 space-y-2 overflow-y-auto">
+                    {accountAttachmentsLoading ? <p className="text-xs text-muted">Загрузка вложений…</p> : null}
+                    {!accountAttachmentsLoading && accountAttachments.length === 0 ? <p className="text-xs text-muted">Вложений пока нет.</p> : null}
+                    {accountAttachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center gap-2 rounded-lg border border-violet-400/15 p-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-xs text-primary">{attachment.parentTaskTitle ? `Подзадача «${attachment.taskTitle}» → основная задача «${attachment.parentTaskTitle}»` : `Задача «${attachment.taskTitle}»`}</p>
+                          <a className="mt-1 block break-all text-xs text-violet-500 hover:underline" href={api.getTaskAttachmentDownloadUrl(attachment.taskId, attachment.id)} download={attachment.name}>{attachment.name} · {formatStorageMiB(attachment.size)}</a>
+                        </div>
+                        <button type="button" aria-label={`Удалить вложение ${attachment.name}`} title="Удалить файл" className="shrink-0 rounded-md p-1.5 text-rose-500 hover:bg-rose-500/10" onClick={() => void deleteAccountAttachment(attachment)}><Trash2 size={15}/></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
               <label className="profile-field-label">Имя
                 <input className="profile-field" value={profileName} maxLength={100} autoComplete="name" onChange={(event) => setProfileName(event.target.value)} />
               </label>
