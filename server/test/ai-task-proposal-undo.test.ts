@@ -61,7 +61,7 @@ test('note edits are displayed in the shared proposal on web and Mini App, not c
   assert.match(proposal, /if \(snapshot\.kind === 'note'\)/);
   assert.match(proposal, /aiPersonalNotesService\.update\(/);
   assert.match(proposal, /const notesBefore = noteIds\.length/);
-  assert.match(proposal, /captureProposalAfter\(userId, before, createdIds, notesBefore\)/);
+  assert.match(proposal, /captureProposalAfter\(userId, before, createdIds, notesBefore, createdNoteIds\)/);
   assert.match(undo, /notes\?: \{ before: StoredNote\[\]; after:/);
   assert.match(undo, /tx\.standaloneNote\.updateMany/);
   assert.match(undo, /noteHistory\.before\.length/);
@@ -93,4 +93,74 @@ test('queued note edit rechecks the original read version before applying and ca
   assert.equal(result.ok, false);
   assert.equal(result.code, 'NOTE_CHANGED');
   assert.equal(writes, 0, 'Confirmation must not overwrite a newer version of the note');
+});
+
+test('create_note uses existing approval chip, not an immediate DB write, with a requested group', () => {
+  const tools = source('../src/services/ai-chat-tools.service.ts');
+  const proposal = source('../src/services/ai-task-proposal.service.ts');
+  const undo = source('../src/services/ai-task-proposal-undo.service.ts');
+  const card = source('../../client/src/components/AiTaskProposalCard.tsx');
+  const assistant = source('../src/services/ai-assistant.service.ts');
+  const createBlock = tools.slice(tools.indexOf("if (name === 'create_note')"), tools.indexOf("if (name === 'update_note')"));
+  assert.match(createBlock, /validateAiCreateNoteArgs\(value\)/);
+  assert.match(createBlock, /preparedTaskActions\.push\(\{ operation: 'create_note', \.\.\.note \}\)/);
+  assert.doesNotMatch(createBlock, /aiPersonalNotesService\.create\(/);
+  assert.match(tools, /preparedTaskActions\.length\s*\? await prepareTaskProposal/);
+  assert.match(proposal, /function isCreateNoteAction/);
+  assert.match(proposal, /where: \{ userId, name: \{ equals: payload\.groupName, mode: 'insensitive' \} \}/);
+  assert.match(proposal, /aiPersonalNotesService\.create\(userId, action\)/);
+  assert.match(proposal, /createdNoteIds\.push\(result\.note\.id\)/);
+  assert.match(proposal, /createdNoteIds\);/);
+  assert.match(undo, /createdNoteIds: string\[\] = \[\]/);
+  assert.match(undo, /tx\.standaloneNote\.deleteMany/);
+  assert.match(undo, /updatedAt: new Date\(note\.updatedAt\)/);
+  assert.match(card, /create_note: 'Создание заметки'/);
+  assert.match(card, /\['update_note', 'create_note'\]\.includes/);
+  assert.match(card, /standalone-notes-updated/);
+  assert.match(assistant, /groupName/);
+});
+
+test('creating notes assigns only an existing owner-scoped group', async () => {
+  const { createAiPersonalNotesService } = await import('../src/services/ai-create-note.service.js');
+  const writes: Array<Record<string, unknown>> = [];
+  const db = {
+    standaloneNoteGroup: {
+      findFirst: async ({ where }: { where: { userId: string; name: { equals: string } } }) =>
+        where.userId === 'owner' && where.name.equals === 'Музыка' ? { id: 'group-owner', name: 'Музыка' } : null
+    },
+    standaloneNote: {
+      create: async ({ data }: { data: Record<string, unknown> }) => {
+        writes.push(data);
+        return { id: 'note-created', title: data.title, groupId: data.groupId, createdAt: new Date() };
+      }
+    }
+  };
+  const service = createAiPersonalNotesService(db as unknown as Parameters<typeof createAiPersonalNotesService>[0]);
+  const groupNote = await service.create('owner', { title: 'Песня', content: 'Bm A Em D', groupName: 'Музыка' });
+  assert.equal(groupNote.ok, true);
+  assert.equal(writes[0].groupId, 'group-owner');
+  const foreign = await service.create('someone-else', { title: 'Песня', content: 'Новый текст', groupName: 'Музыка' });
+  assert.equal(foreign.ok, false);
+  assert.equal(writes.length, 1);
+  const ungrouped = await service.create('owner', { title: 'Текст', content: 'Строка', groupName: null });
+  assert.equal(ungrouped.ok, true);
+  assert.equal(writes[1].groupId, null);
+});
+
+test('all AI chat attachment queues clear on send and replies re-enable scrolling', () => {
+  const web = source('../../client/src/App.tsx');
+  const mini = source('../../client/src/MiniApp.tsx');
+  const expanded = source('../../client/src/components/ExpandedAiChat.tsx');
+  const css = source('../../client/src/styles.css');
+  assert.match(web, /setAiChatPendingFiles\(\[\]\);[\s\S]*?const result = await api\.askAiChatStreaming/);
+  assert.match(mini, /setAiChatPendingFiles\(\[\]\);[^\n]*\n\s*const result = await api\.askAiChatStreaming/);
+  assert.match(web, /setFocusAiPendingFiles\(\[\]\);/);
+  assert.match(web, /setAiPendingFiles\(\[\]\);/);
+  assert.match(mini, /setAiPendingFiles\(\[\]\);/);
+  assert.match(web, /if \(quick\) quickAiFollowBottomRef\.current = true;/);
+  assert.match(expanded, /previousLoadingRef\.current && !loading/);
+  assert.match(mini, /generalAiChatNearBottomRef\.current = true;\s*if \(result\.actionReports/);
+  assert.match(css, /\.ai-system-notification-spacing \{ margin-bottom: 27px; \}/);
+  assert.match(web, /system-notification-message ai-system-notification-spacing/);
+  assert.match(css, /\.ai-attachment-tiles-history \.ai-attachment-tile-file-icon/);
 });
