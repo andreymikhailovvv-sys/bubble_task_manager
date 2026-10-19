@@ -97,12 +97,14 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
       />
       <div className="telegram-ai-slider-setting__marks" aria-hidden="true">
         {options.map((option, i) => (
-          <span key={option} className={i <= index ? 'telegram-ai-slider-setting__mark--active' : ''}/>
+          <span key={option} style={{ left: `${i / Math.max(1, options.length - 1) * 100}%` }}
+            className={i <= index ? 'telegram-ai-slider-setting__mark--active' : ''}/>
         ))}
       </div>
       {shortLabels ? (
-        <div className="telegram-ai-slider-setting__labels" aria-hidden="true" style={{ gridTemplateColumns: `repeat(${shortLabels.length}, minmax(0, 1fr))` }}>
-          {shortLabels.map(label => <span key={label}>{label}</span>)}
+        <div className="telegram-ai-slider-setting__labels" aria-hidden="true">
+          {shortLabels.map((label, i) => <span key={label}
+            style={{ left: `${i / Math.max(1, shortLabels.length - 1) * 100}%` }}>{label}</span>)}
         </div>
       ) : (
         <div className="telegram-ai-slider-setting__ends" aria-hidden="true">
@@ -540,10 +542,11 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                           placeholder="Например: отвечай кратко и дружелюбно от моего лица; если спрашивают о сроках, сообщай, что я уточню их позже. Ничего не обещай без подтверждения."
                           className="telegram-integrations-modal__input mt-2 w-full resize-y rounded-xl border px-3 py-2 text-sm font-normal"/>
                       </label>
-                      <SettingSlider title="Частота автоответов" description="«Сразу» означает проверку примерно раз в 15 секунд"
-                        index={indexOfValue(CHECK_INTERVALS, draft.autoReplyIntervalMinutes)}
-                        options={CHECK_NAMES} shortLabels={CHECK_SHORT}
-                        onChange={i => update('autoReplyIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                      <TimeFrequencySlider key={selectedId + '-reply'} title="Частота автоответов" description="«Сразу» означает проверку примерно раз в 15 секунд"
+                        minutes={draft.autoReplyIntervalMinutes} months={draft.autoReplyIntervalMonths}
+                        onChange={(minutes, months) => setDraft(current => ({
+                          ...current, autoReplyIntervalMinutes: minutes, autoReplyIntervalMonths: months
+                        }))}/>
                     </div>
                   )}
                   </section>
@@ -566,17 +569,19 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     </label>
                   ) : null}
                   {draft.taskMode !== 'NONE' && (
-                    <SettingSlider title="Частота добавления задач" description="Как часто искать новые поручения и договорённости. «Сразу» означает проверку примерно раз в 15 секунд"
-                      index={indexOfValue(CHECK_INTERVALS, draft.taskIntervalMinutes)}
-                      options={CHECK_NAMES} shortLabels={CHECK_SHORT}
-                      onChange={i => update('taskIntervalMinutes', CHECK_INTERVALS[i] ?? CHECK_INTERVALS[0])}/>
+                    <TimeFrequencySlider key={selectedId + '-tasks'} title="Частота добавления задач" description="Как часто искать новые поручения и договорённости. «Сразу» означает проверку примерно раз в 15 секунд"
+                      minutes={draft.taskIntervalMinutes} months={draft.taskIntervalMonths}
+                      onChange={(minutes, months) => setDraft(current => ({
+                        ...current, taskIntervalMinutes: minutes, taskIntervalMonths: months
+                      }))}/>
                   )}
                   </section>
                   <section className="telegram-ai-settings-section" aria-label="Настройки сводок">
-                  <SettingSlider title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
-                    index={indexOfValue(SUMMARY_INTERVALS, draft.summaryIntervalMinutes)} options={SUMMARY_NAMES}
-                    shortLabels={SUMMARY_SHORT}
-                    onChange={i => update('summaryIntervalMinutes', SUMMARY_INTERVALS[i] ?? SUMMARY_INTERVALS[0])}/>
+                  <TimeFrequencySlider key={selectedId + '-summary'} title="Частота сводок" description="Как часто ассистент составляет аналитические сводки переписки. «Сразу» — проверка примерно раз в 15 секунд"
+                    disabledOption minutes={draft.summaryIntervalMinutes} months={draft.summaryIntervalMonths}
+                    onChange={(minutes, months) => setDraft(current => ({
+                      ...current, summaryIntervalMinutes: minutes, summaryIntervalMonths: months
+                    }))}/>
                   {draft.summaryIntervalMinutes !== -1 && (
                     <label className="block text-sm font-semibold">Какие именно сводки делать
                       <textarea rows={3} maxLength={2000} value={draft.summaryInstructions}
@@ -597,9 +602,8 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                       <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                     </select>
                   </label>
-                  <SettingSlider title="Дневной предел кредитов" description="Максимальный расход ИИ по этой переписке за день"
-                    index={indexOfValue(DAILY_LIMITS, draft.dailyCreditLimitMilli)} options={CREDIT_NAMES}
-                    onChange={i => update('dailyCreditLimitMilli', DAILY_LIMITS[i] ?? null)}/>
+                  <CreditLimitSlider key={selectedId + '-credits'} value={draft.dailyCreditLimitMilli}
+                    onChange={value => update('dailyCreditLimitMilli', value)}/>
                   <p className="integration-menu__muted text-xs leading-relaxed">
                     «Без ограничения» отменяет только дневной предел для этого чата. Расходы учитываются по фактическим токенам модели и списываются из общего баланса. При нехватке кредитов новые анализы не выполняются.
                   </p>
