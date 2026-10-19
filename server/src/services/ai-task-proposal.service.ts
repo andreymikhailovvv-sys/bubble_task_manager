@@ -2,6 +2,7 @@ import { captureProposalBefore, captureProposalAfter, undoStoredProposal } from 
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { plannerToolsService, type PlannerActionInput } from './planner-tools.service.js';
+import { aiPersonalNotesService, validateAiUpdateNoteArgs, type UpdatePersonalNoteArgs } from './ai-create-note.service.js';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -10,6 +11,14 @@ import type { Prisma } from '@prisma/client';
  */
 export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant';
 export type TaskProposalAction = Record<string, unknown>;
+export type NoteProposalAction = UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
+function isNoteAction(action: TaskProposalAction): action is NoteProposalAction {
+  return action.operation === 'update_note';
+}
+function noteActionPayload(action: NoteProposalAction): UpdatePersonalNoteArgs {
+  return { id: action.id, title: action.title, content: action.content,
+    contentMode: action.contentMode, groupName: action.groupName };
+}
 export type TaskProposalView = {
   id: string; status: string; source: string; autoApplied: boolean;
   operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[] }>;
@@ -48,9 +57,25 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
     select: { id: true, title: true, description: true, dueDate: true, status: true, updatedAt: true, parentTaskId: true }
   }) : [];
   const byId = new Map(tasks.map(task => [task.id, task]));
+  const noteActions = actions.filter(isNoteAction);
+  const noteIds = [...new Set(noteActions.map(action => action.id))];
+  const notes = noteIds.length ? await prisma.standaloneNote.findMany({
+    where: { id: { in: noteIds }, userId },
+    select: { id: true, title: true, updatedAt: true }
+  }) : [];
+  const notesById = new Map(notes.map(note => [note.id, note]));
+  for (const action of noteActions) {
+    // Validate the exact persisted command and the version the AI actually read.
+    validateAiUpdateNoteArgs(noteActionPayload(action));
+    const note = notesById.get(action.id);
+    if (!note || note.updatedAt.toISOString() !== action.expectedUpdatedAt) {
+      throw new Error('Заметка изменилась или недоступна. Прочитайте её снова.');
+    }
+  }
   const sphereNames = new Map<string, string>();
   // All existing references must remain reachable by the consenting actor.
   for (const action of actions) {
+    if (isNoteAction(action)) continue;
     for (const id of actionIds(action)) {
       if (!byId.has(id)) throw new Error('Задача или подзадача недоступна. Предложение не создано.');
     }
@@ -61,8 +86,21 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
     }
   }
   return {
-    snapshots: tasks.map(task => ({ id: task.id, updatedAt: task.updatedAt.toISOString() })),
+    snapshots: [
+      ...tasks.map(task => ({ id: task.id, updatedAt: task.updatedAt.toISOString() })),
+      ...notes.map(note => ({ kind: 'note', id: note.id, updatedAt: note.updatedAt.toISOString() }))
+    ],
     display: actions.map(action => {
+      if (isNoteAction(action)) {
+        const note = notesById.get(action.id)!;
+        const details = [
+          action.title !== null ? 'Новое название: ' + action.title : null,
+          action.content !== null ? (action.contentMode === 'append'
+            ? 'Добавление текста в конец заметки' : 'Замена содержимого заметки') : null,
+          action.groupName !== null ? (action.groupName ? 'Группа: ' + action.groupName : 'Убрать из группы') : null
+        ].filter((part): part is string => part !== null);
+        return { type: 'update_note', title: note.title || 'Без названия', details };
+      }
       const target = byId.get(String(action.itemId ?? action.subtaskId ?? action.taskId ?? action.parentTaskId ?? ''));
       return {
         type: label(action),
@@ -140,10 +178,22 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
   const row = await prisma.aiTaskProposal.findFirstOrThrow({ where: { id, userId } });
   const actions = row.operations as TaskProposalAction[];
   try {
-    const snapshots = Array.isArray(row.snapshots) ? row.snapshots as Array<{ id: string; updatedAt: string }> : [];
+    const snapshots = Array.isArray(row.snapshots) ? row.snapshots as Array<{ kind?: string; id: string; updatedAt: string }> : [];
     if (row.source !== 'telegram_assistant' || actions.some(a => 'operation' in a)) {
       // Recheck access AND optimistic version before writing anything.
       for (const snapshot of snapshots) {
+        if (snapshot.kind === 'note') {
+          const note = await prisma.standaloneNote.findFirst({
+            where: { id: snapshot.id, userId }, select: { updatedAt: true }
+          });
+          if (!note || note.updatedAt.toISOString() !== snapshot.updatedAt) {
+            await prisma.aiTaskProposal.update({ where: { id }, data: {
+              status: 'CONFLICT', error: 'Заметка была изменена или недоступна. Создайте предложение заново.'
+            } });
+            return getTaskProposal(userId, id);
+          }
+          continue;
+        }
         const task = await prisma.task.findFirst({
           where: { id: snapshot.id, AND: [taskAccessWhere(userId)] },
           select: { updatedAt: true }
@@ -157,6 +207,12 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       }
     }
     const before = await captureProposalBefore(userId, actions);
+    const noteIds = [...new Set(actions.filter(isNoteAction).map(action => action.id))];
+    const notesBefore = noteIds.length ? await prisma.standaloneNote.findMany({
+      where: { id: { in: noteIds }, userId },
+      select: { id: true, title: true, content: true, groupId: true, updatedAt: true }
+    }) : [];
+    if (notesBefore.length !== noteIds.length) throw new Error('Заметка больше недоступна.');
     const reports: string[] = [];
     const createdIds: string[] = [];
     if (row.source === 'planner' || row.source === 'telegram_bot' ||
@@ -167,6 +223,14 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
       }
       const ids = (row.resolvedIds ?? {}) as { items?: string[]; spheres?: string[] };
       for (const action of actions) {
+        if (isNoteAction(action)) {
+          const result = await aiPersonalNotesService.update(
+            userId, noteActionPayload(action), action.expectedUpdatedAt
+          );
+          if (!result.ok) throw new Error(result.message);
+          reports.push('Изменена заметка «' + (result.note?.title ?? 'Без названия') + '».');
+          continue;
+        }
         const result = await plannerToolsService.action(
           userId, action as PlannerActionInput,
           new Set(ids.items ?? []), new Set(ids.spheres ?? []), row.userTimeZone
@@ -199,7 +263,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
         reports.push('Создана задача «' + String(action.title).slice(0, 180) + '».');
       }
     } else throw new Error('Неизвестный источник предложения.');
-    const undoData = await captureProposalAfter(userId, before, createdIds);
+    const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
       status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
       result: { reports, createdIds } as Prisma.InputJsonValue
