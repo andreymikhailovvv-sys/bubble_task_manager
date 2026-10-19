@@ -62,7 +62,8 @@ test('все поверхности отмечают вложения подза
     readFile(new URL('../src/services/task.service.ts', import.meta.url), 'utf8')
   ]);
   assert.match(taskService, /attachmentsByTaskId\.get\(task\.id\)/);
-  assert.match(web, /subtask\.attachmentCount/);
+  assert.match(web, /renderWorkspaceAttachmentIndicator\(subtask\)/);
+  assert.match(web, /const total = task\.attachmentCount \?\? 0/);
   assert.match(mini, /subtask\.attachmentCount/);
   assert.match(editor, /chunkSize = 0x8000/);
   assert.doesNotMatch(editor, /btoa\(String\.fromCharCode\(\.\.\.new Uint8Array/);

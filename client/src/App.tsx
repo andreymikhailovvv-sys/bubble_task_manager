@@ -3915,16 +3915,32 @@ ${allContext}`,
     const unread = task.unreadCommentCount ?? 0;
     return (
       <span
-        className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-violet-300/50 bg-violet-500/10 text-violet-600 ${compact ? 'h-5 w-5' : 'h-6 w-6'}`}
+        className={compact
+          ? 'relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-violet-300/50 bg-violet-500/10 text-violet-600'
+          : 'task-card-meta-indicator relative'}
         title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${total}`}
         aria-label={unread > 0 ? `Непрочитанных комментариев: ${unread}` : `Комментариев: ${total}`}
       >
-        <MessageCircle size={compact ? 11 : 13} />
+        <MessageCircle size={compact ? 11 : 15} />
         {unread > 0 ? (
           <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">
             {unread > 99 ? '99+' : unread}
           </span>
         ) : null}
+      </span>
+    );
+  };
+
+  const renderWorkspaceAttachmentIndicator = (task: Task) => {
+    const total = task.attachmentCount ?? 0;
+    if (total <= 0) return null;
+    return (
+      <span
+        className="task-card-meta-indicator"
+        title={`Вложений: ${total}`}
+        aria-label={`Вложений: ${total}`}
+      >
+        <Paperclip size={15} />
       </span>
     );
   };
@@ -3935,7 +3951,7 @@ ${allContext}`,
     return (
       <button
         type="button"
-        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-violet-100 hover:text-violet-700"
+        className="task-card-meta-indicator task-card-meta-action relative"
         title={unread > 0 ? `Непрочитанных комментариев: ${unread}` : total > 0 ? `Комментариев: ${total}` : 'Открыть комментарии'}
         aria-label="Открыть комментарии"
         onClick={(event) => {
@@ -5240,7 +5256,7 @@ ${allContext}`,
                       <input type="checkbox" checked={subtask.status === 'DONE'} onChange={async () => { await toggleSubtaskDone(subtask); }} onClick={(event) => event.stopPropagation()} />
                       {closingTaskIds.includes(subtask.id) ? <Check size={13} className="timeline-task-chip-success shrink-0" /> : null}
                       <button type="button" className={`min-w-0 flex-1 truncate text-left hover:text-violet-700 ${subtask.status === 'DONE' || closingTaskIds.includes(subtask.id) ? 'timeline-task-chip-completed line-through opacity-60 decoration-2' : ''}`} onClick={() => setEditorState({ task: subtask })}>{subtask.title}</button>
-                      {(subtask.attachmentCount ?? 0) > 0 ? <span title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" className="inline-flex shrink-0"><Paperclip size={13} className="text-violet-500" /></span> : null}
+                      {renderWorkspaceAttachmentIndicator(subtask)}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusActiveTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusActiveTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
@@ -5760,6 +5776,7 @@ ${allContext}`,
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
                       {renderWorkspaceCommentIndicator(task)}
+                      {renderWorkspaceAttachmentIndicator(task)}
                       {rankingMode === 'coefficient' ? (
                         <span
                           className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
@@ -7545,7 +7562,7 @@ ${allContext}`,
                       >
                         <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
                       </button>
-                      {(subtask.attachmentCount ?? 0) > 0 ? <span title={`${subtask.attachmentCount} вложений`} aria-label="Есть вложения" className="inline-flex shrink-0"><Paperclip size={13} className="text-violet-500" /></span> : null}
+                      {renderWorkspaceAttachmentIndicator(subtask)}
                       {subtask.dueDate ? <span className="shrink-0 whitespace-nowrap text-xs font-semibold text-violet-500" title={`До дедлайна: ${formatDeadlineLeft(subtask.dueDate)}`}>{formatSubtaskRelativeDeadline(subtask.dueDate)}</span> : null}
                       {focusedTask.isCollaborative ? renderSubtaskCommentButton(subtask) : null}
                       {focusedTask.isCollaborative && subtask.creatorName ? <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm" style={{ backgroundColor: subtask.creatorColor ?? '#8b5cf6' }}>{subtask.creatorName}</span> : null}
