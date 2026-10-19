@@ -422,6 +422,9 @@ body[data-theme='light'] .telegram-ai-settings-section--general {
   padding: 16px 18px 18px;
   border-top: 1px solid var(--section-border);
 }
+.telegram-ai-settings-section:not([open]) > .telegram-ai-settings-section__content {
+  display: none;
+}
 .telegram-ai-settings-section__content > .telegram-ai-slider-setting,
 .telegram-ai-settings-section__content > .telegram-ai-custom-control > .telegram-ai-slider-setting {
   border: 0;
