@@ -1263,12 +1263,12 @@ body[data-theme='light'] .backdrop-blur-sm {
   }
 
   .task-card-meta-action:hover {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-    color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+    background: color-mix(in srgb, #8b5cf6 12%, transparent);
+    color: color-mix(in srgb, #8b5cf6 75%, var(--text-primary));
   }
 
   .task-card-meta-action:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid #8b5cf6;
     outline-offset: 2px;
   }
 
