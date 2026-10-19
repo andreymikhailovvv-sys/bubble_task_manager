@@ -2826,6 +2826,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, attachmentPreviews };
     const history = activeAiChat?.messages ?? [];
+    generalAiChatNearBottomRef.current = true;
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
     aiChatDraftValueRef.current = '';
     aiChatComposerRef.current?.clearDraft();
