@@ -1257,7 +1257,7 @@ apiRouter.get('/ai-chat/uploaded-attachments/:messageId/:ordinal/download', requ
     select: { fileName: true, mimeType: true, contentBase64: true }
   });
   if (!file) { res.status(404).json({ error: 'Вложение больше не хранится на сервере. Прикрепите его заново.' }); return; }
-  const safeName = file.fileName.replace(/[^\\x20-\\x7e]|["\\\\]/g, '_') || 'attachment';
+  const safeName = file.fileName.replace(/[^\x20-\x7e]|["\\]/g, '_') || 'attachment';
   res.set({
     'Content-Type': file.mimeType || 'application/octet-stream',
     'Content-Disposition': `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
