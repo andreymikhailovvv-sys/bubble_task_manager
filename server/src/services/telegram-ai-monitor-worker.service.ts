@@ -20,6 +20,15 @@ export function telegramInteractionDelayMs(minutes: number) {
   return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
 }
 
+/** Task proposals follow their own timer, independent of reply and summary scans. */
+export function telegramTaskScanDue(
+  policy: Pick<TelegramAiChatPolicy, 'taskMode' | 'nextTaskAt'>,
+  now: Date
+): boolean {
+  return policy.taskMode !== 'NONE' &&
+    policy.nextTaskAt != null && policy.nextTaskAt <= now;
+}
+
 function nextMonitorWakeup(values: Array<Date | null | undefined>): Date | null {
   const valid = values.filter((value): value is Date => value instanceof Date);
   return valid.length ? new Date(Math.min(...valid.map(value => value.getTime()))) : null;
@@ -253,8 +262,7 @@ async function processClaim(claimed: Claimed) {
     (policy.summaryIntervalMinutes !== -1 && policy.nextSummaryAt != null && policy.nextSummaryAt <= now);
   // Tasks have their own user-selected frequency. Reply proposals, auto-replies,
   // and summaries never pull task analysis forward ahead of this timer.
-  const dueTasks = policy.taskMode !== 'NONE' &&
-    policy.nextTaskAt != null && policy.nextTaskAt <= now;
+  const dueTasks = telegramTaskScanDue(policy, now);
 
   const lastInteraction = policy.lastInteractionMessageId ?? policy.lastSeenMessageId ?? 0;
   const lastSummary = policy.lastSummaryMessageId ?? policy.lastSeenMessageId ?? 0;
