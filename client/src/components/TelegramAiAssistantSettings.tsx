@@ -82,7 +82,7 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
   const id = useId();
   const progress = options.length > 1 ? (index / (options.length - 1)) * 100 : 0;
   return (
-    <div className="telegram-ai-slider-setting">
+    <div className={`telegram-ai-slider-setting ${shortLabels?.length === 3 ? 'telegram-ai-slider-setting--sparse' : shortLabels && shortLabels.length >= 8 ? 'telegram-ai-slider-setting--dense' : ''}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <label htmlFor={id} className="text-sm font-semibold">{title}</label>
         <span className="telegram-ai-slider-setting__value" aria-live="polite">{options[index]}</span>
@@ -102,7 +102,7 @@ function SettingSlider({ title, description, index, options, shortLabels, onChan
         ))}
       </div>
       {shortLabels ? (
-        <div className="telegram-ai-slider-setting__labels" aria-hidden="true">
+        <div className={`telegram-ai-slider-setting__labels ${shortLabels.length >= 8 ? 'telegram-ai-slider-setting__labels--dense' : ''}`} aria-hidden="true">
           {shortLabels.map((label, i) => <span key={label}
             style={{ left: `${i / Math.max(1, shortLabels.length - 1) * 100}%` }}>{label}</span>)}
         </div>
@@ -462,10 +462,9 @@ export function TelegramAiAssistantSettings({ onClose }: Props) {
                     <p className="integration-menu__muted mt-1 text-xs">Передвигайте бегунки. Выбранное значение показано справа.</p>
                   </div>
                   {selected && (
-                    <div role="status" aria-live="polite"
-                      className={`telegram-ai-monitor-status telegram-ai-monitor-status--${selected.isEnabled ? 'active' : 'paused'} space-y-2 rounded-2xl border p-4`}>
+                    <div className={`telegram-ai-monitor-status telegram-ai-monitor-status--${selected.isEnabled ? 'active' : 'paused'} space-y-2 rounded-2xl border p-4`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="telegram-ai-monitor-status__headline flex items-center gap-2 text-sm font-semibold">
+                        <span role="status" aria-live="polite" className="telegram-ai-monitor-status__headline flex items-center gap-2 text-sm font-semibold">
                           <span className="telegram-ai-monitor-status__indicator" aria-hidden="true"/>
                           {selected.isEnabled ? 'Мониторинг включён' : 'Мониторинг приостановлен'}
                         </span>
