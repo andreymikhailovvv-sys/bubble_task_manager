@@ -98,7 +98,7 @@ async function ownerSnapshot(userId: string, actions: TaskProposalAction[]) {
           action.content !== null ? (action.contentMode === 'append'
             ? 'Добавление текста в конец заметки' : 'Замена содержимого заметки') : null,
           action.content !== null ? 'Текст: ' +
-            action.content.replace(/\\s+/g, ' ').trim().slice(0, 240) +
+            action.content.replace(/\s+/g, ' ').trim().slice(0, 240) +
             (action.content.length > 240 ? '…' : '') : null,
           action.groupName !== null ? (action.groupName ? 'Группа: ' + action.groupName : 'Убрать из группы') : null
         ].filter((part): part is string => part !== null);
