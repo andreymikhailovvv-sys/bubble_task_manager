@@ -50,6 +50,16 @@ export const AI_CHAT_OPENAI_TOOLS = [
     } }
   },
   {
+    type: 'function', name: 'update_note', strict: true,
+    description: 'Изменить существующую личную заметку только по явной просьбе пользователя. ОБЯЗАТЕЛЬНО сначала найти её через search_notes или search_workspace, затем прочитать через read_note. Использовать точный id из read_note. title=null оставляет название без изменений; content=null сохраняет содержание. Для content укажи contentMode=replace (полная замена по явной просьбе) либо append (добавление текста, сохраняющее исходный HTML). groupName=null сохраняет группу; пустая строка убирает из группы; непустая строка требует существующую группу. Не выдумывай содержимое заметки, не перезаписывай весь текст для маленькой правки, если достаточно append. Не называй запись изменённой до ok=true.',
+    parameters: { type: 'object', additionalProperties: false, required: ['id', 'title', 'content', 'contentMode', 'groupName'], properties: {
+      id: { type: 'string' },
+      title: nullable('string'), content: nullable('string'),
+      contentMode: { type: ['string', 'null'], enum: ['replace', 'append', null] },
+      groupName: nullable('string')
+    } }
+  },
+  {
     type: 'function', name: 'read_note', strict: true,
     description: 'Прочитать подробное содержимое одной личной заметки, найденной search_notes или search_workspace, с проверкой прав текущего пользователя. Только чтение.',
     parameters: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: { type: 'string' } } }
@@ -266,6 +276,8 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
   const resolvedItemIds = new Set<string>(); const resolvedSphereIds = new Set<string>();
   const preparedTaskActions: PlannerActionInput[] = [];
   const resolvedNoteIds = new Set<string>();
+  const readNoteIds = new Set<string>();
+  const updatedNoteIds = new Set<string>();
   let noteCreated = false;
   const actionReports: string[] = []; const undoOperations: unknown[] = [];
   let generatedDocument: GeneratedDocumentMeta | null = null;
@@ -447,6 +459,27 @@ export async function askAiChatWithTools(input: { userId: string; model: string;
           } catch (error) {
             return { ok: false, code: 'CREATE_NOTE_FAILED',
               message: error instanceof TypeError ? error.message : 'Не удалось создать заметку.' };
+          }
+        }
+        if (name === 'update_note') {
+          const id = (value as { id?: unknown }).id;
+          if (typeof id !== 'string' || !resolvedNoteIds.has(id) || !readNoteIds.has(id)) {
+            return { ok: false, code: 'NOTE_NOT_READ', message: 'Сначала найдите и прочитайте нужную заметку через search_notes и read_note.' };
+          }
+          if (updatedNoteIds.has(id)) {
+            return { ok: false, code: 'NOTE_ALREADY_UPDATED', message: 'Эта заметка уже изменена в текущем запросе.' };
+          }
+          try {
+            const result = await aiPersonalNotesService.update(input.userId, value);
+            if (result.ok) {
+              updatedNoteIds.add(id);
+              actionReports.push('Изменена заметка «' + (result.note?.title ?? 'Без названия') + '».');
+              console.info('[AI tools] note updated', { requestId, userId: input.userId, noteId: id });
+            }
+            return result;
+          } catch (error) {
+            return { ok: false, code: 'UPDATE_NOTE_FAILED',
+              message: error instanceof TypeError ? error.message : 'Не удалось изменить заметку.' };
           }
         }
         if (name === 'search_workspace') {
