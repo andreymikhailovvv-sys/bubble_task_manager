@@ -4651,6 +4651,19 @@ body[data-theme='light'] .efficiency-detail-row-focus b {
   transform: translateY(-1px);
 }
 
+/* The add-subtask calendar button previously kept its white light-theme face. */
+body[data-theme='dark'] .focused-task-inline-subtask-button {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: rgba(51, 65, 85, 0.88);
+  color: #ddd6fe;
+}
+body[data-theme='dark'] .focused-task-inline-subtask-button .date-time-trigger-icon {
+  color: #ddd6fe;
+}
+body[data-theme='dark'] .focused-task-inline-subtask-button:hover {
+  background: rgba(76, 29, 149, 0.38);
+}
+
 @media (max-height: 760px) {
   .focused-task-description { max-height: 5rem; }
   .focused-task-subtasks { max-height: none; }

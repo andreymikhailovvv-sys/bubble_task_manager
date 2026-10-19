@@ -17,6 +17,7 @@ import { LinkifiedText } from './components/LinkifiedText';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { ResizableDescriptionSurface } from './components/ResizableDescriptionSurface';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
@@ -1163,6 +1164,8 @@ export default function App() {
   const generalAiDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiFullscreenDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const quickAiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
+  const quickAiContentRef = useRef<HTMLDivElement | null>(null);
+  const quickAiFollowBottomRef = useRef(true);
   const timelineScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineCurrentDayRef = useRef<HTMLDivElement | null>(null);
   const timelineLastScrollTopRef = useRef(0);
@@ -1796,11 +1799,10 @@ export default function App() {
       acc[parentId] = [...items].sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
-        if (subtaskFilterMode === 'none') return 0;
-        if (subtaskFilterMode === 'importance') {
-          const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
-          if (importanceDiff !== 0) return importanceDiff;
-        }
+        if (subtaskFilterMode === 'none') return newestFocusSubtaskFirst(a, b);
+        if (subtaskFilterMode === 'urgency') return urgentFocusSubtaskFirst(a, b);
+        const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
+        if (importanceDiff !== 0) return importanceDiff;
         return toDeadlineTimestamp(a) - toDeadlineTimestamp(b);
       });
       return acc;
@@ -2909,16 +2911,22 @@ ${allContext}`,
     window.requestAnimationFrame(scrollQuickAiChatToBottom);
   };
 
-  useEffect(() => {
-    const container = quickAiChatDialogContainerRef.current;
-    if (!container) return;
-    const frameId = window.requestAnimationFrame(() => {
-      // Background chat sync must not move a manually scrolled transcript.
-      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 110;
-      if (isAtBottom) scrollQuickAiChatToBottom();
-    });
+  useLayoutEffect(() => {
+    if (!quickAiFollowBottomRef.current) return;
+    scrollQuickAiChatToBottom();
+    const frameId = window.requestAnimationFrame(scrollQuickAiChatToBottom);
     return () => window.cancelAnimationFrame(frameId);
   }, [quickAiChatMessages.length, systemNotifications.length, aiChatLoading, aiChatProgress]);
+
+  useEffect(() => {
+    const content = quickAiContentRef.current;
+    if (!content) return;
+    const observer = new ResizeObserver(() => {
+      if (quickAiFollowBottomRef.current) scrollQuickAiChatToBottom();
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
   const updateActiveAiChatMessages = (updater: (messages: AiChatMessage[]) => AiChatMessage[]) => {
     setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
@@ -2936,6 +2944,7 @@ ${allContext}`,
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString(), attachmentPreviews };
     const history = quick ? quickAiChatMessages : (activeAiChat?.messages ?? []);
     if (quick) {
+      quickAiFollowBottomRef.current = true;
       setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, userMessage].slice(-20) } : chat) } : project));
       setQuickAiChatDraft('');
     } else {
@@ -2962,6 +2971,9 @@ ${allContext}`,
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
       if (!quick) setAiChatPendingFiles([]);
       const actionReports = result.actionReports ?? [];
+      if (actionReports.some((item) => item.startsWith('Изменена заметка'))) {
+        window.dispatchEvent(new Event('standalone-notes-updated'));
+      }
       const serviceReport = actionReports.length > 0
         ? `\n\nИзменения:\n- ${actionReports.join('\n- ')}`
         : '';
@@ -7928,7 +7940,11 @@ ${allContext}`,
       >
         <div className={`absolute bottom-14 right-0 w-80 transition duration-200 ${forceQuickAiPreviewOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'}`}>
           <div data-tour="quick-ai" className="dialog-surface rounded-3xl border p-3 shadow-2xl backdrop-blur transition duration-200 hover:shadow-violet-500/20">
-            <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 space-y-2 overflow-y-auto overflow-x-hidden pr-1 text-xs">
+            <div ref={quickAiChatDialogContainerRef} className="quick-ai-chat-messages mb-2 max-h-72 overflow-y-auto overflow-x-hidden pr-1 text-xs" onScroll={(event) => {
+                const container = event.currentTarget;
+                quickAiFollowBottomRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 110;
+              }}>
+              <div ref={quickAiContentRef} className="space-y-2">
               {quickAiChatTimeline.slice(-30).map((item) => item.kind === 'notification' ? (
                 <div key={`notification-${item.notification.id}`} className="system-notification-message mr-6 rounded-2xl border px-3 py-2 shadow-sm">
                   <b className="system-notification-label mb-0.5 block text-[10px] uppercase tracking-wide">⚙️ Системное уведомление</b>
@@ -7945,6 +7961,7 @@ ${allContext}`,
               ))}
               {quickAiChatMessages.length === 0 && systemNotifications.length === 0 ? <p className="text-subtle">Быстрый одноразовый вопрос. Хранится только последние 20 запросов.</p> : null}
               {quickAiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
+              </div>
             </div>
             <div className="flex items-end gap-2">
               <AutoGrowingTextarea maxHeight={144} className="form-field min-h-9 min-w-0 flex-1 resize-none rounded-2xl border px-3 py-2 text-sm leading-5 transition focus:ring-2 focus:ring-violet-300" value={quickAiChatDraft} onChange={(e) => setQuickAiChatDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void sendAiChatQuestion(true); } }} placeholder="Спросить быстро…" />

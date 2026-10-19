@@ -7,6 +7,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
+import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
 import { CustomSelect } from './components/CustomSelect';
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
@@ -2540,12 +2541,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       .sort((a, b) => {
         const statusDiff = Number(a.status === 'DONE') - Number(b.status === 'DONE');
         if (statusDiff !== 0) return statusDiff;
-        if (openedTaskSubtaskFilterMode === 'urgency') {
-          const aDueDate = dueDateTimestamp(a);
-          const bDueDate = dueDateTimestamp(b);
-          if (aDueDate !== bDueDate) return aDueDate - bDueDate;
-          return createdAtTimestamp(a) - createdAtTimestamp(b);
-        }
+        if (openedTaskSubtaskFilterMode === 'none') return newestFocusSubtaskFirst(a, b);
+        if (openedTaskSubtaskFilterMode === 'urgency') return urgentFocusSubtaskFirst(a, b);
         if (openedTaskSubtaskFilterMode === 'importance') {
           const importanceDiff = (b.importance ?? 3) - (a.importance ?? 3);
           if (importanceDiff !== 0) return importanceDiff;
@@ -2829,6 +2826,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, attachmentPreviews };
     const history = activeAiChat?.messages ?? [];
+    generalAiChatNearBottomRef.current = true;
     updateActiveAiChatMessages((messages) => [...messages, userMessage]);
     aiChatDraftValueRef.current = '';
     aiChatComposerRef.current?.clearDraft();
@@ -2850,7 +2848,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         attachments: attachmentsPayload
       }, { onStatus: setAiChatProgress, onUploadProgress: setAiChatUploadProgress });
       setAiChatPendingFiles([]);
-      const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
+      if (result.actionReports?.some((item) => item.startsWith('Изменена заметка'))) {
+         window.dispatchEvent(new Event('standalone-notes-updated'));
+       }
+       const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
