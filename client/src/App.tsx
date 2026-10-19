@@ -2267,6 +2267,7 @@ export default function App() {
     setTaskAiUploadProgress(null);
     setAiError(null);
     setAiLoadingTaskId(taskId);
+    setAiPendingFiles([]); // Attachment bytes already captured for the outgoing message.
     setAiProgressByTask((current) => ({ ...current, [taskId]: 'analyzing_request' }));
 
     try {
@@ -2277,7 +2278,6 @@ export default function App() {
         model: options?.modelOverride ?? focusedAiModel,
         attachments: attachmentsPayload
       }, (status) => setAiProgressByTask((current) => ({ ...current, [taskId]: status })), setTaskAiUploadProgress);
-      setAiPendingFiles([]);
       const actionSummary = (result.actionReports?.length ?? 0) > 0
         ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}`
         : '';
@@ -2652,11 +2652,11 @@ ${allContext}`,
     setFocusAiUploadProgress(null);
     setFocusAiError(null);
     setFocusAiLoading(true);
+    setFocusAiPendingFiles([]); // Remove completed outgoing attachment tiles before response.
     setFocusAiProgress('analyzing_request');
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
       const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
-      setFocusAiPendingFiles([]);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
       await refreshAiCredits();
     } catch (error) {
