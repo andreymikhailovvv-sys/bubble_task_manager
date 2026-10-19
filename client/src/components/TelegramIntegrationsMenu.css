@@ -108,7 +108,8 @@ body[data-theme='light'] .telegram-integrations-modal {
   border-radius: 18px;
   background: var(--integration-surface);
 }
-.telegram-ai-settings-section > .telegram-ai-slider-setting {
+.telegram-ai-settings-section > .telegram-ai-slider-setting,
+.telegram-ai-settings-section > .telegram-ai-custom-control > .telegram-ai-slider-setting {
   border: 0;
   border-radius: 0;
   background: transparent;
