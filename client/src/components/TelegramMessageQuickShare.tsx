@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './TelegramMessageQuickShare.css';
-import { Check, ChevronRight, Forward, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
+import { Check, ChevronRight, Send, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
 import { api, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
 
 const SAVED_MESSAGES_ID = 'saved';
@@ -301,7 +301,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
           aria-expanded={menuOpen} aria-haspopup="menu"
           className="telegram-quick-share__trigger"
           data-message-forward-trigger="true">
-          <Forward size={19} strokeWidth={1.75} aria-hidden="true" />
+          <Send size={18} strokeWidth={1.75} aria-hidden="true" />
         </button>
         {menuOpen ? <div role="menu" className="telegram-quick-share__platform-menu">
           <div className="telegram-quick-share__menu-caption">Переслать в</div>
