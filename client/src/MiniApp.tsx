@@ -2879,7 +2879,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
         const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
         setAiChatProjects((prev) => prev.map(project => project.id !== projectId ? project : {
-          ...project, chats: project.chats.map(chat => chat.id !== chatId || !/^(Новый чат|Чат \\d+)$/i.test(chat.title)
+          ...project, chats: project.chats.map(chat => chat.id !== chatId || !/^(Новый чат|Чат \d+)$/i.test(chat.title)
             ? chat : { ...chat, title: result.suggestedChatTitle! })
         }));
       }

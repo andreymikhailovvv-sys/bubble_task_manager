@@ -11,7 +11,8 @@ const mini = read('MiniApp.tsx');
 
 test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(action, /className="telegram-quick-share__trigger"/);
-  assert.match(action, /<Forward size=\{19\}/);
+  assert.match(action, /<Send size=\{18\}/);
+  assert.doesNotMatch(action, /<Forward size=/);
   assert.match(web, /<TelegramMessageQuickShare text=\{/);
   assert.match(mini, /<TelegramMessageQuickShare text=\{/);
   assert.match(css, /width:\s*28px\s*!important/);
@@ -22,7 +23,7 @@ test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(css, /stroke:\s*currentColor\s*!important/);
 });
 
-test('light Mini App button overrides cannot add a white box around the arrow', () => {
+test('light Mini App button overrides cannot add a white box around the paper-plane icon', () => {
   assert.match(css, /body\[data-theme\] \.miniapp-shell \.ai-message-forward-actions button\.telegram-quick-share__trigger/);
   assert.match(css, /\.miniapp-shell\.miniapp-light \.ai-message-forward-actions button\.telegram-quick-share__trigger/);
   assert.match(css, /background:\s*transparent\s*!important/);
@@ -31,7 +32,7 @@ test('light Mini App button overrides cannot add a white box around the arrow', 
   assert.match(css, /background-image:\s*none\s*!important/);
 });
 
-test('arrow is below the message in a separate action row, never on a saturated bubble', () => {
+test('paper-plane share icon is below the message in a separate action row', () => {
   assert.match(css, /\.ai-message-forward-group\s*\{/);
   assert.match(css, /\.ai-message-forward-actions\s*\{/);
   assert.equal((web.match(/className="ai-message-forward-actions"/g) ?? []).length, 6);

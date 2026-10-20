@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { makeAiReplyTarget, parseAiReply, serializeAiReply } from '../../client/src/components/AiMessageReply.js';
+import { CHAT_TITLE_INSTRUCTION, extractAiChatTitleFromAnswer, isDefaultAiChatTitle, normalizeAiChatTitle, shouldSuggestAiChatTitle } from '../src/services/ai-chat-title.service.js';
 
 test('reply preserves quoted text, message ID and uploaded/generated file IDs', () => {
   const target = makeAiReplyTarget({
@@ -27,10 +28,11 @@ test('first chat reply may suggest a title but never overwrites a manual rename'
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8')
   ]);
-  assert.match(service, /suggestAiChatTitle\(/);
-  assert.match(service, /history\.length === 0/);
-  assert.match(service, /!quick && history\.length === 0/);
-  assert.match(service, /startsWith\('telegram-ai-assistant:'\)/);
+  assert.match(service, /shouldSuggestAiChatTitle\(/);
+  assert.match(service, /extractAiChatTitleFromAnswer\(result\.answer\)/);
+  assert.match(service, /messages\.splice\(1, 0, \{ role: 'system', content: CHAT_TITLE_INSTRUCTION \}\)/);
+  assert.match(service, /model: input\.model/);
+  assert.doesNotMatch(service, /model: 'gpt-5\.4-mini',\s*max_output_tokens: 128/);
   assert.match(api, /suggestedChatTitle\?: string/);
   for (const text of [app, mini]) {
     assert.match(text, /result\.suggestedChatTitle/);
@@ -50,7 +52,54 @@ test('reply controls and previews cover website focus, task chats, miniapp and m
   assert.match(web, /serializeAiReply\(/);
   assert.match(mini, /serializeAiReply\(/);
   assert.match(expanded, /<AiReplyPreview/);
-  assert.match(css, /\.ai-message-forward-actions \{ justify-content: space-between/);
+  assert.match(css, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 3px;/);
+});
+
+test('title recognition covers Чат 1 and manual titles without false matches', () => {
+  for (const title of ['Новый чат', ' Чат 1 ', 'Чат 27', 'ЧАТ 120']) {
+    assert.equal(isDefaultAiChatTitle(title), true, title);
+    assert.equal(shouldSuggestAiChatTitle({ chatId: 'personal-chat', chatTitle: title, historyLength: 0, quick: false }), true);
+  }
+  for (const title of ['План на отпуск', 'Чат 1 работа', 'Мои заметки', 'Чат \d+']) {
+    assert.equal(isDefaultAiChatTitle(title), false, title);
+  }
+  assert.equal(shouldSuggestAiChatTitle({ chatId: 'personal-chat', chatTitle: 'Чат 2', historyLength: 1, quick: false }), false);
+  assert.equal(shouldSuggestAiChatTitle({ chatId: 'quick-ai-requests', chatTitle: 'Новый чат', historyLength: 0, quick: true }), false);
+  assert.equal(shouldSuggestAiChatTitle({ chatId: 'telegram-ai-assistant:123', chatTitle: 'Новый чат', historyLength: 0, quick: false }), false);
+  assert.equal(shouldSuggestAiChatTitle({ chatTitle: 'Новый чат', historyLength: 0, quick: false }), false);
+});
+
+test('the selected model returns a title with the answer, and it is hidden from user text', () => {
+  const sample = 'Пользуйтесь поиском по проектам.\n\n[[PLANIROVYCH_CHAT_TITLE:Поиск по проектам]]';
+  assert.match(CHAT_TITLE_INSTRUCTION, /ПЕРВОГО ответа/);
+  assert.deepEqual(extractAiChatTitleFromAnswer(sample), {
+    answer: 'Пользуйтесь поиском по проектам.', title: 'Поиск по проектам'
+  });
+  assert.equal(extractAiChatTitleFromAnswer('Только ответ').title, null);
+  assert.equal(normalizeAiChatTitle('«Изменения календаря»'), 'Изменения календаря');
+  assert.equal(normalizeAiChatTitle('Чат 17'), null);
+});
+
+test('title generation preserves selected model and icon grouping is shared by web and miniapp', async () => {
+  const [service, app, mini, css, share] = await Promise.all([
+    readFile(new URL('../src/services/ai-assistant.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/TelegramMessageQuickShare.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/TelegramMessageQuickShare.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(service, /suggestAiChatTitle\(\{ apiKey, model, question/);
+  assert.match(service, /max_output_tokens: 512/);
+  assert.doesNotMatch(service, /model: 'gpt-5\.4-mini',\s*max_output_tokens/);
+  for (const source of [app, mini]) {
+    assert.match(source, /<AiReplyAction[^>]*\/><TelegramMessageQuickShare/);
+    assert.match(source, /Чат \\d\+/);
+    assert.doesNotMatch(source, /Чат \\\\d\+/);
+  }
+  assert.match(share, /<Send size=\{18\}/);
+  assert.doesNotMatch(share, /<Forward size=/);
+  assert.match(css, /justify-content: flex-end;\s*gap: 3px/);
+  assert.doesNotMatch(css, /justify-content: space-between/);
 });
 
 test('focus task settings are opaque and use dark theme for labels, dropdowns and buttons', async () => {

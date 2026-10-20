@@ -330,8 +330,16 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
   border-color: #34455f;
 }
 
-/* Reply sits to the left of the existing Telegram forward action. */
-.ai-message-forward-actions { justify-content: space-between; }
+/* Both actions form a compact, neutral group at the bottom right.
+   Reply immediately precedes the paper-plane Telegram share icon. */
+.ai-message-forward-actions {
+  justify-content: flex-end;
+  gap: 3px;
+}
+.ai-message-forward-actions > .telegram-quick-share__menu-anchor,
+.ai-message-forward-actions > .ai-message-reply-trigger {
+  flex: 0 0 28px;
+}
 .ai-message-reply-trigger {
   display: grid !important;
   place-items: center !important;
