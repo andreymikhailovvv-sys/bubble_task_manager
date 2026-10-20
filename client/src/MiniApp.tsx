@@ -4642,7 +4642,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
-                  <div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
@@ -4688,6 +4688,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   ) : null}
                 </div>
               ) : null}
+              {replyToTask ? <AiReplyPreview target={replyToTask} onDismiss={() => setReplyToTask(null)} /> : null}
               <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => setAiPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiLoadingTaskId === openedTask.id} uploadProgress={taskAiUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
                 <MiniAiChatComposer
@@ -4801,7 +4802,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
-                  <div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
               {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
@@ -4810,6 +4811,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
               <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
                 <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
