@@ -6,6 +6,8 @@ export type TaskAiProgressStatus =
   | 'reading_subtask'
   | 'searching_files'
   | 'reading_file'
+  | 'searching_web'
+  | 'analyzing_web_results'
   | 'analyzing_retrieved_context'
   | 'forming_answer'
   | 'applying_changes'
