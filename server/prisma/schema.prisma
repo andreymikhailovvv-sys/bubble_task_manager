@@ -88,6 +88,7 @@ model User {
   timeZone     String?
   aiTaskAutoApply Boolean @default(false)
   aiTaskProposals AiTaskProposal[]
+  browserNotificationsEnabled Boolean @default(true)
   morningAiCheckupEnabled Boolean @default(false)
   morningAiCheckupTime String @default("10:00")
   lastMorningAiCheckupDate String?
