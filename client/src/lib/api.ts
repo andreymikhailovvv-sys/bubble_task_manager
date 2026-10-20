@@ -251,6 +251,7 @@ export type CurrentUser = {
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
+  browserNotificationsEnabled?: boolean;
   morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
@@ -465,7 +466,7 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
-  updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string }) =>
+  updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
