@@ -136,6 +136,7 @@ const toAuthUser = (user: {
   aiEfficiencyCreditsPeriod?: string;
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
+  browserNotificationsEnabled?: boolean;
   morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
@@ -167,6 +168,7 @@ const toAuthUser = (user: {
   aiEfficiencyCreditsPeriod: user.aiEfficiencyCreditsPeriod ?? '',
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
   morningAiCheckupEnabled: user.morningAiCheckupEnabled ?? false,
+  browserNotificationsEnabled: user.browserNotificationsEnabled ?? true,
   morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
   efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
   efficiencyScore: Math.max(0, Math.min(100, user.efficiencyScore ?? 0)),
@@ -902,6 +904,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
   const data: {
     timeZone?: string;
     morningAiCheckupEnabled?: boolean;
+    browserNotificationsEnabled?: boolean;
     morningAiCheckupTime?: string;
   } = {};
 
@@ -916,6 +919,14 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
 
   if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'morningAiCheckupEnabled')) {
     data.morningAiCheckupEnabled = req.body?.morningAiCheckupEnabled === true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'browserNotificationsEnabled')) {
+    if (typeof req.body?.browserNotificationsEnabled !== 'boolean') {
+      res.status(400).json({ error: 'Укажите логическое значение для уведомлений браузера' });
+      return;
+    }
+    data.browserNotificationsEnabled = req.body.browserNotificationsEnabled;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'morningAiCheckupTime')) {
@@ -947,6 +958,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       aiEfficiencyCreditsPeriod: true,
       timeZone: true,
       morningAiCheckupEnabled: true,
+      browserNotificationsEnabled: true,
       morningAiCheckupTime: true,
       efficiencyScore: true,
       efficiencyTaskScore: true,
