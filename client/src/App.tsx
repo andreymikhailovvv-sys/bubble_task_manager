@@ -8,6 +8,7 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
+import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { CustomSelect } from './components/CustomSelect';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
@@ -7076,7 +7077,9 @@ ${allContext}`,
                     />
                   </label>
                 ) : null}
-                {filteredFocusedAiDialog.length === 0 ? <p className="text-xs text-subtle">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как быстрее и качественнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+                {filteredFocusedAiDialog.length === 0 ? (focusedAiDialog.length === 0
+                  ? <TaskAiEmptyState />
+                  : <p className="text-xs text-subtle">Сообщения не найдены.</p>) : null}
                 {filteredFocusedAiDialog.map((message, index) => (
                   <div
                     key={message.id}
@@ -7914,7 +7917,9 @@ ${allContext}`,
                   />
                 </label>
               ) : null}
-              {filteredFocusedAiDialog.length === 0 ? <p className="text-sm text-subtle">{focusedAiDialog.length === 0 ? 'Спросите ИИ, как эффективнее выполнить задачу.' : 'Сообщения не найдены.'}</p> : null}
+              {filteredFocusedAiDialog.length === 0 ? (focusedAiDialog.length === 0
+                ? <TaskAiEmptyState />
+                : <p className="text-sm text-subtle">Сообщения не найдены.</p>) : null}
               {filteredFocusedAiDialog.map((message, index) => (
                 <div
                   key={`expanded-${message.id}`}
