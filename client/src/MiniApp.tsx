@@ -1911,7 +1911,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: true,
+    aiNotificationsEnabled: aiNotificationDefault,
     subtasks: []
   });
 
