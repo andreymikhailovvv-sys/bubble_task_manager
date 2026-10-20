@@ -438,6 +438,7 @@ export type StandaloneNoteGroup = {
   id: string;
   name: string;
   color: string;
+  sphereId: string | null;
   createdAt: string;
   updatedAt: string;
 };
