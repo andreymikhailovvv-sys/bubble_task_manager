@@ -7,6 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
+import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { CustomSelect } from './components/CustomSelect';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatDisplayPreviews, stripAiChatProjectDisplayPreviews, setUnauthorizedHandler, ATTACHMENT_STORAGE_LIMIT_EVENT, formatStorageMiB, type AttachmentStorage, type AccountAttachment, type CreditPack, type CreditUsageStatistics, type CurrentUser, type SubscriptionLinks, type TaskAiProgressStatus, type AiChatProgressStatus, type TelegramAiAssistantInbox } from './lib/api';
 import { calcScore, getTaskCoefficient, type BubbleRankingMode } from './lib/layout';
@@ -815,6 +816,7 @@ export default function App() {
   };
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [creditModalView, setCreditModalView] = useState<'purchase' | 'statistics'>('purchase');
@@ -882,7 +884,7 @@ export default function App() {
   const [isMorningAiCheckupEnabled, setIsMorningAiCheckupEnabled] = useState(false);
   const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | null>(null);
+  const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | 'taskReport' | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [isTimelineToolbarHidden, setIsTimelineToolbarHidden] = useState(false);
@@ -1313,7 +1315,7 @@ export default function App() {
   }
 
   const updateUserSettings = async (
-    payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string; browserNotificationsEnabled?: boolean },
+    payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string; browserNotificationsEnabled?: boolean; offerTaskCompletionReport?: boolean },
     savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications'
   ) => {
     setSettingsSavingKey(savingKey);
@@ -3758,6 +3760,10 @@ ${allContext}`,
     setEditorState((current) => current?.task?.id === task.id ? null : current);
     setFocusedTaskId((current) => current === task.id ? null : current);
     await load();
+    if (!task.parentTaskId && task.taskType !== 'EVENT' && task.taskType !== 'REMINDER'
+      && !task.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
+      setReportPromptTask(task);
+    }
   };
 
   const saveFocusedTask = async () => {
@@ -4876,6 +4882,18 @@ ${allContext}`,
       className="app-shell flex h-screen flex-col overflow-y-auto p-4 lg:p-6"
       data-theme={effectiveThemeMode}
     >
+      {reportPromptTask ? (
+        <TaskCompletionReportDialog
+          taskId={reportPromptTask.id}
+          taskTitle={reportPromptTask.title}
+          onClose={() => setReportPromptTask(null)}
+          onNeverShow={async () => {
+            const { user } = await api.updateUserSettings({ offerTaskCompletionReport: false });
+            setCurrentUser(user);
+          }}
+          onGenerated={() => void load()}
+        />
+      ) : null}
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {isOnboardingOfferOpen ? (
@@ -5167,6 +5185,16 @@ ${allContext}`,
                   onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
                   options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
                   ariaLabel="Уведомления от ИИ"
+                />
+              </div>
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+                <div className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт по выполнению задачи</div>
+                <CustomSelect
+                  value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
+                  onChange={(value) => void updateUserSettings({ offerTaskCompletionReport: value === 'enabled' }, 'taskReport')}
+                  options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
+                  ariaLabel="Предлагать отчёт по выполнению задачи"
+                  disabled={settingsSavingKey === 'taskReport'}
                 />
               </div>
               <div className="mt-3 border-t border-rose-500/30 pt-3">
@@ -6861,6 +6889,7 @@ ${allContext}`,
             setEditorState(null);
             setFocusedTaskId(editorState.task!.parentTaskId!);
           } : undefined}
+          onPrepareReport={editorState.task?.id && !editorState.task.parentTaskId ? () => setReportPromptTask(editorState.task!) : undefined}
           onComplete={editorState.task?.id ? async () => {
             const selected = editorState.task!;
             if (selected.parentTaskId) {
@@ -7355,6 +7384,12 @@ ${allContext}`,
                         <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
                       </div>
                       {focusedSaveError ? <p role="alert" className="rounded-xl border border-rose-400/50 bg-rose-50 px-3 py-2 text-xs text-rose-700">Не удалось сохранить изменения: {focusedSaveError}</p> : null}
+                  {focusedTask.taskType !== 'EVENT' && focusedTask.taskType !== 'REMINDER' ? (
+                    <button type="button" className="surface-muted flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-primary"
+                      onClick={() => { setIsFocusedSettingsOpen(false); setReportPromptTask(focusedTask); }}>
+                      <FileText size={15} /> Подготовить отчёт
+                    </button>
+                  ) : null}
                   <div className="task-edit-compact-grid mt-4 grid grid-cols-2 items-end gap-3">
                     <label className="block text-xs font-semibold text-muted">Сектор
                       <div className="focus-sector-dropdown relative mt-1">
