@@ -1,5 +1,6 @@
 import { prepareAiChatImageFile } from './lib/ai-image-upload';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
@@ -675,6 +676,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   });
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [aiNotificationDefault, setAiNotificationDefault] = useState(() =>
+    localStorage.getItem('btm:ai-notifications-default-enabled') !== '0');
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
@@ -1905,7 +1908,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceJson: null,
     recurrenceSummary: null,
     recurrenceUntil: null,
-    aiNotificationsEnabled: true,
+    aiNotificationsEnabled: aiNotificationDefault,
     subtasks: []
   });
 
@@ -3472,6 +3475,97 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           onGenerated={() => void loadData()}
         />
       ) : null}
+      {isSettingsOpen ? createPortal(
+        <div className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}>
+          <section data-miniapp-popover="settings" role="dialog" aria-modal="true" aria-label="Настройки Планировыча"
+            className={['surface-popover miniapp-settings-popover relative max-h-[88dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border p-5 shadow-2xl sm:p-6', isLightTheme ? 'miniapp-light' : ''].join(' ')}
+            data-theme={isLightTheme ? 'light' : 'dark'}>
+            <div className="mb-5 flex items-center justify-between border-b border-[color:var(--panel-border)] pb-3">
+              <h2 className="text-xl font-bold text-primary">Настройки Планировыча</h2>
+              <button type="button" className="surface-muted rounded-xl p-2 text-muted hover:text-primary" onClick={() => setIsSettingsOpen(false)} aria-label="Закрыть настройки"><X size={18} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-sm font-semibold text-primary">Тема интерфейса</p>
+                <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-xl surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
+                  {(['light', 'dark', 'auto'] as const).map(mode => (
+                    <button key={mode} type="button" aria-pressed={miniThemeMode === mode}
+                      onClick={() => setMiniThemeMode(mode)}
+                      className={['theme-preference-switch-option rounded-lg px-3 py-2.5 font-semibold transition', miniThemeMode === mode ? 'theme-preference-switch-option-active' : 'text-muted hover:brightness-110'].join(' ')}>
+                      {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted">Авто: тёмная с 20:00 до 05:00 по часовому поясу пользователя.</p>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold text-primary">Часовой пояс</p>
+                <CustomSelect value={userTimeZone} onChange={(value) => {
+                  void api.updateUserSettings({ timeZone: value })
+                    .then(({ user }) => { setCurrentUser(user); localStorage.setItem('btm:user-timezone', value); })
+                    .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить часовой пояс'));
+                }}
+                  options={[...new Set([userTimeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Omsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Yakutsk','Asia/Vladivostok','Asia/Magadan','Asia/Kamchatka','Europe/Minsk','Europe/Berlin','Europe/London','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Dubai','Asia/Almaty','Asia/Tokyo'])].map(value => ({ value, label: value }))}
+                  ariaLabel="Часовой пояс пользователя" detachedPopup />
+              </div>
+              <div className="border-t border-[color:var(--panel-border)] pt-4">
+                <p className="mb-2 text-sm font-semibold text-primary">Утренний ИИ-чекап</p>
+                <p className="mb-2 text-xs leading-relaxed text-muted">Ежедневный обзор задач в общем чате с ИИ и Telegram, если бот подключён.</p>
+                <CustomSelect value={currentUser?.morningAiCheckupEnabled === true ? 'enabled' : 'disabled'}
+                  onChange={(value) => void api.updateUserSettings({ morningAiCheckupEnabled: value === 'enabled' })
+                    .then(({ user }) => setCurrentUser(user))
+                    .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
+                  options={[{ value:'disabled',label:'Выключен' },{ value:'enabled',label:'Включен' }]}
+                  ariaLabel="Утренний ИИ-чекап" detachedPopup />
+                <label className="mt-3 block text-sm text-primary">
+                  Время чекапа
+                  <input type="time" className="surface-input mt-1 w-full rounded-xl border px-3 py-2"
+                    value={currentUser?.morningAiCheckupTime ?? '10:00'}
+                    onChange={(event) => void api.updateUserSettings({ morningAiCheckupTime: event.target.value })
+                      .then(({ user }) => setCurrentUser(user))
+                      .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить время'))}/>
+                </label>
+              </div>
+              <div className="border-t border-[color:var(--panel-border)] pt-4">
+                <p className="mb-2 text-sm font-semibold text-primary">Уведомления от ИИ в новых задачах</p>
+                <CustomSelect value={aiNotificationDefault ? 'enabled' : 'disabled'}
+                  onChange={value => {
+                    const enabled=value === 'enabled';
+                    setAiNotificationDefault(enabled);
+                    localStorage.setItem('btm:ai-notifications-default-enabled',enabled ? '1' : '0');
+                  }}
+                  options={[{ value:'enabled',label:'Включены для новых задач' },{ value:'disabled',label:'Выключены для новых задач' }]}
+                  ariaLabel="Уведомления от ИИ в новых задачах" detachedPopup />
+              </div>
+              <div className="border-t border-[color:var(--panel-border)] pt-4">
+                <p className="mb-2 text-sm font-semibold text-primary">Предлагать отчёт по выполнению задачи</p>
+                <CustomSelect value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
+                  onChange={value => void api.updateUserSettings({ offerTaskCompletionReport: value === 'enabled' })
+                    .then(({ user }) => setCurrentUser(user))
+                    .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
+                  options={[{value:'enabled',label:'Включено'},{value:'disabled',label:'Выключено'}]}
+                  ariaLabel="Предлагать отчёт" detachedPopup />
+              </div>
+              {isWebRuntime ? <div className="border-t border-[color:var(--panel-border)] pt-4">
+                <p className="mb-2 text-sm font-semibold text-primary">Аккаунт</p>
+                {hasAccount ? (
+                  <>
+                    <p className="mb-2 break-words text-sm text-muted">{accountDisplayName}</p>
+                    <button type="button" className="surface-muted w-full rounded-xl px-3 py-2 text-sm text-primary"
+                      onClick={() => void logout()} disabled={logoutSubmitting}>{logoutSubmitting ? 'Выходим…' : 'Выйти'}</button>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => openAuthModal('login')} className="surface-muted rounded-xl px-3 py-2 text-sm">Войти</button>
+                    <button type="button" onClick={() => openAuthModal('register')} className="primary-button rounded-xl px-3 py-2 text-sm">Регистрация</button>
+                  </div>
+                )}
+              </div> : null}
+            </div>
+          </section>
+        </div>, document.body
+      ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
@@ -3555,62 +3649,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     <div className="efficiency-detail-row"><span>Работа с ИИ</span><b>+{formatRatingDelta(currentUser?.efficiencyAiScore ?? 0)} рейтинга</b></div>
                     <div className="efficiency-detail-row efficiency-detail-row-focus"><span>Режим концентрации (х2)</span><b>+{formatRatingDelta(currentUser?.efficiencyFocusScore ?? 0)} рейтинга</b></div>
                   </div>
-                </div>
-              ) : null}
-              {isSettingsOpen ? (
-                <div data-miniapp-popover="settings" className="miniapp-settings-popover absolute right-0 top-full z-40 mt-2 w-64 rounded-xl border border-slate-600 bg-slate-900 p-3 text-sm shadow-xl">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="font-medium text-slate-100">Настройки</span>
-                    <button type="button" onClick={() => setIsSettingsOpen(false)} className="rounded-md p-1 text-slate-400 hover:bg-slate-800" aria-label="Закрыть настройки">
-                      <X size={14} />
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-400">Тема мини-приложения</p>
-                    <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg border border-slate-600 bg-slate-800 p-1 text-xs" role="group" aria-label="Тема мини-приложения">
-                      {(['light', 'dark', 'auto'] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          aria-pressed={miniThemeMode === mode}
-                          onClick={() => setMiniThemeMode(mode)}
-                          className={`theme-preference-switch-option min-w-0 rounded-md px-1.5 py-2 transition ${miniThemeMode === mode ? 'theme-preference-switch-option-active' : 'hover:bg-slate-700'}`}
-                        >
-                          {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[11px] leading-snug text-slate-400">Авто: тёмная с 20:00 до 05:00 ({userTimeZone}).</p>
-                  </div>
-                  <div className="mt-3 border-t border-slate-700 pt-3">
-                    <p className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт после выполнения задачи</p>
-                    <CustomSelect
-                      value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
-                      onChange={(value) => void api.updateUserSettings({ offerTaskCompletionReport: value === 'enabled' })
-                        .then(({ user }) => setCurrentUser(user)).catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
-                      options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
-                      ariaLabel="Предлагать отчёт после выполнения"
-                      detachedPopup
-                    />
-                  </div>
-                  {isWebRuntime ? (
-                    <div className="mt-3 border-t border-slate-700 pt-3">
-                      <p className="mb-2 text-xs font-semibold text-slate-200">Аккаунт</p>
-                      {hasAccount ? (
-                        <div className="space-y-2">
-                          <p className="truncate text-xs text-slate-300" title={accountDisplayName}>{accountDisplayName}</p>
-                          <button type="button" onClick={() => void logout()} disabled={logoutSubmitting} className="w-full rounded-md border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 disabled:opacity-60">
-                            {logoutSubmitting ? 'Выходим…' : 'Выйти'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button type="button" onClick={() => openAuthModal('login')} className="rounded-md border border-sky-400/60 bg-sky-500/15 px-2 py-2 text-xs font-semibold text-sky-200">Войти</button>
-                          <button type="button" onClick={() => openAuthModal('register')} className="rounded-md border border-violet-400/60 bg-violet-500/15 px-2 py-2 text-xs font-semibold text-violet-200">Регистрация</button>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
             </div>
