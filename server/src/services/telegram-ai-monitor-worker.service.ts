@@ -15,6 +15,13 @@ const STALE_CALL_MS = 12 * 60_000;
 const MAX_JOBS_PER_TICK = 2;
 const MAX_INPUT_MESSAGES = 40;
 const IMMEDIATE_POLL_MS = 15_000; // Minimum per-chat polling interval; no permanent MTProto listener.
+const NETWORK_RETRY_CAP_MS = 30 * 60_000;
+
+/** Persisted per-chat backoff across process restarts and Timeweb replicas. */
+export function telegramMonitorNetworkRetryMs(failureStreak: number): number {
+  const exponent = Math.max(0, Math.min(5, Math.trunc(failureStreak) - 1));
+  return Math.min(NETWORK_RETRY_CAP_MS, 60_000 * (2 ** exponent));
+}
 
 export function telegramInteractionDelayMs(minutes: number) {
   return minutes === 0 ? IMMEDIATE_POLL_MS : minutes * 60_000;
@@ -107,7 +114,7 @@ export const telegramAiMonitorControl = {
             : telegramMonitorNextAt(policy.summaryIntervalMinutes, policy.summaryIntervalMonths),
           policy.taskMode === 'NONE' ? null : telegramMonitorNextAt(policy.taskIntervalMinutes, policy.taskIntervalMonths)
         ]),
-        lastError: null, leaseToken: null, leasedUntil: null, summaryRequested: false
+        lastError: null, networkFailureStreak: 0, leaseToken: null, leasedUntil: null, summaryRequested: false
       }
     });
     if (!current.count) throw new TelegramUserClientError(409, 'Настройки были изменены; обновите страницу');
@@ -157,14 +164,16 @@ async function claim(): Promise<Claimed | null> {
   return result.count ? { policy: candidate, token } : null;
 }
 
-async function release(claimed: Claimed, error: string | null = null, retryMs: number | null = null) {
+async function release(claimed: Claimed, error: string | null = null, retryMs: number | null = null, networkFailure = false) {
   await prisma.telegramAiChatPolicy.updateMany({
     where: { id: claimed.policy.id, leaseToken: claimed.token },
     data: {
       leaseToken: null, leasedUntil: null,
       ...(error || retryMs != null ? { nextCheckAt: new Date(Date.now() + (retryMs ?? 60_000)) } : {}),
       lastCheckedAt: new Date(),
-      ...(error ? { lastError: error.slice(0, 160) } : { lastError: null })
+      ...(error ? { lastError: error.slice(0, 160) } : { lastError: null }),
+      ...(networkFailure ? { networkFailureStreak: { increment: 1 } }
+        : !error && retryMs === null ? { networkFailureStreak: 0 } : {})
     }
   });
 }
@@ -555,9 +564,13 @@ class TelegramAiMonitorWorker {
           }
           const safe = error instanceof TelegramUserClientError ? error.message.slice(0, 150) :
             'Ошибка обработки Telegram. Следующая проверка по расписанию.';
-          await release(claimed, safe);
+          const networkFailure = error instanceof TelegramUserClientError && error.statusCode === 503;
+          const failureStreak = claimed.policy.networkFailureStreak + 1;
+          const retryMs = networkFailure ? telegramMonitorNetworkRetryMs(failureStreak) : null;
+          await release(claimed, safe, retryMs, networkFailure);
           console.warn('[TelegramMonitor] worker attempt failed', {
-            policyId: claimed.policy.id, code: error instanceof TelegramUserClientError ? error.statusCode : 'INTERNAL'
+            policyId: claimed.policy.id, code: error instanceof TelegramUserClientError ? error.statusCode : 'INTERNAL',
+            ...(networkFailure ? { networkFailureStreak: failureStreak, retryInSeconds: Math.round(retryMs! / 1000) } : {})
           });
         }
       }
