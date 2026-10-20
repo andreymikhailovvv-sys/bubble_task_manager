@@ -1,4 +1,5 @@
 import { Reply, X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { ChatMessage } from '../lib/types';
 
 const START = '[[PLANNER_AI_REPLY_BEGIN]]';
@@ -76,7 +77,7 @@ export function AiReplyPreview({ target, onDismiss, compact = false }: { target:
   </div>;
 }
 
-export function AiReplyMessageBody({ content, renderBody }: { content: string; renderBody: (text: string) => React.ReactNode }) {
+export function AiReplyMessageBody({ content, renderBody }: { content: string; renderBody: (text: string) => ReactNode }) {
   const parsed = parseAiReply(content);
   if (!parsed) return <>{renderBody(content)}</>;
   return <><AiReplyPreview target={parsed.reply} compact /><div className="mt-1">{renderBody(parsed.text)}</div></>;
