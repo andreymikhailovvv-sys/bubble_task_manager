@@ -1780,6 +1780,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         }
       }
       await loadData();
+      // Only closing an existing subtask from its editor should dismiss the sheet.
+      // Keep the "Вернуть" flow and the parent-task confirmation unchanged.
+      if (completed?.parentTaskId && openedSubtaskId === taskId) {
+        closeMiniWindowWithMotion('subtask', () => setOpenedSubtaskId(null));
+      }
       if (completed && !completed.parentTaskId && completed.taskType !== 'EVENT' && completed.taskType !== 'REMINDER'
         && !completed.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
         setReportPromptTask(completed);
@@ -3130,8 +3135,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     setTasks(await api.getTasks());
   };
 
-  const downloadAiGeneratedDocument = async (generatedDocument: GeneratedDocument) => {
-    try {
+  const startAiGeneratedDocumentDownload = async (generatedDocument: GeneratedDocument) => {
       const download = await api.createAiGeneratedDocumentDownloadLink(generatedDocument.id);
       const webApp = isTelegramRuntime ? (window as TelegramWindow).Telegram?.WebApp : undefined;
 
@@ -3153,6 +3157,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         link.click();
         window.document.body.removeChild(link);
       }
+  };
+  const downloadAiGeneratedDocument = async (generatedDocument: GeneratedDocument) => {
+    try {
+      await startAiGeneratedDocumentDownload(generatedDocument);
       setError(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Не удалось скачать Word-файл');
@@ -3465,6 +3473,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     >
       {reportPromptTask ? (
         <TaskCompletionReportDialog
+          onDownload={startAiGeneratedDocumentDownload}
           taskId={reportPromptTask.id}
           taskTitle={reportPromptTask.title}
           onClose={() => setReportPromptTask(null)}
