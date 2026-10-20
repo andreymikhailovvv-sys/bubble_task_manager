@@ -1,6 +1,6 @@
 import net from 'node:net';
 import tls from 'node:tls';
-import { connectTelegramSocks5, parseTelegramSocks5Proxy, type TelegramSocks5Proxy } from './telegram-socks5.js';
+import { connectTelegramSocks5, parseTelegramSocks5Proxy, type TelegramSocks5Proxy, type TelegramSocks5Stage } from './telegram-socks5.js';
 
 // HTTP CONNECT for the Telegram *user* MTProto TCP stream. The existing
 // undici ProxyAgent only handles HTTP requests to the Bot API and cannot be
@@ -14,6 +14,10 @@ type ProxyConfig = {
 } | (TelegramSocks5Proxy & { protocol: 'socks5' });
 
 const CONNECT_TIMEOUT_MS = 10_000;
+export type TelegramMtprotoTransport = 'direct' | 'socks5' | 'http_connect';
+export type TelegramMtprotoStage = TelegramSocks5Stage |
+  'http_proxy_connected' | 'proxy_tunnel_ready' | 'mtproto_first_bytes';
+export type TelegramMtprotoStageObserver = (stage: TelegramMtprotoStage) => void;
 const MAX_CONNECT_HEADER_BYTES = 8192;
 
 export class TelegramUserProxyConfigurationError extends Error {
@@ -23,7 +27,8 @@ export class TelegramUserProxyConfigurationError extends Error {
 }
 
 function proxyConfig(env: NodeJS.ProcessEnv): ProxyConfig | null {
-  const value = (env.TELEGRAM_USER_PROXY_URL ?? env.TELEGRAM_PROXY_URL ?? '').trim();
+  // An empty dedicated env var must NOT silently disable the shared Bot proxy.
+  const value = env.TELEGRAM_USER_PROXY_URL?.trim() || env.TELEGRAM_PROXY_URL?.trim() || '';
   if (!value) return null;
 
   let url: URL;
@@ -44,8 +49,8 @@ function proxyConfig(env: NodeJS.ProcessEnv): ProxyConfig | null {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TelegramUserProxyConfigurationError();
   }
-  const username = env.TELEGRAM_USER_PROXY_USERNAME ?? env.TELEGRAM_PROXY_USERNAME;
-  const password = env.TELEGRAM_USER_PROXY_PASSWORD ?? env.TELEGRAM_PROXY_PASSWORD;
+  const username = env.TELEGRAM_USER_PROXY_USERNAME?.trim() || env.TELEGRAM_PROXY_USERNAME;
+  const password = env.TELEGRAM_USER_PROXY_PASSWORD || env.TELEGRAM_PROXY_PASSWORD;
   if (Boolean(username) !== Boolean(password)) {
     // Do not silently drop authentication for a partially configured proxy.
     throw new TelegramUserProxyConfigurationError();
@@ -72,7 +77,17 @@ export class HttpConnectTelegramSocket {
   private readonly readers = new Set<{ resolve(): void; reject(error: Error): void }>();
   lastDataAt = 0;
 
-  constructor(private readonly proxy: ProxyConfig, private readonly keepAliveInterval = 30_000) {}
+  private sawMtprotoData = false;
+  constructor(
+    private readonly proxy: ProxyConfig,
+    private readonly keepAliveInterval = 30_000,
+    private readonly onStage?: TelegramMtprotoStageObserver
+  ) {}
+  private receivedMtprotoBytes(): void {
+    if (this.sawMtprotoData) return;
+    this.sawMtprotoData = true;
+    this.onStage?.('mtproto_first_bytes');
+  }
 
   private signalReaders(error?: Error): void {
     for (const reader of this.readers) {
@@ -163,12 +178,15 @@ export class HttpConnectTelegramSocket {
     if (this.socket || !this.closed) throw new Error('Socket already initialized');
     const proxy = this.proxy;
     if (proxy.protocol === 'socks5') {
-      const socket = await connectTelegramSocks5(proxy, ip, port);
+      const socket = await connectTelegramSocks5(proxy, ip, port, this.onStage);
       this.socket = socket;
       this.closed = false;
       socket.setNoDelay(true);
       socket.setKeepAlive(this.keepAliveInterval > 0, Math.max(0, this.keepAliveInterval));
-      socket.on('data', (chunk) => this.enqueue(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      socket.on('data', (chunk) => {
+        this.receivedMtprotoBytes();
+        this.enqueue(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
       socket.on('error', () => {
         this.closed = true;
         this.signalReaders(new Error('Telegram MTProto SOCKS5 socket error'));
@@ -214,6 +232,7 @@ export class HttpConnectTelegramSocket {
           }
           // Mark as live before draining bytes that arrived with the response.
           this.closed = false;
+          this.onStage?.('proxy_tunnel_ready');
           socket.setNoDelay(true);
           socket.setKeepAlive(this.keepAliveInterval > 0, Math.max(0, this.keepAliveInterval));
           cleanup();
@@ -223,7 +242,10 @@ export class HttpConnectTelegramSocket {
           this.enqueue(header.subarray(split + 4));
           resolve();
         };
-        const liveData = (chunk: Buffer) => this.enqueue(chunk);
+        const liveData = (chunk: Buffer) => {
+          this.receivedMtprotoBytes();
+          this.enqueue(chunk);
+        };
         const liveError = () => {
           this.closed = true;
           this.signalReaders(new Error('Telegram MTProto proxy socket error'));
@@ -233,6 +255,7 @@ export class HttpConnectTelegramSocket {
           this.signalReaders(new Error('Telegram MTProto proxy socket closed'));
         };
         const onConnected = () => {
+          this.onStage?.('http_proxy_connected');
           const request = [
             'CONNECT ' + endpoint + ' HTTP/1.1',
             'Host: ' + endpoint,
@@ -255,13 +278,22 @@ export class HttpConnectTelegramSocket {
 }
 
 /** One SocketFactory per TelegramClient; credentials remain server-side. */
-export function telegramUserClientNetworkOptions(env: NodeJS.ProcessEnv = process.env) {
+/** Returns only the transport class, never the address or credentials. */
+export function telegramMtprotoTransport(env: NodeJS.ProcessEnv = process.env): TelegramMtprotoTransport {
+  const config = proxyConfig(env);
+  return config ? config.protocol === 'socks5' ? 'socks5' : 'http_connect' : 'direct';
+}
+
+export function telegramUserClientNetworkOptions(
+  env: NodeJS.ProcessEnv = process.env,
+  onStage?: TelegramMtprotoStageObserver
+) {
   const config = proxyConfig(env);
   if (!config) return {};
   const activeConfig: ProxyConfig = config;
   const Socket = class extends HttpConnectTelegramSocket {
     constructor(_ignoredProxy?: unknown, keepAliveInterval?: number) {
-      super(activeConfig, keepAliveInterval);
+      super(activeConfig, keepAliveInterval, onStage);
     }
   };
   return { networkSocket: Socket };

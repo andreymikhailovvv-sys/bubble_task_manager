@@ -4,7 +4,7 @@ import test from 'node:test';
 import { connectTelegramSocks5, parseTelegramSocks5Proxy } from '../src/lib/telegram-socks5.js';
 import {
   telegramUserClientNetworkOptions, TelegramUserProxyConfigurationError,
-  classifyTelegramUserNetworkError
+  classifyTelegramUserNetworkError, type TelegramMtprotoStage
 } from '../src/lib/telegram-user-client-network.js';
 
 async function localSocks5(withAuth: boolean, accept = true) {
@@ -41,11 +41,13 @@ async function localSocks5(withAuth: boolean, accept = true) {
 
 test('SOCKS5 username/password works for MTProto and falls back to bot proxy settings', async () => {
   const proxy = await localSocks5(true);
+  const observedStages: TelegramMtprotoStage[] = [];
   const options = telegramUserClientNetworkOptions({
+    TELEGRAM_USER_PROXY_URL: ' ',
     TELEGRAM_PROXY_URL: `socks5://127.0.0.1:${proxy.port}`,
     TELEGRAM_PROXY_USERNAME: 'user-name',
     TELEGRAM_PROXY_PASSWORD: 'secret-pass'
-  });
+  }, stage => observedStages.push(stage));
   assert.ok(options.networkSocket);
   const client = new options.networkSocket!();
   try {
@@ -57,6 +59,10 @@ test('SOCKS5 username/password works for MTProto and falls back to bot proxy set
     assert.equal(proxy.requests[2].subarray(0, 8).toString('hex'), '05010001959aa733');
     client.write(Buffer.from('MTProto'));
     assert.equal((await client.readExactly(7)).toString(), 'MTProto');
+    assert.deepEqual(observedStages, [
+      'proxy_tcp_connected', 'proxy_greeting_ok', 'proxy_authenticated',
+      'proxy_tunnel_ready', 'mtproto_first_bytes'
+    ]);
   } finally {
     await client.close();
     await proxy.close();

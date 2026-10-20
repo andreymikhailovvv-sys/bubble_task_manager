@@ -8,6 +8,9 @@ export type TelegramSocks5Proxy = {
 };
 
 const CONNECT_TIMEOUT_MS = 10_000;
+/** Safe progress signals; never include hosts, proxy credentials or Telegram data. */
+export type TelegramSocks5Stage =
+  'proxy_tcp_connected' | 'proxy_greeting_ok' | 'proxy_authenticated' | 'proxy_tunnel_ready';
 
 /** Credentials live in separate environment variables, never in the proxy URL. */
 export function parseTelegramSocks5Proxy(url: URL, username?: string, password?: string): TelegramSocks5Proxy {
@@ -60,7 +63,8 @@ function destinationAddress(host: string): Buffer {
 export async function connectTelegramSocks5(
   proxy: TelegramSocks5Proxy,
   destinationHost: string,
-  destinationPort: number
+  destinationPort: number,
+  onStage?: (stage: TelegramSocks5Stage) => void
 ): Promise<net.Socket> {
   if (!Number.isInteger(destinationPort) || destinationPort < 1 || destinationPort > 65535) {
     throw new Error('Invalid Telegram SOCKS5 destination port');
@@ -113,12 +117,14 @@ export async function connectTelegramSocks5(
       socket.once('close', onClose);
     });
 
+    onStage?.('proxy_tcp_connected');
     const needsAuth = Boolean(proxy.username && proxy.password);
     socket.write(Buffer.from([0x05, 0x01, needsAuth ? 0x02 : 0x00]));
     const greeting = await readExactly(2);
     if (greeting[0] !== 0x05 || greeting[1] !== (needsAuth ? 0x02 : 0x00)) {
       throw new Error('Telegram SOCKS5 authentication method rejected');
     }
+    onStage?.('proxy_greeting_ok');
     if (needsAuth) {
       const username = Buffer.from(proxy.username!, 'utf8');
       const password = Buffer.from(proxy.password!, 'utf8');
@@ -131,6 +137,7 @@ export async function connectTelegramSocks5(
         throw new Error('Telegram SOCKS5 authentication failed');
       }
     }
+    if (needsAuth) onStage?.('proxy_authenticated');
     const port = Buffer.alloc(2);
     port.writeUInt16BE(destinationPort);
     socket.write(Buffer.concat([Buffer.from([0x05, 0x01, 0x00]), address, port]));
@@ -147,6 +154,7 @@ export async function connectTelegramSocks5(
     await readExactly(2);
 
     socket.setTimeout(0);
+    onStage?.('proxy_tunnel_ready');
     return socket;
   } catch (error) {
     socket.destroy();
