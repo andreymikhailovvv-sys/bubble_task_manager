@@ -50,5 +50,7 @@ test('task web search uses reserved credits with separate usage event and source
   assert.match(source, /settleAiCreditReservation\(webReservation, WEB_SEARCH_CALL_CREDITS_MILLI\)/);
   assert.match(source, /feature: 'web_search'/);
   assert.match(source, /refundWalletReservation\(webReservation\)/);
-  assert.match(source, /webSearchUsed && sources\.length/);
+  assert.match(source, /webSources: sources, webCitations/);
+  assert.match(source, /getWebSearchProgressStatus\(event\.type\)/);
+  assert.match(source, /readOpenAiResponsesStreamWithRecovery\(openAiResponse\.body/);
 });
