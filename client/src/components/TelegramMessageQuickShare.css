@@ -271,10 +271,10 @@ body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg
 .miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
   position: static !important;
   display: block !important;
-  width: 17px !important;
-  height: 17px !important;
-  min-width: 17px !important;
-  min-height: 17px !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
   padding: 0 !important;
   margin: 0 !important;
   transform: none !important;
@@ -340,11 +340,17 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
    Reply immediately precedes the paper-plane Telegram share icon. */
 .ai-message-forward-actions {
   justify-content: flex-end;
-  gap: 3px;
+  gap: 7px;
 }
 .ai-message-forward-actions > .telegram-quick-share__menu-anchor,
 .ai-message-forward-actions > .ai-message-reply-trigger {
   flex: 0 0 28px;
+}
+/* The reply arrow is optically centred a little to the right of its
+   hit area; leave both 28x25px click targets and Send alignment intact. */
+body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg,
+.miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
+  transform: translateX(2px) !important;
 }
 .ai-message-reply-trigger {
   display: grid !important;
