@@ -85,5 +85,5 @@ test('desktop task AI welcome card matches the Mini App and keeps no-results sea
   assert.match(shared, /<Sparkles size=\{34\}/);
   assert.match(shared, /ИИ готов помочь/);
   assert.match(shared, /Спросите, как эффективнее выполнить эту задачу/);
-  assert.match(app, /: <p className="text-xs text-subtle">Сообщения не найдены<\/p>/);
+  assert.match(app, /: <p className="text-xs text-subtle">Сообщения не найдены\.<\/p>/);
 });
