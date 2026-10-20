@@ -96,7 +96,7 @@ test('title generation preserves selected model and icon grouping is shared by w
     assert.match(source, /Чат \\d\+/);
     assert.doesNotMatch(source, /Чат \\\\d\+/);
   }
-  assert.match(share, /<Send size=\{18\}/);
+  assert.match(share, /<Send size=\{17\}/);
   assert.doesNotMatch(share, /<Forward size=/);
   assert.match(css, /justify-content: flex-end;\s*gap: 3px/);
   assert.doesNotMatch(css, /justify-content: space-between/);
