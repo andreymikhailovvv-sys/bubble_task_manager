@@ -253,6 +253,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
 
 /** Responses/input_tokens counts the exact content and tools, but does not accept execution-only max_tool_calls. */
 export function createTaskChatInputTokensPayload(payload: ReturnType<typeof createTaskChatOpenAiPayload>) {
+  if (!('max_tool_calls' in payload)) return payload;
   const { max_tool_calls: _maxToolCalls, ...inputTokensPayload } = payload;
   return inputTokensPayload;
 }
