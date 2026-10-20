@@ -882,7 +882,7 @@ export default function App() {
   const [isMorningAiCheckupEnabled, setIsMorningAiCheckupEnabled] = useState(false);
   const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | null>(null);
+  const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [timelineViewMode, setTimelineViewMode] = useState<'day' | 'week' | 'month'>('month');
   const [isTimelineToolbarHidden, setIsTimelineToolbarHidden] = useState(false);
