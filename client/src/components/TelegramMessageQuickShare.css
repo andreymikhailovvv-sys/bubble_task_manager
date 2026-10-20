@@ -329,3 +329,49 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
   color: #f1f5f9;
   border-color: #34455f;
 }
+
+/* Reply sits to the left of the existing Telegram forward action. */
+.ai-message-forward-actions { justify-content: space-between; }
+.ai-message-reply-trigger {
+  display: grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  height: 25px !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: #737c8b !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  opacity: .85;
+}
+body[data-theme='dark'] .ai-message-reply-trigger,
+.miniapp-shell:not(.miniapp-light) .ai-message-reply-trigger { color: #a1aab7 !important; }
+.ai-message-reply-trigger:hover, .ai-message-reply-trigger:focus-visible {
+  color: var(--text-primary, #475569) !important;
+  background: rgba(127, 136, 150, .14) !important;
+  opacity: 1;
+}
+.ai-reply-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin-bottom: .5rem;
+  padding: .6rem .7rem;
+  border-left: 3px solid #8b5cf6;
+  border-radius: .6rem;
+  background: color-mix(in srgb, var(--field-bg, #f1f5f9) 95%, #8b5cf6);
+  color: var(--text-primary, #1e293b);
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-reply-preview-title { font-size: .74rem; font-weight: 700; color: #8b5cf6; }
+.ai-reply-preview-text { font-size: .78rem; line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ai-reply-preview-files { margin-top: .25rem; font-size: .7rem; color: var(--text-muted, #64748b); overflow-wrap: anywhere; }
+.ai-reply-dismiss { margin-left: auto; flex: none; color: var(--text-muted, #64748b); padding: .15rem; background: transparent; border: 0; }
+body[data-theme='dark'] .ai-reply-preview, .miniapp-shell:not(.miniapp-light) .ai-reply-preview {
+  background: #27344b;
+  color: #edf2f9;
+}
+body[data-theme='dark'] .ai-reply-preview-title, .miniapp-shell:not(.miniapp-light) .ai-reply-preview-title { color: #c4b5fd; }
+.ai-reply-preview-compact { padding: .45rem .55rem; margin-bottom: .3rem; }
