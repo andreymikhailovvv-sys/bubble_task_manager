@@ -29,6 +29,7 @@ export async function syncSectorNoteGroups(userId: string): Promise<void> {
     reserved.add(selected);
     planned.push({ id: sector.id, name: selected, color: sector.color, currentId: current?.id });
   }
+  let createdCount = 0;
   for (const item of planned) {
     if (item.currentId) {
       const current = linked.get(item.id)!;
@@ -41,11 +42,12 @@ export async function syncSectorNoteGroups(userId: string): Promise<void> {
       } catch (error) {
         if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) throw error;
       }
-    } else if (groups.length + planned.filter(x => !x.currentId && x.id <= item.id).length <= MAX_GROUPS) {
-      await prisma.standaloneNoteGroup.createMany({
+    } else if (groups.length + createdCount < MAX_GROUPS) {
+      const created = await prisma.standaloneNoteGroup.createMany({
         data: [{ userId, sphereId: item.id, name: item.name, color: item.color }],
         skipDuplicates: true
       });
+      createdCount += created.count;
     }
   }
 }
