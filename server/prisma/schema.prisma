@@ -275,6 +275,7 @@ model Sphere {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks     Task[]
+  noteGroup StandaloneNoteGroup?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -883,6 +884,8 @@ model StandaloneNoteGroup {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   color     String   @default("#8b5cf6")
+  sphereId  String?  @unique
+  sphere    Sphere?  @relation(fields: [sphereId], references: [id], onDelete: SetNull)
   notes     StandaloneNote[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

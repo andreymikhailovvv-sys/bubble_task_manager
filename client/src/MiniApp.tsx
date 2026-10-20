@@ -841,6 +841,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
+  // Auto-scrolling to the newest message must not masquerade as a swipe and
+  // hide the header immediately when opened from a Telegram deep link.
+  const generalAiChatUserScrollEnabledRef = useRef(false);
   const generalAiChatNearBottomRef = useRef(true);
   const previousGeneralAiChatIdRef = useRef('');
   const [isGeneralAiChatHeaderHidden, setIsGeneralAiChatHeaderHidden] = useState(false);
@@ -2734,6 +2737,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   useEffect(() => {
     if (!isAiChatOpen) return;
+    generalAiChatUserScrollEnabledRef.current = false;
     setIsGeneralAiChatHeaderHidden(false);
     generalAiChatScrollTopRef.current = aiChatDialogContainerRef.current?.scrollTop ?? 0;
   }, [isAiChatOpen, activeAiChatId]);
@@ -4674,8 +4678,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 const container = event.currentTarget;
                 generalAiChatNearBottomRef.current =
                   container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+                if (!generalAiChatUserScrollEnabledRef.current) {
+                  generalAiChatScrollTopRef.current = container.scrollTop;
+                  return;
+                }
                 updateAiChatHeaderVisibility(container.scrollTop, generalAiChatScrollTopRef, setIsGeneralAiChatHeaderHidden);
-              }} className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              }}
+                onWheel={() => { generalAiChatUserScrollEnabledRef.current = true; }}
+                onTouchMove={() => { generalAiChatUserScrollEnabledRef.current = true; }}
+                onKeyDown={(event) => {
+                  if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) generalAiChatUserScrollEnabledRef.current = true;
+                }}
+                className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {(activeAiChat?.messages ?? []).length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>

@@ -40,7 +40,8 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
     try {
       const [result, allGroups] = await Promise.all([api.getStandaloneNotes(), api.getStandaloneNoteGroups()]);
       setNotes(sortNotes(result));
-      setGroups(allGroups);
+      // Sectors are the default groups; independent groups follow them.
+      setGroups([...allGroups].sort((a, b) => Number(Boolean(b.sphereId)) - Number(Boolean(a.sphereId))));
       setError(null);
     } catch (cause) {
       setError(getErrorMessage(cause));
@@ -366,7 +367,7 @@ export function StandaloneNotesWorkspace({ userId, requestedNote, mode = 'widget
               </div>
             </div>
             {error ? <p role="alert" className="standalone-notes-error mx-4 mt-3 rounded-lg px-3 py-2 text-sm sm:mx-6">{error}</p> : null}
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="standalone-notes-scroll-area min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
               {filteredNotes.length === 0 ? (
                 <div className="standalone-notes-empty rounded-2xl border p-8 text-center text-muted">
                   <StickyNote className="mx-auto mb-3 opacity-70" size={32} />

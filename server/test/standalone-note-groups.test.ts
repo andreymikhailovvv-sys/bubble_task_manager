@@ -120,3 +120,63 @@ test('notes window orders header, groups, and card actions correctly', async () 
   assert.match(board, /onClick=\{\(\) => openEditor\(note\)\}/,
     'Click on the card itself must continue opening the editor');
 });
+
+
+test('sector-backed groups are linked to the owner sphere; custom groups remain independent', async () => {
+  const [schema, migration, sync, controller, board, manager, api] = await Promise.all([
+    readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8'),
+    readFile(new URL('../prisma/migrations/20261020095000_link_note_groups_to_spheres/migration.sql', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/sector-note-groups.service.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/controllers/standalone-note-group.controller.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/StandaloneNoteGroupManager.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/lib/api.ts', import.meta.url), 'utf8')
+  ]);
+  const noteGroup = schema.match(/model StandaloneNoteGroup \{[\s\S]*?\n\}/)?.[0] ?? '';
+  const sphere = schema.match(/model Sphere \{[\s\S]*?\n\}/)?.[0] ?? '';
+  assert.match(noteGroup, /sphereId\s+String\?\s+@unique/);
+  assert.match(noteGroup, /sphere\s+Sphere\?\s+@relation\(fields: \[sphereId\], references: \[id\], onDelete: SetNull\)/);
+  assert.match(sphere, /noteGroup\s+StandaloneNoteGroup\?/);
+  assert.match(migration, /ADD COLUMN "sphereId" TEXT/);
+  assert.match(migration, /ON DELETE SET NULL/);
+  assert.doesNotMatch(migration, /DROP TABLE|DROP COLUMN/);
+  assert.match(sync, /prisma\.sphere\.findMany\(\{ where: \{ userId \}/);
+  assert.match(sync, /prisma\.standaloneNoteGroup\.findMany\(\{ where: \{ userId \}/);
+  assert.match(sync, /prisma\.standaloneNoteGroup\.createMany/);
+  assert.match(sync, /prisma\.standaloneNoteGroup\.updateMany/);
+  assert.match(sync, /skipDuplicates: true/);
+  assert.match(controller, /await syncSectorNoteGroups\(req\.user!\.id\)/);
+  assert.match(controller, /select = \{ id: true, name: true, color: true, sphereId: true/);
+  assert.match(controller, /if \(linked\?\.sphereId\)/);
+  assert.match(board, /Boolean\(b\.sphereId\)/);
+  assert.match(manager, /group\.sphereId \?/);
+  assert.match(api, /sphereId: string \| null/);
+});
+
+test('mobile note cards are compact and both scrollbars hidden without blocking scrolling', async () => {
+  const [board, css, mini] = await Promise.all([
+    readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(board, /standalone-notes-scroll-area min-h-0 flex-1 overflow-y-auto/);
+  assert.match(board, /standalone-group-filter flex[^"]*overflow-x-auto/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-group-filter::\-webkit-scrollbar/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-notes-scroll-area::\-webkit-scrollbar/);
+  assert.match(css, /scrollbar-width: none/);
+  assert.match(css, /\.standalone-notes-mobile \.standalone-note-card \{\s*min-height: 8\.5rem;/);
+  assert.match(css, /\-webkit-line-clamp: 3;/);
+  assert.match(mini, /mode="mobile" onClose/);
+});
+
+test('Telegram deep-link chat header remains visible during auto scroll then follows user swipes', async () => {
+  const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
+  assert.match(mini, /launchParams\.openTelegramAiChat/);
+  assert.match(mini, /launchParams\.openQuickAi/);
+  assert.match(mini, /generalAiChatUserScrollEnabledRef = useRef\(false\)/);
+  assert.match(mini, /generalAiChatUserScrollEnabledRef\.current = false;\s*setIsGeneralAiChatHeaderHidden\(false\)/);
+  assert.match(mini, /if \(!generalAiChatUserScrollEnabledRef\.current\) \{[\s\S]*?return;\s*\}\s*updateAiChatHeaderVisibility/);
+  assert.match(mini, /onWheel=\{\(\) => \{ generalAiChatUserScrollEnabledRef\.current = true; \}\}/);
+  assert.match(mini, /onTouchMove=\{\(\) => \{ generalAiChatUserScrollEnabledRef\.current = true; \}\}/);
+  assert.match(mini, /setIsHidden\(delta > 0\)/);
+});

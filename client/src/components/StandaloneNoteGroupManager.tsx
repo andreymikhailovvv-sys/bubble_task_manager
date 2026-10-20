@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Layers3, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { StandaloneNoteGroup } from '../lib/api';
 
 export const NOTE_GROUP_COLOR_OPTIONS = [
@@ -90,7 +90,7 @@ export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate
         <div className="flex items-start justify-between gap-3 border-b px-5 py-4 standalone-group-manager-header">
           <div>
             <h3 className="text-lg font-bold text-primary">Группы заметок</h3>
-            <p className="mt-1 text-xs text-muted">Название и цвет можно менять. При удалении группы заметки сохраняются.</p>
+            <p className="mt-1 text-xs text-muted">Секторные группы связаны с секторами. Остальные можно переименовывать и удалять, не теряя заметок.</p>
           </div>
           <button type="button" className="standalone-notes-icon-button rounded-lg p-2" onClick={onClose} aria-label="Закрыть управление группами" disabled={saving}><X size={17}/></button>
         </div>
@@ -100,11 +100,12 @@ export function StandaloneNoteGroupManager({ groups, startNew, onClose, onCreate
               <div className="flex min-w-0 items-center gap-2">
                 <span className="standalone-group-color-dot h-3.5 w-3.5 shrink-0 rounded-full" style={noteGroupStyle(group.color)} />
                 <span className="truncate text-sm font-semibold text-primary">{group.name}</span>
+                {group.sphereId ? <span className="inline-flex shrink-0 items-center gap-1 text-[10px] text-muted" title="Группа связана с сектором"><Layers3 size={12}/> Сектор</span> : null}
               </div>
-              <div className="flex shrink-0 gap-1">
+              {!group.sphereId ? <div className="flex shrink-0 gap-1">
                 <button type="button" className="standalone-notes-icon-button rounded-lg p-1.5" title="Редактировать группу" aria-label={'Редактировать группу «' + group.name + '»'} onClick={() => startEdit(group)} disabled={saving}><Pencil size={15}/></button>
                 <button type="button" className="standalone-notes-delete rounded-lg p-1.5" title="Удалить группу" aria-label={'Удалить группу «' + group.name + '»'} onClick={() => void remove(group)} disabled={saving}><Trash2 size={15}/></button>
-              </div>
+              </div> : null}
             </div>
           ))}
           {groups.length === 0 ? <p className="text-sm text-muted">Групп пока нет.</p> : null}

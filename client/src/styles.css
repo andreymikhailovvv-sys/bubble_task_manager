@@ -9348,6 +9348,43 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-reset,
 .standalone-notes-mobile .standalone-notes-grid {
   grid-template-columns: minmax(0, 1fr);
 }
+/* Compact mobile note cards, while keeping both axes touch-scrollable.
+   Browser-native scrollbars are hidden, not scrolling itself. */
+.standalone-notes-mobile .standalone-group-filter,
+.standalone-notes-mobile .standalone-notes-scroll-area {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.standalone-notes-mobile .standalone-group-filter::-webkit-scrollbar,
+.standalone-notes-mobile .standalone-notes-scroll-area::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.standalone-notes-mobile .standalone-notes-grid {
+  gap: .55rem;
+}
+.standalone-notes-mobile .standalone-note-card {
+  min-height: 8.5rem;
+}
+.standalone-notes-mobile .standalone-note-open {
+  padding: .7rem .85rem .4rem;
+}
+.standalone-notes-mobile .standalone-note-preview {
+  max-height: 3.7rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.standalone-notes-mobile .standalone-note-card-footer {
+  padding: .35rem .75rem;
+}
+.standalone-notes-mobile .standalone-notes-scroll-area {
+  padding: .7rem;
+}
+
 .standalone-notes-mobile .standalone-notes-create {
   min-width: 2.5rem;
 }
