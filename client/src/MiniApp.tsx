@@ -3476,15 +3476,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         />
       ) : null}
       {isSettingsOpen ? createPortal(
-        <div className="fixed inset-0 z-[320] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}>
-          <section data-miniapp-popover="settings" role="dialog" aria-modal="true" aria-label="Настройки Планировыча"
-            className={['surface-popover miniapp-settings-popover relative max-h-[88dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-3xl border p-5 shadow-2xl sm:p-6', isLightTheme ? 'miniapp-light' : ''].join(' ')}
+        <div className="settings-modal-backdrop fixed inset-0 z-[320] flex items-center justify-center overflow-hidden bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}
+          onTouchMove={(event) => event.stopPropagation()}>
+          <section data-miniapp-popover="settings" data-settings-modal role="dialog" aria-modal="true" aria-label="Настройки Планировыча"
+            className={['settings-modal-shell surface-popover miniapp-settings-popover relative flex h-[min(88dvh,780px)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border shadow-2xl', isLightTheme ? 'miniapp-light' : ''].join(' ')}
             data-theme={isLightTheme ? 'light' : 'dark'}>
-            <div className="mb-5 flex items-center justify-between border-b border-[color:var(--panel-border)] pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[color:var(--panel-border)] px-5 py-4 sm:px-6">
               <h2 className="text-xl font-bold text-primary">Настройки Планировыча</h2>
               <button type="button" className="surface-muted rounded-xl p-2 text-muted hover:text-primary" onClick={() => setIsSettingsOpen(false)} aria-label="Закрыть настройки"><X size={18} /></button>
             </div>
+            <div className="settings-modal-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pb-6 pt-4 sm:px-6">
             <div className="space-y-4">
               <div>
                 <p className="mb-2 text-sm font-semibold text-primary">Тема интерфейса</p>
@@ -3507,7 +3509,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить часовой пояс'));
                 }}
                   options={[...new Set([userTimeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Omsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Yakutsk','Asia/Vladivostok','Asia/Magadan','Asia/Kamchatka','Europe/Minsk','Europe/Berlin','Europe/London','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Dubai','Asia/Almaty','Asia/Tokyo'])].map(value => ({ value, label: value }))}
-                  ariaLabel="Часовой пояс пользователя" detachedPopup />
+                  ariaLabel="Часовой пояс пользователя" detachedPopup popupVariant="settings" />
               </div>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Утренний ИИ-чекап</p>
@@ -3517,7 +3519,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     .then(({ user }) => setCurrentUser(user))
                     .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
                   options={[{ value:'disabled',label:'Выключен' },{ value:'enabled',label:'Включен' }]}
-                  ariaLabel="Утренний ИИ-чекап" detachedPopup />
+                  ariaLabel="Утренний ИИ-чекап" detachedPopup popupVariant="settings" />
                 <label className="mt-3 block text-sm text-primary">
                   Время чекапа
                   <input type="time" className="surface-input mt-1 w-full rounded-xl border px-3 py-2"
@@ -3536,7 +3538,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     localStorage.setItem('btm:ai-notifications-default-enabled',enabled ? '1' : '0');
                   }}
                   options={[{ value:'enabled',label:'Включены для новых задач' },{ value:'disabled',label:'Выключены для новых задач' }]}
-                  ariaLabel="Уведомления от ИИ в новых задачах" detachedPopup />
+                  ariaLabel="Уведомления от ИИ в новых задачах" detachedPopup popupVariant="settings" />
               </div>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Предлагать отчёт по выполнению задачи</p>
@@ -3545,7 +3547,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     .then(({ user }) => setCurrentUser(user))
                     .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
                   options={[{value:'enabled',label:'Включено'},{value:'disabled',label:'Выключено'}]}
-                  ariaLabel="Предлагать отчёт" detachedPopup />
+                  ariaLabel="Предлагать отчёт" detachedPopup popupVariant="settings" />
               </div>
               {isWebRuntime ? <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Аккаунт</p>
@@ -3562,6 +3564,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   </div>
                 )}
               </div> : null}
+            </div>
             </div>
           </section>
         </div>, document.body
