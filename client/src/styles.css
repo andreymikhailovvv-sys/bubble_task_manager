@@ -9402,3 +9402,84 @@ body[data-theme='light'] .miniapp-shell .miniapp-workspace-filter-reset,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Settings dialogs: the header stays put; only the padded inner pane scrolls.
+   The scrollbar is inset from rounded corners and stays within the dialog. */
+.settings-modal-shell {
+  min-height: 0;
+}
+.settings-modal-scroll {
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 157, 182, 0.65) transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.settings-modal-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-modal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-modal-scroll::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(125, 157, 182, 0.6);
+  box-shadow: none;
+}
+.settings-modal-shell .custom-select-trigger {
+  min-height: 2.6rem;
+  border-radius: 0.75rem;
+  background: var(--field-bg);
+  box-shadow: none;
+}
+.settings-modal-shell .custom-select-trigger:hover,
+.settings-modal-shell .custom-select-trigger[aria-expanded='true'] {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+/* Detached settings menus live in document.body: they need their own theme,
+   stacking context and scroll limits instead of relying on modal ancestors. */
+.custom-select-menu.settings-select-menu {
+  z-index: 390 !important;
+  padding: 0.35rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(100, 116, 139, 0.48);
+  background: #162235;
+  color: #e2e8f0;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.28);
+  backdrop-filter: none;
+}
+.settings-select-menu .custom-select-option {
+  min-height: 2.45rem;
+  border-radius: 0.6rem;
+  color: #e2e8f0;
+}
+.settings-select-menu .custom-select-option:hover,
+.settings-select-menu .custom-select-option-active,
+.settings-select-menu .custom-select-option:focus-visible {
+  background: #244a63;
+  color: #f8fafc;
+  outline: none;
+}
+.custom-select-menu.settings-select-menu[data-theme='light'] {
+  border-color: rgba(203, 213, 225, 0.85);
+  background: #ffffff;
+  color: #1e293b;
+  box-shadow: 0 18px 38px rgba(30, 41, 59, 0.16);
+}
+.settings-select-menu[data-theme='light'] .custom-select-option {
+  color: #1e293b;
+}
+.settings-select-menu[data-theme='light'] .custom-select-option:hover,
+.settings-select-menu[data-theme='light'] .custom-select-option-active,
+.settings-select-menu[data-theme='light'] .custom-select-option:focus-visible {
+  background: #e5f5fd;
+  color: #0f172a;
+}

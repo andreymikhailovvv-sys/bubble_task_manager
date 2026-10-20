@@ -4892,14 +4892,15 @@ ${allContext}`,
       {isSettingsOpen ? createPortal(
         <div data-theme={effectiveThemeMode} className="fixed inset-0 z-[290] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}>
-          <section data-tour="settings-panel" role="dialog" aria-modal="true" aria-label="Настройки"
-            className="surface-popover light-dropdown relative max-h-[min(88dvh,820px)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-3xl border p-5 shadow-2xl sm:p-6"
+          <section data-tour="settings-panel" data-settings-modal role="dialog" aria-modal="true" aria-label="Настройки"
+            className="settings-modal-shell surface-popover light-dropdown relative flex h-[min(88dvh,820px)] w-full max-w-xl flex-col overflow-hidden rounded-3xl border shadow-2xl"
             onMouseDown={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between border-b border-[color:var(--panel-border)] pb-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-[color:var(--panel-border)] px-5 py-4 sm:px-6">
               <h2 className="text-xl font-bold text-primary">Настройки Планировыча</h2>
               <button type="button" className="surface-muted rounded-xl p-2 text-muted transition hover:text-primary" aria-label="Закрыть настройки"
                 onClick={() => setIsSettingsOpen(false)}><X size={18} /></button>
             </div>
+            <div className="settings-modal-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-5 pb-6 pt-4 sm:px-6">
               <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
                 <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
@@ -4918,7 +4919,7 @@ ${allContext}`,
                 <p className="mt-2 text-[11px] leading-snug text-subtle">Авто: тёмная с 20:00 до 05:00 по выбранному часовому поясу.</p>
               </div>
               <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
-              <CustomSelect
+              <CustomSelect detachedPopup popupVariant="settings"
                 value={userTimeZone}
                 onChange={(nextTimeZone) => {
                   setUserTimeZone(nextTimeZone);
@@ -4949,7 +4950,7 @@ ${allContext}`,
                 <p className="mb-2 text-[11px] leading-snug text-subtle">
                   Дублируют системные уведомления, только когда вкладка Планировыча неактивна. Работают, пока сайт открыт.
                 </p>
-                <CustomSelect
+                <CustomSelect detachedPopup popupVariant="settings"
                   value={currentUser?.browserNotificationsEnabled !== false ? 'enabled' : 'disabled'}
                   onChange={(value) => {
                     const enabled = value === 'enabled';
@@ -4983,7 +4984,7 @@ ${allContext}`,
                 <p className="mb-2 text-[11px] leading-snug text-subtle">
                   Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
                 </p>
-                <CustomSelect
+                <CustomSelect detachedPopup popupVariant="settings"
                   value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
                   onChange={(value) => {
                     const enabled = value === 'enabled';
@@ -5021,7 +5022,7 @@ ${allContext}`,
                     ?
                   </span>
                 </div>
-                <CustomSelect
+                <CustomSelect detachedPopup popupVariant="settings"
                   value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
                   onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
                   options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
@@ -5030,7 +5031,7 @@ ${allContext}`,
               </div>
               <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт по выполнению задачи</div>
-                <CustomSelect
+                <CustomSelect detachedPopup popupVariant="settings"
                   value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
                   onChange={(value) => void updateUserSettings({ offerTaskCompletionReport: value === 'enabled' }, 'taskReport')}
                   options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
@@ -5050,6 +5051,7 @@ ${allContext}`,
                   {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
                 </button>
               </div>
+            </div>
           </section>
         </div>,
         document.body
