@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Copy } from 'lucide-react';
 import { parseAiMarkdownTables, type AiMarkdownTableData } from '../lib/aiMarkdownTables';
+import { AiInlineMarkup } from './AiInlineMarkup';
 
 const CODE_BLOCK_PATTERN = /```([\w+-]+)?\n?([\s\S]*?)```/g;
 
@@ -41,7 +42,7 @@ function AiMarkdownTable({ table }: { table: AiMarkdownTableData }) {
         <thead>
           <tr>
             {table.headers.map((header, index) => (
-              <th key={index} scope="col" style={{ textAlign: table.alignments[index] }}>{renderTableCell(header)}</th>
+              <th key={index} scope="col" style={{ textAlign: table.alignments[index] }}><AiInlineMarkup content={renderTableCell(header)} /></th>
             ))}
           </tr>
         </thead>
@@ -49,7 +50,7 @@ function AiMarkdownTable({ table }: { table: AiMarkdownTableData }) {
           {table.rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} style={{ textAlign: table.alignments[cellIndex] }}>{renderTableCell(cell)}</td>
+                <td key={cellIndex} style={{ textAlign: table.alignments[cellIndex] }}><AiInlineMarkup content={renderTableCell(cell)} /></td>
               ))}
             </tr>
           ))}
