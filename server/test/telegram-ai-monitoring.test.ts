@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { validateTelegramAiChatSettings, DEFAULT_TELEGRAM_AI_CHAT_SETTINGS } from '../src/services/telegram-ai-chat-policy.service.js';
-import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs, telegramTaskScanDue, telegramMonitorNextAt } from '../src/services/telegram-ai-monitor-worker.service.js';
+import { availableMonitorBudget, monitorDayKey, telegramInteractionDelayMs, telegramTaskScanDue, telegramMonitorNextAt, telegramMonitorNetworkRetryMs } from '../src/services/telegram-ai-monitor-worker.service.js';
 import { buildMonitorPayload, parseMonitorSummary, parseMonitorAutoReply, classifyMonitorAutoReply, normalizeMonitorTaskAction } from '../src/services/telegram-ai-monitor-summary.service.js';
 import { nextTelegramAutoReplyAllowedAt } from '../src/services/telegram-ai-auto-reply.service.js';
 
@@ -332,4 +332,32 @@ test('Custom Telegram month frequency clamps shorter months instead of assuming 
   assert.match(worker, /current\.autoReplyIntervalMonths/);
   assert.match(worker, /current\.summaryIntervalMonths/);
   assert.match(worker, /current\.taskIntervalMonths/);
+});
+
+test('Telegram MTProto failures use a persisted exponential backoff, capped at 30 minutes', () => {
+  for (const [count, ms] of [[1, 60000], [2, 120000], [3, 240000],
+    [4, 480000], [5, 960000], [6, 1800000], [15, 1800000]] as const) {
+    assert.equal(telegramMonitorNetworkRetryMs(count), ms);
+  }
+  const worker = source('../src/services/telegram-ai-monitor-worker.service.ts');
+  assert.match(worker, /networkFailureStreak: \{ increment: 1 \}/);
+  assert.match(worker, /networkFailureStreak: 0/);
+  assert.match(worker, /error\.statusCode === 503/);
+  assert.match(worker, /retryInSeconds: Math\.round\(retryMs! \/ 1000\)/);
+  const schema = source('../prisma/schema.prisma');
+  const migration = source('../prisma/migrations/20261020115000_telegram_monitor_network_backoff/migration.sql');
+  assert.match(schema, /networkFailureStreak\s+Int\s+@default\(0\)/);
+  assert.match(migration, /ADD COLUMN "networkFailureStreak" INTEGER NOT NULL DEFAULT 0/);
+});
+
+test('Telegram reads safely report tunnel and MTProto phases without logging session or message contents', () => {
+  const read = source('../src/services/telegram-user-client-read.service.ts');
+  const socks = source('../src/lib/telegram-socks5.ts');
+  const network = source('../src/lib/telegram-user-client-network.ts');
+  assert.match(read, /tunnelStage: diagnostic\.tunnelStage/);
+  assert.match(read, /phase: diagnostic\.phase/);
+  assert.match(read, /classifyTelegramUserNetworkError\(error\)/);
+  assert.match(socks, /onStage\?\.\('proxy_tunnel_ready'\)/);
+  assert.match(network, /receivedMtprotoBytes\(\)/);
+  assert.match(network, /TELEGRAM_USER_PROXY_URL\?\.trim\(\) \|\| env\.TELEGRAM_PROXY_URL\?\.trim\(\)/);
 });
