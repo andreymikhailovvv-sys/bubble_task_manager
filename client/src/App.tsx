@@ -1731,7 +1731,7 @@ export default function App() {
       const tourKeepsSettingsOpen = activeTourStep === 'workspace-settings'
         || activeTourStep === 'ai-checkup'
         || activeTourStep === 'ai-notifications';
-      if (!tourKeepsSettingsOpen && isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target)) {
+      if (!tourKeepsSettingsOpen && isSettingsOpen && settingsMenuRef.current && target && !settingsMenuRef.current.contains(target) && !(target instanceof Element && target.closest('[data-tour="settings-panel"]'))) {
         setIsSettingsOpen(false);
       }
     };
@@ -4894,6 +4894,171 @@ ${allContext}`,
           onGenerated={() => void load()}
         />
       ) : null}
+      {isSettingsOpen ? createPortal(
+        <div data-theme={effectiveThemeMode} className="fixed inset-0 z-[290] flex items-center justify-center overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsSettingsOpen(false); }}>
+          <section data-tour="settings-panel" role="dialog" aria-modal="true" aria-label="Настройки"
+            className="surface-popover light-dropdown relative max-h-[min(88dvh,820px)] w-full max-w-xl overflow-y-auto overscroll-contain rounded-3xl border p-5 shadow-2xl sm:p-6"
+            onMouseDown={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between border-b border-[color:var(--panel-border)] pb-3">
+              <h2 className="text-xl font-bold text-primary">Настройки Планировыча</h2>
+              <button type="button" className="surface-muted rounded-xl p-2 text-muted transition hover:text-primary" aria-label="Закрыть настройки"
+                onClick={() => setIsSettingsOpen(false)}><X size={18} /></button>
+            </div>
+              <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
+                <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
+                <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
+                  {(['light', 'dark', 'auto'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={themeMode === mode}
+                      className={`theme-preference-switch-option rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'theme-preference-switch-option-active' : 'text-muted hover:brightness-110'}`}
+                      onClick={() => setThemeMode(mode)}
+                    >
+                      {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] leading-snug text-subtle">Авто: тёмная с 20:00 до 05:00 по выбранному часовому поясу.</p>
+              </div>
+              <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
+              <CustomSelect
+                value={userTimeZone}
+                onChange={(nextTimeZone) => {
+                  setUserTimeZone(nextTimeZone);
+                  void updateUserSettings({ timeZone: nextTimeZone }, 'timeZone');
+                }}
+                options={[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => ({ value: timeZone, label: timeZone }))}
+                buttonClassName={settingsSavingKey === 'timeZone' ? 'cursor-not-allowed opacity-60' : ''}
+                disabled={settingsSavingKey === 'timeZone'}
+                ariaLabel="Часовой пояс пользователя"
+              />
+              <button
+                type="button"
+                className="surface-muted light-dropdown-item mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={settingsSavingKey === 'timeZone'}
+                onClick={() => {
+                  setUserTimeZone(DEFAULT_TIMEZONE);
+                  void updateUserSettings({ timeZone: DEFAULT_TIMEZONE }, 'timeZone');
+                }}
+              >
+                Сбросить на Москву
+              </button>
+
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3" data-tour="browser-notification-settings">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-primary">
+                  <span className="inline-flex items-center gap-1.5 font-semibold"><BellRing size={14} /> Уведомления браузера</span>
+                  <span className="text-[10px] text-subtle">По умолчанию включены</span>
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-subtle">
+                  Дублируют системные уведомления, только когда вкладка Планировыча неактивна. Работают, пока сайт открыт.
+                </p>
+                <CustomSelect
+                  value={currentUser?.browserNotificationsEnabled !== false ? 'enabled' : 'disabled'}
+                  onChange={(value) => {
+                    const enabled = value === 'enabled';
+                    void updateUserSettings({ browserNotificationsEnabled: enabled }, 'browserNotifications');
+                    if (enabled && browserNotificationPermission() === 'default') void requestBrowserNotifications();
+                  }}
+                  options={[{ value: 'enabled', label: 'Включены' }, { value: 'disabled', label: 'Выключены' }]}
+                  disabled={settingsSavingKey === 'browserNotifications'}
+                  ariaLabel="Уведомления браузера"
+                />
+                {currentUser?.browserNotificationsEnabled !== false ? (
+                  <div className="mt-2 text-[11px] text-subtle">
+                    {browserPermission === 'granted' ? '✓ Разрешены в браузере' :
+                      browserPermission === 'denied' ? 'Браузер запретил уведомления. Разрешите их в настройках сайта.' :
+                      browserPermission === 'unsupported' ? 'Браузерные уведомления недоступны здесь (нужен HTTPS и поддержка браузера).' : (
+                        <button type="button" className="surface-muted w-full rounded-lg border border-[color:var(--panel-border)] px-2 py-1.5 text-center font-semibold text-primary hover:brightness-110" onClick={() => { void requestBrowserNotifications(); }}>
+                          Разрешить уведомления в браузере
+                        </button>
+                      )}
+                  </div>
+                ) : null}
+              </div>
+
+              <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
+                  <span>Утренний ИИ-чекап</span>
+                  <span className="ai-checkup-credit-badge inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
+                    2 <Coins size={11} /> за чекап
+                  </span>
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-subtle">
+                  Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
+                </p>
+                <CustomSelect
+                  value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
+                  onChange={(value) => {
+                    const enabled = value === 'enabled';
+                    setIsMorningAiCheckupEnabled(enabled);
+                    void updateUserSettings({ morningAiCheckupEnabled: enabled }, 'checkupEnabled');
+                  }}
+                  options={[{ value: 'disabled', label: 'Выключен' }, { value: 'enabled', label: 'Включен' }]}
+                  buttonClassName={settingsSavingKey === 'checkupEnabled' ? 'cursor-not-allowed opacity-60' : ''}
+                  disabled={settingsSavingKey === 'checkupEnabled'}
+                  ariaLabel="Утренний ИИ-чекап"
+                />
+                <label className="mt-2 block text-[11px] text-slate-400">
+                  Время чекапа
+                  <input
+                    type="time"
+                    className="surface-input light-dropdown-control mt-1 w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    value={morningAiCheckupTime}
+                    disabled={settingsSavingKey === 'checkupTime'}
+                    onChange={(event) => {
+                      const nextTime = event.target.value || DEFAULT_MORNING_AI_CHECKUP_TIME;
+                      setMorningAiCheckupTime(nextTime);
+                      void updateUserSettings({ morningAiCheckupTime: nextTime }, 'checkupTime');
+                    }}
+                  />
+                </label>
+              </div>
+              {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
+              <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+                <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
+                  <span>Уведомления от ИИ</span>
+                  <span
+                    className="cursor-help rounded-full border border-slate-600 px-1.5 text-[10px] text-slate-300"
+                    title="Настройка определяет, включён ли чекбокс ИИ-уведомлений при создании новых задач. Уже созданные задачи не меняются. Кредиты за подсказку ИИ списываются по фактическим токенам."
+                  >
+                    ?
+                  </span>
+                </div>
+                <CustomSelect
+                  value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
+                  onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
+                  options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
+                  ariaLabel="Уведомления от ИИ"
+                />
+              </div>
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
+                <div className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт по выполнению задачи</div>
+                <CustomSelect
+                  value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
+                  onChange={(value) => void updateUserSettings({ offerTaskCompletionReport: value === 'enabled' }, 'taskReport')}
+                  options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
+                  ariaLabel="Предлагать отчёт по выполнению задачи"
+                  disabled={settingsSavingKey === 'taskReport'}
+                />
+              </div>
+              <div className="mt-3 border-t border-rose-500/30 pt-3">
+                <div className="mb-1 text-xs font-semibold text-rose-300">Удаление аккаунта</div>
+                <p className="mb-2 text-[11px] leading-snug text-subtle">Аккаунт и связанные с ним данные будут удалены без возможности восстановления.</p>
+                <button
+                  type="button"
+                  className="danger-button w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isDeletingAccount}
+                  onClick={() => void deleteAccount()}
+                >
+                  {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
+                </button>
+              </div>
+          </section>
+        </div>,
+        document.body
+      ) : null}
       <UpdatesMenu open={isUpdatesOpen} onClose={() => setIsUpdatesOpen(false)} onStartWorkspaceTour={startWorkspaceTour} onStartTaskTour={startTaskTour} onStartAiTour={startAiTour} onStartFeatureTour={startFeatureTour} completedLessonIds={currentUser.completedLessonIds ?? []} hasUnreadNews={hasUnreadNews} onNewsViewed={markLatestNewsRead} />
       {trainingRewardMessage ? <div className="training-reward-toast focus-bonus-message focus-bonus-subtask" role="status">{trainingRewardMessage}</div> : null}
       {isOnboardingOfferOpen ? (
@@ -5057,160 +5222,6 @@ ${allContext}`,
           </div>
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
-            {isSettingsOpen ? (
-            <div data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 max-h-[calc(100dvh-6rem)] w-72 overflow-y-auto overscroll-contain rounded-xl border p-3 shadow-2xl backdrop-blur">
-              <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
-                <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
-                <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
-                  {(['light', 'dark', 'auto'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      aria-pressed={themeMode === mode}
-                      className={`theme-preference-switch-option rounded-md px-2 py-1.5 transition ${themeMode === mode ? 'theme-preference-switch-option-active' : 'text-muted hover:brightness-110'}`}
-                      onClick={() => setThemeMode(mode)}
-                    >
-                      {mode === 'light' ? 'Светлая' : mode === 'dark' ? 'Тёмная' : 'Авто'}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[11px] leading-snug text-subtle">Авто: тёмная с 20:00 до 05:00 по выбранному часовому поясу.</p>
-              </div>
-              <div className="mb-2 text-xs text-muted">Часовой пояс пользователя</div>
-              <CustomSelect
-                value={userTimeZone}
-                onChange={(nextTimeZone) => {
-                  setUserTimeZone(nextTimeZone);
-                  void updateUserSettings({ timeZone: nextTimeZone }, 'timeZone');
-                }}
-                options={[...new Set([userTimeZone, ...TIMEZONE_OPTIONS])].map((timeZone) => ({ value: timeZone, label: timeZone }))}
-                buttonClassName={settingsSavingKey === 'timeZone' ? 'cursor-not-allowed opacity-60' : ''}
-                disabled={settingsSavingKey === 'timeZone'}
-                ariaLabel="Часовой пояс пользователя"
-              />
-              <button
-                type="button"
-                className="surface-muted light-dropdown-item mt-2 rounded px-2 py-1 text-xs hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={settingsSavingKey === 'timeZone'}
-                onClick={() => {
-                  setUserTimeZone(DEFAULT_TIMEZONE);
-                  void updateUserSettings({ timeZone: DEFAULT_TIMEZONE }, 'timeZone');
-                }}
-              >
-                Сбросить на Москву
-              </button>
-
-              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3" data-tour="browser-notification-settings">
-                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-primary">
-                  <span className="inline-flex items-center gap-1.5 font-semibold"><BellRing size={14} /> Уведомления браузера</span>
-                  <span className="text-[10px] text-subtle">По умолчанию включены</span>
-                </div>
-                <p className="mb-2 text-[11px] leading-snug text-subtle">
-                  Дублируют системные уведомления, только когда вкладка Планировыча неактивна. Работают, пока сайт открыт.
-                </p>
-                <CustomSelect
-                  value={currentUser?.browserNotificationsEnabled !== false ? 'enabled' : 'disabled'}
-                  onChange={(value) => {
-                    const enabled = value === 'enabled';
-                    void updateUserSettings({ browserNotificationsEnabled: enabled }, 'browserNotifications');
-                    if (enabled && browserNotificationPermission() === 'default') void requestBrowserNotifications();
-                  }}
-                  options={[{ value: 'enabled', label: 'Включены' }, { value: 'disabled', label: 'Выключены' }]}
-                  disabled={settingsSavingKey === 'browserNotifications'}
-                  ariaLabel="Уведомления браузера"
-                />
-                {currentUser?.browserNotificationsEnabled !== false ? (
-                  <div className="mt-2 text-[11px] text-subtle">
-                    {browserPermission === 'granted' ? '✓ Разрешены в браузере' :
-                      browserPermission === 'denied' ? 'Браузер запретил уведомления. Разрешите их в настройках сайта.' :
-                      browserPermission === 'unsupported' ? 'Браузерные уведомления недоступны здесь (нужен HTTPS и поддержка браузера).' : (
-                        <button type="button" className="surface-muted w-full rounded-lg border border-[color:var(--panel-border)] px-2 py-1.5 text-center font-semibold text-primary hover:brightness-110" onClick={() => { void requestBrowserNotifications(); }}>
-                          Разрешить уведомления в браузере
-                        </button>
-                      )}
-                  </div>
-                ) : null}
-              </div>
-
-              <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
-                  <span>Утренний ИИ-чекап</span>
-                  <span className="ai-checkup-credit-badge inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
-                    2 <Coins size={11} /> за чекап
-                  </span>
-                </div>
-                <p className="mb-2 text-[11px] leading-snug text-subtle">
-                  Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
-                </p>
-                <CustomSelect
-                  value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
-                  onChange={(value) => {
-                    const enabled = value === 'enabled';
-                    setIsMorningAiCheckupEnabled(enabled);
-                    void updateUserSettings({ morningAiCheckupEnabled: enabled }, 'checkupEnabled');
-                  }}
-                  options={[{ value: 'disabled', label: 'Выключен' }, { value: 'enabled', label: 'Включен' }]}
-                  buttonClassName={settingsSavingKey === 'checkupEnabled' ? 'cursor-not-allowed opacity-60' : ''}
-                  disabled={settingsSavingKey === 'checkupEnabled'}
-                  ariaLabel="Утренний ИИ-чекап"
-                />
-                <label className="mt-2 block text-[11px] text-slate-400">
-                  Время чекапа
-                  <input
-                    type="time"
-                    className="surface-input light-dropdown-control mt-1 w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    value={morningAiCheckupTime}
-                    disabled={settingsSavingKey === 'checkupTime'}
-                    onChange={(event) => {
-                      const nextTime = event.target.value || DEFAULT_MORNING_AI_CHECKUP_TIME;
-                      setMorningAiCheckupTime(nextTime);
-                      void updateUserSettings({ morningAiCheckupTime: nextTime }, 'checkupTime');
-                    }}
-                  />
-                </label>
-              </div>
-              {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
-              <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-                <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">
-                  <span>Уведомления от ИИ</span>
-                  <span
-                    className="cursor-help rounded-full border border-slate-600 px-1.5 text-[10px] text-slate-300"
-                    title="Настройка определяет, включён ли чекбокс ИИ-уведомлений при создании новых задач. Уже созданные задачи не меняются. Кредиты за подсказку ИИ списываются по фактическим токенам."
-                  >
-                    ?
-                  </span>
-                </div>
-                <CustomSelect
-                  value={isAiNotificationsDefaultEnabled ? 'enabled' : 'disabled'}
-                  onChange={(value) => setIsAiNotificationsDefaultEnabled(value === 'enabled')}
-                  options={[{ value: 'enabled', label: 'Включены для всех задач' }, { value: 'disabled', label: 'Выключены для всех задач' }]}
-                  ariaLabel="Уведомления от ИИ"
-                />
-              </div>
-              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-                <div className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт по выполнению задачи</div>
-                <CustomSelect
-                  value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
-                  onChange={(value) => void updateUserSettings({ offerTaskCompletionReport: value === 'enabled' }, 'taskReport')}
-                  options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
-                  ariaLabel="Предлагать отчёт по выполнению задачи"
-                  disabled={settingsSavingKey === 'taskReport'}
-                />
-              </div>
-              <div className="mt-3 border-t border-rose-500/30 pt-3">
-                <div className="mb-1 text-xs font-semibold text-rose-300">Удаление аккаунта</div>
-                <p className="mb-2 text-[11px] leading-snug text-subtle">Аккаунт и связанные с ним данные будут удалены без возможности восстановления.</p>
-                <button
-                  type="button"
-                  className="danger-button w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isDeletingAccount}
-                  onClick={() => void deleteAccount()}
-                >
-                  {isDeletingAccount ? 'Удаляем аккаунт…' : 'Удалить аккаунт'}
-                </button>
-              </div>
-            </div>
-          ) : null}
           </div>
         </div>
       </section> : null}
