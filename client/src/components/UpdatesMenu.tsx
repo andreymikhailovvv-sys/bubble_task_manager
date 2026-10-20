@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, CalendarCheck2, Coins, FileSpreadsheet, FileText, Flame, ImagePlus, MessageCircle, Mic, Newspaper, Search, SendHorizontal, Settings2, Sparkles, StickyNote, Tags, TrendingUp, WandSparkles, X } from 'lucide-react';
 
-export const LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending';
+export const LATEST_NEWS_ID = '2026-10-20-task-completion-word-report';
 
 type UpdatesMenuProps = {
   open: boolean;
@@ -59,7 +59,36 @@ export function UpdatesMenu({ open, onClose, onStartTaskTour, onStartAiTour, onS
           </div>
         ) : (
           <div className="mt-5 space-y-3 overflow-y-auto pr-1">
-            <article className="updates-lesson updates-news-latest updates-news-telegram rounded-2xl border p-4">
+            <article className="updates-lesson updates-news-latest updates-news-report rounded-2xl border p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="updates-news-date updates-news-date--violet text-[11px] font-semibold uppercase tracking-[0.14em]">20 октября 2026</p>
+                  <h3 className="mt-1 text-base font-semibold text-primary">Отчёт по задаче: вся история работы в одном Word-файле</h3>
+                </div>
+                <span className="updates-lesson-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"><FileText size={18} /></span>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                Теперь Планировыч может подготовить отчёт о том, как выполнялась задача. ИИ соберёт важное из сохранённой истории и оформит результат в Word, чтобы к нему можно было вернуться, поделиться итогами или использовать их в дальнейшей работе.
+              </p>
+              <div className="mt-3 space-y-2">
+                <div className="updates-news-report-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><CalendarCheck2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">После завершения задачи</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Когда вы отмечаете обычную задачу выполненной, Планировыч предложит подготовить отчёт. Можно согласиться или пропустить предложение. При желании такие предложения отключаются в настройках Планировыча.</p>
+                </div>
+                <div className="updates-news-report-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><Settings2 size={17} className="shrink-0" /><h4 className="text-sm font-semibold">В любой момент из настроек задачи</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Откройте нужную задачу, нажмите на значок шестерёнки и выберите «Подготовить отчёт». Не обязательно дожидаться её завершения. Кнопка доступна на сайте, в Mini App и мобильной версии.</p>
+                </div>
+                <div className="updates-news-report-feature rounded-xl p-3">
+                  <div className="flex items-center gap-2"><FileText size={17} className="shrink-0" /><h4 className="text-sm font-semibold">Что попадёт в отчёт</h4></div>
+                  <p className="mt-1.5 text-sm leading-relaxed">Ход работы, обсуждения, решения, изменения и результаты, подзадачи и сведения о вложениях. ИИ опирается на сохранённые данные и отмечает, если каких-то сведений не хватает. Готовый DOCX можно скачать; он также появится в чате задачи. За подготовку расходуются ИИ-кредиты.</p>
+                </div>
+              </div>
+              <span className="updates-news-tag updates-news-tag--violet mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold">
+                <FileText size={13} className="shrink-0" /> Результат работы всегда под рукой
+              </span>
+            </article>
+            <article className="updates-lesson updates-news-telegram rounded-2xl border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="updates-news-date updates-news-date--cyan text-[11px] font-semibold uppercase tracking-[0.14em]">15 октября 2026</p>
