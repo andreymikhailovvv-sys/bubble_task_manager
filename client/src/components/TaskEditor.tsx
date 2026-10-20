@@ -9,6 +9,7 @@ import {
   CalendarPlus,
   Loader2,
   Maximize2,
+  FileText,
   Paperclip,
   Plus,
   Trash2,
@@ -56,6 +57,7 @@ type Props = {
   onDelete?: () => Promise<void>;
   onCancel: () => void;
   onComplete?: () => Promise<void>;
+  onPrepareReport?: () => void;
   parentTaskTitle?: string | null;
   onOpenParentTask?: () => void;
   defaultAiNotificationsEnabled: boolean;
@@ -301,6 +303,7 @@ export function TaskEditor({
   onDelete,
   onCancel,
   onComplete,
+  onPrepareReport,
   parentTaskTitle,
   onOpenParentTask,
   defaultAiNotificationsEnabled,
@@ -1396,6 +1399,10 @@ export function TaskEditor({
                     <p className="text-xs text-subtle">Пока нет подзадач</p>
                   )}
                 </div>
+              ) : null}
+              {isEditing && !isSubtask && !isEventEditor && onPrepareReport ? (
+                <button type="button" className="surface-muted mt-3 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-primary"
+                  onClick={onPrepareReport}><FileText size={15} /> Подготовить отчёт</button>
               ) : null}
               {isEditing && !isSubtask ? (
                 <div className="mt-auto flex gap-2 pt-4">

@@ -473,6 +473,20 @@ export const taskService = {
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
       let finalTask = updatedTask;
+      const statusBefore = ownMember?.statusOverride ?? currentTask.status;
+      const statusAfter = input.status ?? statusBefore;
+      const details = {
+        beforeStatus: statusBefore, afterStatus: statusAfter,
+        ...(input.title !== undefined && input.title !== currentTask.title ? { beforeTitle: currentTask.title, afterTitle: updatedTask.title } : {}),
+        ...(sharedDueDateChanged ? { beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null } : {}),
+        ...(input.description !== undefined && input.description !== currentTask.description ? { descriptionChanged: true } : {})
+      };
+      if (statusBefore !== statusAfter || 'beforeTitle' in details || 'beforeDueDate' in details || 'descriptionChanged' in details) {
+        await tx.taskActivityEvent.create({
+          data: { taskId: id, actorId: userId, type: statusBefore !== statusAfter ? 'status_changed' : 'details_updated',
+            details }
+        });
+      }
       console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
       if (input.status === 'DONE' && updatedTask.isRecurring && !updatedTask.parentTaskId && !isCollaborativeRoot) {
@@ -486,9 +500,19 @@ export const taskService = {
           });
         }
       } else if (input.status === 'DONE' && !currentTask.parentTaskId) {
+        const autoCompleted = await tx.task.findMany({
+          where: { parentTaskId: id, status: { not: 'DONE' } },
+          select: { id: true, status: true, title: true }
+        });
         await tx.task.updateMany({
           where: { parentTaskId: id, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
+        });
+        if (autoCompleted.length) await tx.taskActivityEvent.createMany({
+          data: autoCompleted.map(subtask => ({
+            taskId: subtask.id, actorId: userId, type: 'status_changed',
+            details: { beforeStatus: subtask.status, afterStatus: 'DONE', automaticallyCompletedWithParent: true, title: subtask.title }
+          }))
         });
       }
 

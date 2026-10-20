@@ -15,6 +15,7 @@ import { taskAttachmentController } from '../controllers/task-attachment.control
 import { insightService } from '../services/insight.service.js';
 import { aiController } from '../controllers/ai.controller.js';
 import { aiGeneratedDocumentController } from '../controllers/ai-generated-document.controller.js';
+import { generateTaskCompletionReport } from '../services/task-completion-report.service.js';
 import { telegramController } from '../controllers/telegram.controller.js';
 import { telegramRelayController } from '../controllers/telegram-relay.controller.js';
 import { telegramService } from '../services/telegram.service.js';
@@ -137,6 +138,7 @@ const toAuthUser = (user: {
   timeZone?: string | null;
   morningAiCheckupEnabled?: boolean;
   browserNotificationsEnabled?: boolean;
+  offerTaskCompletionReport?: boolean;
   morningAiCheckupTime?: string;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
@@ -169,6 +171,7 @@ const toAuthUser = (user: {
   timeZone: user.timeZone ?? DEFAULT_TIMEZONE,
   morningAiCheckupEnabled: user.morningAiCheckupEnabled ?? false,
   browserNotificationsEnabled: user.browserNotificationsEnabled ?? true,
+  offerTaskCompletionReport: user.offerTaskCompletionReport ?? true,
   morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
   efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
   efficiencyScore: Math.max(0, Math.min(100, user.efficiencyScore ?? 0)),
@@ -905,6 +908,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     timeZone?: string;
     morningAiCheckupEnabled?: boolean;
     browserNotificationsEnabled?: boolean;
+    offerTaskCompletionReport?: boolean;
     morningAiCheckupTime?: string;
   } = {};
 
@@ -929,6 +933,13 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     data.browserNotificationsEnabled = req.body.browserNotificationsEnabled;
   }
 
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'offerTaskCompletionReport')) {
+    if (typeof req.body?.offerTaskCompletionReport !== 'boolean') {
+      res.status(400).json({ error: 'Настройка отчёта должна быть логическим значением.' });
+      return;
+    }
+    data.offerTaskCompletionReport = req.body.offerTaskCompletionReport;
+  }
   if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'morningAiCheckupTime')) {
     const checkupTime = String(req.body?.morningAiCheckupTime ?? '').trim();
     if (!CHECKUP_TIME_PATTERN.test(checkupTime)) {
@@ -959,6 +970,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       timeZone: true,
       morningAiCheckupEnabled: true,
       browserNotificationsEnabled: true,
+      offerTaskCompletionReport: true,
       morningAiCheckupTime: true,
       efficiencyScore: true,
       efficiencyTaskScore: true,
@@ -1213,6 +1225,10 @@ apiRouter.delete('/spheres/:id', requireAuth, sphereController.remove);
 apiRouter.get('/tasks', requireAuth, taskController.list);
 apiRouter.post('/tasks', requireAuth, taskController.create);
 apiRouter.patch('/tasks/:id', requireAuth, taskController.update);
+apiRouter.post('/tasks/:id/completion-report', requireAuth, asyncHandler(async (req, res) => {
+  const result = await generateTaskCompletionReport({ userId: req.user!.id, taskId: req.params.id });
+  res.json(result);
+}));
 apiRouter.delete('/tasks/:id', requireAuth, taskController.remove);
 apiRouter.get('/tasks/:id/comments', requireAuth, taskCommentController.list);
 apiRouter.post('/tasks/:id/comments', requireAuth, taskCommentController.create);
