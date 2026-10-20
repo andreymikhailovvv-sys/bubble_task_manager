@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { NoteInputError } from './standalone-note.controller.js';
+import { syncSectorNoteGroups } from '../services/sector-note-groups.service.js';
 
 // Eight harmonious accent colors shared by the API and both client themes.
 export const NOTE_GROUP_COLORS = [
@@ -34,10 +35,11 @@ export function sendGroupConflict(error: unknown, res: Response): boolean {
   }
   return false;
 }
-const select = { id: true, name: true, color: true, createdAt: true, updatedAt: true } as const;
+const select = { id: true, name: true, color: true, sphereId: true, createdAt: true, updatedAt: true } as const;
 
 export const standaloneNoteGroupController = {
   list: async (req: Request, res: Response) => {
+    await syncSectorNoteGroups(req.user!.id);
     const groups = await prisma.standaloneNoteGroup.findMany({
       where: { userId: req.user!.id },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -55,6 +57,8 @@ export const standaloneNoteGroupController = {
     res.status(201).json(group);
   },
   update: async (req: Request, res: Response) => {
+    const linked = await prisma.standaloneNoteGroup.findFirst({ where: { id: req.params.id, userId: req.user!.id }, select: { sphereId: true } });
+    if (linked?.sphereId) { res.status(400).json({ error: 'Название и цвет этой группы изменяются в настройках сектора.' }); return; }
     const data = validateNoteGroupPayload(req.body);
     const updated = await prisma.standaloneNoteGroup.updateMany({
       where: { id: req.params.id, userId: req.user!.id }, data
@@ -68,6 +72,8 @@ export const standaloneNoteGroupController = {
     }));
   },
   remove: async (req: Request, res: Response) => {
+    const linked = await prisma.standaloneNoteGroup.findFirst({ where: { id: req.params.id, userId: req.user!.id }, select: { sphereId: true } });
+    if (linked?.sphereId) { res.status(400).json({ error: 'Секторную группу нельзя удалить отдельно от сектора.' }); return; }
     const removed = await prisma.standaloneNoteGroup.deleteMany({
       where: { id: req.params.id, userId: req.user!.id }
     });
