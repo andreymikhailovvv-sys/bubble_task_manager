@@ -52,3 +52,38 @@ test('task report has server authorization, token billing and document attachmen
   assert.match(mini, /<TaskCompletionReportDialog/);
   assert.match(api, /generateTaskCompletionReport/);
 });
+
+test('report dialog aligns status heading with the icon and downloads using the caller handler', async () => {
+  const dialog = await readFile(new URL('../../client/src/components/TaskCompletionReportDialog.tsx', import.meta.url), 'utf8');
+  assert.match(dialog, /className="mb-3 flex items-center gap-3 pr-10"/);
+  assert.match(dialog, /id="task-report-dialog-title"/);
+  assert.match(dialog, /document \? 'Отчёт готов' : 'Подготовить отчёт выполнения задачи\?'/);
+  assert.match(dialog, /onDownload\?: \(document: GeneratedDocument\)/);
+  assert.match(dialog, /await props\.onDownload\(document\.file\)/);
+  assert.match(dialog, /createAiGeneratedDocumentDownloadLink\(document\.file\.id\)/);
+  assert.match(dialog, /onClick=\{\(\) => void downloadReport\(\)\}/);
+});
+
+test('mini app routes report downloads through Telegram bridge and closes completed subtask editor', async () => {
+  const mini = await readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8');
+  assert.match(mini, /const startAiGeneratedDocumentDownload = async/);
+  assert.match(mini, /webApp\.downloadFile\(/);
+  assert.match(mini, /onDownload=\{startAiGeneratedDocumentDownload\}/);
+  assert.match(mini, /if \(completed\?\.parentTaskId && openedSubtaskId === taskId\) \{\s*closeMiniWindowWithMotion\('subtask', \(\) => setOpenedSubtaskId\(null\)\)/);
+  assert.match(mini, /await loadData\(\);\s*\/\/ Only closing an existing subtask/);
+  assert.match(mini, /openedSubtask\.status === 'DONE' \? restoreOpenedSubtask\(openedSubtask\) : completeTask\(openedSubtask\.id\)/);
+});
+
+test('desktop task AI welcome card matches the Mini App and keeps no-results search state separate', async () => {
+  const [app, mini, shared] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/TaskAiEmptyState.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.equal((app.match(/<TaskAiEmptyState \/>/g) ?? []).length, 2);
+  assert.match(mini, /<TaskAiEmptyState variant="miniapp" \/>/);
+  assert.match(shared, /<Sparkles size=\{34\}/);
+  assert.match(shared, /ИИ готов помочь/);
+  assert.match(shared, /Спросите, как эффективнее выполнить эту задачу/);
+  assert.match(app, /: <p className="text-xs text-subtle">Сообщения не найдены\.<\/p>/);
+});
