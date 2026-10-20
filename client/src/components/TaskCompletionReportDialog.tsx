@@ -15,7 +15,7 @@ export function TaskCompletionReportDialog(props: {
   const [neverShow, setNeverShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [document, setDocument] = useState<{ file: GeneratedDocument; url: string | null; credits: number } | null>(null);
+  const [document, setDocument] = useState<{ file: GeneratedDocument; credits: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const finish = async () => {
     if (neverShow && props.onNeverShow) {
@@ -31,10 +31,9 @@ export function TaskCompletionReportDialog(props: {
     try {
       const report = await api.generateTaskCompletionReport(props.taskId);
       props.onGenerated?.();
-      // The Telegram WebView needs its native downloadFile API. Do not issue an
-      // expiring signed link here if the native handler will mint one on click.
-      const download = props.onDownload ? null : await api.createAiGeneratedDocumentDownloadLink(report.document.id);
-      setDocument({ file: report.document, url: download?.url ?? null, credits: report.creditsSpentMilli });
+      // Mint a fresh signed URL only when the user actually requests the file.
+      // Telegram downloads must go through its WebApp bridge.
+      setDocument({ file: report.document, credits: report.creditsSpentMilli });
       if (neverShow && props.onNeverShow) await props.onNeverShow();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Не удалось подготовить отчёт');
