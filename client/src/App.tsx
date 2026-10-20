@@ -1316,7 +1316,7 @@ export default function App() {
 
   const updateUserSettings = async (
     payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string; browserNotificationsEnabled?: boolean; offerTaskCompletionReport?: boolean },
-    savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications'
+    savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | 'taskReport'
   ) => {
     setSettingsSavingKey(savingKey);
     setSettingsError(null);
