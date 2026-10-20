@@ -483,6 +483,23 @@ function compactGlobalLayout(bubbles: Bubble[], center: number, maxDistance: num
   }
 }
 
+/**
+ * Tasks without a valid sphere belong to their own transient visual sector.
+ * This is presentation-only: no Sphere row is created or persisted.
+ */
+export function getBubbleSectorSpheres(tasks: Task[], spheres: Sphere[], mode: 'global' | 'sectors'): Array<Sphere | null> {
+  if (mode !== 'sectors') return [];
+  const ids = new Set(spheres.map((sphere) => sphere.id));
+  const hasUnassigned = tasks.some((task) => !task.sphereId || !ids.has(task.sphereId));
+  return hasUnassigned ? [...spheres, null] : [...spheres];
+}
+
+export function getBubbleSectorIndex(task: Task, sectors: Array<Sphere | null>): number {
+  if (sectors.length <= 1) return 0;
+  const index = sectors.findIndex((sphere) => sphere !== null && sphere.id === task.sphereId);
+  return index >= 0 ? index : Math.max(0, sectors.indexOf(null));
+}
+
 export function buildBubbles(
   tasks: Task[],
   spheres: Sphere[],
@@ -493,7 +510,8 @@ export function buildBubbles(
 ): Bubble[] {
   const center = size / 2;
   const maxDistance = size * 0.44;
-  const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
+  const bubbleSectors = getBubbleSectorSpheres(tasks, spheres, mode);
+  const sectorCount = Math.max(1, bubbleSectors.length);
 
   const getEffectiveDueDate = (task: Task) => {
     const parseDate = (value?: string | null) => {
@@ -530,7 +548,7 @@ export function buildBubbles(
   const bySector = Array.from({ length: sectorCount }, () => [] as Task[]);
 
   tasksWithEffectiveDueDate.forEach((task) => {
-    const sectorIndex = sectorCount === 1 ? 0 : Math.max(0, spheres.findIndex((sphere) => sphere.id === task.sphereId));
+    const sectorIndex = getBubbleSectorIndex(task, bubbleSectors);
     bySector[sectorIndex].push(task);
   });
   const sectorGeometry = buildSectorGeometry(sectorCount, bySector.map((sectorTasks) => sectorTasks.length));
@@ -601,7 +619,7 @@ export function buildBubbles(
         radius,
         color: rankingMode === 'importance'
           ? getImportanceBubbleColor(task.importance)
-          : spheres.find((s) => s.id === task.sphereId)?.color ?? '#60a5fa',
+          : spheres.find((s) => s.id === task.sphereId)?.color ?? '#64748b',
         sectorIndex,
         distanceRatio: Math.min(1, distance / maxDistance)
       });

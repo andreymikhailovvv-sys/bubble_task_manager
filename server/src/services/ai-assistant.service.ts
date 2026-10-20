@@ -2944,11 +2944,11 @@ export const aiAssistantService = {
     const weekEnd = new Date(now);
     weekEnd.setDate(weekEnd.getDate() + 7);
     const allWeekTasks = await prisma.task.findMany({
-      where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, dueDate: { gte: now, lt: weekEnd } },
+      where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, taskType: { notIn: ['EVENT', 'REMINDER'] }, dueDate: { gte: now, lt: weekEnd } },
       include: { sphere: { select: { name: true } }, parentTask: { select: { title: true } } },
       orderBy: { dueDate: 'asc' }
     });
-    const overdue = await prisma.task.findMany({ where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
+    const overdue = await prisma.task.findMany({ where: { userId: input.userId, AND: [taskAccessWhere(input.userId)], status: { not: 'DONE' }, taskType: { notIn: ['EVENT', 'REMINDER'] }, dueDate: { lt: now } }, orderBy: { dueDate: 'asc' } });
     if (overdue.length === 0) return { ok: true as const, model: OTHER_AI_MODEL, summary: 'Просроченных задач нет', updatedTaskIds: [] as string[], billing: { mode: 'legacy' as const, creditsSpentMilli: 0 } };
     const lines = allWeekTasks.map((t, i) => `${i+1}. id=${t.id} | тип=${t.parentTaskId ? 'подзадача':'задача'} | название=${t.title} | дата=${t.dueDate?.toISOString() ?? 'null'} | сектор=${t.sphere?.name ?? 'без сектора'}`).join('\n');
     const overdueIds = overdue.map((t) => t.id);
@@ -2961,7 +2961,7 @@ ${lines}`}] }) });
     const parsed = parseTimelineOptimizationPlan(extractOutputText(responseJson));
     const map = new Map(overdue.map((t)=>[t.id,t]));
     const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
-    await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.updateMany({ where:{id:u.taskId, userId:input.userId, AND:[taskAccessWhere(input.userId)]}, data:{dueDate:u.dueDate} }); }});
+    await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.updateMany({ where:{id:u.taskId, userId:input.userId, taskType: { notIn: ['EVENT', 'REMINDER'] }, AND:[taskAccessWhere(input.userId)]}, data:{dueDate:u.dueDate} }); }});
     return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId), billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(2) } };
   },
 

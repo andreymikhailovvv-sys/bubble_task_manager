@@ -785,6 +785,7 @@ function buildTimelineViewData(
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [initialWorkspaceReady, setInitialWorkspaceReady] = useState(false);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [mode, setMode] = useState<'global' | 'sectors'>('sectors');
@@ -1384,6 +1385,7 @@ export default function App() {
 
   const clearUserState = () => {
     setCurrentUser(null);
+    setInitialWorkspaceReady(false);
     setSpheres([]);
     setTasks([]);
     setHabits([]);
@@ -1440,8 +1442,19 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    void load();
+    let live = true;
+    void load()
+      .catch((error) => console.error('[Workspace] initial data load failed', error))
+      .finally(() => { if (live) setInitialWorkspaceReady(true); });
+    return () => { live = false; };
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (authLoading || (currentUser && !initialWorkspaceReady)) return;
+    // The static HTML splash also covers bundle download and React startup.
+    // Remove it only once auth and the first workspace request have settled.
+    document.documentElement.classList.remove('web-workspace-preload');
+  }, [authLoading, currentUser?.id, initialWorkspaceReady]);
   useEffect(() => {
     if (!currentUser) return;
     const token = new URLSearchParams(window.location.search).get('joinTask');

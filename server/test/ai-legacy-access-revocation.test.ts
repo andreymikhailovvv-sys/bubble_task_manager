@@ -28,7 +28,7 @@ test('undo and automated schedule updates cannot mutate excluded collaborators t
   assert.match(undo,/id: operation\.taskId, userId: input\.userId, AND: \[taskAccessWhere\(input\.userId\)\]/);
   const overdue=src.slice(src.indexOf('generateOverdueTaskNudge: async'),src.indexOf('generateSubtasks: async'));
   assert.match(overdue,/AND: \[taskAccessWhere\(input\.userId\)\]/);
-  assert.match(overdue,/updateMany\(\{ where:\{id:u\.taskId, userId:input\.userId, AND:\[taskAccessWhere\(input\.userId\)\]\}/);
+  assert.match(overdue,/updateMany\(\{ where:\{id:u\.taskId, userId:input\.userId, taskType: \{ notIn: \['EVENT', 'REMINDER'\] \}, AND:\[taskAccessWhere\(input\.userId\)\]\}/);
   assert.match(overdue,/updateMany\(\{ where: \{ id: task\.id, userId: input\.userId, AND: \[taskAccessWhere\(input\.userId\)\] \}/);
   assert.doesNotMatch(overdue,/where:\{id:u\.taskId\}, data:/);
 });
