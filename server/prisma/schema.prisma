@@ -711,6 +711,7 @@ model TelegramAiChatPolicy {
   lastSummary             Json?
   lastSummaryAt           DateTime?
   lastError               String?
+  networkFailureStreak    Int      @default(0) // Persisted across replicas, cleared after a successful scan
   monitorRevision         Int      @default(0)
   summaryRequested        Boolean  @default(false)
   creditDayKey            String?
