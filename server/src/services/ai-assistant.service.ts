@@ -3,8 +3,10 @@ import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
-import { askAiChatWithTools } from './ai-chat-tools.service.js';
+import { askAiChatWithTools, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
+import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dynamic-responses-billing.service.js';
 import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
@@ -37,12 +39,17 @@ import {
 } from './ai-credit-wallet.service.js';
 
 type ChatRole = 'user' | 'assistant';
+export type TaskWebSource = { title: string; url: string };
+export type TaskWebCitation = { startIndex: number; endIndex: number; sourceIndex: number };
 
 export type ChatMessage = {
   id?: string;
   role: ChatRole;
   content: string;
   creditsSpentMilli?: number;
+  webSearchUsed?: boolean;
+  webSources?: TaskWebSource[];
+  webCitations?: TaskWebCitation[];
   generatedDocument?: GeneratedDocumentMeta;
   taskProposal?: TaskProposalView | null;
 };
@@ -233,8 +240,9 @@ export const TASK_ASSISTANT_RESPONSE_FORMAT = {
   }
 };
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean }) {
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean }) {
   const allowTools = options?.allowTools !== false;
+  const allowWebSearch = allowTools && options?.allowWebSearch === true;
   return {
     model,
     input: messages.map((message) => {
@@ -243,10 +251,17 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL], tool_choice: 'auto', parallel_tool_calls: false } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
+}
+
+/** Responses/input_tokens counts the exact content and tools, but does not accept execution-only max_tool_calls. */
+export function createTaskChatInputTokensPayload(payload: ReturnType<typeof createTaskChatOpenAiPayload>) {
+  if (!('max_tool_calls' in payload)) return payload;
+  const { max_tool_calls: _maxToolCalls, ...inputTokensPayload } = payload;
+  return inputTokensPayload;
 }
 
 type AskTaskAssistantInput = {
@@ -1832,6 +1847,9 @@ export const aiAssistantService = {
         role: true,
         content: true,
         creditsSpentMilli: true,
+        webSearchUsed: true,
+        webSources: true,
+        webCitations: true,
         userId: true,
         messageKind: true,
         recipientUserId: true,
@@ -1867,6 +1885,11 @@ export const aiAssistantService = {
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
         : {}),
+      ...(message.role === 'assistant' && message.webSearchUsed ? {
+        webSearchUsed: true,
+        webSources: Array.isArray(message.webSources) ? message.webSources as TaskWebSource[] : [],
+        webCitations: Array.isArray(message.webCitations) ? message.webCitations as TaskWebCitation[] : []
+      } : {}),
       ...(message.role === 'assistant' && message.generatedDocument
         ? { generatedDocument: message.generatedDocument }
         : {}),
@@ -1920,7 +1943,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1936,6 +1959,8 @@ export const aiAssistantService = {
         role: 'assistant',
         content,
         creditsSpentMilli: input.creditsSpentMilli,
+        webSearchUsed: input.webSearchUsed ?? false,
+        ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}),
         generatedDocumentId: input.generatedDocumentId ?? null,
         aiTaskProposalId: input.taskProposalId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
@@ -2090,6 +2115,7 @@ export const aiAssistantService = {
       'Не вызывай генератор картинки для чтения/правки текстовых документов. Для прошлых изображений используй явный fileId из КАТАЛОГА ФАЙЛОВ. По запросу «отредактируй изображение выше» можешь выбрать его однозначный generated_document fileId, но никогда не выбирай старый файл только по факту его наличия. Если выбор неоднозначен, уточни.',
       'Если пользователь явно просит отправить или переслать сообщение в Telegram (например, «подведи итог обсуждения задачи и отправь Ване»), сформируй законченный текст и вызови prepare_telegram_send с recipient и text. Инструмент ничего не отправляет: он только создаёт карточку Telegram под ответом, с текстом, выбранным контактом и кнопкой «Отправить». Пользователь подтвердит отправку сам. Не говори, что сообщение уже отправлено. Не угадывай Telegram ID. Если адресат не назван, сначала уточни.',
       'По явной просьбе пользователя прочитать Telegram-переписку с человеком или в группе вызови request_telegram_chat_read с точным именем чата. До отдельного согласия владельца содержимое Telegram недоступно; сообщи об ожидании разрешения. После согласия исходный запрос продолжится. Не имитируй чтение.',
+      'Для запроса актуальных внешних фактов можешь использовать web_search. Максимум один поиск за пользовательский запрос. Для обычного разговора, анализа файлов и внутренней истории задачи веб-поиск не нужен. Не выдумывай источники.',
       'Текст пользователю пиши только в answer.',
       'Ты видишь только краткий preview активных подзадач и metadata сохранённых файлов. Если нужна подзадача вне preview, полный список, description или старая/выполненная подзадача — используй task_context_lookup. Не придумывай отсутствующие подзадачи.',
       'Если пользователь просит все подзадачи, полный список, классифицировать, сгруппировать, отсортировать или сравнить все подзадачи, расставить приоритеты среди всех либо найти закономерности по всему списку, нельзя отвечать только по preview. Сначала вызови task_context_lookup с operation=list_subtasks. Если result.hasMore=true, запрашивай следующую страницу с offset=result.nextOffset и продолжай до hasMore=false в пределах tool budget. Для точечного поиска нескольких подходящих подзадач используй search_subtasks.',
@@ -2211,6 +2237,15 @@ export const aiAssistantService = {
     let editedFileDocument: GeneratedDocumentMeta | null = null;
     let editedFileCreditsMilli = 0;
     let failedFileEditReason: string | null = null;
+    let webSearchUsed = false;
+    const webSources = new Map<string, string>();
+    const webCitations: TaskWebCitation[] = [];
+    let webReservation: WalletReservation | null = null;
+    try {
+      webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI);
+    } catch (error) {
+      if (!(error instanceof Error && error.message === 'Недостаточно AI кредитов')) throw error;
+    }
     for (const model of modelCandidates) {
       const dynamicCalls: Array<{ reservation: WalletReservation; actualCreditsMilli: number; usageCost: ReturnType<typeof calculateOpenAiUsageCost>; providerCallIndex: number }> = [];
       let pendingDynamicReservation: WalletReservation | null = null;
@@ -2225,21 +2260,30 @@ export const aiAssistantService = {
         for (let modelProviderCallIndex = 0; modelProviderCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS && providerCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS; modelProviderCallIndex += 1) {
           providerCallIndex += 1;
           const isForcedFinalRound = toolCallsExecuted >= TASK_CHAT_CONTEXT_MAX_TOOL_CALLS;
+          const allowWebSearch = Boolean(webReservation) && !webSearchUsed && !isForcedFinalRound && modelProviderCallIndex === 0;
           if (isForcedFinalRound) {
             input.onProgress?.('forming_answer');
             providerInput.push({ role: 'system', content: 'Лимит получения дополнительных данных исчерпан. Сформируй лучший возможный финальный ответ на основе уже полученного контекста. Не запрашивай дополнительные tools.' });
           }
           const startedAt = Date.now();
           const reasoning = supportsReasoningEffort(model) ? reasoningEffort : undefined;
-          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound });
+          const preflightPayload = createTaskChatOpenAiPayload(model, providerInput, undefined, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch });
           let maxOutputTokens: number | undefined;
           let dynamicReservation: WalletReservation | null = null;
           if (dynamicBilling && !input.skipCreditsCharge) {
             const providerRequestId = `${requestId}:tokens:${providerCallIndex}`;
             const preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(preflightPayload)
+              method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(createTaskChatInputTokensPayload(preflightPayload))
             }, { requestId: providerRequestId, model });
-            if (!preflight.ok) throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
+            if (!preflight.ok) {
+              let errorBody: unknown = null;
+              try { errorBody = await preflight.json(); } catch { /* Preserve the original provider HTTP status. */ }
+              console.error('[AI task chat] input token preflight failed', {
+                requestId: providerRequestId, model, status: preflight.status,
+                ...getOpenAiPreflightErrorDiagnostics(errorBody)
+              });
+              throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
+            }
             const tokenPayload = await preflight.json() as { input_tokens?: unknown };
             const inputTokens = typeof tokenPayload.input_tokens === 'number' && tokenPayload.input_tokens >= 0 ? Math.floor(tokenPayload.input_tokens) : null;
             if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
@@ -2250,10 +2294,10 @@ export const aiAssistantService = {
             maxOutputTokens = Math.min(TASK_CHAT_MAX_OUTPUT_TOKENS, calculateAffordableOutputTokens(model, inputTokens, dynamicReservation.totalMilli - desired.inputCreditsMilli));
             if (maxOutputTokens < TASK_CHAT_MIN_OUTPUT_TOKENS) throw new Error('Недостаточно AI кредитов');
           }
-          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound });
+          const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(payload)
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, stream: true })
           }, { requestId: `${requestId}:response:${providerCallIndex}`, model });
           console.info('[AI] OpenAI response received', { requestId, providerCallIndex, model, status: openAiResponse.status, ok: openAiResponse.ok, latencyMs: Date.now() - startedAt, taskId: input.taskId, userId: input.userId });
           if (!openAiResponse.ok) {
@@ -2261,7 +2305,16 @@ export const aiAssistantService = {
             pendingDynamicReservation = null;
             throw new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
           }
-          const responseJson = await openAiResponse.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; output?: unknown; [key: string]: unknown };
+          const responseJson = await readOpenAiResponsesStreamWithRecovery(openAiResponse.body, {
+            onEvent: (event) => {
+              const progress = getWebSearchProgressStatus(event.type);
+              if (progress) input.onProgress?.(progress);
+            },
+            retrieveResponse: (responseId) => retrieveOpenAiResponse(responseId, apiKey, requestId + ':task-chat:' + providerCallIndex, model),
+            onRecovery: (stage, detail) => console.warn('[AI task streaming] recovery', {
+              requestId, taskId: input.taskId, model, providerCallIndex, stage, ...detail
+            })
+          }) as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; output?: unknown; [key: string]: unknown };
           await recordOpenAiUsageShadow({ userId: input.userId, taskId: input.taskId, actionId: requestId, requestId: `${requestId}:response:${providerCallIndex}`, providerCallIndex, feature: input.billingFeature ?? 'task_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: dynamicBilling ? 'DYNAMIC' : 'SHADOW' });
           if (dynamicReservation) {
             const usageCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {});
@@ -2270,6 +2323,31 @@ export const aiAssistantService = {
             pendingDynamicReservation = null;
           }
           const output = Array.isArray(responseJson.output) ? responseJson.output : [];
+          const webSearchAnalysis = analyzeWebSearchCalls(responseJson);
+          if (webSearchAnalysis.uniqueSearchCalls + webSearchAnalysis.searchCallsWithoutId > 0) {
+            webSearchUsed = true;
+            input.onProgress?.('analyzing_web_results');
+          }
+          for (const item of output) {
+            if (!item || typeof item !== 'object') continue;
+            const content = Array.isArray((item as { content?: unknown }).content)
+              ? (item as { content: Array<Record<string, unknown>> }).content : [];
+            for (const part of content) {
+              for (const annotation of Array.isArray(part?.annotations) ? part.annotations as Array<Record<string, unknown>> : []) {
+                if (annotation.type !== 'url_citation' || typeof annotation.url !== 'string') continue;
+                try {
+                  const url = new URL(annotation.url);
+                  if (url.protocol !== 'https:' || url.href.length > 2048) continue;
+                  if (!webSources.has(url.href) && webSources.size < 5) webSources.set(url.href,
+                    typeof annotation.title === 'string' && annotation.title.trim() ? annotation.title.slice(0, 160) : url.hostname);
+                  const sourceIndex = [...webSources.keys()].indexOf(url.href);
+                  if (sourceIndex >= 0 && typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') {
+                    webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
+                  }
+                } catch { /* Ignore malformed untrusted URLs. */ }
+              }
+            }
+          }
           const toolCalls = output.filter((item): item is OpenAiFunctionCall => Boolean(item && typeof item === 'object' && (item as { type?: unknown }).type === 'function_call' && typeof (item as { call_id?: unknown }).call_id === 'string'));
           const usage = responseJson.usage as { input_tokens?: number; output_tokens?: number } | undefined;
           const roundCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {}).estimatedCreditsMilli;
@@ -2524,11 +2602,13 @@ export const aiAssistantService = {
         const actionAwareAnswer = failedFileEditReason && !generatedDocument
           ? [parsed.answer, `Файл не изменён. ${failedFileEditReason.slice(0, 700)}`].filter(Boolean).join('\n\n')
           : parsed.answer;
-        const answer = taskProposal
+        const baseAnswer = taskProposal
           ? (taskProposal.status === 'APPLIED'
               ? 'Изменения автоматически применены. Подробности в карточке.'
               : 'Подготовил изменения. Проверьте карточку ниже и нажмите «Принять», чтобы применить их.')
           : actionAwareAnswer;
+        const answer = baseAnswer;
+        const sources: TaskWebSource[] = [...webSources].map(([url, title]) => ({ url, title }));
 
         console.info('[AI] Task assistant request completed', {
           requestId,
@@ -2560,8 +2640,18 @@ export const aiAssistantService = {
           }
           console.info('[AI dynamic billing] workflow settled', { userId: input.userId, taskId: input.taskId, requestId, model, providerCalls: dynamicCalls.length, chargedMilli: creditsSpentMilli });
         }
+        if (webReservation) {
+          if (webSearchUsed) {
+            const charged = await settleAiCreditReservation(webReservation, WEB_SEARCH_CALL_CREDITS_MILLI);
+            creditsSpentMilli += charged.chargedMilli;
+            await recordAiCreditCharge({ userId: input.userId, actionId: requestId,
+              requestId: requestId + ':web-search-charge', feature: 'web_search',
+              model: 'openai-web-search', creditsSpentMilli: charged.chargedMilli });
+          } else await refundWalletReservation(webReservation);
+          webReservation = null;
+        }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
@@ -2605,6 +2695,7 @@ export const aiAssistantService = {
       throw new Error(`Smart mode failed for all model attempts: ${attemptsSummary}`);
     }
 
+    if (webReservation) await refundWalletReservation(webReservation);
     if (creditReservation) await refundAiCreditReservation(input.userId, creditReservation, requestId);
     throw lastError ?? new Error('OpenAI request failed without details');
   },
