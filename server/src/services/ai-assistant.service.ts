@@ -23,7 +23,7 @@ import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService, computeNextRecurringDueDate } from './task.service.js';
 import { makeManualRecurrenceSchedule, type RecurrenceSchedule as StoredRecurrenceSchedule } from './recurrence-slots.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
-import { loadAiFileCatalog, formatAiFileCatalog, type AiFileHistoryReference } from './ai-file-catalog.service.js';
+import { loadAiFileCatalog, formatAiFileCatalog, extractAiReplyFileReferences, type AiFileHistoryReference } from './ai-file-catalog.service.js';
 import { AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, executeAiFileTool, resolveCatalogImageReferences } from './ai-file-operations.service.js';
 import { wordDocumentService, type GeneratedDocumentMeta } from './word-document.service.js';
 import { excelWorkbookService } from './excel-workbook.service.js';
@@ -1391,7 +1391,8 @@ export const aiAssistantService = {
       }
       if (history.length) input.onProgress?.('using_chat_history');
       const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences, projectId: input.projectId, chatId: input.chatId, currentMessageId: input.currentMessageId });
+      const quotedFiles = extractAiReplyFileReferences(question);
+      const fileCatalog = await loadAiFileCatalog({ userId: input.userId, currentUploads: input.attachments, history: input.fileReferences, projectId: input.projectId, chatId: input.chatId, currentMessageId: input.currentMessageId, quotedMessageId: quotedFiles.messageId, quotedDocumentId: quotedFiles.documentId });
       const fileCatalogText = formatAiFileCatalog(fileCatalog);
       if (attachmentsMessage) input.onProgress?.('reading_attachment');
       const providerHistory = toOpenAiGeneralHistory(history);
@@ -2168,7 +2169,8 @@ export const aiAssistantService = {
     // deliberately excluded from the assistant context; the user must attach
     // a file to the chat explicitly when they want the model to process it.
     const attachmentsMessage = buildAttachmentsPromptMessage(input.attachments);
-    const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments, currentMessageId: input.currentMessageId });
+    const quotedFiles = extractAiReplyFileReferences(input.question);
+    const fileCatalog = await loadAiFileCatalog({ userId: input.userId, taskId: input.taskId, currentUploads: input.attachments, currentMessageId: input.currentMessageId, quotedMessageId: quotedFiles.messageId, quotedDocumentId: quotedFiles.documentId, quotedAttachmentNames: quotedFiles.attachmentNames });
     const fileCatalogText = formatAiFileCatalog(fileCatalog);
     const hasAttachments = Boolean(attachmentsMessage);
     const memoryFeatureEnabled = isTaskChatMemoryEnabled(input.userId);
