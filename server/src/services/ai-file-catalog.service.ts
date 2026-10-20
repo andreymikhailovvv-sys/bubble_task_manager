@@ -41,6 +41,25 @@ export type AiFileHistoryReference = { id?: string; role: 'user' | 'assistant'; 
 const safeName = (name: string) => name.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 140) || 'Без названия';
 const safeMime = (mimeType: string) => mimeType.trim().slice(0, 100) || 'application/octet-stream';
 const validId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
+/** Reply metadata is only a hint; database lookups still check owner and thread. */
+export function extractAiReplyFileReferences(question: string): { messageId?: string; documentId?: string; attachmentNames: string[] } {
+  const prefix = '[[PLANNER_AI_REPLY_BEGIN]]\n';
+  // Focus-mode messages contain task instructions before the user's quoted reply.
+  const start = question.indexOf(prefix);
+  if (start < 0) return { attachmentNames: [] };
+  const payloadStart = start + prefix.length;
+  const end = question.indexOf('\n[[PLANNER_AI_REPLY_END]]\n', payloadStart);
+  if (end < 0 || end - payloadStart > 18000) return { attachmentNames: [] };
+  try {
+    const data = JSON.parse(question.slice(payloadStart, end)) as Record<string, unknown>;
+    const messageId = validId(data.attachmentMessageId) ? data.attachmentMessageId : undefined;
+    const documentId = validId(data.generatedDocumentId) ? data.generatedDocumentId : undefined;
+    const attachmentNames = Array.isArray(data.attachmentNames)
+      ? data.attachmentNames.filter((value): value is string => typeof value === 'string' && value.length > 0 && value.length < 142).slice(0, 20)
+      : [];
+    return { messageId, documentId, attachmentNames };
+  } catch { return { attachmentNames: [] }; }
+}
 const validFile = (file: CurrentUpload) => file && typeof file.name === 'string' && typeof file.mimeType === 'string'
   && Number.isSafeInteger(file.size) && file.size > 0 && file.size <= 8 * 1024 * 1024;
 
@@ -109,6 +128,9 @@ export async function loadAiFileCatalog(input: {
   projectId?: string;
   chatId?: string;
   currentMessageId?: string;
+  quotedMessageId?: string;
+  quotedDocumentId?: string;
+  quotedAttachmentNames?: string[];
   currentUploads?: CurrentUpload[];
   history?: AiFileHistoryReference[];
 }): Promise<AiFileCatalog> {
@@ -119,7 +141,7 @@ export async function loadAiFileCatalog(input: {
     });
     if (!task) throw new Error('Задача недоступна');
 
-    const [taskFiles, generatedMessages, chatUploads] = await Promise.all([
+    const [taskFiles, generatedMessages, chatUploads, quotedUploads, quotedDocument] = await Promise.all([
       task.parentTaskId ? Promise.resolve([]) : prisma.taskAttachment.findMany({
         where: { taskId: input.taskId, userId: input.userId },
         select: { id: true, name: true, mimeType: true, size: true, createdAt: true },
@@ -140,24 +162,40 @@ export async function loadAiFileCatalog(input: {
         select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true, messageId: true },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: AI_FILE_CATALOG_RECENT_PER_SOURCE
-      })
+      }),
+      (validId(input.quotedMessageId) || (input.quotedAttachmentNames?.length ?? 0) > 0)
+        ? prisma.aiConversationAttachment.findMany({
+            where: { userId: input.userId, taskId: input.taskId, OR: [
+              ...(validId(input.quotedMessageId) ? [{ messageId: input.quotedMessageId }] : []),
+              ...(input.quotedAttachmentNames?.length ? [{ fileName: { in: input.quotedAttachmentNames.slice(0, 20) } }] : [])
+            ] },
+            select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true, messageId: true },
+            take: AI_FILE_CATALOG_RECENT_PER_SOURCE
+          }) : Promise.resolve([]),
+      validId(input.quotedDocumentId)
+        ? prisma.aiGeneratedDocument.findFirst({
+            where: { id: input.quotedDocumentId, userId: input.userId, taskId: input.taskId },
+            select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true }
+          }) : Promise.resolve(null)
     ]);
     const generatedDocuments = generatedMessages
       .filter((message) => message.generatedDocument?.userId === input.userId && message.generatedDocument.taskId === input.taskId)
       .map((message) => ({ ...message.generatedDocument!, messageId: message.id }));
-    return buildAiFileCatalog({ currentUploads: input.currentUploads, taskAttachments: taskFiles, generatedDocuments, chatUploads: chatUploads.map((file) => ({ ...file, name: file.fileName })) });
+    return buildAiFileCatalog({ currentUploads: input.currentUploads, taskAttachments: taskFiles,
+      generatedDocuments: [...(quotedDocument ? [quotedDocument] : []), ...generatedDocuments],
+      chatUploads: [...quotedUploads, ...chatUploads].map((file) => ({ ...file, name: file.fileName })) });
   }
 
   // A general conversation lives in client state rather than a server chat
   // table. Its references are hints only, not proof of ownership or membership.
-  const refs = (input.history ?? []).slice(-50).reverse()
+  const refs = [...(validId(input.quotedDocumentId) ? [{ id: input.quotedDocumentId, messageId: validId(input.quotedMessageId) ? input.quotedMessageId : undefined }] : []), ...(input.history ?? []).slice(-50).reverse()
     .filter((message) => message.role === 'assistant')
     .map((message) => ({
       id: message.generatedDocument?.id,
       messageId: validId(message.id) ? message.id : undefined
     }))
     .filter((ref): ref is { id: string; messageId: string | undefined } => validId(ref.id))
-    .slice(0, AI_FILE_CATALOG_RECENT_PER_SOURCE);
+    .slice(0, AI_FILE_CATALOG_RECENT_PER_SOURCE)];
   const ids = [...new Set(refs.map((ref) => ref.id))];
   const owned = ids.length
     ? await prisma.aiGeneratedDocument.findMany({
@@ -170,7 +208,14 @@ export async function loadAiFileCatalog(input: {
     const file = byId.get(ref.id);
     return file ? [{ ...file, messageId: ref.messageId }] : [];
   });
-  const historyMessageIds = (input.history ?? []).slice(-50).map((message) => message.id).filter(validId);
+  const historyMessageIds = [...new Set([input.quotedMessageId, ...(input.history ?? []).slice(-50).map((message) => message.id)].filter(validId))];
+  const quotedUploads = validId(input.projectId) && validId(input.chatId) && validId(input.quotedMessageId)
+    ? await prisma.aiConversationAttachment.findMany({
+        where: { userId: input.userId, taskId: null, projectId: input.projectId,
+          chatId: input.chatId, messageId: input.quotedMessageId },
+        select: { id: true, fileName: true, mimeType: true, size: true, createdAt: true, messageId: true },
+        take: AI_FILE_CATALOG_RECENT_PER_SOURCE
+      }) : [];
   const savedUploads = validId(input.projectId) && validId(input.chatId) && historyMessageIds.length
     ? await prisma.aiConversationAttachment.findMany({
         where: { userId: input.userId, taskId: null, projectId: input.projectId, chatId: input.chatId, messageId: { in: historyMessageIds.filter((id) => id !== input.currentMessageId) } },
@@ -180,7 +225,7 @@ export async function loadAiFileCatalog(input: {
       })
     : [];
   return buildAiFileCatalog({ currentUploads: input.currentUploads, generatedDocuments,
-    chatUploads: savedUploads.map((file) => ({ ...file, name: file.fileName })) });
+    chatUploads: [...quotedUploads, ...savedUploads].map((file) => ({ ...file, name: file.fileName })) });
 }
 
 /** Only an inventory. None of these IDs grants permission to read or edit. */

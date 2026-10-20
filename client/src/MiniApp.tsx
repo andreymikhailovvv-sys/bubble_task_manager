@@ -36,6 +36,7 @@ import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
+import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -554,9 +555,9 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { cont
 function renderMiniAiMessageContent(content: string, previews?: AiAttachmentPreview[], messageId?: string) {
   const { text, names } = splitAiMessageAttachments(content);
   return <>
-    {renderAiContentBlocks(normalizeMiniAiMessageContent(text), (part, key) => (
+    <AiReplyMessageBody content={text} renderBody={(body) => renderAiContentBlocks(normalizeMiniAiMessageContent(body), (part, key) => (
       <div key={key}>{renderMiniAiText(part)}</div>
-    ))}
+    ))} />
     <AiMessageAttachments names={names} previews={previews} messageId={messageId} />
   </>;
 }
@@ -769,6 +770,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isTaskAiRecipientPickerVisible, setIsTaskAiRecipientPickerVisible] = useState(false);
   const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
+  const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
+  useEffect(() => { setReplyToTask(null); }, [openedTaskId]);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
@@ -842,6 +846,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
+  useEffect(() => { setReplyToGeneral(null); }, [activeAiChatId]);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
   // Auto-scrolling to the newest message must not masquerade as a swipe and
@@ -2836,9 +2841,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiChatError(cause instanceof Error ? cause.message : 'Не удалось прочитать приложенные файлы');
       return;
     }
-    const userMessageContent = fileNames.length > 0
+    const userMessageContent = serializeAiReply(fileNames.length > 0
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : question;
+      : question, replyToGeneral);
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, attachmentPreviews };
     const history = activeAiChat?.messages ?? [];
@@ -2854,7 +2859,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiChatPendingFiles([]); // Attachment bytes are already prepared.
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToGeneral),
         history,
         model: selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
@@ -2870,6 +2875,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
        }
        const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      setReplyToGeneral(null);
+      if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
+        const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
+        setAiChatProjects((prev) => prev.map(project => project.id !== projectId ? project : {
+          ...project, chats: project.chats.map(chat => chat.id !== chatId || !/^(Новый чат|Чат \\d+)$/i.test(chat.title)
+            ? chat : { ...chat, title: result.suggestedChatTitle! })
+        }));
+      }
        window.requestAnimationFrame(() => {
          const scroll = aiChatDialogContainerRef.current;
          if (scroll) scroll.scrollTop = scroll.scrollHeight;
@@ -3322,12 +3335,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return;
     }
     const baseDialog = aiDialogByTask[openedTask.id] ?? [];
-    const userMessage = fileNames.length > 0
+    const userMessage = serializeAiReply(fileNames.length > 0
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : question;
+      : question, replyToTask);
     const clientRequestId = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(aiPendingFiles);
-    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage, attachmentPreviews, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
+    const nextDialog: ChatMessage[] = [...baseDialog, { id: clientRequestId, role: 'user', content: userMessage, attachmentPreviews, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     taskAiDraftValueRef.current = '';
     taskAiComposerRef.current?.clearDraft();
@@ -3336,7 +3349,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
         clientRequestId,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToTask),
         userMessage,
         mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
@@ -3350,6 +3363,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
+      setReplyToTask(null);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } catch (e) {
@@ -4630,7 +4644,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadTask} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
-                  <div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
                 ))}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
@@ -4676,6 +4690,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   ) : null}
                 </div>
               ) : null}
+              {replyToTask ? <AiReplyPreview target={replyToTask} onDismiss={() => setReplyToTask(null)} /> : null}
               <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) => setAiPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiLoadingTaskId === openedTask.id} uploadProgress={taskAiUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-task flex items-end gap-2 rounded-3xl border p-2">
                 <MiniAiChatComposer
@@ -4789,7 +4804,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   {message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={continueTelegramReadAiChat} /> : null}
                   {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-slate-400 opacity-80">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                   </div>
-                  <div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div>
+                  <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={setReplyToGeneral} /><TelegramMessageQuickShare text={message.content} compact /></div>
                 </div>
               ))}
               {aiChatLoading ? <AiProgress status={aiChatProgress} /> : null}
@@ -4798,6 +4813,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               </div>
             </div>
             <div className="miniapp-ai-chat-composer absolute inset-x-0 bottom-0 z-20 p-3">
+              {replyToGeneral ? <AiReplyPreview target={replyToGeneral} onDismiss={() => setReplyToGeneral(null)} /> : null}
               <AiAttachmentTiles files={aiChatPendingFiles} onRemove={(file) => setAiChatPendingFiles((prev) => prev.filter((item) => item !== file))} busy={aiChatLoading} uploadProgress={aiChatUploadProgress} />
               <div className="miniapp-ai-chat-composer-card miniapp-ai-chat-composer-card-general flex items-end gap-2 rounded-3xl border p-2">
                 <input ref={aiChatFileInputRef} type="file" multiple className="hidden" accept=".pdf,.docx,.xls,.xlsx,image/png,image/jpeg,image/webp,image/gif" onChange={handleAiChatFileSelect} />
