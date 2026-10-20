@@ -6,7 +6,10 @@ import { prisma } from '../db/prisma.js';
 import { canUseTelegramUserClient } from '../lib/telegram-user-client-access.js';
 import { decryptTelegramAppCredentials } from '../lib/telegram-user-app-credentials.js';
 import { decryptTelegramUserSession } from '../lib/telegram-user-client-crypto.js';
-import { telegramUserClientNetworkOptions } from '../lib/telegram-user-client-network.js';
+import {
+  telegramUserClientNetworkOptions, telegramMtprotoTransport, classifyTelegramUserNetworkError,
+  type TelegramMtprotoStage, type TelegramMtprotoTransport
+} from '../lib/telegram-user-client-network.js';
 import { FixedWindowRateLimiter } from '../lib/security-rate-limiter.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { buildTelegramAnalysisSnapshot } from '../lib/telegram-user-client-analysis-snapshot.js';
@@ -199,15 +202,23 @@ async function validOwner(userId: string) {
 
 type ReadOwner = Awaited<ReturnType<typeof validOwner>>;
 
-async function openReadClient(owner: ReadOwner) {
+type TelegramReadDiagnostic = {
+  phase: 'client_connect' | 'identity_check' | 'read_request' | 'finished';
+  transport: TelegramMtprotoTransport | 'unknown';
+  tunnelStage: TelegramMtprotoStage | 'not_started';
+};
+
+async function openReadClient(owner: ReadOwner, diagnostic: TelegramReadDiagnostic) {
   const credentials = decryptTelegramAppCredentials(owner.userId, owner.encryptedApiCredentials);
   const session = decryptTelegramUserSession(owner.encryptedSession, owner.userId);
+  diagnostic.transport = telegramMtprotoTransport();
   const client = new TelegramClient(new StringSession(session), credentials.apiId, credentials.apiHash, {
     connectionRetries: 1,
-    ...telegramUserClientNetworkOptions()
+    ...telegramUserClientNetworkOptions(process.env, (stage) => { diagnostic.tunnelStage = stage; })
   });
   try {
     await client.connect();
+    diagnostic.phase = 'identity_check';
     const me = await client.getMe();
     if (me.bot || String(me.id) !== owner.accountId) {
       throw new TelegramUserClientError(409, 'Подключённый Telegram-аккаунт изменился');
@@ -243,10 +254,15 @@ async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'mon
       throw new TelegramUserClientError(429, 'Слишком много запросов к Telegram. Повторите позже');
     }
     let client: TelegramClient | null = null;
+    const diagnostic: TelegramReadDiagnostic = {
+      phase: 'client_connect', transport: 'unknown', tunnelStage: 'not_started'
+    };
     try {
       const owner = await validOwner(userId);
-      client = await openReadClient(owner);
+      client = await openReadClient(owner, diagnostic);
+      diagnostic.phase = 'read_request';
       const data = await work(client, owner);
+      diagnostic.phase = 'finished';
       // Permission and session must still be valid when returning sensitive data.
       const current = await validOwner(userId);
       if (current.accountId !== owner.accountId || current.encryptedSession !== owner.encryptedSession) {
@@ -255,7 +271,10 @@ async function withReadClient<T>(userId: string, kind: 'list' | 'history' | 'mon
       return data;
     } catch (error) {
       if (error instanceof TelegramUserClientError) throw error;
-      console.warn('[TelegramUserClient] Telegram read failed', { kind, category: 'network_or_mtproto' });
+      console.warn('[TelegramUserClient] Telegram read failed', {
+        kind, category: classifyTelegramUserNetworkError(error),
+        phase: diagnostic.phase, transport: diagnostic.transport, tunnelStage: diagnostic.tunnelStage
+      });
       throw new TelegramUserClientError(503, 'Не удалось получить данные Telegram. Повторите позже');
     } finally {
       if (client) try { await client.disconnect(); } catch { /* best effort */ }
