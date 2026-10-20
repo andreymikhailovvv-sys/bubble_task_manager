@@ -21,7 +21,11 @@ export function makeAiReplyTarget(message: ChatMessage): AiReplyTarget {
     id: message.id ?? '',
     role: message.role,
     content: message.content,
-    fileNames: message.attachmentPreviews?.map(item => item.name).filter(Boolean) ?? [],
+    // The server may strip display-only thumbnails during sync; the file names
+    // are also present in the saved message text.
+    fileNames: message.attachmentPreviews?.length
+      ? message.attachmentPreviews.map(item => item.name).filter(Boolean)
+      : (message.content.match(/(?:^|\\n)📎 Файлы: ([^\\n]+)/)?.[1] ?? '').split(', ').filter(Boolean),
     ...(message.generatedDocument?.id ? { generatedDocumentId: message.generatedDocument.id } : {})
   };
 }
@@ -32,7 +36,7 @@ export function serializeAiReply(question: string, target: AiReplyTarget | null)
     messageId: target.id,
     role: target.role,
     quotedText: target.content.length > MAX_QUOTE ? target.content.slice(0, MAX_QUOTE) + ' [цитата сокращена]' : target.content,
-    attachmentMessageId: target.fileNames.length ? target.id : null,
+    attachmentMessageId: target.id || null, // Database confirms whether this original message has attachments.
     attachmentNames: target.fileNames.slice(0, 30),
     generatedDocumentId: target.generatedDocumentId ?? null
   };
