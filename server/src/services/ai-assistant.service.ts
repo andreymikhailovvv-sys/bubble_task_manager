@@ -234,7 +234,7 @@ export const TASK_ASSISTANT_RESPONSE_FORMAT = {
   }
 };
 
-export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean } {
+export function createTaskChatOpenAiPayload(model: string, messages: TaskChatProviderInput[], maxOutputTokens?: number, options?: { reasoningEffort?: string; allowTools?: boolean; allowWebSearch?: boolean }) {
   const allowTools = options?.allowTools !== false;
   const allowWebSearch = allowTools && options?.allowWebSearch === true;
   return {
