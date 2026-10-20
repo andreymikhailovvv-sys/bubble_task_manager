@@ -41,7 +41,7 @@ test('task report has server authorization, token billing and document attachmen
   assert.match(service, /refundDynamicResponsesCall/);
   assert.match(service, /wordDocumentService\.create/);
   assert.match(service, /generatedDocumentId: document\.id/);
-  assert.match(service, /не выдумывай скрытые рассуждения/);
+  assert.match(service, /не придумывай скрытые рассуждения/);
   assert.match(service, /нет достоверной даты в журнале/);
   assert.match(routes, /post\('\/tasks\/:id\/completion-report', requireAuth/);
   assert.match(schema, /model TaskActivityEvent/);
