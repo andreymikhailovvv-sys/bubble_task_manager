@@ -36,6 +36,7 @@ import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
+import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
@@ -554,9 +555,9 @@ function MiniAiMessageContentWithTaskRefs({ content, tasks, onOpenTask }: { cont
 function renderMiniAiMessageContent(content: string, previews?: AiAttachmentPreview[], messageId?: string) {
   const { text, names } = splitAiMessageAttachments(content);
   return <>
-    {renderAiContentBlocks(normalizeMiniAiMessageContent(text), (part, key) => (
+    <AiReplyMessageBody content={text} renderBody={(body) => renderAiContentBlocks(normalizeMiniAiMessageContent(body), (part, key) => (
       <div key={key}>{renderMiniAiText(part)}</div>
-    ))}
+    ))} />
     <AiMessageAttachments names={names} previews={previews} messageId={messageId} />
   </>;
 }
@@ -769,6 +770,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isTaskAiRecipientPickerVisible, setIsTaskAiRecipientPickerVisible] = useState(false);
   const [isTaskAiRecipientMenuOpen, setIsTaskAiRecipientMenuOpen] = useState(false);
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
+  const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
+  const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
