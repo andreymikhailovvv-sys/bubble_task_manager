@@ -3064,7 +3064,16 @@ ${allContext}`,
         : '';
       const assistantMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeAiMessageContent(result.answer)}${serviceReport}`, createdAt: new Date().toISOString(), creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       if (quick) setAiChatProjects((prev) => prev.map((project, projectIndex) => projectIndex === 0 ? { ...project, chats: project.chats.map((chat) => chat.id === QUICK_AI_CHAT_ID ? { ...chat, messages: [...chat.messages, assistantMessage].slice(-20) } : chat) } : project));
-      else updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      else {
+        updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+        if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
+          const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
+          setAiChatProjects((prev) => prev.map(project => project.id !== projectId ? project : {
+            ...project, chats: project.chats.map(chat => chat.id !== chatId || !/^(Новый чат|Чат \\d+)$/i.test(chat.title)
+              ? chat : { ...chat, title: result.suggestedChatTitle! })
+          }));
+        }
+      }
       if (quick) window.requestAnimationFrame(scrollQuickAiChatToBottom);
       if (result.taskDataChanged) await load();
       await refreshAiCredits();
