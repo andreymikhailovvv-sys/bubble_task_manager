@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createTaskChatOpenAiPayload } from '../src/services/ai-assistant.service.js';
+import { createTaskChatOpenAiPayload, createTaskChatInputTokensPayload } from '../src/services/ai-assistant.service.js';
 import { AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from '../src/services/ai-chat-tools.service.js';
 import { analyzeWebSearchCalls } from '../src/services/dynamic-responses-billing.service.js';
 
@@ -14,6 +14,23 @@ test('task chat exposes one optional web search and never on forced final round'
   assert.equal(ordinary.tools?.some(item => item.type === 'web_search'), false);
   const forced = createTaskChatOpenAiPayload('gpt-5.4-mini', messages, undefined, { allowTools: false, allowWebSearch: true });
   assert.equal('tools' in forced, false);
+});
+
+test('task chat input token preflight strips response-only max_tool_calls while keeping search and all other tools', () => {
+  const payload = createTaskChatOpenAiPayload('gpt-6-luna', [{ role: 'user', content: 'Найди актуальные факты' }], undefined, { allowWebSearch: true });
+  assert.equal(payload.max_tool_calls, 1);
+  const preflight = createTaskChatInputTokensPayload(payload);
+  assert.equal('max_tool_calls' in preflight, false);
+  assert.equal(preflight.model, payload.model);
+  assert.deepEqual(preflight.input, payload.input);
+  assert.deepEqual(preflight.tools, payload.tools);
+  assert.deepEqual(preflight.text, payload.text);
+  assert.equal(preflight.tool_choice, payload.tool_choice);
+  assert.equal(preflight.parallel_tool_calls, payload.parallel_tool_calls);
+  assert.equal(payload.max_tool_calls, 1, 'the actual response request keeps its web search limit');
+
+  const withoutSearch = createTaskChatOpenAiPayload('gpt-6-luna', [{ role: 'user', content: 'Привет' }]);
+  assert.deepEqual(createTaskChatInputTokensPayload(withoutSearch), withoutSearch);
 });
 
 test('one provider search action counts once despite duplicated response items', () => {
