@@ -19,6 +19,7 @@ import { ResizableDescriptionSurface } from './components/ResizableDescriptionSu
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
 import { newestFocusSubtaskFirst, urgentFocusSubtaskFirst } from './lib/focusSubtaskSort';
 import { loadThemePreference, resolveThemeMode, type ThemePreference } from './lib/autoTheme';
+import { browserNotificationPermission, requestBrowserNotificationPermission, showBrowserSystemNotification } from './lib/browser-system-notifications';
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
@@ -784,6 +785,10 @@ function buildTimelineViewData(
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const browserNotificationsEnabledRef = useRef(true);
+  browserNotificationsEnabledRef.current = currentUser?.browserNotificationsEnabled !== false;
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission | 'unsupported'>(() => browserNotificationPermission());
+  const [browserPermissionNudgeDismissed, setBrowserPermissionNudgeDismissed] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [initialWorkspaceReady, setInitialWorkspaceReady] = useState(false);
   const [spheres, setSpheres] = useState<Sphere[]>([]);
@@ -1308,8 +1313,8 @@ export default function App() {
   }
 
   const updateUserSettings = async (
-    payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string },
-    savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime'
+    payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; morningAiCheckupTime?: string; browserNotificationsEnabled?: boolean },
+    savingKey: 'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications'
   ) => {
     setSettingsSavingKey(savingKey);
     setSettingsError(null);
@@ -2776,6 +2781,41 @@ ${allContext}`,
     setIsAiChatOpen(true);
   };
 
+  const requestBrowserNotifications = async () => {
+    // The native permission dialog needs a direct user gesture.
+    const status = await requestBrowserNotificationPermission();
+    setBrowserPermission(status);
+    setBrowserPermissionNudgeDismissed(true);
+    if (currentUser) sessionStorage.setItem('btm:browser-permission-nudge:' + currentUser.id, 'dismissed');
+  };
+
+  useEffect(() => {
+    const update = () => setBrowserPermission(browserNotificationPermission());
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.removeEventListener('focus', update);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setBrowserPermission(browserNotificationPermission());
+    setBrowserPermissionNudgeDismissed(
+      sessionStorage.getItem('btm:browser-permission-nudge:' + currentUser.id) === 'dismissed'
+    );
+  }, [currentUser?.id]);
+
+  const deliverBrowserSystemNotifications = (notifications: SystemNotification[]) => {
+    if (!currentUser?.id || !browserNotificationsEnabledRef.current ||
+        document.visibilityState !== 'hidden') return;
+    for (const notification of notifications) {
+      if (notification.readAt != null) continue;
+      void showBrowserSystemNotification(currentUser.id, notification, () => openSystemNotification(notification));
+    }
+  };
+
   const markSystemNotificationsRead = () => {
     if (unreadSystemNotificationCount === 0) return;
     setUnreadSystemNotificationCount(0);
@@ -2786,11 +2826,13 @@ ${allContext}`,
   const refreshSystemNotifications = async () => {
     try {
       const result = await api.getSystemNotifications();
-      const newestUnseen = [...result.notifications].reverse().find((notification) => !knownSystemNotificationIdsRef.current.has(notification.id));
+      const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+      const newestUnseen = [...newNotifications].reverse()[0];
       result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
       setSystemNotifications(result.notifications);
       setUnreadSystemNotificationCount(result.unreadCount);
-      if (newestUnseen && newestUnseen.readAt == null) setSystemNotificationToast(newestUnseen);
+      deliverBrowserSystemNotifications(newNotifications);
+      if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
       console.error('[System notifications] refresh failed', error);
     }
@@ -2805,15 +2847,20 @@ ${allContext}`,
     if (!currentUser) return;
     let cancelled = false;
     let toastTimer: number | null = null;
+    let baselineLoaded = false;
     const loadNotifications = async () => {
       try {
         const result = await api.getSystemNotifications();
         if (cancelled) return;
-        const newestUnseen = [...result.notifications].reverse().find((notification) => !knownSystemNotificationIdsRef.current.has(notification.id));
+        const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+        const newestUnseen = [...newNotifications].reverse()[0];
         result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
         setSystemNotifications(result.notifications);
         setUnreadSystemNotificationCount(result.unreadCount);
-        if (newestUnseen && newestUnseen.readAt == null) {
+        // The first load is a baseline: never produce a pile of historical OS alerts.
+        if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
+        baselineLoaded = true;
+        if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') {
           setSystemNotificationToast(newestUnseen);
           if (toastTimer !== null) window.clearTimeout(toastTimer);
           toastTimer = window.setTimeout(() => setSystemNotificationToast(null), 5000);
@@ -4993,7 +5040,7 @@ ${allContext}`,
           <div className="relative shrink-0" ref={settingsMenuRef}>
             <button className="surface-popover light-menu-trigger topbar-settings-button inline-flex h-10 w-10 items-center justify-center rounded-xl border transition hover:border-cyan-300/70" onClick={() => setIsSettingsOpen((prev) => !prev)} aria-label="Настройки" title="Настройки"><Settings size={17} /></button>
             {isSettingsOpen ? (
-            <div data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 w-72 rounded-xl border p-3 shadow-2xl backdrop-blur">
+            <div data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0 top-[calc(100%+6px)] z-30 max-h-[calc(100dvh-6rem)] w-72 overflow-y-auto overscroll-contain rounded-xl border p-3 shadow-2xl backdrop-blur">
               <div className="surface-card light-dropdown-panel mb-3 rounded-lg border p-2">
                 <div className="mb-2 text-xs font-medium text-primary">Тема интерфейса</div>
                 <div className="theme-preference-switch grid grid-cols-3 gap-1 rounded-lg surface-muted p-1 text-xs" role="group" aria-label="Тема интерфейса">
@@ -5034,6 +5081,38 @@ ${allContext}`,
               >
                 Сбросить на Москву
               </button>
+
+              <div className="mt-3 border-t border-[color:var(--panel-border)] pt-3" data-tour="browser-notification-settings">
+                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-primary">
+                  <span className="inline-flex items-center gap-1.5 font-semibold"><BellRing size={14} /> Уведомления браузера</span>
+                  <span className="text-[10px] text-subtle">По умолчанию включены</span>
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-subtle">
+                  Дублируют системные уведомления, только когда вкладка Планировыча неактивна. Работают, пока сайт открыт.
+                </p>
+                <CustomSelect
+                  value={currentUser?.browserNotificationsEnabled !== false ? 'enabled' : 'disabled'}
+                  onChange={(value) => {
+                    const enabled = value === 'enabled';
+                    void updateUserSettings({ browserNotificationsEnabled: enabled }, 'browserNotifications');
+                    if (enabled && browserNotificationPermission() === 'default') void requestBrowserNotifications();
+                  }}
+                  options={[{ value: 'enabled', label: 'Включены' }, { value: 'disabled', label: 'Выключены' }]}
+                  disabled={settingsSavingKey === 'browserNotifications'}
+                  ariaLabel="Уведомления браузера"
+                />
+                {currentUser?.browserNotificationsEnabled !== false ? (
+                  <div className="mt-2 text-[11px] text-subtle">
+                    {browserPermission === 'granted' ? '✓ Разрешены в браузере' :
+                      browserPermission === 'denied' ? 'Браузер запретил уведомления. Разрешите их в настройках сайта.' :
+                      browserPermission === 'unsupported' ? 'Браузерные уведомления недоступны здесь (нужен HTTPS и поддержка браузера).' : (
+                        <button type="button" className="surface-muted w-full rounded-lg border border-[color:var(--panel-border)] px-2 py-1.5 text-center font-semibold text-primary hover:brightness-110" onClick={() => { void requestBrowserNotifications(); }}>
+                          Разрешить уведомления в браузере
+                        </button>
+                      )}
+                  </div>
+                ) : null}
+              </div>
 
               <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
@@ -8151,6 +8230,26 @@ ${allContext}`,
           </section>
         </div>
       ) : null}
+
+      {currentUser && currentUser.browserNotificationsEnabled !== false && browserPermission === 'default'
+        && !browserPermissionNudgeDismissed && initialWorkspaceReady ? createPortal((
+        <div className="surface-popover fixed bottom-24 right-6 z-[2147483646] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border border-[color:var(--panel-border)] p-4 text-sm shadow-2xl" role="status">
+          <div className="flex items-start gap-2.5">
+            <BellRing size={19} className="mt-0.5 shrink-0 text-violet-500" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-primary">Уведомления браузера</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted">Разрешите уведомления, чтобы видеть сообщения Планировыча при переключении на другую вкладку.</p>
+            </div>
+            <button type="button" className="rounded-lg p-1 text-muted hover:brightness-125" aria-label="Закрыть предложение включить уведомления" onClick={() => {
+              setBrowserPermissionNudgeDismissed(true);
+              sessionStorage.setItem('btm:browser-permission-nudge:' + currentUser.id, 'dismissed');
+            }}><X size={16} /></button>
+          </div>
+          <button type="button" className="primary-button mt-3 w-full rounded-xl px-3 py-2 text-xs font-semibold" onClick={() => { void requestBrowserNotifications(); }}>
+            Разрешить уведомления
+          </button>
+        </div>
+      ), document.body) : null}
 
       {systemNotificationToast ? createPortal((
         <button key={systemNotificationToast.id} type="button" className="system-notification-toast fixed bottom-8 left-6 z-[2147483647] w-[min(22rem,calc(100vw-3rem))] rounded-2xl border px-4 py-3 text-left text-sm shadow-2xl backdrop-blur" onClick={() => { setSystemNotificationToast(null); openSystemNotification(systemNotificationToast); }}>
