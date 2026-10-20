@@ -50,7 +50,7 @@ function safeResultJson(response: Record<string, unknown>): { summary: string; d
   const output = Array.isArray(response.output) ? response.output : [];
   const text = typeof response.output_text === 'string' ? response.output_text
     : output.flatMap(item => typeof item === 'object' && item !== null && 'content' in item && Array.isArray(item.content)
-      ? item.content.flatMap(part => typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' ? [part.text] : []) : []).join('');
+      ? item.content.flatMap((part: unknown) => typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string' ? [part.text] : []) : []).join('');
   if (!text) throw new Error('Luna 6 не сформировала содержимое отчёта.');
   const data = JSON.parse(text) as Record<string, unknown>;
   if (typeof data.summary !== 'string' || typeof data.result !== 'string'
@@ -122,7 +122,7 @@ export async function generateTaskCompletionReport(input: { userId: string; task
   const actionId = randomUUID();
   const call = await runDynamicResponsesCall({
     userId: input.userId, actionId, providerCallIndex: 1,
-    feature: 'task_chat', apiKey, maxOutputTokensCap: 4096, stream: false,
+    feature: 'ai_chat_planner', apiKey, maxOutputTokensCap: 4096, stream: false,
     payload: {
       model: TASK_REPORT_MODEL,
       input: [
