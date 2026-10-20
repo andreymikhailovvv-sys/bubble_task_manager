@@ -40,8 +40,78 @@
       }
     </script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      // Show before the JS bundle downloads, only for the desktop planner.
+      if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
+        document.documentElement.classList.add('web-workspace-preload');
+      }
+    </script>
+    <style>
+      #workspace-boot-splash { display: none; }
+      .web-workspace-preload #workspace-boot-splash {
+        display: flex; position: fixed; inset: 0; z-index: 2147483000;
+        align-items: center; justify-content: center; overflow: hidden;
+        background: radial-gradient(ellipse at 48% 45%, #172552 0%, #0d1530 44%, #070c1b 100%);
+        color: #edf5ff; font-family: Inter, system-ui, sans-serif;
+        isolation: isolate;
+      }
+      #workspace-boot-splash .boot-core { position: relative; text-align: center; padding: 2.5rem 1.5rem; }
+      #workspace-boot-splash .boot-halo {
+        position: absolute; top: 46%; left: 50%;
+        width: min(62vw, 500px); aspect-ratio: 1; border-radius: 50%;
+        transform: translate(-50%, -50%); pointer-events: none;
+        background: radial-gradient(circle, rgba(109,84,238,.18) 0%, rgba(34,211,238,.08) 28%, transparent 68%);
+        filter: blur(3px);
+        animation: boot-breathe 3s ease-in-out infinite alternate;
+      }
+      #workspace-boot-splash .boot-wordmark {
+        position: relative; margin: 0;
+        font-size: clamp(3.3rem, 7.5vw, 6.4rem); line-height: 1.05;
+        font-weight: 820; letter-spacing: -.06em;
+        background: linear-gradient(108deg, #fff 14%, #a5b4fc 45%, #67e8f9 70%, #fff 95%);
+        background-size: 250% 100%; color: transparent;
+        -webkit-background-clip: text; background-clip: text;
+        animation: boot-shine 3.5s linear infinite;
+      }
+      #workspace-boot-splash .boot-subtitle {
+        position: relative; margin: .9rem 0 0; font-size: .78rem;
+        color: #aab8d7; letter-spacing: .23em; text-transform: uppercase;
+      }
+      #workspace-boot-splash .boot-loader {
+        position: relative; display: flex; width: 180px; height: 4px;
+        margin: 2.3rem auto 0; overflow: hidden; border-radius: 99px;
+        background: rgba(165,180,252,.15);
+      }
+      #workspace-boot-splash .boot-loader::after {
+        content: ''; width: 48%; height: 100%; border-radius: inherit;
+        background: linear-gradient(90deg, #818cf8, #67e8f9);
+        box-shadow: 0 0 18px rgba(103,232,249,.4);
+        animation: boot-progress 1.7s ease-in-out infinite alternate;
+      }
+      #workspace-boot-splash .boot-caption {
+        position: relative; margin: 1rem 0 0; font-size: .8rem; color: #8494bc;
+      }
+      @keyframes boot-shine { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+      @keyframes boot-breathe { from { opacity: .65; scale: .92; } to { opacity: 1; scale: 1.08; } }
+      @keyframes boot-progress { from { transform: translateX(-100%); } to { transform: translateX(310%); } }
+      @media (prefers-reduced-motion: reduce) {
+        #workspace-boot-splash .boot-halo,
+        #workspace-boot-splash .boot-wordmark,
+        #workspace-boot-splash .boot-loader::after { animation: none; }
+        #workspace-boot-splash .boot-loader::after { transform: translateX(60%); }
+      }
+    </style>
   </head>
   <body class="bg-slate-950">
+    <div id="workspace-boot-splash" role="status" aria-label="Загрузка Планировыча">
+      <div class="boot-halo" aria-hidden="true"></div>
+      <div class="boot-core">
+        <h1 class="boot-wordmark">Планировыч</h1>
+        <p class="boot-subtitle">Твой день под контролем</p>
+        <div class="boot-loader" aria-hidden="true"></div>
+        <p class="boot-caption">Подготавливаем рабочее пространство</p>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
