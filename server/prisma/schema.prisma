@@ -428,6 +428,9 @@ model TaskAiMessage {
   role      AiMessageRole
   content   String
   creditsSpentMilli Int?
+  webSearchUsed Boolean     @default(false)
+  webSources Json?
+  webCitations Json?
   messageKind String      @default("AI")
   recipientUserId String?
   telegramSendDraft Json?
