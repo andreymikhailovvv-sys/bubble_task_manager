@@ -772,6 +772,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiDialogByTask, setAiDialogByTask] = useState<Record<string, ChatMessage[]>>({});
   const [replyToTask, setReplyToTask] = useState<AiReplyTarget | null>(null);
   const [replyToGeneral, setReplyToGeneral] = useState<AiReplyTarget | null>(null);
+  useEffect(() => { setReplyToTask(null); }, [openedTaskId]);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
@@ -845,6 +846,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => QUICK_AI_CHAT_ID);
+  useEffect(() => { setReplyToGeneral(null); }, [activeAiChatId]);
   const aiChatDialogContainerRef = useRef<HTMLDivElement | null>(null);
   const generalAiChatScrollTopRef = useRef(0);
   // Auto-scrolling to the newest message must not masquerade as a swipe and
