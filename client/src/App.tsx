@@ -1111,6 +1111,7 @@ export default function App() {
   const aiChatProjectsPollingRef = useRef(false);
   const [activeAiChatProjectId, setActiveAiChatProjectId] = useState(() => aiChatProjects[0]?.id ?? '');
   const [activeAiChatId, setActiveAiChatId] = useState(() => aiChatProjects[0]?.chats[0]?.id ?? QUICK_AI_CHAT_ID);
+  useEffect(() => { setReplyToAiChat(null); setReplyToQuickAi(null); }, [activeAiChatId]);
   const [isAiChatProjectDialogOpen, setIsAiChatProjectDialogOpen] = useState(false);
   const [aiChatProjectDraft, setAiChatProjectDraft] = useState<AiChatProjectDraft>({ mode: 'create', title: '', color: '#8b5cf6', icon: '✨' });
   const [aiChatContextMenu, setAiChatContextMenu] = useState<AiChatContextMenu | null>(null);
