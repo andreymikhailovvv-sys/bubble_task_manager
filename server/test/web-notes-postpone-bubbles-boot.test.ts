@@ -75,6 +75,14 @@ test('загрузочный экран сайта появляется до з�
     readFile(new URL('../../client/src/main.tsx', import.meta.url), 'utf8')
   ]);
   assert.match(html, /workspace-boot-splash/);
+  // The old synchronous Telegram SDK blocked HTML parsing ahead of the splash.
+  // The critical CSS/class activation must not wait for any remote script.
+  assert.match(html, /<script defer src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"><\/script>/);
+  assert.doesNotMatch(html, /<script src="https:\/\/telegram\.org\/js\/telegram-web-app\.js"><\/script>/);
+  assert.ok(html.indexOf("document.documentElement.classList.add('web-workspace-preload')") < html.indexOf('telegram-web-app.js'));
+  assert.ok(html.indexOf('#workspace-boot-splash { display: none; }') < html.indexOf('telegram-web-app.js'));
+  assert.ok(html.indexOf('telegram-web-app.js') < html.indexOf('<div id="workspace-boot-splash"'));
+  assert.ok(html.indexOf('<div id="workspace-boot-splash"') < html.indexOf('<script type="module"'));
   assert.match(html, /Твой день под контролем/);
   assert.match(html, /location\.pathname === '\/' && matchMedia\('\(min-width: 1025px\)'\)/);
   assert.match(html, /prefers-reduced-motion: reduce/);

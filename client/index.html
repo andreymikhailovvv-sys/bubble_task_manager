@@ -39,7 +39,6 @@
         "url": "https://planirovych.ru/"
       }
     </script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       // Show before the JS bundle downloads, only for the desktop planner.
       if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
@@ -47,6 +46,8 @@
       }
     </script>
     <style>
+      /* Inline, render-blocking CSS is intentional: paint the splash before any app bundles. */
+      html.web-workspace-preload, html.web-workspace-preload body { background: #070c1b; }
       #workspace-boot-splash { display: none; }
       .web-workspace-preload #workspace-boot-splash {
         display: flex; position: fixed; inset: 0; z-index: 2147483000;
@@ -101,6 +102,9 @@
         #workspace-boot-splash .boot-loader::after { transform: translateX(60%); }
       }
     </style>
+    <!-- Keep Telegram's bridge available to Mini App, but never let network
+         latency on telegram.org block the HTML parser and first splash paint. -->
+    <script defer src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body class="bg-slate-950">
     <div id="workspace-boot-splash" role="status" aria-label="Загрузка Планировыча">
