@@ -3,6 +3,7 @@ import { deductEfficiencyPenalty } from './efficiency-rating.service.js';
 import { randomUUID } from 'node:crypto';
 import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
+import { getWebSearchProgressStatus, readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
 import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dynamic-responses-billing.service.js';
@@ -38,12 +39,17 @@ import {
 } from './ai-credit-wallet.service.js';
 
 type ChatRole = 'user' | 'assistant';
+export type TaskWebSource = { title: string; url: string };
+export type TaskWebCitation = { startIndex: number; endIndex: number; sourceIndex: number };
 
 export type ChatMessage = {
   id?: string;
   role: ChatRole;
   content: string;
   creditsSpentMilli?: number;
+  webSearchUsed?: boolean;
+  webSources?: TaskWebSource[];
+  webCitations?: TaskWebCitation[];
   generatedDocument?: GeneratedDocumentMeta;
   taskProposal?: TaskProposalView | null;
 };
@@ -1841,6 +1847,9 @@ export const aiAssistantService = {
         role: true,
         content: true,
         creditsSpentMilli: true,
+        webSearchUsed: true,
+        webSources: true,
+        webCitations: true,
         userId: true,
         messageKind: true,
         recipientUserId: true,
@@ -1876,6 +1885,11 @@ export const aiAssistantService = {
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null
         ? { creditsSpentMilli: message.creditsSpentMilli }
         : {}),
+      ...(message.role === 'assistant' && message.webSearchUsed ? {
+        webSearchUsed: true,
+        webSources: Array.isArray(message.webSources) ? message.webSources as TaskWebSource[] : [],
+        webCitations: Array.isArray(message.webCitations) ? message.webCitations as TaskWebCitation[] : []
+      } : {}),
       ...(message.role === 'assistant' && message.generatedDocument
         ? { generatedDocument: message.generatedDocument }
         : {}),
@@ -1929,7 +1943,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
+  appendTaskDialogAssistantMessage: async (input: { userId: string; taskId: string; content: string; creditsSpentMilli: number; webSearchUsed?: boolean; webSources?: TaskWebSource[]; webCitations?: TaskWebCitation[]; generatedDocumentId?: string | null; telegramSendDraft?: TelegramInlineSendDraft | null; telegramReadDraft?: TelegramReadDraft | null; telegramReadOwnerId?: string | null; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
 
@@ -1945,6 +1959,8 @@ export const aiAssistantService = {
         role: 'assistant',
         content,
         creditsSpentMilli: input.creditsSpentMilli,
+        webSearchUsed: input.webSearchUsed ?? false,
+        ...(input.webSearchUsed ? { webSources: input.webSources ?? [], webCitations: input.webCitations ?? [] } : {}),
         generatedDocumentId: input.generatedDocumentId ?? null,
         aiTaskProposalId: input.taskProposalId ?? null,
         ...(input.telegramSendDraft ? { telegramSendDraft: { ...input.telegramSendDraft } } : {}),
@@ -2223,6 +2239,7 @@ export const aiAssistantService = {
     let failedFileEditReason: string | null = null;
     let webSearchUsed = false;
     const webSources = new Map<string, string>();
+    const webCitations: TaskWebCitation[] = [];
     let webReservation: WalletReservation | null = null;
     try {
       webReservation = await reserveAiCreditsMilli(input.userId, WEB_SEARCH_CALL_CREDITS_MILLI);
@@ -2280,7 +2297,7 @@ export const aiAssistantService = {
           const payload = createTaskChatOpenAiPayload(model, providerInput, maxOutputTokens, { reasoningEffort: reasoning, allowTools: !isForcedFinalRound, allowWebSearch });
           console.info('[AI] Sending OpenAI request', { requestId, providerCallIndex, mode: input.mode ?? 'fast', model, taskId: input.taskId, userId: input.userId });
           const openAiResponse = await openAiFetch('https://api.openai.com/v1/responses', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(payload)
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify({ ...payload, stream: true })
           }, { requestId: `${requestId}:response:${providerCallIndex}`, model });
           console.info('[AI] OpenAI response received', { requestId, providerCallIndex, model, status: openAiResponse.status, ok: openAiResponse.ok, latencyMs: Date.now() - startedAt, taskId: input.taskId, userId: input.userId });
           if (!openAiResponse.ok) {
@@ -2288,7 +2305,16 @@ export const aiAssistantService = {
             pendingDynamicReservation = null;
             throw new Error(`OpenAI request failed for model "${model}": ${openAiResponse.status}`);
           }
-          const responseJson = await openAiResponse.json() as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; output?: unknown; [key: string]: unknown };
+          const responseJson = await readOpenAiResponsesStreamWithRecovery(openAiResponse.body, {
+            onEvent: (event) => {
+              const progress = getWebSearchProgressStatus(event.type);
+              if (progress) input.onProgress?.(progress);
+            },
+            retrieveResponse: (responseId) => retrieveOpenAiResponse(responseId, apiKey, requestId + ':task-chat:' + providerCallIndex, model),
+            onRecovery: (stage, detail) => console.warn('[AI task streaming] recovery', {
+              requestId, taskId: input.taskId, model, providerCallIndex, stage, ...detail
+            })
+          }) as { id?: unknown; usage?: import('./ai-usage-metering.service.js').OpenAiUsage; output?: unknown; [key: string]: unknown };
           await recordOpenAiUsageShadow({ userId: input.userId, taskId: input.taskId, actionId: requestId, requestId: `${requestId}:response:${providerCallIndex}`, providerCallIndex, feature: input.billingFeature ?? 'task_chat', model, openAiResponseId: typeof responseJson.id === 'string' ? responseJson.id : null, usage: responseJson.usage, billingMode: dynamicBilling ? 'DYNAMIC' : 'SHADOW' });
           if (dynamicReservation) {
             const usageCost = calculateOpenAiUsageCost(model, responseJson.usage ?? {});
@@ -2312,8 +2338,12 @@ export const aiAssistantService = {
                 try {
                   const url = new URL(annotation.url);
                   if (url.protocol !== 'https:' || url.href.length > 2048) continue;
-                  if (!webSources.has(url.href)) webSources.set(url.href,
-                    typeof annotation.title === 'string' ? annotation.title.slice(0, 160) : url.hostname);
+                  if (!webSources.has(url.href) && webSources.size < 5) webSources.set(url.href,
+                    typeof annotation.title === 'string' && annotation.title.trim() ? annotation.title.slice(0, 160) : url.hostname);
+                  const sourceIndex = [...webSources.keys()].indexOf(url.href);
+                  if (sourceIndex >= 0 && typeof annotation.start_index === 'number' && typeof annotation.end_index === 'number') {
+                    webCitations.push({ startIndex: annotation.start_index, endIndex: annotation.end_index, sourceIndex });
+                  }
                 } catch { /* Ignore malformed untrusted URLs. */ }
               }
             }
@@ -2577,11 +2607,8 @@ export const aiAssistantService = {
               ? 'Изменения автоматически применены. Подробности в карточке.'
               : 'Подготовил изменения. Проверьте карточку ниже и нажмите «Принять», чтобы применить их.')
           : actionAwareAnswer;
-        const sources = [...webSources].slice(0, 5);
-        const answer = webSearchUsed && sources.length
-          ? baseAnswer + '\n\nИсточники:\n' + sources.map(([url, title]) =>
-              '- [' + title.replace(/[\[\]]/g, '') + '](' + url + ')').join('\n')
-          : baseAnswer;
+        const answer = baseAnswer;
+        const sources: TaskWebSource[] = [...webSources].map(([url, title]) => ({ url, title }));
 
         console.info('[AI] Task assistant request completed', {
           requestId,
@@ -2624,7 +2651,7 @@ export const aiAssistantService = {
           webReservation = null;
         }
         console.info('[AI] AI operation completed successfully', { requestId, model, userId: input.userId });
-        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
+        return { model, answer, actionReports, taskProposal, generatedDocument, telegramSendDraft, telegramReadDraft, webSearchUsed, webSources: sources, webCitations, taskDataChanged: appliedActionsCount > 0, billing: { mode: dynamicBilling ? 'dynamic' as const : 'legacy' as const, creditsSpentMilli } };
       } catch (error) {
         if (pendingDynamicReservation) await refundWalletReservation(pendingDynamicReservation).catch(() => undefined);
         await Promise.all(dynamicCalls.map((call) => refundWalletReservation(call.reservation).catch(() => undefined)));
