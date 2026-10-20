@@ -5,7 +5,7 @@ import { FormData } from 'undici';
 import { openAiFetch } from '../lib/openai-fetch.js';
 import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 import { askAiChatWithTools, AI_CHAT_WEB_SEARCH_TOOL, WEB_SEARCH_CALL_CREDITS_MILLI } from './ai-chat-tools.service.js';
-import { analyzeWebSearchCalls } from './dynamic-responses-billing.service.js';
+import { analyzeWebSearchCalls, getOpenAiPreflightErrorDiagnostics } from './dynamic-responses-billing.service.js';
 import { prepareTaskProposal, proposalView, type TaskProposalView } from './ai-task-proposal.service.js';
 import { TELEGRAM_REQUEST_READ_TOOL, prepareTelegramAiReadRequest, type TelegramReadDraft } from './telegram-ai-read-consent.service.js';
 import { TELEGRAM_PREPARE_SEND_TOOL, prepareTelegramInlineSendDraft, type TelegramInlineSendDraft } from './telegram-inline-send-draft.service.js';
@@ -249,6 +249,12 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
+}
+
+/** Responses/input_tokens counts the exact content and tools, but does not accept execution-only max_tool_calls. */
+export function createTaskChatInputTokensPayload(payload: ReturnType<typeof createTaskChatOpenAiPayload>) {
+  const { max_tool_calls: _maxToolCalls, ...inputTokensPayload } = payload;
+  return inputTokensPayload;
 }
 
 type AskTaskAssistantInput = {
@@ -2249,9 +2255,17 @@ export const aiAssistantService = {
           if (dynamicBilling && !input.skipCreditsCharge) {
             const providerRequestId = `${requestId}:tokens:${providerCallIndex}`;
             const preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(preflightPayload)
+              method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: JSON.stringify(createTaskChatInputTokensPayload(preflightPayload))
             }, { requestId: providerRequestId, model });
-            if (!preflight.ok) throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
+            if (!preflight.ok) {
+              let errorBody: unknown = null;
+              try { errorBody = await preflight.json(); } catch { /* Preserve the original provider HTTP status. */ }
+              console.error('[AI task chat] input token preflight failed', {
+                requestId: providerRequestId, model, status: preflight.status,
+                ...getOpenAiPreflightErrorDiagnostics(errorBody)
+              });
+              throw new Error(`AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight failed: ${preflight.status}`);
+            }
             const tokenPayload = await preflight.json() as { input_tokens?: unknown };
             const inputTokens = typeof tokenPayload.input_tokens === 'number' && tokenPayload.input_tokens >= 0 ? Math.floor(tokenPayload.input_tokens) : null;
             if (inputTokens === null) throw new Error('AI_DYNAMIC_PREFLIGHT_FAILED: OpenAI input token preflight returned invalid usage');
