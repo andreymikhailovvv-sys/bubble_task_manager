@@ -5463,6 +5463,7 @@ ${allContext}`,
               </div>
             </div>
             {focusAiError ? <p className="mt-2 text-xs text-rose-500">{focusAiError}</p> : null}
+            {replyToFocusAi ? <AiReplyPreview target={replyToFocusAi} onDismiss={() => setReplyToFocusAi(null)} /> : null}
             {focusAiPendingFiles.length > 0 ? <div className="mt-2 flex flex-wrap gap-1.5">{focusAiPendingFiles.map((file) => <button key={file.name} type="button" className="rounded-full bg-violet-100 px-2 py-1 text-[11px] text-violet-700" onClick={() => removeFocusAiPendingFile(file.name)}>📎 {file.name} ×</button>)}</div> : null}
             <div className="ai-chat-composer mt-3 flex items-center gap-2 rounded-3xl border p-2">
               <AutoGrowingTextarea className="form-field min-h-11 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2 text-sm focus:ring-0" value={focusAiDraft} onChange={(e) => setFocusAiDraft(e.target.value)} onKeyDown={(event) => { if (shouldSendAiMessageOnEnter(event)) { event.preventDefault(); void sendFocusAiQuestion(); } }} placeholder={isFocusTimerRunning ? 'Напишите сообщение…' : 'Запустите таймер, чтобы писать ИИ'} disabled={!isFocusTimerRunning || focusAiLoading} />
