@@ -129,7 +129,8 @@ test('notes announcement remains in the news archive with both accessible theme 
     readFile(new URL('../../client/src/components/UpdatesMenu.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
   ]);
-  assert.match(news, /LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending'/);
+  assert.match(news, /LATEST_NEWS_ID = '2026-10-20-task-completion-word-report'/);
+  assert.ok(news.indexOf('20 октября 2026') < news.indexOf('15 октября 2026'));
   assert.ok(news.indexOf('15 октября 2026') < news.indexOf('14 октября 2026'));
   assert.ok(news.indexOf('14 октября 2026') < news.indexOf('12 октября 2026'));
   assert.ok(news.indexOf('12 октября 2026') < news.indexOf('11 октября 2026'));
