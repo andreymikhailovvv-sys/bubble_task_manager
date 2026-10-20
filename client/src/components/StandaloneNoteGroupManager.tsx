@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Layers3, Pencil, Plus, Trash2, X } from 'lucide-react';
 import type { StandaloneNoteGroup } from '../lib/api';
 
 export const NOTE_GROUP_COLOR_OPTIONS = [
