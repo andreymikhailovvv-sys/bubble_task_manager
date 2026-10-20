@@ -65,7 +65,10 @@ export function parseAiReply(content: string): { reply: AiReplyTarget; text: str
 
 export function AiReplyAction({ message, onReply }: { message: ChatMessage; onReply: (target: AiReplyTarget) => void }) {
   return <button type="button" className="ai-message-reply-trigger" title="Ответить на сообщение ИИ" aria-label="Ответить на сообщение" onClick={() => onReply(makeAiReplyTarget(message))}>
-    <Reply size={18} strokeWidth={1.8} />
+    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="m9 7-5 5 5 5" />
+      <path d="M4 12h9a7 7 0 0 1 7 7v2" />
+    </svg>
   </button>;
 }
 
