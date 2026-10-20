@@ -43,12 +43,12 @@ const safeMime = (mimeType: string) => mimeType.trim().slice(0, 100) || 'applica
 const validId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
 /** Reply metadata is only a hint; database lookups still check owner and thread. */
 export function extractAiReplyFileReferences(question: string): { messageId?: string; documentId?: string; attachmentNames: string[] } {
-  const prefix = '[[PLANNER_AI_REPLY_BEGIN]]\\n';
+  const prefix = '[[PLANNER_AI_REPLY_BEGIN]]\n';
   // Focus-mode messages contain task instructions before the user's quoted reply.
   const start = question.indexOf(prefix);
   if (start < 0) return { attachmentNames: [] };
   const payloadStart = start + prefix.length;
-  const end = question.indexOf('\\n[[PLANNER_AI_REPLY_END]]\\n', payloadStart);
+  const end = question.indexOf('\n[[PLANNER_AI_REPLY_END]]\n', payloadStart);
   if (end < 0 || end - payloadStart > 18000) return { attachmentNames: [] };
   try {
     const data = JSON.parse(question.slice(payloadStart, end)) as Record<string, unknown>;
