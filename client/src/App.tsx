@@ -7389,12 +7389,12 @@ ${allContext}`,
                     onChange={handleTaskAttachmentFileSelect}
                   />
                   {isFocusedSettingsOpen ? (
-                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
                         <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
                       </div>
-                      {focusedSaveError ? <p role="alert" className="rounded-xl border border-rose-400/50 bg-rose-50 px-3 py-2 text-xs text-rose-700">Не удалось сохранить изменения: {focusedSaveError}</p> : null}
+                      {focusedSaveError ? <p role="alert" className="focused-task-settings-error rounded-xl border px-3 py-2 text-xs">Не удалось сохранить изменения: {focusedSaveError}</p> : null}
                   {focusedTask.taskType !== 'EVENT' && focusedTask.taskType !== 'REMINDER' ? (
                     <button type="button" className="surface-muted flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-primary"
                       onClick={() => { setIsFocusedSettingsOpen(false); setReportPromptTask(focusedTask); }}>
@@ -7404,7 +7404,7 @@ ${allContext}`,
                   <div className="task-edit-compact-grid mt-4 grid grid-cols-2 items-end gap-3">
                     <label className="block text-xs font-semibold text-muted">Сектор
                       <div className="focus-sector-dropdown relative mt-1">
-                        <button type="button" className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-600" onClick={() => setIsFocusedSphereDropdownOpen((prev) => !prev)}>
+                        <button type="button" className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full px-3 py-2 text-sm" onClick={() => setIsFocusedSphereDropdownOpen((prev) => !prev)}>
                           {(() => {
                             const selectedSphere = spheres.find((sphere) => sphere.id === focusedDraft.sphereId);
                             return (
@@ -7417,9 +7417,9 @@ ${allContext}`,
                           })()}
                         </button>
                         {isFocusedSphereDropdownOpen ? (
-                          <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border bg-white p-1 shadow-2xl">
+                          <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border p-1 shadow-2xl">
                             {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
-                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-violet-50" onClick={() => {
+                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 focused-task-sector-option rounded-xl px-3 py-2 text-left text-sm" onClick={() => {
                                 const nextSphereId = sphere.id || null;
                                 // Keep the selection in the unsaved draft. Do not
                                 // mutate focusedTask via setTasks until the API
