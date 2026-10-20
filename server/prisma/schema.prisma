@@ -89,6 +89,7 @@ model User {
   aiTaskAutoApply Boolean @default(false)
   aiTaskProposals AiTaskProposal[]
   browserNotificationsEnabled Boolean @default(true)
+  offerTaskCompletionReport Boolean @default(true)
   morningAiCheckupEnabled Boolean @default(false)
   morningAiCheckupTime String @default("10:00")
   lastMorningAiCheckupDate String?
@@ -138,6 +139,7 @@ model User {
   creditPurchases CreditPurchase[]
   collaborativeTaskMembers CollaborativeTaskMember[]
   taskComments TaskComment[] @relation("TaskCommentAuthor")
+  taskActivityEvents TaskActivityEvent[] @relation("TaskActivityActor")
   taskCommentReadStates TaskCommentReadState[]
   generatedDocuments AiGeneratedDocument[]
   standaloneNotes StandaloneNote[]
@@ -319,6 +321,7 @@ model Task {
   collaborationId     String?
   collaboration       CollaborativeTask? @relation(fields: [collaborationId], references: [id], onDelete: SetNull)
   comments            TaskComment[]
+  activityEvents      TaskActivityEvent[]
   commentReadStates   TaskCommentReadState[]
   generatedDocuments  AiGeneratedDocument[]
   aiConversationAttachments AiConversationAttachment[]
@@ -366,6 +369,22 @@ model CollaborativeTaskMember {
 
   @@unique([collaborationId, userId])
   @@index([userId])
+}
+
+// New events are tracked from this migration onward. Older completion dates
+// must not be inferred from updatedAt.
+model TaskActivityEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+  type      String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model TaskComment {
