@@ -2254,7 +2254,7 @@ body[data-theme='dark'] .workspace-global-search-panel {
 .standalone-group-chip-active { background: color-mix(in srgb, var(--note-group-color, var(--accent)) 20%, var(--panel-bg)); }
 .standalone-group-color-dot,
 .standalone-group-swatch { background: var(--note-group-color, var(--accent)); }
-.standalone-group-note-label { border: 1px solid; }
+.standalone-group-note-label { border: 0; box-shadow: none; }
 .standalone-group-picker,
 .standalone-group-manager {
   background: var(--panel-bg);
@@ -2267,13 +2267,15 @@ body[data-theme='dark'] .workspace-global-search-panel {
 .standalone-note-editor-group {
   background: var(--field-bg);
   color: var(--text-primary);
-  border-color: var(--panel-border);
-  transition: background-color .15s ease, border-color .15s ease;
+  border: 0;
+  box-shadow: none;
+  transition: background-color .15s ease;
 }
 .standalone-note-editor-group:hover,
 .standalone-note-editor-group:focus-visible {
   background: var(--muted-bg);
-  border-color: var(--note-group-color, var(--accent));
+  border-color: transparent;
+  box-shadow: none;
   outline: none;
 }
 
