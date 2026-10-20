@@ -159,13 +159,15 @@ export async function generateTaskCompletionReport(input: { userId: string; task
       { type: 'paragraph', text: content.result || 'Итог не подтверждён сохранённой историей.' },
       { type: 'heading', level: 2, text: 'Хронология событий и работы с вложениями' }
     ];
-    const timeline = sortedTaskReportTimeline(items);
+    // Preserve chronological order but stay within the validated Word export limits.
+    const timelineAll = sortedTaskReportTimeline(items);
+    const timeline = timelineAll.slice(-180);
     for (let i = 0; i < timeline.length; i += 15) {
       const slice = timeline.slice(i, i + 15);
       blocks.push({ type: 'bullets', items: slice.map(event =>
-        '[' + date(event.occurredAt, timeZone) + '] ' + event.kind + ': ' + trim(event.text, 550)) });
+        '[' + date(event.occurredAt, timeZone) + '] ' + event.kind + ': ' + trim(event.text, 230)) });
     }
-    blocks.push({ type: 'paragraph', text: 'Примечание. Отчёт сформирован по сохранённым событиям. Даты завершения до внедрения журнала могут отсутствовать. Пропущено записей: ' + omittedEvents + '. Раздел о решениях является резюме видимых сообщений, а не скрытых рассуждений модели.' });
+    blocks.push({ type: 'paragraph', text: 'Примечание. Отчёт сформирован по сохранённым событиям. Даты завершения до внедрения журнала могут отсутствовать. Пропущено записей: ' + (omittedEvents + Math.max(0, timelineAll.length - timeline.length)) + '. Раздел о решениях является резюме видимых сообщений, а не скрытых рассуждений модели.' });
     document = await wordDocumentService.create({
       userId: input.userId, taskId: input.taskId,
       spec: { fileName: 'Отчёт_' + task.title.replace(/[\\/:*?"<>|]/g, '').slice(0, 65) + '.docx', blocks }
