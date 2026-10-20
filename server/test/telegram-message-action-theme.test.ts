@@ -11,7 +11,7 @@ const mini = read('MiniApp.tsx');
 
 test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(action, /className="telegram-quick-share__trigger"/);
-  assert.match(action, /<Send size=\{17\}/);
+  assert.match(action, /<Send size=\{20\}/);
   assert.doesNotMatch(action, /<Forward size=/);
   assert.match(web, /<TelegramMessageQuickShare text=\{/);
   assert.match(mini, /<TelegramMessageQuickShare text=\{/);
@@ -23,19 +23,19 @@ test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(css, /stroke:\s*currentColor\s*!important/);
 });
 
-test('reply and share use equal 17px glyphs, shared stroke and equal button hit areas', () => {
+test('reply and share use equal 20px glyphs, shared stroke and equal button hit areas', () => {
   const reply = read('components/AiMessageReply.tsx');
-  assert.match(action, /<Send size=\{17\} strokeWidth=\{1\.75\}/);
-  assert.match(reply, /<svg width=\{17\} height=\{17\} viewBox="0 0 24 24"/);
+  assert.match(action, /<Send size=\{20\} strokeWidth=\{1\.75\}/);
+  assert.match(reply, /<svg width=\{20\} height=\{20\} viewBox="0 0 24 24"/);
   assert.match(reply, /strokeWidth=\{1\.75\} strokeLinecap="round" strokeLinejoin="round"/);
-  assert.match(reply, /M4 12h9a7 7 0 0 1 7 7v2/);
+  assert.match(reply, /M2 12h9c7 0 11 3 11 10/);
   assert.match(css, /body\[data-theme\] \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   assert.match(css, /\.miniapp-shell \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   const matched = css.match(/\/\* Both action glyphs[\s\S]*?\*\/[\s\S]*?\{([^}]+)\}/)?.[1] ?? '';
-  assert.match(matched, /width:\s*17px !important/);
-  assert.match(matched, /height:\s*17px !important/);
+  assert.match(matched, /width:\s*20px !important/);
+  assert.match(matched, /height:\s*20px !important/);
   assert.match(matched, /stroke-width:\s*1\.75 !important/);
-  assert.doesNotMatch(matched, /19px/);
+  assert.doesNotMatch(matched, /17px/);
   assert.match(css, /\.ai-message-reply-trigger \{[\s\S]*?width: 28px !important;[\s\S]*?height: 25px !important;/);
 });
 

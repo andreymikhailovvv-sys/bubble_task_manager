@@ -64,10 +64,12 @@ export function parseAiReply(content: string): { reply: AiReplyTarget; text: str
 }
 
 export function AiReplyAction({ message, onReply }: { message: ChatMessage; onReply: (target: AiReplyTarget) => void }) {
-  return <button type="button" className="ai-message-reply-trigger" title="Ответить на сообщение ИИ" aria-label="Ответить на сообщение" onClick={() => onReply(makeAiReplyTarget(message))}>
-    <svg width={17} height={17} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d="m9 7-5 5 5 5" />
-      <path d="M4 12h9a7 7 0 0 1 7 7v2" />
+  return <button type="button" className="ai-message-reply-trigger" title="Ответить на сообщение" aria-label="Ответить на сообщение" onClick={() => onReply(makeAiReplyTarget(message))}>
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {/* Use nearly the whole 24px viewBox, matching the Send icon's visible bounds.
+          The older path only occupied y=7..21 and looked much smaller on mobile. */}
+      <path d="m11 2-9 10 9 10" />
+      <path d="M2 12h9c7 0 11 3 11 10" />
     </svg>
   </button>;
 }
