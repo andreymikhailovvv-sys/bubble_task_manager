@@ -7563,6 +7563,30 @@ body[data-theme='dark'] .updates-news-latest {
   border-color: rgba(196,181,253,.28);
 }
 
+/* Task report announcement: clear lavender surfaces and readable text in both themes. */
+.updates-news-report {
+  background: linear-gradient(145deg, #f5f3ff 0%, #eef2ff 54%, #eff6ff 100%);
+  border-color: #c4b5fd;
+}
+.updates-news-report-feature {
+  min-width: 0;
+  background: rgba(255, 255, 255, .88);
+  border: 1px solid #ddd6fe;
+  color: var(--text-primary);
+}
+.updates-news-report-feature svg { color: #6d28d9; }
+.updates-news-report-feature p { color: var(--text-muted); }
+body[data-theme='dark'] .updates-news-report {
+  background: linear-gradient(145deg, rgba(91,33,182,.26), rgba(49,46,129,.22) 54%, rgba(8,47,73,.22));
+  border-color: rgba(196,181,253,.4);
+}
+body[data-theme='dark'] .updates-news-report-feature {
+  background: rgba(15,23,42,.46);
+  border-color: rgba(196,181,253,.25);
+  color: var(--text-primary);
+}
+body[data-theme='dark'] .updates-news-report-feature svg { color: #c4b5fd; }
+
 /* New habit-tracker announcement follows the existing news-card layout,
    with a calm cyan/emerald accent in both themes. */
 /* Telegram sending announcement mirrors the layered news cards and theme tokens. */

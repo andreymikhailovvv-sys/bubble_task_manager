@@ -25,15 +25,20 @@ const color = (declarations: string) => {
   return rgb(hex);
 };
 
-test('Telegram sending is newest, while habit tracker, notes and earlier releases remain visible', async () => {
+test('Word task report is newest, while Telegram sending, habits and earlier releases remain visible', async () => {
   const menu = await readFile(menuPath, 'utf8');
-  assert.match(menu, /LATEST_NEWS_ID = '2026-10-15-telegram-ai-sending'/);
-  const dates = ['15 октября 2026', '14 октября 2026', '12 октября 2026', '11 октября 2026', '8 октября 2026'];
+  assert.match(menu, /LATEST_NEWS_ID = '2026-10-20-task-completion-word-report'/);
+  const dates = ['20 октября 2026', '15 октября 2026', '14 октября 2026', '12 октября 2026', '11 октября 2026', '8 октября 2026'];
   for (const date of dates) assert.ok(menu.includes(date), 'Missing date: ' + date);
   for (let i = 1; i < dates.length; i++) {
     assert.ok(menu.indexOf(dates[i - 1]) < menu.indexOf(dates[i]), 'News not in newest-first order');
   }
   for (const phrase of [
+    'Отчёт по задаче: вся история работы в одном Word-файле',
+    'После завершения задачи',
+    'В любой момент из настроек задачи',
+    'Что попадёт в отчёт',
+    'Подготовить отчёт',
     'Отправляйте сообщения в Telegram прямо из Планировыча',
     'Пересылка в пару нажатий',
     'Попросите ИИ текстом или голосом',
@@ -94,7 +99,8 @@ test('all news badges have accessible light and dark text contrast', async () =>
 
 test('Telegram announcement follows existing themed release card patterns and one-click sending rules', async () => {
   const [menu, css] = await Promise.all([readFile(menuPath, 'utf8'), readFile(cssPath, 'utf8')]);
-  assert.match(menu, /updates-lesson updates-news-latest updates-news-telegram/);
+  assert.match(menu, /updates-lesson updates-news-telegram/);
+  assert.ok(menu.indexOf('updates-news-latest updates-news-report') < menu.indexOf('updates-news-telegram'));
   assert.match(menu, /updates-news-telegram-feature/);
   assert.match(menu, /Обсудили, подготовили, отправили/);
   assert.match(menu, /голосовой ввод устройства/);
@@ -108,4 +114,34 @@ test('Telegram announcement follows existing themed release card patterns and on
     assert.match(rule(css, selector), /background:/);
     assert.match(rule(css, selector), /border-color:|border:/);
   }
+});
+
+test('task report news is consistent with task controls and accessible in both themes', async () => {
+  const [menu, css, web, mini, service] = await Promise.all([
+    readFile(menuPath, 'utf8'),
+    readFile(cssPath, 'utf8'),
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/task-completion-report.service.ts', import.meta.url), 'utf8')
+  ]);
+  assert.ok(menu.indexOf('20 октября 2026') < menu.indexOf('15 октября 2026'));
+  assert.match(menu, /updates-lesson updates-news-latest updates-news-report/);
+  assert.match(menu, /updates-news-report-feature/);
+  assert.match(menu, /updates-news-tag--violet/);
+  for (const phrase of ['Готовый DOCX', 'ИИ-кредиты', 'шестерёнки', 'чате задачи']) {
+    assert.ok(menu.toLowerCase().includes(phrase.toLowerCase()), 'Missing report explanation: ' + phrase);
+  }
+  assert.match(web, /<FileText size=\{15\} \/> Подготовить отчёт/);
+  assert.match(mini, /<FileText size=\{15\} \/> Подготовить отчёт/);
+  assert.match(service, /wordDocumentService\.create/);
+  for (const selector of [
+    '.updates-news-report', '.updates-news-report-feature',
+    "body[data-theme='dark'] .updates-news-report",
+    "body[data-theme='dark'] .updates-news-report-feature"
+  ]) {
+    assert.match(rule(css, selector), /background:/);
+    assert.match(rule(css, selector), /border-color:|border:/);
+  }
+  assert.match(rule(css, '.updates-news-report-feature svg'), /color:/);
+  assert.match(rule(css, "body[data-theme='dark'] .updates-news-report-feature svg"), /color:/);
 });
