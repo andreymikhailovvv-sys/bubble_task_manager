@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { buildBubbles, buildSectorGeometry, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
+import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -300,10 +300,10 @@ export function BubbleField({
 
 
   const getSphereAtClientPoint = (clientX: number, clientY: number, fallbackTask?: Task | null) => {
-    if (fallbackTask?.sphereId) {
-      return spheres.find((sphere) => sphere.id === fallbackTask.sphereId) ?? null;
+    if (fallbackTask) {
+      return fallbackTask.sphereId ? spheres.find((sphere) => sphere.id === fallbackTask.sphereId) ?? null : null;
     }
-    if (mode !== 'sectors' || spheres.length === 0) return spheres[0] ?? null;
+    if (mode !== 'sectors' || bubbleSectors.length === 0) return spheres[0] ?? null;
 
     const svg = svgRef.current;
     if (!svg) return spheres[0] ?? null;
@@ -313,10 +313,10 @@ export function BubbleField({
     const matrix = svg.getScreenCTM();
     if (!matrix) return spheres[0] ?? null;
     const svgPoint = point.matrixTransform(matrix.inverse());
-    if (sectorCount <= 1) return spheres[0] ?? null;
+    if (sectorCount <= 1) return bubbleSectors[0] ?? null;
     const angle = ((Math.atan2((svgPoint.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE, (svgPoint.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const sectorIndex = sectorGeometry.findIndex((geometry) => angle >= geometry.startAngle && angle < geometry.endAngle);
-    return spheres[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
+    return bubbleSectors[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
   };
 
   const showContextMenu = (event: MouseEvent, task: Task | null) => {
@@ -341,7 +341,7 @@ export function BubbleField({
       setContextMenu({
         ...getViewportSafeContextMenuPosition(anchorX, anchorY),
         task: tourContextMenuTask,
-        sphere: spheres.find((sphere) => sphere.id === tourContextMenuTask.sphereId) ?? spheres[0] ?? null
+        sphere: spheres.find((sphere) => sphere.id === tourContextMenuTask.sphereId) ?? null
       });
       setContextPostponeSubmenuOpen(false);
     });
@@ -435,16 +435,16 @@ export function BubbleField({
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
   const visibleHoverSubtasks = hoveredSubtasks.slice(0, 6);
   const hiddenHoverSubtaskCount = Math.max(0, hoveredSubtasks.length - visibleHoverSubtasks.length);
-  const sectorCount = mode === 'sectors' && spheres.length > 1 ? spheres.length : 1;
+  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
+  const sectorCount = Math.max(1, bubbleSectors.length);
   const sectorTaskCounts = useMemo(() => {
     if (sectorCount === 1) return [tasks.length];
     const counts = Array.from({ length: sectorCount }, () => 0);
     tasks.forEach((task) => {
-      const sectorIndex = Math.max(0, spheres.findIndex((sphere) => sphere.id === task.sphereId));
-      counts[sectorIndex] += 1;
+      counts[getBubbleSectorIndex(task, bubbleSectors)] += 1;
     });
     return counts;
-  }, [sectorCount, spheres, tasks]);
+  }, [sectorCount, bubbleSectors, tasks]);
   const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
   const orderedBubbles = visibleBubbles;
@@ -481,7 +481,7 @@ export function BubbleField({
 
   const sectorLabels = useMemo(() => {
     if (sectorCount === 1) return [];
-    return spheres.map((sphere, idx) => {
+    return bubbleSectors.map((sphere, idx) => {
       const angle = sectorGeometry[idx]?.midAngle ?? 0;
       const distance = SIZE * 0.46;
       const point = mapToOval(SIZE / 2 + Math.cos(angle) * distance, SIZE / 2 + Math.sin(angle) * distance);
@@ -491,7 +491,7 @@ export function BubbleField({
         y: point.y,
       };
     });
-  }, [mapToOval, sectorCount, sectorGeometry, spheres]);
+  }, [mapToOval, sectorCount, sectorGeometry, bubbleSectors]);
 
   const cancelHoverExit = () => {
     if (hoverExitTimer.current) {
@@ -895,22 +895,24 @@ export function BubbleField({
           <AnimatePresence>{orderedBubbles.map((bubble) => renderBubble(bubble))}</AnimatePresence>
 
           {sectorLabels.map((item) => {
-            const Icon = resolveSphereIcon(item.sphere.icon);
+            const Icon = item.sphere ? resolveSphereIcon(item.sphere.icon) : null;
             return (
-              <g key={item.sphere.id} transform={`translate(${item.x} ${item.y})`}>
+              <g key={item.sphere?.id ?? 'unassigned-tasks'} transform={`translate(${item.x} ${item.y})`}>
                 <foreignObject x={-88} y={-18} width={176} height={40}>
                   <div className="bubble-sector-label flex w-full items-center justify-center gap-1 rounded border px-2 py-1 text-xs">
-                    <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere)}>
-                      {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
-                      <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
+                    {item.sphere ? (
+                      <button className="inline-flex min-w-0 items-center gap-1" onClick={() => onRenameSphere?.(item.sphere!)}>
+                        {Icon ? <Icon size={14} color={item.sphere.color} /> : null}
+                        <span className="truncate" style={{ color: item.sphere.color }}>{item.sphere.name}</span>
                       </button>
+                    ) : <span className="truncate text-muted">Без сектора</span>}
                   </div>
                 </foreignObject>
-                <foreignObject x={-12} y={20} width={24} height={24}>
-                  <button data-tour="sphere-add" className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-primary" onClick={() => onAddTaskToSphere?.(item.sphere)}>
+                {item.sphere ? <foreignObject x={-12} y={20} width={24} height={24}>
+                  <button data-tour="sphere-add" className="flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-primary" onClick={() => onAddTaskToSphere?.(item.sphere!)}>
                     <Plus size={14} />
                   </button>
-                </foreignObject>
+                </foreignObject> : null}
               </g>
             );
           })}
