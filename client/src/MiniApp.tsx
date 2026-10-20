@@ -2839,9 +2839,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiChatError(cause instanceof Error ? cause.message : 'Не удалось прочитать приложенные файлы');
       return;
     }
-    const userMessageContent = fileNames.length > 0
+    const userMessageContent = serializeAiReply(fileNames.length > 0
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : question;
+      : question, replyToGeneral);
     const attachmentPreviews = await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userMessageContent, attachmentPreviews };
     const history = activeAiChat?.messages ?? [];
@@ -2857,7 +2857,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setAiChatPendingFiles([]); // Attachment bytes are already prepared.
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToGeneral),
         history,
         model: selectedAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
@@ -2873,6 +2873,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
        }
        const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      setReplyToGeneral(null);
       if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
         const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
         setAiChatProjects((prev) => prev.map(project => project.id !== projectId ? project : {
@@ -3332,12 +3333,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return;
     }
     const baseDialog = aiDialogByTask[openedTask.id] ?? [];
-    const userMessage = fileNames.length > 0
+    const userMessage = serializeAiReply(fileNames.length > 0
       ? `${question || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : question;
+      : question, replyToTask);
     const clientRequestId = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(aiPendingFiles);
-    const nextDialog: ChatMessage[] = [...baseDialog, { role: 'user', content: userMessage, attachmentPreviews, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
+    const nextDialog: ChatMessage[] = [...baseDialog, { id: clientRequestId, role: 'user', content: userMessage, attachmentPreviews, ...(openedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: openedTask.collaborationColor } : {}) }];
     setAiDialogByTask((prev) => ({ ...prev, [openedTask.id]: nextDialog }));
     taskAiDraftValueRef.current = '';
     taskAiComposerRef.current?.clearDraft();
@@ -3346,7 +3347,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const result = await api.askTaskAssistantStreaming(openedTask.id, {
         clientRequestId,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToTask),
         userMessage,
         mode: selectedAiChatModel === 'gpt-6.1-sol' ? 'smart' : 'fast',
         model: selectedAiChatModel,
@@ -3360,6 +3361,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         ...prev,
         [openedTask.id]: [...(prev[openedTask.id] ?? nextDialog), { role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
+      setReplyToTask(null);
       refreshAiCredits();
       if (result.taskDataChanged) await loadData({ refreshPlannerOnly: true });
     } catch (e) {
