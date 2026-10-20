@@ -2870,6 +2870,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
        }
        const assistantMessage: MiniAiChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: `${normalizeMiniAiMessageContent(result.answer)}${(result.actionReports?.length ?? 0) > 0 ? `\n\nИзменения:\n- ${result.actionReports!.join('\n- ')}` : ''}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined };
       updateActiveAiChatMessages((messages) => [...messages, assistantMessage]);
+      if (history.length === 0 && result.suggestedChatTitle && activeAiChatProject?.id && activeAiChat?.id) {
+        const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
+        setAiChatProjects((prev) => prev.map(project => project.id !== projectId ? project : {
+          ...project, chats: project.chats.map(chat => chat.id !== chatId || !/^(Новый чат|Чат \\d+)$/i.test(chat.title)
+            ? chat : { ...chat, title: result.suggestedChatTitle! })
+        }));
+      }
        window.requestAnimationFrame(() => {
          const scroll = aiChatDialogContainerRef.current;
          if (scroll) scroll.scrollTop = scroll.scrollHeight;
