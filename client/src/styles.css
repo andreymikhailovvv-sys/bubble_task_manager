@@ -9553,3 +9553,67 @@ body[data-theme='light'] .task-ai-chat-empty {
   border-color: rgba(203, 213, 225, 0.82);
   background: rgba(255, 255, 255, 0.66);
 }
+
+/* Focused task settings: opaque, readable in both application themes. */
+.focused-task-settings-panel {
+  background: #fff !important;
+  border-color: #d7ddea !important;
+  color: #172033 !important;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, .20);
+}
+.focused-task-settings-panel .focused-task-sector-button,
+.focused-task-settings-panel .focused-task-pill-select {
+  background: #f3f6fb !important;
+  color: #223047 !important;
+  border-color: #d8e1ed !important;
+}
+.focused-task-settings-panel .focused-task-sector-option {
+  color: #263449 !important;
+}
+.focused-task-settings-panel .focused-task-sector-option:hover {
+  background: #ede9fe !important;
+}
+.focused-task-settings-panel .focused-task-settings-error {
+  color: #be123c !important;
+  border-color: #fda4af !important;
+  background: #fff1f2 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel {
+  background: #101b2d !important;
+  color: #eaf0fa !important;
+  border-color: #33455d !important;
+  box-shadow: 0 24px 62px rgba(0, 0, 0, .55);
+}
+body[data-theme='dark'] .focused-task-settings-panel .text-primary,
+body[data-theme='dark'] .focused-task-settings-panel .text-muted,
+body[data-theme='dark'] .focused-task-settings-panel h4,
+body[data-theme='dark'] .focused-task-settings-panel label,
+body[data-theme='dark'] .focused-task-settings-panel p {
+  color: #e2e8f0 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel .focused-task-sector-button,
+body[data-theme='dark'] .focused-task-settings-panel .focused-task-pill-select,
+body[data-theme='dark'] .focused-task-settings-panel .surface-muted {
+  color: #e2e8f0 !important;
+  background: #24344b !important;
+  border-color: #41516c !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel .focused-task-sector-option {
+  color: #e2e8f0 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel .focused-task-sector-option:hover {
+  background: #344667 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel .focused-task-settings-error {
+  color: #fecdd3 !important;
+  background: #4c1626 !important;
+  border-color: #9f1239 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel textarea {
+  background: #1d2c41 !important;
+  color: #f1f5f9 !important;
+  border-color: #455875 !important;
+}
+body[data-theme='dark'] .focused-task-settings-panel input[type='checkbox'] {
+  color-scheme: dark;
+}
