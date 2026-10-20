@@ -25,7 +25,7 @@ export function makeAiReplyTarget(message: ChatMessage): AiReplyTarget {
     // are also present in the saved message text.
     fileNames: message.attachmentPreviews?.length
       ? message.attachmentPreviews.map(item => item.name).filter(Boolean)
-      : (message.content.match(/(?:^|\\n)📎 Файлы: ([^\\n]+)/)?.[1] ?? '').split(', ').filter(Boolean),
+      : (message.content.match(/(?:^|\n)📎 Файлы: ([^\n]+)/)?.[1] ?? '').split(', ').filter(Boolean),
     ...(message.generatedDocument?.id ? { generatedDocumentId: message.generatedDocument.id } : {})
   };
 }
