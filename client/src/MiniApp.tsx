@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { ArrowUpRight, Bot, CalendarDays, CalendarPlus, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Coins, Copy, Eye, EyeOff, FileText, Gauge, List, Loader2, Maximize2, Menu, MessageCircle, Minus, Palette, Paperclip, Plus, Save, Search, SendHorizontal, Settings, Sparkles, StickyNote, Ticket, Trash2, X } from 'lucide-react';
 import { INSUFFICIENT_AI_CREDITS_MESSAGE, formatAiRequestError, api, stripAiChatProjectDisplayPreviews, type CreditPack, type CreditUsageStatistics, type CurrentUser, type TaskAiProgressStatus, type AiChatProgressStatus, type StandaloneNote } from './lib/api';
 import { NotesEditor } from './components/NotesEditor';
+import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
@@ -677,6 +678,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   });
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
   const [areHabitsExpanded, setAreHabitsExpanded] = useState(false);
   const [timelineNow, setTimelineNow] = useState(() => new Date());
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(() => new Date());
@@ -1778,6 +1780,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         }
       }
       await loadData();
+      if (completed && !completed.parentTaskId && completed.taskType !== 'EVENT' && completed.taskType !== 'REMINDER'
+        && !completed.isRecurring && currentUser?.offerTaskCompletionReport !== false) {
+        setReportPromptTask(completed);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить задачу');
     } finally {
@@ -3456,6 +3462,18 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
+      {reportPromptTask ? (
+        <TaskCompletionReportDialog
+          taskId={reportPromptTask.id}
+          taskTitle={reportPromptTask.title}
+          onClose={() => setReportPromptTask(null)}
+          onNeverShow={async () => {
+            const { user } = await api.updateUserSettings({ offerTaskCompletionReport: false });
+            setCurrentUser(user);
+          }}
+          onGenerated={() => void loadData()}
+        />
+      ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
@@ -3565,6 +3583,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       ))}
                     </div>
                     <p className="text-[11px] leading-snug text-slate-400">Авто: тёмная с 20:00 до 05:00 ({userTimeZone}).</p>
+                  </div>
+                  <div className="mt-3 border-t border-slate-700 pt-3">
+                    <p className="mb-2 text-xs font-semibold text-primary">Предлагать отчёт после выполнения задачи</p>
+                    <CustomSelect
+                      value={currentUser?.offerTaskCompletionReport !== false ? 'enabled' : 'disabled'}
+                      onChange={(value) => void api.updateUserSettings({ offerTaskCompletionReport: value === 'enabled' })
+                        .then(({ user }) => setCurrentUser(user)).catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
+                      options={[{ value: 'enabled', label: 'Включено' }, { value: 'disabled', label: 'Выключено' }]}
+                      ariaLabel="Предлагать отчёт после выполнения"
+                      detachedPopup
+                    />
                   </div>
                   {isWebRuntime ? (
                     <div className="mt-3 border-t border-slate-700 pt-3">
@@ -4040,6 +4069,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       <X size={14} />
                     </button>
                   </div>
+                  {openedTask.taskType !== 'EVENT' && openedTask.taskType !== 'REMINDER' ? (
+                    <button type="button" className="miniapp-focus-primary-button flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm"
+                      onClick={() => { setIsTaskSettingsOpen(false); setReportPromptTask(openedTask); }}>
+                      <FileText size={15} /> Подготовить отчёт
+                    </button>
+                  ) : null}
                   <div className="task-edit-compact-grid grid grid-cols-2 gap-2">
                     <label className="min-w-0 text-xs font-semibold text-slate-500">
                       <span className="mb-1 block">Сектор</span>
