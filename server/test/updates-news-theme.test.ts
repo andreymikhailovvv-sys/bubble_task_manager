@@ -99,7 +99,8 @@ test('all news badges have accessible light and dark text contrast', async () =>
 
 test('Telegram announcement follows existing themed release card patterns and one-click sending rules', async () => {
   const [menu, css] = await Promise.all([readFile(menuPath, 'utf8'), readFile(cssPath, 'utf8')]);
-  assert.match(menu, /updates-lesson updates-news-latest updates-news-telegram/);
+  assert.match(menu, /updates-lesson updates-news-telegram/);
+  assert.ok(menu.indexOf('updates-news-latest updates-news-report') < menu.indexOf('updates-news-telegram'));
   assert.match(menu, /updates-news-telegram-feature/);
   assert.match(menu, /Обсудили, подготовили, отправили/);
   assert.match(menu, /голосовой ввод устройства/);
