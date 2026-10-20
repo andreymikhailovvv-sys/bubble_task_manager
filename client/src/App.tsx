@@ -39,6 +39,7 @@ import { AI_TOUR_STEPS, FEATURE_TOUR_STEPS, TASK_TOUR_STEPS, WORKSPACE_TOUR_STEP
 import { useCreditPurchase } from './lib/useCreditPurchase';
 import { ExpandedAiChat } from './components/ExpandedAiChat';
 import { TelegramMessageQuickShare } from './components/TelegramMessageQuickShare';
+import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, type AiReplyTarget } from './components/AiMessageReply';
 import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu';
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
@@ -590,11 +591,10 @@ const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs(
 
 function renderAiMessageContent(content: string, previews?: AiAttachmentPreview[], messageId?: string): ReactNode {
   const { text, names } = splitAiMessageAttachments(content);
-  const normalizedContent = normalizeAiMessageContent(text);
   return <>
-    {renderAiContentBlocks(normalizedContent, (part, key) => (
+    <AiReplyMessageBody content={text} renderBody={(body) => renderAiContentBlocks(normalizeAiMessageContent(body), (part, key) => (
       <div key={key} className="whitespace-pre-wrap">{renderInlineAiMarkup(part)}</div>
-    ))}
+    ))} />
     <AiMessageAttachments names={names} previews={previews} messageId={messageId} />
   </>;
 }
@@ -1048,6 +1048,10 @@ export default function App() {
   const [focusedAiSearchQuery, setFocusedAiSearchQuery] = useState('');
   const [isFocusedAiSearchOpen, setIsFocusedAiSearchOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState('');
+  const [replyToAiTask, setReplyToAiTask] = useState<AiReplyTarget | null>(null);
+  const [replyToFocusAi, setReplyToFocusAi] = useState<AiReplyTarget | null>(null);
+  const [replyToAiChat, setReplyToAiChat] = useState<AiReplyTarget | null>(null);
+  const [replyToQuickAi, setReplyToQuickAi] = useState<AiReplyTarget | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoadingTaskId, setAiLoadingTaskId] = useState<string | null>(null);
   const [aiProgressByTask, setAiProgressByTask] = useState<Record<string, TaskAiProgressStatus>>({});
@@ -2293,9 +2297,9 @@ export default function App() {
     const taskId = focusedTask.id;
     const previousDialog = aiDialogByTask[taskId] ?? [];
     const baseUserContent = options?.userContentOverride?.trim() || question;
-    const userContent = fileNames.length > 0
+    const userContent = serializeAiReply(fileNames.length > 0
       ? `${baseUserContent || 'Пользователь отправил сообщение с вложением.'}\n\n📎 Файлы: ${fileNames.join(', ')}`
-      : baseUserContent;
+      : baseUserContent, options?.questionOverride ? null : replyToAiTask);
     const clientRequestId = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(aiPendingFiles);
     const nextDialog = [...previousDialog, { id: clientRequestId, role: 'user' as const, content: userContent, attachmentPreviews, ...(focusedTask.isCollaborative ? { authorName: currentUser?.name || currentUser?.username || 'Вы', authorColor: focusedTask.collaborationColor } : {}) }];
@@ -2310,7 +2314,7 @@ export default function App() {
     try {
       const result = await askTaskAssistant(taskId, {
         clientRequestId,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', options?.questionOverride ? null : replyToAiTask),
         userMessage: userContent,
         model: options?.modelOverride ?? focusedAiModel,
         attachments: attachmentsPayload
@@ -2322,6 +2326,7 @@ export default function App() {
         ...prev,
         [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
+      setReplyToAiTask(null);
       try {
         await load();
       } catch (loadError) {
@@ -2670,9 +2675,7 @@ export default function App() {
 
     const fileNames = focusAiPendingFiles.map((file) => file.name);
     const visibleUserContent = options?.userContentOverride?.trim() || question || 'Сообщение с вложением';
-    const userContent = fileNames.length > 0 ? `${visibleUserContent}
-
-📎 Файлы: ${fileNames.join(', ')}` : visibleUserContent;
+    const userContent = serializeAiReply(fileNames.length > 0 ? `${visibleUserContent}\n\n📎 Файлы: ${fileNames.join(', ')}` : visibleUserContent, options?.questionOverride ? null : replyToFocusAi);
     const allContext = focusTasks.map(buildFocusTaskContext).join('\n\n---\n\n');
     const contextualQuestion = [
       'Ты работаешь в режиме концентрации. Помогай только по выбранным задачам и учитывай, какая задача выбрана сейчас.',
@@ -2682,7 +2685,7 @@ export default function App() {
       `Текущая выбранная задача: [${currentTask.id}] ${currentTask.title}`,
       `Контекст всех задач:
 ${allContext}`,
-      `Запрос пользователя: ${question || visibleUserContent}`
+      `Запрос пользователя: ${serializeAiReply(question || visibleUserContent, options?.questionOverride ? null : replyToFocusAi)}`
     ].join('\n\n');
     const clientRequestId = crypto.randomUUID();
     const attachmentPreviews = await makeAiAttachmentPreviews(focusAiPendingFiles);
@@ -2697,6 +2700,7 @@ ${allContext}`,
     try {
       const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
       setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
+      setReplyToFocusAi(null);
       await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
@@ -3020,7 +3024,8 @@ ${allContext}`,
     const question = (quick ? quickAiChatDraft : expandedDraft).trim();
     if ((!question && (quick || aiChatPendingFiles.length === 0)) || aiChatLoading) return;
     const fileNames = quick ? [] : aiChatPendingFiles.map((file) => file.name);
-    const userContent = fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question;
+    const replyTarget = quick ? replyToQuickAi : replyToAiChat;
+    const userContent = serializeAiReply(fileNames.length ? `${question || 'Сообщение с вложением'}\n\n📎 Файлы: ${fileNames.join(', ')}` : question, replyTarget);
     const attachmentPreviews = quick ? [] : await makeAiAttachmentPreviews(aiChatPendingFiles);
     const userMessage: AiChatMessage = { id: crypto.randomUUID(), role: 'user', content: userContent, createdAt: new Date().toISOString(), attachmentPreviews };
     const history = quick ? quickAiChatMessages : (activeAiChat?.messages ?? []);
@@ -3043,7 +3048,7 @@ ${allContext}`,
       setAiChatProgress('analyzing_request');
       const result = await api.askAiChatStreaming({
         clientRequestId: userMessage.id,
-        question: question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.',
+        question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyTarget),
         history,
         model: quick ? 'gpt-6-luna' : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : selectedAiChatModel,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
@@ -3074,6 +3079,8 @@ ${allContext}`,
           }));
         }
       }
+      if (quick) setReplyToQuickAi(null);
+      else setReplyToAiChat(null);
       if (quick) window.requestAnimationFrame(scrollQuickAiChatToBottom);
       if (result.taskDataChanged) await load();
       await refreshAiCredits();
