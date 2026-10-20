@@ -45,6 +45,7 @@ import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
 import { WebCitations } from './components/WebCitations';
+import { AiInlineMarkup } from './components/AiInlineMarkup';
 import { CollapsibleUserMessage } from './components/CollapsibleUserMessage';
 import { CreditUsageStats } from './components/CreditUsageStats';
 import { AiGeneratedDocumentButton } from './components/AiGeneratedDocumentButton';
@@ -202,7 +203,6 @@ const TIMEZONE_OPTIONS = [
   'Asia/Almaty',
   'Asia/Tokyo'
 ] as const;
-const BOLD_MARKUP_PATTERN = /(\*\*[\s\S]+?\*\*)/g;
 const OVERDUE_CHECK_INTERVAL_MS = 30_000;
 const OVERDUE_NUDGE_RETRY_INTERVAL_MS = 60_000;
 const MAX_SHINE_WINDOW_MINUTES = 180;
@@ -509,13 +509,7 @@ function normalizeAiMessageContent(content: string): string {
 }
 
 function renderInlineAiMarkup(content: string): ReactNode {
-  return content.split(BOLD_MARKUP_PATTERN).map((part, index) => {
-    if (!part) return null;
-    const isBoldMarkup = part.startsWith('**') && part.endsWith('**') && part.length > 4;
-    if (!isBoldMarkup) return <span key={`plain-${index}`}>{part}</span>;
-    const boldText = part.slice(2, -2);
-    return <strong key={`bold-${index}`} className="ai-inline-strong">{boldText}</strong>;
-  });
+  return <AiInlineMarkup content={content} strongClassName="ai-inline-strong" />;
 }
 
 const AiMessageContentWithTaskRefs = memo(function AiMessageContentWithTaskRefs({
@@ -2323,7 +2317,7 @@ export default function App() {
         : '';
       setAiDialogByTask((prev) => ({
         ...prev,
-        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
+        [taskId]: [...(prev[taskId] ?? nextDialog), { id: crypto.randomUUID(), role: 'assistant', content: `${result.answer}${actionSummary}`, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]
       }));
       try {
         await load();
@@ -2699,7 +2693,7 @@ ${allContext}`,
     setFocusSessionAiRequestCount((count) => count + 1);
     try {
       const result = await askTaskAssistant(currentTask.id, { clientRequestId, question: contextualQuestion, userMessage: userContent, model: focusAiModel, attachments: attachmentsPayload, skipEfficiencyBonus: true }, setFocusAiProgress, setFocusAiUploadProgress);
-      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
+      setFocusAiMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: result.answer, creditsSpentMilli: result.billing?.creditsSpentMilli, webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations, generatedDocument: result.generatedDocument ?? undefined, telegramSendDraft: result.telegramSendDraft ?? undefined, taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined }]);
       await refreshAiCredits();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Не удалось получить ответ ИИ';
@@ -3293,6 +3287,7 @@ ${allContext}`,
       const response: TaskAiMessage = {
         id: crypto.randomUUID(), role: 'assistant', content: result.answer,
         creditsSpentMilli: result.billing?.creditsSpentMilli,
+        webSearchUsed: result.webSearchUsed, webSources: result.webSources, webCitations: result.webCitations,
         generatedDocument: result.generatedDocument ?? undefined,
         telegramSendDraft: result.telegramSendDraft ?? undefined,
         taskProposal: result.taskProposal ?? undefined, telegramReadDraft: result.telegramReadDraft ?? undefined
@@ -5372,7 +5367,7 @@ ${allContext}`,
               <div className="relative mt-3 min-h-0 flex-1">
                 <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
                 <div ref={focusAiDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-3 pt-12">
-                  {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                  {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[92%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div></div>)}
                   {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
@@ -5401,7 +5396,7 @@ ${allContext}`,
             <div className="relative min-h-0 flex-1">
               <AiModelChip value={focusAiModel} onChange={setFocusAiModel} ariaLabel="Выбрать модель ИИ для режима концентрации" className="absolute left-1/2 top-px z-20 -translate-x-1/2" />
               <div ref={focusAiExpandedDialogContainerRef} className="chat-thread h-full min-h-0 space-y-3 overflow-y-auto rounded-2xl border p-4 pt-12">
-                {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                {focusAiMessages.map((message) => <div key={message.id} className={`ai-message-forward-group w-fit max-w-[82%] ${message.role === 'assistant' ? 'mr-auto' : 'ml-auto'}`}><div className={`chat-message w-full rounded-2xl p-3 text-sm ${message.role === 'assistant' ? 'chat-message-assistant' : 'chat-message-user'}`}><div className="mb-1 flex items-center justify-between"><p className="text-[11px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focus-expanded-${message.id}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focus-expanded-${message.id}` ? <Check size={12} /> : <Copy size={12} />}</button> : null}</div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsFocusAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}{message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}{message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusActiveTask!.id, true)} /> : null}
                     </div><div className="ai-message-forward-actions"><TelegramMessageQuickShare text={message.content} compact /></div></div>)}
                 {focusAiLoading && focusAiProgress ? <TaskAiProgress status={focusAiProgress} /> : null}
@@ -7050,7 +7045,7 @@ ${allContext}`,
                   >
                     <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-[11px] font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                    {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                    {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[10px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                     {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
                                       </div>
@@ -7882,7 +7877,7 @@ ${allContext}`,
                 >
                   <div className="mb-1 flex items-center justify-between"><p className="chat-message-label text-xs font-semibold uppercase tracking-wide">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => copyAiMessage(`focused-expanded-${index}`, message.content)} className="chat-message-copy transition" title="Копировать">{copiedAiMessageKey === `focused-expanded-${index}` ? <Check size={12} className="text-muted" /> : <Copy size={12} />}</button> : null}</div>
                   <div>{message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={(task) => { setIsAiExpanded(false); openTaskReferenceFromAi(task); }} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                  {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}{message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} /> : null}
                     {message.role === 'assistant' && message.creditsSpentMilli != null && message.creditsSpentMilli > 0 ? <div className="mt-2 text-[11px] text-muted opacity-75">{formatCreditsSpent(message.creditsSpentMilli)}</div> : null}
                     {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} onApplied={() => void load()} /> : null}{message.role === 'assistant' && message.telegramSendDraft ? <TelegramInlineSendCard draft={message.telegramSendDraft} /> : null}{message.role === 'assistant' && message.telegramReadDraft ? <TelegramReadConsentCard draft={message.telegramReadDraft} onContinue={(approval) => continueTelegramReadTask(approval, focusedTask!.id)} /> : null}
                                     </div>
