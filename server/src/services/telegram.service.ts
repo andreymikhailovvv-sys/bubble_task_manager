@@ -1783,25 +1783,29 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
   }
 
   if (action === 'done') {
-    await prisma.$transaction(async (tx) => {
+    const completed = await prisma.$transaction(async (tx) => {
       const parentTask = await tx.task.findFirst({
         where: { id: resolvedTaskId, userId },
         select: { id: true, parentTaskId: true }
       });
-      if (!parentTask) return;
+      if (!parentTask) return null;
 
       await tx.task.update({
         where: { id: parentTask.id },
         data: { status: 'DONE', telegramNotifiedAt: null }
       });
 
+      let childCount = 0;
       if (!parentTask.parentTaskId) {
-        await tx.task.updateMany({
+        const result = await tx.task.updateMany({
           where: { parentTaskId: parentTask.id, userId, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
         });
+        childCount = result.count;
       }
+      return { taskId: parentTask.id, childCount };
     });
+    if (completed) console.info('[Task] status mutation', { source: 'telegram:callback', userId, taskId: completed.taskId, afterStatus: 'DONE', childrenCompleted: completed.childCount });
     await answerCallback(callback.id, 'Задача закрыта');
     await editMessage(chatId, messageId, '✅ <b>Задача выполнена и закрыта.</b> Отличная работа!');
     return;
@@ -1831,6 +1835,7 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId },
       data: { status: 'DONE', telegramNotifiedAt: null }
     });
+    if (updated.count) console.info('[Task] status mutation', { source: 'telegram:callback', userId, taskId: resolvedTaskId, parentTaskId: subtask.parentTaskId, afterStatus: 'DONE' });
     await answerCallback(callback.id, updated.count ? 'Подзадача закрыта' : 'Подзадача не найдена');
     await editMessage(
       chatId,
