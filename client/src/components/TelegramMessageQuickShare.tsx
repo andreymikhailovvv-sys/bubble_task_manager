@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './TelegramMessageQuickShare.css';
-import { Check, ChevronRight, Send, Loader2, MessageCircle, Search, Sparkles, X } from 'lucide-react';
+import { Check, ChevronRight, Loader2, Search, Sparkles, StickyNote, X } from 'lucide-react';
+import { MessageActionArrow, TelegramPlaneIcon } from './MessageActionIcons';
+import { escapeNoteText } from '../lib/notes';
 import { api, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
 
 const SAVED_MESSAGES_ID = 'saved';
-type Mode = 'recipients' | 'edit' | 'preview';
+type Mode = 'recipients' | 'note' | 'edit' | 'preview';
+type Destination = 'telegram' | 'notes';
+const defaultNoteTitle = (text: string) => {
+  const line = text.split(/\r?\n/).map((part) => part.trim()).find(Boolean) ?? '';
+  return line ? `Из чата: ${line.slice(0, 140)}`.slice(0, 160) : 'Из чата с ИИ';
+};
 type Props = { text: string; compact?: boolean };
 
 export function TelegramMessageQuickShare({ text }: Props) {
@@ -26,6 +33,8 @@ export function TelegramMessageQuickShare({ text }: Props) {
     };
   }, [menuOpen]);
   const [mode, setMode] = useState<Mode>('recipients');
+  const [destination, setDestination] = useState<Destination>('telegram');
+  const [noteTitle, setNoteTitle] = useState(() => defaultNoteTitle(text));
   const [busy, setBusy] = useState(false);
   const [dialogs, setDialogs] = useState<TelegramSendTarget[]>([]);
   const [dialogsLoaded, setDialogsLoaded] = useState(false);
@@ -74,6 +83,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
   const show = async () => {
     if (busy || open) return;
     setOpen(true);
+    setDestination('telegram');
     setMode('recipients');
     setError('');
     setSearch('');
@@ -103,6 +113,41 @@ export function TelegramMessageQuickShare({ text }: Props) {
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось получить список чатов Telegram');
     } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+
+  const showNotes = () => {
+    if (busy || open) return;
+    setDestination('notes');
+    setMode('note');
+    setOpen(true);
+    setError('');
+    setBaseText(text);
+    setNoteTitle(defaultNoteTitle(text));
+    setInstruction('');
+    setModifiedText('');
+  };
+
+  const saveNote = async (value: string) => {
+    if (submittingRef.current || !value.trim()) return;
+    submittingRef.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      // StandaloneNotesWorkspace is a rich-text editor; escape quoted chat text
+      // before preserving its line breaks, rather than interpreting it as HTML.
+      const content = escapeNoteText(value).replace(/\r\n?|\n/g, '<br>');
+      if (content.length > 120000) throw new Error('Текст слишком длинный для заметки');
+      await api.createStandaloneNote({ title: noteTitle.trim() || 'Из чата с ИИ', content });
+      if (!alive.current) return;
+      window.dispatchEvent(new Event('standalone-notes-updated'));
+      setToast('Сообщение сохранено в заметках.');
+      setOpen(false);
+    } catch (cause) {
+      if (alive.current) setError(cause instanceof Error ? cause.message : 'Не удалось сохранить заметку');
+    } finally {
+      submittingRef.current = false;
       if (alive.current) setBusy(false);
     }
   };
@@ -150,11 +195,13 @@ export function TelegramMessageQuickShare({ text }: Props) {
   };
 
   const acceptRewrite = async () => {
-    if (busy || !instruction.trim()) return;
+    if (busy || !instruction.trim() || !baseText.trim() || baseText.length > 4000) return;
     setBusy(true);
     setError('');
     try {
-      const result = await api.telegramQuickRewrite({ text: baseText, instruction });
+      const result = destination === 'notes'
+        ? await api.rewriteTextForNote({ text: baseText, instruction })
+        : await api.telegramQuickRewrite({ text: baseText, instruction });
       if (!alive.current) return;
       setModifiedText(result.text);
       setMode('preview');
@@ -166,16 +213,47 @@ export function TelegramMessageQuickShare({ text }: Props) {
   const modal = open ? (
     <div className="telegram-quick-share fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm"
       onClick={(e) => { e.stopPropagation(); close(); }}>
-      <section role="dialog" aria-modal="true" aria-label="Отправить сообщение в Telegram"
+      <section role="dialog" aria-modal="true" aria-label={destination === "notes" ? "Сохранить сообщение в заметки" : "Отправить сообщение в Telegram"}
         className="telegram-quick-share__dialog flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl"
         onClick={(e) => e.stopPropagation()}>
         <header className="telegram-quick-share__header flex shrink-0 items-center justify-between border-b px-4 py-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageCircle size={18} className="text-sky-400" /> Отправить в Telegram</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            {destination === 'notes' ? <><StickyNote size={18} className="text-violet-400" /> Сохранить в заметки</> : <><TelegramPlaneIcon size={18} /> Отправить в Telegram</>}
+          </h3>
           <button type="button" aria-label="Закрыть" disabled={busy}
             onClick={close} className="telegram-quick-share__close rounded-xl p-2 disabled:opacity-40"><X size={17} /></button>
         </header>
         <div className="min-h-0 space-y-4 overflow-y-auto p-4">
-          {mode === 'recipients' ? (
+          {mode === 'note' ? (
+            <>
+              <label className="block text-sm font-medium">
+                Название заметки
+                <input type="text" maxLength={160} value={noteTitle}
+                  onChange={(event) => setNoteTitle(event.target.value)}
+                  className="telegram-quick-share__textarea mt-2 block w-full rounded-xl border p-3 text-sm"
+                  aria-label="Название заметки" />
+              </label>
+              <label className="block text-sm font-medium">
+                Текст заметки
+                <textarea value={baseText} rows={7}
+                  onChange={(event) => setBaseText(event.target.value)}
+                  className="telegram-quick-share__textarea mt-2 block max-h-64 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm"
+                  aria-label="Текст заметки" />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={busy || !baseText.trim()}
+                  onClick={() => void saveNote(baseText)}
+                  className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
+                  Сохранить
+                </button>
+                <button type="button" disabled={busy || !baseText.trim()}
+                  onClick={() => { setMode('edit'); setError(''); }}
+                  className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                  Изменить через ИИ
+                </button>
+              </div>
+            </>
+          ) : mode === 'recipients' ? (
             <>
               <p tabIndex={0} aria-label="Исходное сообщение" className="telegram-quick-share__message max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-xs">
                 {text}
@@ -234,59 +312,80 @@ export function TelegramMessageQuickShare({ text }: Props) {
             </>
           ) : mode === 'edit' ? (
             <>
-              <p className="telegram-quick-share__muted text-xs">Получатели: {selectedNames.join(', ')}</p>
+              <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
               <label className="block text-sm font-medium">
-                Текст сообщения
-                <textarea value={baseText} maxLength={4000} rows={5}
+                {destination === 'notes' ? 'Текст заметки' : 'Текст сообщения'}
+                <textarea value={baseText} maxLength={destination === 'notes' ? undefined : 4000} rows={5}
                   onChange={(e) => setBaseText(e.target.value)}
-                  aria-label="Редактировать текст сообщения"
+                  aria-label={destination === 'notes' ? 'Редактировать текст заметки' : 'Редактировать текст сообщения'}
                   className="telegram-quick-share__textarea mt-2 block max-h-40 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm" />
               </label>
               <label className="block text-sm font-medium">
-                Что нужно изменить в сообщении?
+                {destination === 'notes' ? 'Что нужно изменить в заметке?' : 'Что нужно изменить в сообщении?'}
                 <textarea value={instruction} maxLength={700} rows={4}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="Например: сделай формальнее и короче"
                   className="telegram-quick-share__textarea mt-2 block w-full resize-y rounded-xl border p-3 text-sm" />
               </label>
-              <div className="flex flex-wrap gap-2">
-                <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
-                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()}
-                    onClick={() => void submit(baseText, 'REWRITE_AND_SEND', instruction)}
-                    className="telegram-quick-share__primary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
-                    Изменить и отправить
+              {destination === 'notes' ? (
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={busy || !baseText.trim()} onClick={() => void saveNote(baseText)}
+                    className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
+                    Сохранить без ИИ
                   </button>
-                  <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--start">
-                    ИИ изменит текст по запросу и сразу отправит выбранным получателям.
-                  </span>
-                </div>
-                <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
-                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()} onClick={() => void acceptRewrite()}
-                    className="telegram-quick-share__secondary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
-                    {busy ? 'Обрабатываем…' : 'Изменить'}
+                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim() || baseText.length > 4000}
+                    onClick={() => void acceptRewrite()}
+                    className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                    {busy ? 'Изменяем…' : 'Изменить через ИИ'}
                   </button>
-                  <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--end">
-                    ИИ изменит текст и покажет результат перед отправкой.
-                  </span>
+                  {baseText.length > 4000 ? <p className="telegram-quick-share__muted w-full text-xs">ИИ может изменить до 4000 символов. Сократите текст для ИИ или сохраните его без изменений.</p> : null}
                 </div>
-              </div>
-              <button type="button" disabled={busy} onClick={() => { setMode('recipients'); setError(''); }}
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
+                    <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()}
+                      onClick={() => void submit(baseText, 'REWRITE_AND_SEND', instruction)}
+                      className="telegram-quick-share__primary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
+                      Изменить и отправить
+                    </button>
+                    <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--start">
+                      ИИ изменит текст по запросу и сразу отправит выбранным получателям.
+                    </span>
+                  </div>
+                  <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
+                    <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()} onClick={() => void acceptRewrite()}
+                      className="telegram-quick-share__secondary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
+                      {busy ? 'Обрабатываем…' : 'Изменить'}
+                    </button>
+                    <span role="tooltip" className="telegram-quick-share__tooltip telegram-quick-share__tooltip--end">
+                      ИИ изменит текст и покажет результат перед отправкой.
+                    </span>
+                  </div>
+                </div>
+              )}
+              <button type="button" disabled={busy} onClick={() => { setMode(destination === 'notes' ? 'note' : 'recipients'); setError(''); }}
                 className="telegram-quick-share__back inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-40">Назад</button>
             </>
           ) : (
             <>
               <p className="telegram-quick-share__subtitle flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} /> Изменённое сообщение</p>
-              <p className="telegram-quick-share__muted text-xs">Получатели: {selectedNames.join(', ')}</p>
-              <div className="telegram-quick-share__message max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-sm">{modifiedText}</div>
+              <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
+              {destination === 'notes' ? (
+                <textarea value={modifiedText} rows={7} onChange={(event) => setModifiedText(event.target.value)}
+                  className="telegram-quick-share__textarea block max-h-72 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm"
+                  aria-label="Предпросмотр и правка текста заметки" />
+              ) : (
+                <div className="telegram-quick-share__message max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-sm">{modifiedText}</div>
+              )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy} onClick={() => void submit(modifiedText, 'DIRECT')}
-                  className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">Отправить пользователю</button>
+                <button type="button" disabled={busy || (destination === 'notes' && !modifiedText.trim())} onClick={() => destination === 'notes' ? void saveNote(modifiedText) : void submit(modifiedText, 'DIRECT')}
+                  className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">{destination === 'notes' ? 'Сохранить в заметки' : 'Отправить пользователю'}</button>
                 <button type="button" disabled={busy} onClick={() => { setBaseText(modifiedText); setInstruction(''); setMode('edit'); }}
                   className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">Изменить</button>
               </div>
             </>
           )}
-          {busy && <p role="status" className="telegram-quick-share__subtitle flex items-center gap-2 text-xs"><Loader2 className="animate-spin" size={15} /> {mode === 'recipients' && !dialogsLoaded ? 'Загружаем чаты' : mode === 'preview' ? 'Отправляем сообщение…' : mode === 'edit' ? 'Изменяем сообщение…' : 'Отправляем сообщение…'}</p>}
+          {busy && <p role="status" className="telegram-quick-share__subtitle flex items-center gap-2 text-xs"><Loader2 className="animate-spin" size={15} /> {destination === 'notes' ? (mode === 'edit' ? 'Изменяем текст…' : 'Сохраняем заметку…') : mode === 'recipients' && !dialogsLoaded ? 'Загружаем чаты' : mode === 'edit' ? 'Изменяем сообщение…' : 'Отправляем сообщение…'}</p>}
           {error && <p role="alert" className="telegram-quick-share__error rounded-xl border p-3 text-xs">{error}</p>}
         </div>
       </section>
@@ -301,14 +400,20 @@ export function TelegramMessageQuickShare({ text }: Props) {
           aria-expanded={menuOpen} aria-haspopup="menu"
           className="telegram-quick-share__trigger"
           data-message-forward-trigger="true">
-          <Send size={17} strokeWidth={1.3} aria-hidden="true" />
+          <MessageActionArrow direction="forward" />
         </button>
         {menuOpen ? <div role="menu" className="telegram-quick-share__platform-menu">
           <div className="telegram-quick-share__menu-caption">Переслать в</div>
           <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); void show(); }}
             className="telegram-quick-share__platform-item">
-            <MessageCircle size={16} className="text-sky-400" />
+            <TelegramPlaneIcon size={17} />
             <span>Telegram</span>
+            <ChevronRight size={15} className="opacity-55" />
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); showNotes(); }}
+            className="telegram-quick-share__platform-item">
+            <StickyNote size={17} className="text-violet-400" />
+            <span>Заметки</span>
             <ChevronRight size={15} className="opacity-55" />
           </button>
         </div> : null}
@@ -317,11 +422,11 @@ export function TelegramMessageQuickShare({ text }: Props) {
       {toast && !open ? createPortal(
         <div role="status" className="telegram-quick-share telegram-quick-share__toast fixed bottom-5 right-4 z-[310] max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-2xl">
           <div className="flex items-start gap-2">
-            <MessageCircle className="mt-0.5 shrink-0 text-sky-400" size={17} />
+            {toast.startsWith('Telegram:') || toast.startsWith('Сообщение принято') || toast.startsWith('Запрос будет') ? <TelegramPlaneIcon size={17} /> : <StickyNote className="mt-0.5 shrink-0 text-violet-400" size={17} />}
             <span className="flex-1">{toast}</span>
             <button type="button" onClick={() => setToast('')} aria-label="Скрыть уведомление"><X size={15} /></button>
           </div>
-          {job && (job.state === 'QUEUED' || job.state === 'PROCESSING') && (
+          {toast.startsWith('Telegram:') && job && (job.state === 'QUEUED' || job.state === 'PROCESSING') && (
             <p className="mt-2 text-xs text-slate-400">Отправка выполняется в фоне. Закрытие окна её не отменит.</p>
           )}
         </div>, document.body

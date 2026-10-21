@@ -11,7 +11,7 @@ const mini = read('MiniApp.tsx');
 
 test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(action, /className="telegram-quick-share__trigger"/);
-  assert.match(action, /<Send size=\{17\}/);
+  assert.match(action, /<MessageActionArrow direction="forward"/);
   assert.doesNotMatch(action, /<Forward size=/);
   assert.match(web, /<TelegramMessageQuickShare text=\{/);
   assert.match(mini, /<TelegramMessageQuickShare text=\{/);
@@ -25,10 +25,13 @@ test('one neutral forwarding action is shared by website and Mini App', () => {
 
 test('reply and share use equal 17px glyphs, thinner stroke and unchanged button hit areas', () => {
   const reply = read('components/AiMessageReply.tsx');
-  assert.match(action, /<Send size=\{17\} strokeWidth=\{1\.3\}/);
-  assert.match(reply, /<svg width=\{17\} height=\{17\} viewBox="0 0 24 24"/);
-  assert.match(reply, /strokeWidth=\{1\.3\} strokeLinecap="round" strokeLinejoin="round"/);
-  assert.match(reply, /M2 12h9c7 0 11 3 11 10/);
+  const icons = read('components/MessageActionIcons.tsx');
+  assert.match(action, /<MessageActionArrow direction="forward"/);
+  assert.match(reply, /<MessageActionArrow direction="reply"/);
+  assert.match(icons, /<svg width=\{17\} height=\{17\} viewBox="0 0 24 24"/);
+  assert.match(icons, /strokeWidth=\{1\.3\} strokeLinecap="round" strokeLinejoin="round"/);
+  assert.match(icons, /direction === 'forward' \? <path/);
+  assert.match(icons, /translate\(24 0\) scale\(-1 1\)/);
   assert.match(css, /body\[data-theme\] \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   assert.match(css, /\.miniapp-shell \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   const matched = css.match(/\/\* Both action glyphs[\s\S]*?\*\/[\s\S]*?\{([^}]+)\}/)?.[1] ?? '';

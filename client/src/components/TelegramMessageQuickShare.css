@@ -338,7 +338,7 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
 }
 
 /* Both actions form a compact, neutral group at the bottom right.
-   Reply immediately precedes the paper-plane Telegram share icon. */
+   Matching reply / double-forward arrows use the same viewBox and dimensions. */
 .ai-message-forward-actions {
   justify-content: flex-end;
   gap: 7px;
@@ -346,12 +346,6 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
 .ai-message-forward-actions > .telegram-quick-share__menu-anchor,
 .ai-message-forward-actions > .ai-message-reply-trigger {
   flex: 0 0 28px;
-}
-/* The reply arrow is optically centred a little to the right of its
-   hit area; leave both 28x25px click targets and Send alignment intact. */
-body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg,
-.miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
-  transform: translateX(2px) !important;
 }
 .ai-message-reply-trigger {
   display: grid !important;

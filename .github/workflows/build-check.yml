@@ -49,6 +49,8 @@ jobs:
         run: node --import tsx --test server/test/telegram-ai-inline-send.test.ts
       - name: Verify shared Telegram icon styling and legacy panel cleanup
         run: node --import tsx --test server/test/telegram-message-action-theme.test.ts
+      - name: Verify chat forwarding to standalone notes and AI text rewrite
+        run: node --import tsx --test server/test/chat-message-note-forward.test.ts
       - name: Verify Telegram integration guide, quick-share icon and release announcement
         run: node --import tsx --test server/test/telegram-integration-release-ui.test.ts
       - name: Verify integrations popover and modal remain above workspace
