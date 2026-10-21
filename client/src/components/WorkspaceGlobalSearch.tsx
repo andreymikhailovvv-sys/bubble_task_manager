@@ -14,6 +14,8 @@ type Props = {
   onOpenTask: (task: Task) => void;
   onOpenSubtask: (subtask: Task) => void;
   onOpenNote: (id: string) => void;
+  mobile?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 const sections: Array<{kind:WorkspaceSearchKind; label:string}> = [
   {kind:'task',label:'Задачи'},
@@ -22,7 +24,8 @@ const sections: Array<{kind:WorkspaceSearchKind; label:string}> = [
 ];
 
 export function WorkspaceGlobalSearch({
-  userId, value, onChange, tasks, subtasks, onOpenTask, onOpenSubtask, onOpenNote
+  userId, value, onChange, tasks, subtasks, onOpenTask, onOpenSubtask, onOpenNote,
+  mobile = false, onOpenChange
 }: Props) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -34,6 +37,8 @@ export function WorkspaceGlobalSearch({
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [position, setPosition] = useState<CSSProperties>({ top: 0, left: 0, width: 450 });
   const hasQuery = Boolean(value.trim());
+
+  useEffect(() => { onOpenChange?.(open && hasQuery); }, [onOpenChange, open, hasQuery]);
 
   useEffect(() => {
     if (!open || !hasQuery || !userId) return;
@@ -59,6 +64,21 @@ export function WorkspaceGlobalSearch({
     const update = () => {
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
+      if (mobile) {
+        // The Telegram WebView and mobile browser keyboard both shrink the
+        // visual viewport, even when innerHeight does not change.
+        const viewport = window.visualViewport;
+        const visibleTop = viewport?.offsetTop ?? 0;
+        const visibleBottom = visibleTop + (viewport?.height ?? window.innerHeight);
+        const width = Math.max(160, Math.min(window.innerWidth - 16, 620));
+        const top = rect.bottom + 6;
+        const room = visibleBottom - top - 8;
+        setPosition({
+          position: 'fixed', left: Math.max(8, (window.innerWidth - width) / 2),
+          top, bottom: undefined, width, maxHeight: Math.max(80, Math.min(480, room))
+        });
+        return;
+      }
       const width = Math.min(Math.max(rect.width, 340), window.innerWidth - 24, 620);
       const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
       const below = window.innerHeight - rect.bottom - 12;
@@ -73,11 +93,19 @@ export function WorkspaceGlobalSearch({
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
+    if (mobile) {
+      window.visualViewport?.addEventListener('resize', update);
+      window.visualViewport?.addEventListener('scroll', update);
+    }
     return () => {
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
+      if (mobile) {
+        window.visualViewport?.removeEventListener('resize', update);
+        window.visualViewport?.removeEventListener('scroll', update);
+      }
     };
-  }, [open, hasQuery]);
+  }, [open, hasQuery, mobile]);
 
   useEffect(() => {
     if (!open) return;
@@ -125,8 +153,8 @@ export function WorkspaceGlobalSearch({
 
   let runningIndex = -1;
   return (
-    <div className="workspace-global-search-anchor relative min-w-52 flex-1" ref={anchorRef}>
-      <div className="workspace-global-search-field surface-input light-search-input flex w-full items-center rounded-xl border">
+    <div className={'workspace-global-search-anchor relative flex-1 ' + (mobile ? 'min-w-0' : 'min-w-52')} ref={anchorRef}>
+      <div className={'workspace-global-search-field surface-input light-search-input flex w-full items-center border ' + (mobile ? 'miniapp-global-search-field rounded-lg' : 'rounded-xl')}>
         <Search size={17} className="ml-3 shrink-0 text-muted" aria-hidden="true"/>
         <input
           type="search"
@@ -135,7 +163,7 @@ export function WorkspaceGlobalSearch({
           aria-controls="workspace-global-search-results"
           aria-autocomplete="list"
           role="combobox"
-          className="w-full min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-primary outline-none"
+          className={'w-full min-w-0 flex-1 bg-transparent px-2 py-2 text-primary outline-none ' + (mobile ? 'text-base' : 'text-sm')}
           placeholder="Поиск в Планировыче"
           value={value}
           onChange={event => { onChange(event.target.value); setOpen(Boolean(event.target.value.trim())); }}
@@ -145,7 +173,7 @@ export function WorkspaceGlobalSearch({
         {hasQuery ? <button type="button" className="workspace-global-search-clear mr-2 rounded-lg p-1 text-muted" onClick={() => { onChange(''); setOpen(false); }} title="Очистить поиск" aria-label="Очистить поиск"><X size={15}/></button> : null}
       </div>
       {open && hasQuery ? createPortal(
-        <section id="workspace-global-search-results" className="workspace-global-search-panel z-[220] flex flex-col overflow-hidden rounded-2xl border shadow-2xl" style={position}
+        <section id="workspace-global-search-results" className={'workspace-global-search-panel z-[220] flex flex-col overflow-hidden rounded-2xl border shadow-2xl ' + (mobile ? 'workspace-global-search-panel-mobile' : '')} style={position}
           ref={panelRef} role="listbox" aria-label="Результаты общего поиска">
           <div className="workspace-global-search-panel-header flex items-center justify-between gap-2 border-b px-4 py-3">
             <span className="text-xs font-bold uppercase tracking-[0.09em] text-muted">Найдено в Планировыче</span>
@@ -186,7 +214,7 @@ export function WorkspaceGlobalSearch({
             {notesError ? <p className="workspace-global-search-error rounded-xl px-3 py-2 text-xs" role="status">Заметки не удалось загрузить. Поиск по задачам доступен.</p> : null}
           </div>
           <div className="workspace-global-search-footer border-t px-3 py-2 text-[11px] text-muted">
-            ↑ ↓ выбор · Enter открыть · Esc закрыть
+            {mobile ? 'Нажмите на результат, чтобы открыть его' : '↑ ↓ выбор · Enter открыть · Esc закрыть'}
           </div>
         </section>, document.body) : null}
     </div>
