@@ -9,6 +9,7 @@ import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
+import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
@@ -669,10 +670,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [sphereFilter, setSphereFilter] = useState<string>('all');
   const [taskSearch, setTaskSearch] = useState('');
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('list');
   const [listSortMode, setListSortMode] = useState<ListSortMode>('urgency');
   const [listSelectedSphereIds, setListSelectedSphereIds] = useState<string[] | null>(null);
   const [isStandaloneNotesOpen, setIsStandaloneNotesOpen] = useState(false);
+  const [requestedStandaloneNote, setRequestedStandaloneNote] = useState<{ id: string; serial: number } | null>(null);
   const [miniThemeMode, setMiniThemeMode] = useState<ThemePreference>(() => {
     return loadThemePreference(localStorage, 'btm:miniapp-theme-mode');
   });
@@ -1299,6 +1302,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       return text.includes(query);
     });
   }, [sphereFilter, taskSearch, tasks, timeFilter]);
+
+  const globalSearchSubtasks = useMemo(() => tasks.filter((task) => Boolean(task.parentTaskId)), [tasks]);
 
   const subtasksByParent = useMemo(() => {
     const map: Record<string, Task[]> = {};
@@ -3473,6 +3478,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         setIsSettingsOpen(false);
         setIsCreditPurchaseOpen(false);
         const nextTop = event.currentTarget.scrollTop;
+        if (isGlobalSearchOpen) {
+          setIsHeaderVisible(true);
+          lastMainScrollTopRef.current = nextTop;
+          return;
+        }
         const prevTop = lastMainScrollTopRef.current;
         if (nextTop <= 8) setIsHeaderVisible(true);
         else if (nextTop > prevTop + 6) setIsHeaderVisible(false);
@@ -3596,15 +3606,21 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       <div className="mx-auto max-w-2xl space-y-4">
         <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-600 bg-slate-800 px-3 py-2">
-            <Search size={14} className="text-slate-400" />
-            <input
+            <WorkspaceGlobalSearch
+              mobile
+              userId={currentUser?.id ?? ''}
               value={taskSearch}
-              onChange={(event) => setTaskSearch(event.target.value)}
-              placeholder="Поиск по задачам"
-              className="miniapp-search-input w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              onChange={(value) => { setTaskSearch(value); setIsHeaderVisible(true); }}
+              onOpenChange={(open) => { setIsGlobalSearchOpen(open); if (open) setIsHeaderVisible(true); }}
+              tasks={tasks}
+              subtasks={globalSearchSubtasks}
+              onOpenTask={openTaskModal}
+              onOpenSubtask={openSubtaskModal}
+              onOpenNote={(id) => {
+                setRequestedStandaloneNote({ id, serial: Date.now() });
+                setIsStandaloneNotesOpen(true);
+              }}
             />
-            </div>
             <div className="relative inline-flex shrink-0 items-center gap-1">
               <button type="button" onClick={() => { if (currentUser?.isGuest && isWebRuntime) { setIsCreditPurchaseOpen(false); openAuthModal('register'); } else { setCreditPopoverView('purchase'); setIsCreditPurchaseOpen((open) => !open); } }} className="miniapp-credit-badge inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold" title={currentUser?.isGuest ? 'Зарегистрируйтесь, чтобы получить 100 ИИ-кредитов' : 'Купить AI-кредиты'} aria-label={`AI-кредиты: ${aiCredits}`} aria-expanded={isCreditPurchaseOpen}>
                 <Coins size={15} />
@@ -3780,7 +3796,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onToggleSphere={toggleListSphereSelection}
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
-              onNotesOpen={() => setIsStandaloneNotesOpen(true)}
+              onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
             />
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
@@ -3906,7 +3922,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               onToggleSphere={toggleListSphereSelection}
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
-              onNotesOpen={() => setIsStandaloneNotesOpen(true)}
+              onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
             />
             {timelineView === 'day' ? <div className="relative overflow-x-hidden">
               <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
@@ -5267,7 +5283,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
       {isStandaloneNotesOpen && currentUser ? (
         <StandaloneNotesWorkspace key={currentUser.id} userId={currentUser.id}
-          mode="mobile" onClose={() => setIsStandaloneNotesOpen(false)} />
+          requestedNote={requestedStandaloneNote}
+          mode="mobile" onClose={() => { setIsStandaloneNotesOpen(false); setRequestedStandaloneNote(null); }} />
       ) : null}
 
       {isWebRuntime && authModalMode ? (
