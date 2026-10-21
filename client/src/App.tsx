@@ -62,7 +62,7 @@ const MAX_SPHERES = 8;
 const FOCUSED_TASK_EDIT_KEYS = [
   'title', 'description', 'sphereId', 'dueDate', 'notifyBeforeMinutes',
   'isRecurring', 'recurrenceText', 'recurrenceJson', 'recurrenceSummary',
-  'recurrenceUntil', 'importance', 'urgency', 'status', 'aiNotificationsEnabled'
+  'recurrenceUntil', 'importance', 'urgency', 'aiNotificationsEnabled'
 ] as const satisfies readonly (keyof Task)[];
 
 const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotificationsEnabled: boolean) => ({
@@ -78,7 +78,6 @@ const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotifications
   recurrenceUntil: task.recurrenceUntil ?? null,
   importance: task.importance ?? 3,
   urgency: task.urgency ?? 3,
-  status: task.status ?? 'TODO',
   aiNotificationsEnabled: task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled
 });
 

@@ -3838,6 +3838,7 @@ export async function applyLegacyGeneralProposalActions(input: {
             where: { id: task.id },
             data: { status: 'DONE' }
           });
+          if (task.status !== 'DONE') console.info('[Task] status mutation', { source: 'ai:general', userId: input.userId, taskId: task.id, beforeStatus: task.status, afterStatus: 'DONE' });
           actionReports.push(`Отметил задачу "${task.title}" выполненной.`);
           appliedActionsCount += 1;
           continue;
@@ -3848,6 +3849,7 @@ export async function applyLegacyGeneralProposalActions(input: {
             where: { id: task.id },
             data: { status: 'TODO' }
           });
+          if (task.status !== 'TODO') console.info('[Task] status mutation', { source: 'ai:general', userId: input.userId, taskId: task.id, beforeStatus: task.status, afterStatus: 'TODO' });
           actionReports.push(`Вернул задачу "${task.title}" в активные.`);
           appliedActionsCount += 1;
           continue;
