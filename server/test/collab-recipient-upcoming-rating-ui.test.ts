@@ -53,8 +53,12 @@ test('скругления виджета, поля поиска и фон ба�
     readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx', import.meta.url), 'utf8')
   ]);
-  assert.match(web, /workspace-side-rail[^\n]*pb-3 pl-5 pr-3 pt-3/);
-  assert.doesNotMatch(web, /workspace-side-rail[^\n]*pr-0/);
+  assert.match(web, /workspace-side-rail[^\n]*pb-3 pl-5 pr-0 pt-0/);
+  assert.doesNotMatch(web, /workspace-side-rail[^\n]*pr-3 pt-3/);
+  // Sidebar cards share their top and right edges with the visible workspace,
+  // rather than the padded grey rail underneath them.
+  assert.match(web, /workspace-side-rail absolute right-0 top-0/);
+  assert.match(web, /<section className="workspace-widget-card rounded-\[1\.35rem\] border p-4">\s*<div className="mb-3 flex items-center justify-between gap-2">\s*<h3[^>]*>Ближайшие подзадачи<\/h3>/);
   assert.match(styles, /\.bubble-field-stage \{\s*background: transparent;/);
   assert.match(styles, /\.bubble-field-container \{[\s\S]*?background: var\(--bubble-field-bg\), var\(--canvas-bg\);/);
   assert.match(styles, /\.workspace-widget-card \{\s*overflow: hidden;/);
