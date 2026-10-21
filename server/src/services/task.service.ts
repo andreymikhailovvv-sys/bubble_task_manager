@@ -512,6 +512,11 @@ export const taskService = {
           where: { parentTaskId: id, status: { not: 'DONE' } },
           data: { status: 'DONE', telegramNotifiedAt: null }
         });
+        if (autoCompleted.length) console.info('[Task] children completed with parent', {
+          source: context.source ?? 'internal', requestId: context.requestId ?? null,
+          userId, parentTaskId: id, count: autoCompleted.length,
+          childTaskIds: autoCompleted.map((subtask) => subtask.id)
+        });
         if (autoCompleted.length) await tx.taskActivityEvent.createMany({
           data: autoCompleted.map(subtask => ({
             taskId: subtask.id, actorId: userId, type: 'status_changed',
