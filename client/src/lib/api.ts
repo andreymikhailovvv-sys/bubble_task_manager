@@ -496,6 +496,8 @@ export const api = {
   deleteStandaloneNoteGroup: (id: string) =>
     request<{ ok: true }>(`/api/note-groups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getStandaloneNotes: () => request<StandaloneNote[]>('/api/notes'),
+  rewriteTextForNote: (payload: { text: string; instruction: string }) =>
+    request<{ text: string }>('/api/notes/quick-rewrite', { method: 'POST', body: JSON.stringify(payload) }),
   createStandaloneNote: (payload: { title?: string; content?: string; groupId?: string | null } = {}) =>
     request<StandaloneNote>('/api/notes', { method: 'POST', body: JSON.stringify(payload) }),
   updateStandaloneNote: (id: string, payload: { title?: string; content?: string; groupId?: string | null }) =>
