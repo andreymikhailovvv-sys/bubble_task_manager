@@ -67,7 +67,7 @@ test('top search filters workspace as before and opens corresponding editors', a
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx',import.meta.url),'utf8'),
     readFile(new URL('../../client/src/styles.css',import.meta.url),'utf8')
   ]);
-  assert.match(app,/if \(search && !task\.title\.toLowerCase\(\)\.includes\(search\.toLowerCase\(\)\)\) return false/);
+  assert.match(app,/if \(search && !matchesWorkspaceText\(task\.title, search\)\) return false/);
   assert.match(app,/<WorkspaceGlobalSearch/);
   assert.match(app,/onOpenTask=\{openTaskWithFocusGuard\}/);
   assert.match(app,/onOpenSubtask=\{\(subtask\) => setEditorState\(\{ task: subtask \}\)\}/);
