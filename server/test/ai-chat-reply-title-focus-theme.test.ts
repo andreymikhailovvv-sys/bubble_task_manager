@@ -96,7 +96,7 @@ test('title generation preserves selected model and icon grouping is shared by w
     assert.match(source, /Чат \\d\+/);
     assert.doesNotMatch(source, /Чат \\\\d\+/);
   }
-  assert.match(share, /<Send size=\{18\}/);
+  assert.match(share, /<Send size=\{17\}/);
   assert.doesNotMatch(share, /<Forward size=/);
   assert.match(css, /justify-content: flex-end;\s*gap: 7px/);
   assert.doesNotMatch(css, /justify-content: space-between/);
@@ -108,13 +108,13 @@ test('reply and share use equally sized optical glyphs across web, Mini App and 
     readFile(new URL('../../client/src/components/TelegramMessageQuickShare.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/TelegramMessageQuickShare.css', import.meta.url), 'utf8')
   ]);
-  assert.match(reply, /<svg width=\{18\} height=\{18\} viewBox="0 0 24 24"/);
+  assert.match(reply, /<svg width=\{17\} height=\{17\} viewBox="0 0 24 24"/);
   assert.match(reply, /<path d="m11 2-9 10 9 10"/);
   assert.match(reply, /<path d="M2 12h9c7 0 11 3 11 10"/);
-  assert.match(forward, /<Send size=\{18\} strokeWidth=\{1\.5\}/);
+  assert.match(forward, /<Send size=\{17\} strokeWidth=\{1\.3\}/);
   assert.match(styles, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 7px;/);
   assert.match(styles, /button\.telegram-quick-share__trigger svg,\s*body\[data-theme\] \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
-  assert.match(styles, /width: 18px !important;\s*height: 18px !important;/);
+  assert.match(styles, /width: 17px !important;\s*height: 17px !important;/);
   assert.match(styles, /button\.ai-message-reply-trigger svg \{\s*transform: translateX\(2px\) !important;/);
   assert.match(styles, /\.miniapp-shell \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
 });
