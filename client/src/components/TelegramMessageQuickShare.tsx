@@ -195,7 +195,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
   };
 
   const acceptRewrite = async () => {
-    if (busy || !instruction.trim()) return;
+    if (busy || !instruction.trim() || !baseText.trim() || baseText.length > 4000) return;
     setBusy(true);
     setError('');
     try {
@@ -315,13 +315,13 @@ export function TelegramMessageQuickShare({ text }: Props) {
               <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
               <label className="block text-sm font-medium">
                 {destination === 'notes' ? 'Текст заметки' : 'Текст сообщения'}
-                <textarea value={baseText} maxLength={destination === 'notes' ? 25000 : 4000} rows={5}
+                <textarea value={baseText} maxLength={destination === 'notes' ? undefined : 4000} rows={5}
                   onChange={(e) => setBaseText(e.target.value)}
                   aria-label={destination === 'notes' ? 'Редактировать текст заметки' : 'Редактировать текст сообщения'}
                   className="telegram-quick-share__textarea mt-2 block max-h-40 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm" />
               </label>
               <label className="block text-sm font-medium">
-                Что нужно изменить в сообщении?
+                {destination === 'notes' ? 'Что нужно изменить в заметке?' : 'Что нужно изменить в сообщении?'}
                 <textarea value={instruction} maxLength={700} rows={4}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="Например: сделай формальнее и короче"
@@ -378,7 +378,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
                 <div className="telegram-quick-share__message max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-sm">{modifiedText}</div>
               )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy} onClick={() => destination === 'notes' ? void saveNote(modifiedText) : void submit(modifiedText, 'DIRECT')}
+                <button type="button" disabled={busy || (destination === 'notes' && !modifiedText.trim())} onClick={() => destination === 'notes' ? void saveNote(modifiedText) : void submit(modifiedText, 'DIRECT')}
                   className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">{destination === 'notes' ? 'Сохранить в заметки' : 'Отправить пользователю'}</button>
                 <button type="button" disabled={busy} onClick={() => { setBaseText(modifiedText); setInstruction(''); setMode('edit'); }}
                   className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">Изменить</button>
