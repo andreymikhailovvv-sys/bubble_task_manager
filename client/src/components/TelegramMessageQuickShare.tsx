@@ -38,6 +38,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
   const [noteGroups, setNoteGroups] = useState<StandaloneNoteGroup[]>([]);
   const [noteGroupId, setNoteGroupId] = useState('');
   const [noteGroupsLoading, setNoteGroupsLoading] = useState(false);
+  const [noteGroupsReady, setNoteGroupsReady] = useState(false);
   const [noteGroupsError, setNoteGroupsError] = useState('');
   const [groupsLoadAttempt, setGroupsLoadAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -63,6 +64,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
     if (!open || destination !== 'notes') return;
     let cancelled = false;
     setNoteGroupsLoading(true);
+    setNoteGroupsReady(false);
     setNoteGroupsError('');
     void api.getStandaloneNoteGroups().then((groups) => {
       if (cancelled) return;
@@ -71,6 +73,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
         ? groups.find((group) => group.sphereId === initialNoteSphereId)
         : null;
       setNoteGroupId(taskGroup?.id ?? '');
+      setNoteGroupsReady(true);
     }).catch((cause) => {
       if (cancelled) return;
       setNoteGroupsError(cause instanceof Error ? cause.message : 'Не удалось загрузить группы заметок');
@@ -157,12 +160,13 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
     setNoteGroups([]);
     setNoteGroupId('');
     setNoteGroupsError('');
+    setNoteGroupsReady(false);
     setInstruction('');
     setModifiedText('');
   };
 
   const saveNote = async (value: string) => {
-    if (submittingRef.current || !value.trim() || noteGroupsLoading || noteGroupsError) return;
+    if (submittingRef.current || !value.trim() || !noteGroupsReady || noteGroupsLoading || noteGroupsError) return;
     submittingRef.current = true;
     setBusy(true);
     setError('');
@@ -268,7 +272,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
               <label className="block text-sm font-medium">
                 Группа заметки
                 <select value={noteGroupId} onChange={(event) => setNoteGroupId(event.target.value)}
-                  disabled={noteGroupsLoading || Boolean(noteGroupsError)}
+                  disabled={!noteGroupsReady || noteGroupsLoading || Boolean(noteGroupsError)}
                   className="telegram-quick-share__textarea mt-2 block w-full rounded-xl border p-3 text-sm disabled:opacity-60"
                   aria-label="Группа заметки">
                   <option value="">{noteGroupsLoading ? 'Загружаем группы…' : 'Без группы'}</option>
@@ -290,7 +294,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
                   aria-label="Текст заметки" />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy || !baseText.trim() || noteGroupsLoading || Boolean(noteGroupsError)}
+                <button type="button" disabled={busy || !baseText.trim() || !noteGroupsReady || noteGroupsLoading || Boolean(noteGroupsError)}
                   onClick={() => void saveNote(baseText)}
                   className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
                   Сохранить
@@ -378,7 +382,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
               </label>
               {destination === 'notes' ? (
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={busy || !baseText.trim() || noteGroupsLoading || Boolean(noteGroupsError)} onClick={() => void saveNote(baseText)}
+                  <button type="button" disabled={busy || !baseText.trim() || !noteGroupsReady || noteGroupsLoading || Boolean(noteGroupsError)} onClick={() => void saveNote(baseText)}
                     className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
                     Сохранить без ИИ
                   </button>
@@ -427,7 +431,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
                 <div className="telegram-quick-share__message max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-xl p-3 text-sm">{modifiedText}</div>
               )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy || (destination === 'notes' && (!modifiedText.trim() || noteGroupsLoading || Boolean(noteGroupsError)))} onClick={() => destination === 'notes' ? void saveNote(modifiedText) : void submit(modifiedText, 'DIRECT')}
+                <button type="button" disabled={busy || (destination === 'notes' && (!modifiedText.trim() || !noteGroupsReady || noteGroupsLoading || Boolean(noteGroupsError)))} onClick={() => destination === 'notes' ? void saveNote(modifiedText) : void submit(modifiedText, 'DIRECT')}
                   className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">{destination === 'notes' ? 'Сохранить в заметки' : 'Отправить пользователю'}</button>
                 <button type="button" disabled={busy} onClick={() => { setBaseText(modifiedText); setInstruction(''); setMode('edit'); }}
                   className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">Изменить</button>
