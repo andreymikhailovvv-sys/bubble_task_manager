@@ -52,7 +52,7 @@ test('reply controls and previews cover website focus, task chats, miniapp and m
   assert.match(web, /serializeAiReply\(/);
   assert.match(mini, /serializeAiReply\(/);
   assert.match(expanded, /<AiReplyPreview/);
-  assert.match(css, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 4px;/);
+  assert.match(css, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 7px;/);
 });
 
 test('title recognition covers Чат 1 and manual titles without false matches', () => {
@@ -96,9 +96,9 @@ test('title generation preserves selected model and icon grouping is shared by w
     assert.match(source, /Чат \\d\+/);
     assert.doesNotMatch(source, /Чат \\\\d\+/);
   }
-  assert.match(share, /<Send size=\{19\}/);
+  assert.match(share, /<Send size=\{20\}/);
   assert.doesNotMatch(share, /<Forward size=/);
-  assert.match(css, /justify-content: flex-end;\s*gap: 4px/);
+  assert.match(css, /justify-content: flex-end;\s*gap: 7px/);
   assert.doesNotMatch(css, /justify-content: space-between/);
 });
 
@@ -108,14 +108,14 @@ test('reply and share use equally sized optical glyphs across web, Mini App and 
     readFile(new URL('../../client/src/components/TelegramMessageQuickShare.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../client/src/components/TelegramMessageQuickShare.css', import.meta.url), 'utf8')
   ]);
-  assert.match(reply, /<svg width=\{19\} height=\{19\} viewBox="0 0 24 24"/);
+  assert.match(reply, /<svg width=\{20\} height=\{20\} viewBox="0 0 24 24"/);
   assert.match(reply, /<path d="m11 2-9 10 9 10"/);
   assert.match(reply, /<path d="M2 12h9c7 0 11 3 11 10"/);
-  assert.match(forward, /<Send size=\{19\} strokeWidth=\{1\.75\}/);
-  assert.match(styles, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 4px;/);
+  assert.match(forward, /<Send size=\{20\} strokeWidth=\{1\.75\}/);
+  assert.match(styles, /\.ai-message-forward-actions \{\s*justify-content: flex-end;\s*gap: 7px;/);
   assert.match(styles, /button\.telegram-quick-share__trigger svg,\s*body\[data-theme\] \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
-  assert.match(styles, /width: 19px !important;\s*height: 19px !important;/);
-  assert.match(styles, /button\.ai-message-reply-trigger svg \{\s*transform: translateX\(2\.5px\) !important;/);
+  assert.match(styles, /width: 20px !important;\s*height: 20px !important;/);
+  assert.match(styles, /button\.ai-message-reply-trigger svg \{\s*transform: translateX\(2px\) !important;/);
   assert.match(styles, /\.miniapp-shell \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
 });
 
