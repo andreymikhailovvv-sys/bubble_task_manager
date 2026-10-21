@@ -9617,3 +9617,46 @@ body[data-theme='dark'] .focused-task-settings-panel textarea {
 body[data-theme='dark'] .focused-task-settings-panel input[type='checkbox'] {
   color-scheme: dark;
 }
+
+
+/* Universal search in Telegram Mini App and mobile web. Same search results as
+   desktop, with a touch-size input and an opaque keyboard-safe portal sheet. */
+.miniapp-shell .miniapp-global-search-field {
+  min-width: 0;
+  min-height: 40px;
+  border-color: var(--field-border);
+  background: var(--field-bg);
+  color: var(--text-primary);
+}
+.miniapp-shell .miniapp-global-search-field:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 64%, var(--field-border));
+}
+.miniapp-shell .miniapp-global-search-field input {
+  min-width: 0;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.miniapp-shell .miniapp-global-search-field input::placeholder {
+  color: var(--field-placeholder);
+}
+.workspace-global-search-panel-mobile {
+  z-index: 220;
+  max-width: calc(100vw - 16px);
+  min-height: 0;
+  background: var(--popover-bg);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.workspace-global-search-panel-mobile > div:nth-child(2) {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+body[data-theme='light'] .workspace-global-search-panel-mobile {
+  background: #ffffff;
+}
+body[data-theme='dark'] .workspace-global-search-panel-mobile {
+  background: #0f172a;
+}
