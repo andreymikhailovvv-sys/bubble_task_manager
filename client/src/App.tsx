@@ -1021,7 +1021,6 @@ export default function App() {
   const [isEditingFocusedTitle, setIsEditingFocusedTitle] = useState(false);
   const [focusedTitleDraft, setFocusedTitleDraft] = useState('');
   const [focusedTitleRows, setFocusedTitleRows] = useState(1);
-  const [isFocusedSphereDropdownOpen, setIsFocusedSphereDropdownOpen] = useState(false);
   const [focusedNotifyPreset, setFocusedNotifyPreset] = useState('30');
   const [focusedRecurrenceLoading, setFocusedRecurrenceLoading] = useState(false);
   const [focusedRecurrenceSummary, setFocusedRecurrenceSummary] = useState<string | null>(null);
@@ -1981,7 +1980,6 @@ export default function App() {
       setIsEditingFocusedTitle(false);
       setFocusedTitleDraft('');
       setFocusedTitleRows(1);
-      setIsFocusedSphereDropdownOpen(false);
       setIsAddingFocusedSubtask(false);
       setFocusedSubtaskTitle('');
       setIsAiSubtasksPromptOpen(false);
@@ -2004,7 +2002,6 @@ export default function App() {
     setIsEditingFocusedTitle(false);
     setFocusedTitleDraft(focusedTask.title ?? '');
     setFocusedTitleRows(1);
-    setIsFocusedSphereDropdownOpen(false);
     setFocusedDraft({ ...focusedTask, aiNotificationsEnabled: focusedTask.aiNotificationsEnabled ?? isAiNotificationsDefaultEnabled });
     setFocusedRecurrenceSummary(focusedTask.recurrenceSummary ?? null);
     if (focusedTask.notifyBeforeMinutes === null) {
@@ -7423,40 +7420,25 @@ ${allContext}`,
                   ) : null}
                   <div className="task-edit-compact-grid mt-4 grid grid-cols-2 items-end gap-3">
                     <label className="block text-xs font-semibold text-muted">Сектор
-                      <div className="focus-sector-dropdown relative mt-1">
-                        <button type="button" className="focus-sector-dropdown-button focused-task-sector-button inline-flex w-full items-center gap-2 rounded-full px-3 py-2 text-sm" onClick={() => setIsFocusedSphereDropdownOpen((prev) => !prev)}>
-                          {(() => {
-                            const selectedSphere = spheres.find((sphere) => sphere.id === focusedDraft.sphereId);
-                            return (
-                              <>
-                                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: selectedSphere?.color ?? '#7c3aed' }} />
-                                <span className="min-w-0 flex-1 truncate text-left font-semibold">{selectedSphere?.name ?? 'Без сектора'}</span>
-                                <ChevronDown size={14} className="shrink-0" />
-                              </>
-                            );
-                          })()}
-                        </button>
-                        {isFocusedSphereDropdownOpen ? (
-                          <div className="focus-sector-dropdown-menu absolute left-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border p-1 shadow-2xl">
-                            {[{ id: '', name: 'Без сектора', color: '#7c3aed' }, ...spheres].map((sphere) => (
-                              <button key={sphere.id || 'none'} type="button" className="flex w-full items-center gap-2 focused-task-sector-option rounded-xl px-3 py-2 text-left text-sm" onClick={() => {
-                                const nextSphereId = sphere.id || null;
-                                // Keep the selection in the unsaved draft. Do not
-                                // mutate focusedTask via setTasks until the API
-                                // confirms the new sphere, or the reconciliation
-                                // effect will treat it as already persisted.
-                                setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: nextSphereId }));
-                                setFocusedSaveError(null);
-                                setIsFocusedSphereDropdownOpen(false);
-                              }}>
-                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: sphere.color }} />
-                                <span className="font-medium">{sphere.name}</span>
-                                {(focusedDraft.sphereId ?? '') === sphere.id ? <Check size={14} className="ml-auto text-violet-600" /> : null}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
+                      <CustomSelect
+                        className="mt-1"
+                        value={focusedDraft.sphereId ?? ''}
+                        onChange={(value) => {
+                          const nextSphereId = value || null;
+                          // Keep this in the unsaved draft until the API confirms it.
+                          // Updating the persisted task here would mask the change from autosave.
+                          setFocusedDraft((prev) => ({ ...(prev ?? {}), sphereId: nextSphereId }));
+                          setFocusedSaveError(null);
+                        }}
+                        options={[
+                          { value: '', label: 'Без сектора', color: '#7c3aed' },
+                          ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color })),
+                        ]}
+                        ariaLabel="Выбрать сектор"
+                        buttonClassName="focus-sector-dropdown-button focused-task-sector-button"
+                        menuClassName="task-edit-sector-menu"
+                        detachedPopup
+                      />
                     </label>
                     <label className="block text-xs font-semibold text-muted focused-task-notify">Уведомлять за
                       <CustomSelect

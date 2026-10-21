@@ -48,10 +48,14 @@ test('Mini App X saves only manual field edits, not old task snapshots', async (
 
 test('focus task sector stays dirty until server confirms its update', async () => {
   const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
-  const selectStart = web.indexOf('const nextSphereId = sphere.id || null;');
-  const selectEnd = web.indexOf('setIsFocusedSphereDropdownOpen(false);', selectStart);
-  assert.ok(selectStart >= 0 && selectEnd > selectStart, 'sector dropdown handler must exist');
-  const selection = web.slice(selectStart, selectEnd);
+  const panelStart = web.indexOf('{isFocusedSettingsOpen ? (');
+  const selectStart = web.indexOf('ariaLabel="Выбрать сектор"', panelStart);
+  const sectorStart = web.lastIndexOf('<CustomSelect', selectStart);
+  const selectEnd = web.indexOf('detachedPopup', selectStart);
+  assert.ok(panelStart >= 0 && sectorStart > panelStart && selectStart > sectorStart && selectEnd > selectStart, 'focused task sector select must exist');
+  const selection = web.slice(sectorStart, selectEnd);
+  assert.match(selection, /value=\{focusedDraft\.sphereId \?\? ''\}/);
+  assert.match(selection, /const nextSphereId = value \|\| null/);
   assert.match(selection, /setFocusedDraft\(\(prev\) => \(\{ \.\.\.\(prev \?\? \{\}\), sphereId: nextSphereId \}\)\)/);
   assert.doesNotMatch(selection, /setTasks\(/, 'must not change remote task list before PATCH succeeds');
 
