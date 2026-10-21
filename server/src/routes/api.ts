@@ -47,6 +47,7 @@ import { telegramAiChatPolicyService } from '../services/telegram-ai-chat-policy
 import { telegramAiMonitorControl } from '../services/telegram-ai-monitor-worker.service.js';
 import { telegramAiInboxFeed, approveTelegramAiSuggestedTask, sendTelegramAiSuggestedReply } from '../services/telegram-ai-inbox.service.js';
 import { telegramQuickShare } from '../services/telegram-quick-share.service.js';
+import { rewriteNotesQuickText } from '../services/telegram-quick-share-ai.service.js';
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 
 export const apiRouter = Router();
@@ -68,6 +69,7 @@ const accountLoginLimiter = new FixedWindowRateLimiter(15, AUTH_RATE_WINDOW_MS);
 const ipLoginLimiter = new FixedWindowRateLimiter(300, AUTH_RATE_WINDOW_MS);
 const registrationLimiter = new FixedWindowRateLimiter(60, 60 * 60 * 1000);
 const adminRequestLimiter = new FixedWindowRateLimiter(240, AUTH_RATE_WINDOW_MS);
+const notesRewriteLimiter = new FixedWindowRateLimiter(15, 10 * 60 * 1000);
 const adminPasswordFailureLimiter = new FixedWindowRateLimiter(8, AUTH_RATE_WINDOW_MS);
 
 const rateLimitIpKey = (req: { ip?: string; socket?: { remoteAddress?: string } }) =>
@@ -1256,6 +1258,14 @@ apiRouter.patch('/note-groups/:id', requireAuth, asyncHandler(async (req, res) =
 apiRouter.delete('/note-groups/:id', requireAuth, asyncHandler(standaloneNoteGroupController.remove));
 
 apiRouter.get('/notes', requireAuth, asyncHandler(standaloneNoteController.list));
+// Notes rewriting needs only the signed-in user. Never require a connected Telegram account.
+apiRouter.post('/notes/quick-rewrite', requireAuth, async (req, res) => {
+  if (rejectOnRateLimit(res, notesRewriteLimiter.consume(req.user!.id))) return;
+  try {
+    const rewritten = await rewriteNotesQuickText(req.user!.id, req.body?.text, req.body?.instruction);
+    res.json({ text: rewritten });
+  } catch (error) { telegramAuthError(res, error); }
+});
 apiRouter.post('/notes', requireAuth, asyncHandler(async (req, res) => {
   try { await standaloneNoteController.create(req, res); }
   catch (error) { if (!sendNoteInputError(error, res)) throw error; }
