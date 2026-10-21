@@ -86,7 +86,7 @@ test('compact and Telegram notes share web CRUD, grouping, autosave and rich-tex
     read('../../client/src/lib/api.ts')
   ]);
   assert.match(mini, /<StandaloneNotesWorkspace key=\{currentUser\.id\} userId=\{currentUser\.id\}/);
-  assert.match(mini, /mode="mobile" onClose=\{\(\) => setIsStandaloneNotesOpen\(false\)\}/);
+  assert.match(mini, /mode="mobile" onClose=\{\(\) => \{ setIsStandaloneNotesOpen\(false\); setRequestedStandaloneNote\(null\); \}\}/);
   assert.match(board, /setBoardOpen\(mode === 'mobile'\)/);
   assert.match(board, /api\.getStandaloneNotes\(\)/);
   assert.match(board, /api\.getStandaloneNoteGroups\(\)/);

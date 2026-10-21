@@ -84,3 +84,36 @@ test('top search filters workspace as before and opens corresponding editors', a
   assert.match(css,/body\[data-theme='light'\] \.workspace-global-search-panel/);
   assert.match(css,/body\[data-theme='dark'\] \.workspace-global-search-panel/);
 });
+
+
+test('Mini App and mobile website share desktop global search, with note deep links and keyboard-safe results', async () => {
+  const [mini, component, css] = await Promise.all([
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/WorkspaceGlobalSearch.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8')
+  ]);
+  // The same MiniApp component serves both Telegram and mobile web.
+  assert.match(mini, /runtime === 'telegram'/);
+  assert.match(mini, /runtime === 'web'/);
+  assert.match(mini, /<WorkspaceGlobalSearch\s+mobile/);
+  assert.match(mini, /value=\{taskSearch\}/);
+  assert.match(mini, /tasks=\{tasks\}/);
+  assert.match(mini, /subtasks=\{globalSearchSubtasks\}/);
+  assert.match(mini, /onOpenTask=\{openTaskModal\}/);
+  assert.match(mini, /onOpenSubtask=\{openSubtaskModal\}/);
+  assert.match(mini, /setRequestedStandaloneNote\(\{ id, serial: Date\.now\(\) \}\)/);
+  assert.match(mini, /requestedNote=\{requestedStandaloneNote\}/);
+  assert.match(mini, /setIsHeaderVisible\(true\)/);
+  assert.doesNotMatch(mini, /placeholder="Поиск по задачам"/);
+
+  // No second search algorithm, no eager transfer of all note bodies.
+  assert.match(component, /searchWorkspace\(tasks, subtasks, indexedNotes, value\)/);
+  assert.match(component, /api\.getStandaloneNotes\(\)/);
+  assert.match(component, /if \(!open \|\| !hasQuery \|\| !userId\) return/);
+  assert.match(component, /window\.visualViewport/);
+  assert.match(component, /visualViewport\?\.addEventListener\('resize', update\)/);
+  assert.match(component, /workspace-global-search-panel-mobile/);
+  assert.match(css, /body\[data-theme='light'\] \.workspace-global-search-panel-mobile/);
+  assert.match(css, /body\[data-theme='dark'\] \.workspace-global-search-panel-mobile/);
+  assert.match(css, /\.miniapp-shell \.miniapp-global-search-field input/);
+});
