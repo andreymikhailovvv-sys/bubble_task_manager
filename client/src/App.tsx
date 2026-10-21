@@ -6510,7 +6510,7 @@ ${allContext}`,
 
         <aside
           data-tour="workspace-side-rail"
-          className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain pb-3 pl-5 pr-3 pt-3"
+          className="workspace-side-rail absolute right-0 top-0 z-10 h-full w-[360px] space-y-4 overflow-y-auto overscroll-contain pb-3 pl-5 pr-0 pt-0"
           data-no-field-zoom="true"
           onWheel={(event) => {
             event.stopPropagation();
