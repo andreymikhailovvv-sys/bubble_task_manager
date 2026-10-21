@@ -1497,7 +1497,9 @@ apiRouter.get('/ai-chat/projects/:projectId/chats/:chatId/messages', requireAuth
         .filter((item) =>
           item != null && typeof item === 'object' && !Array.isArray(item) &&
           typeof (item as { id?: unknown }).id === 'string')
-        .map(item => ({ id: String(item.id), title: String(item.title ?? '') }))
+        .map(item => ({ id: String(item.id), title: String(item.title ?? ''),
+          ...(typeof item.model === 'string' ? { model: item.model } : {}),
+          ...(typeof item.modelChangedAt === 'string' ? { modelChangedAt: item.modelChangedAt } : {}) }))
     }));
   if (chatId === 'quick-ai-requests') {
     const messages = await aiAssistantService.listGeneralDialog({ userId });
