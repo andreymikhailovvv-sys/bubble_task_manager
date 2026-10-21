@@ -102,7 +102,7 @@ export function reconcileAiChatProjectOutline<
     const chats = data.chats.map(thread => {
       const existing = previous?.chats.find(chat => chat.id === thread.id);
       if (!existing) { changed = true; return { ...thread, messages: [] } as unknown as TChat; }
-      const mergedModel = preferRecentChatModel(existing as TChat & { model?: string; modelChangedAt?: string }, {
+      const mergedModel = preferRecentChatModel({ model: (existing as TChat & { model?: string }).model, modelChangedAt: (existing as TChat & { modelChangedAt?: string }).modelChangedAt }, {
         model: readSavedAiChatModel(thread.model) ?? undefined, modelChangedAt: thread.modelChangedAt
       });
       const old = existing as TChat & { model?: string; modelChangedAt?: string };
