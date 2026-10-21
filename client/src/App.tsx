@@ -7435,7 +7435,7 @@ ${allContext}`,
                           ...spheres.map((sphere) => ({ value: sphere.id, label: sphere.name, color: sphere.color })),
                         ]}
                         ariaLabel="Выбрать сектор"
-                        buttonClassName="focus-sector-dropdown-button focused-task-sector-button focused-task-pill-select"
+                        buttonClassName="focused-task-pill-select"
                         menuClassName="task-edit-sector-menu"
                         detachedPopup
                       />
