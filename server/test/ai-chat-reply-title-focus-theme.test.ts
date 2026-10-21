@@ -132,6 +132,8 @@ test('focus task settings are opaque and use dark theme for labels, dropdowns an
   assert.match(sector, /<CustomSelect/);
   assert.match(sector, /value=\{focusedDraft\.sphereId \?\? ''\}/);
   assert.match(sector, /menuClassName="task-edit-sector-menu"/);
+  assert.match(sector, /buttonClassName="[^"]*focused-task-pill-select"/);
+  assert.match(css, /\.focused-task-pill-select \{\s*border-radius: 9999px !important;/);
   assert.match(sector, /detachedPopup/);
   assert.match(sector, /setFocusedDraft\(\(prev\) => \(\{ \.\.\.\(prev \?\? \{\}\), sphereId: nextSphereId \}\)\)/);
   assert.doesNotMatch(sector, /focus-sector-dropdown-menu absolute/);
