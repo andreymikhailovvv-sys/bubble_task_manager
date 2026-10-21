@@ -263,7 +263,7 @@ body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigge
   outline: 2px solid #7f8da3 !important;
   outline-offset: 1px !important;
 }
-/* Both action glyphs are 10% smaller and use thinner strokes, including
+/* Both action glyphs are slightly smaller and use thinner strokes, including
    Mini App, where generic button/SVG rules can otherwise enlarge them.
    Keep the existing 28x25px clickable button area. */
 body[data-theme] .ai-message-forward-actions button.telegram-quick-share__trigger svg,
@@ -272,16 +272,16 @@ body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg
 .miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
   position: static !important;
   display: block !important;
-  width: 18px !important;
-  height: 18px !important;
-  min-width: 18px !important;
-  min-height: 18px !important;
+  width: 17px !important;
+  height: 17px !important;
+  min-width: 17px !important;
+  min-height: 17px !important;
   padding: 0 !important;
   margin: 0 !important;
   transform: none !important;
   fill: none !important;
   stroke: currentColor !important;
-  stroke-width: 1.5 !important;
+  stroke-width: 1.3 !important;
   stroke-linecap: round !important;
   stroke-linejoin: round !important;
   opacity: 1 !important;
