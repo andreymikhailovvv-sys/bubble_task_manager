@@ -2195,6 +2195,21 @@ body[data-theme='light'] .bubble-subtask-preview.bubble-subtask-preview-reminder
 }
 .workspace-global-search-panel-header,
 .workspace-global-search-footer { border-color: var(--panel-border); }
+.workspace-global-search-collapse {
+  color: var(--text-primary);
+  background: var(--muted-bg);
+  border: 1px solid var(--panel-border);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.workspace-global-search-collapse:hover,
+.workspace-global-search-collapse:focus-visible {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--panel-border));
+}
+.workspace-global-search-collapse:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .workspace-global-search-section-title { color: var(--text-muted); }
 .workspace-global-search-section-title svg { color: var(--accent); }
 .workspace-global-search-section-title--subtask svg { color: #8b5cf6; }

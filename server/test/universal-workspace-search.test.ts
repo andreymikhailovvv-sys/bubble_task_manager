@@ -72,7 +72,7 @@ test('top search filters workspace as before and opens corresponding editors', a
   assert.match(app,/onOpenTask=\{openTaskWithFocusGuard\}/);
   assert.match(app,/onOpenSubtask=\{\(subtask\) => setEditorState\(\{ task: subtask \}\)\}/);
   assert.match(app,/requestedNote=\{requestedStandaloneNote\}/);
-  assert.match(component,/placeholder="Поиск в Планировыче"/);
+  assert.match(component,/placeholder="Поиск"/);
   assert.match(component,/api\.getStandaloneNotes\(\)/);
   assert.match(component,/role="combobox"/);
   assert.match(component,/role="listbox"/);
@@ -113,6 +113,12 @@ test('Mini App and mobile website share desktop global search, with note deep li
   assert.match(component, /window\.visualViewport/);
   assert.match(component, /visualViewport\?\.addEventListener\('resize', update\)/);
   assert.match(component, /workspace-global-search-panel-mobile/);
+  assert.match(component, /aria-label="Свернуть результаты поиска"/);
+  assert.match(component, /<ChevronUp size=\{13\}/);
+  assert.match(component, /onClick=\{\(\) => \{ setOpen\(false\); anchorRef\.current\?\.querySelector\('input'\)\?\.blur\(\); \}\}/);
+  assert.doesNotMatch(component, /Нажмите на результат, чтобы открыть его/);
+  assert.match(css, /\.workspace-global-search-collapse\s*\{/);
+  assert.match(css, /\.workspace-global-search-collapse:hover/);
   assert.match(css, /body\[data-theme='light'\] \.workspace-global-search-panel-mobile/);
   assert.match(css, /body\[data-theme='dark'\] \.workspace-global-search-panel-mobile/);
   assert.match(css, /\.miniapp-shell \.miniapp-global-search-field input/);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, ListChecks, LoaderCircle, Search, StickyNote, X } from 'lucide-react';
+import { ChevronUp, FileText, ListChecks, LoaderCircle, Search, StickyNote, X } from 'lucide-react';
 import { api, type StandaloneNote } from '../lib/api';
 import type { Task } from '../lib/types';
 import { searchWorkspace, noteSearchText, type WorkspaceSearchHit, type WorkspaceSearchKind } from '../lib/workspaceSearch';
@@ -164,7 +164,7 @@ export function WorkspaceGlobalSearch({
           aria-autocomplete="list"
           role="combobox"
           className={'w-full min-w-0 flex-1 bg-transparent px-2 py-2 text-primary outline-none ' + (mobile ? 'text-base' : 'text-sm')}
-          placeholder="Поиск в Планировыче"
+          placeholder="Поиск"
           value={value}
           onChange={event => { onChange(event.target.value); setOpen(Boolean(event.target.value.trim())); }}
           onFocus={() => { setOpen(true); setRefresh(i => i + 1); }}
@@ -213,8 +213,14 @@ export function WorkspaceGlobalSearch({
             {loadingNotes && entries.length ? <p className="px-3 py-2 text-xs text-muted">Проверяю заметки…</p> : null}
             {notesError ? <p className="workspace-global-search-error rounded-xl px-3 py-2 text-xs" role="status">Заметки не удалось загрузить. Поиск по задачам доступен.</p> : null}
           </div>
-          <div className="workspace-global-search-footer border-t px-3 py-2 text-[11px] text-muted">
-            {mobile ? 'Нажмите на результат, чтобы открыть его' : '↑ ↓ выбор · Enter открыть · Esc закрыть'}
+          <div className={'workspace-global-search-footer border-t px-3 py-2 text-[11px] text-muted' + (mobile ? ' flex justify-center' : '')}>
+            {mobile ? (
+              <button type="button" className="workspace-global-search-collapse inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+                onClick={() => { setOpen(false); anchorRef.current?.querySelector('input')?.blur(); }}
+                aria-label="Свернуть результаты поиска">
+                <ChevronUp size={13} aria-hidden="true" />Свернуть
+              </button>
+            ) : '↑ ↓ выбор · Enter открыть · Esc закрыть'}
           </div>
         </section>, document.body) : null}
     </div>
