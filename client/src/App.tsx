@@ -25,6 +25,7 @@ import { browserNotificationPermission, requestBrowserNotificationPermission, sh
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
@@ -3589,7 +3590,7 @@ ${allContext}`,
           return date >= start && date < end;
         };
 
-        if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !matchesWorkspaceText(task.title, search)) return false;
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
         if (effectiveTimeFilter === 'focus') {
