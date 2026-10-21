@@ -49,3 +49,33 @@ test('notes AI rewrite is authenticated and independent of Telegram sessions or 
   assert.equal(validateQuickInstruction('  Сократи  '), 'Сократи');
   assert.throws(() => validateQuickText('A'.repeat(4001)));
 });
+
+
+test('curved arrow shaft ends at the chevron vertex, and the Telegram mark is centered', async () => {
+  const icons = await clientFile('components/MessageActionIcons.tsx');
+  // Both arrows enter a chevron corner at the same y coordinate.
+  assert.match(icons, /9\.5 10H15/);
+  assert.match(icons, /9\.5 10H19/);
+  assert.match(icons, /M12 3 19 10 12 17/);
+  assert.match(icons, /M8 3 15 10 8 17/);
+  assert.match(icons, /transform="translate\(-0\.65 0\.65\)"/);
+});
+
+test('notes forwarding allows an explicit group and matches the source task sector', async () => {
+  const share = await clientFile('components/TelegramMessageQuickShare.tsx');
+  const web = await clientFile('App.tsx');
+  const mini = await clientFile('MiniApp.tsx');
+  assert.match(share, /initialNoteSphereId\?: string \| null/);
+  assert.match(share, /api\.getStandaloneNoteGroups\(\)/);
+  assert.match(share, /group\.sphereId === initialNoteSphereId/);
+  assert.match(share, /setNoteGroupId\(taskGroup\?\.id \?\? ''\)/);
+  assert.match(share, /aria-label="Группа заметки"/);
+  assert.match(share, /<option value="">/);
+  assert.match(share, /onChange=\{\(event\) => setNoteGroupId\(event\.target\.value\)\}/);
+  assert.match(share, /groupId: noteGroupId \|\| null/);
+  assert.match(share, /!noteGroupsReady \|\| noteGroupsLoading \|\| noteGroupsError/);
+  // Regular task AI, focus AI and mobile task AI, but not general AI chat.
+  assert.equal((web.match(/initialNoteSphereId=\{focusActiveTask\?\.sphereId \?\? null\}/g) ?? []).length, 2);
+  assert.equal((web.match(/initialNoteSphereId=\{focusedTask\?\.sphereId \?\? null\}/g) ?? []).length, 2);
+  assert.equal((mini.match(/initialNoteSphereId=\{openedTask\?\.sphereId \?\? null\}/g) ?? []).length, 1);
+});
