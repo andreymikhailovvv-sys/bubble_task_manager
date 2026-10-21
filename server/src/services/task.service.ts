@@ -301,7 +301,7 @@ export const taskService = {
     }
     return created;
   },
-  update: async (id: string, userId: string, input: TaskInput) => {
+  update: async (id: string, userId: string, input: TaskInput, context: { source?: string; requestId?: string } = {}) => {
     if (input.recurrenceJson && typeof input.recurrenceJson === 'object' && 'slots' in input.recurrenceJson) {
       validateManualRecurrenceSchedule(input.recurrenceJson as unknown as RecurrenceSchedule);
     }
@@ -480,6 +480,7 @@ export const taskService = {
       const statusAfter = input.status ?? statusBefore;
       const details = {
         beforeStatus: statusBefore, afterStatus: statusAfter,
+        ...(statusBefore !== statusAfter ? { source: context.source ?? 'internal' } : {}),
         ...(input.title !== undefined && input.title !== currentTask.title ? { beforeTitle: currentTask.title, afterTitle: updatedTask.title } : {}),
         ...(sharedDueDateChanged ? { beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null } : {}),
         ...(input.description !== undefined && input.description !== currentTask.description ? { descriptionChanged: true } : {})
@@ -490,7 +491,7 @@ export const taskService = {
             details }
         });
       }
-      console.info('[Task] update', { userId, taskId: id, beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
+      console.info('[Task] update', { userId, taskId: id, source: context.source ?? 'internal', requestId: context.requestId ?? null, requestedStatus: input.status ?? null, updatedFields: Object.keys(input).filter((key) => input[key as keyof TaskInput] !== undefined), beforeStatus: currentTask.status, afterStatus: updatedTask.status, beforeDueDate: currentTask.dueDate?.toISOString() ?? null, afterDueDate: updatedTask.dueDate?.toISOString() ?? null, parentTaskId: currentTask.parentTaskId });
 
       if (input.status === 'DONE' && updatedTask.isRecurring && !updatedTask.parentTaskId && !isCollaborativeRoot) {
         const schedule = updatedTask.recurrenceJson as unknown as RecurrenceSchedule | null;
