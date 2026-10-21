@@ -81,3 +81,23 @@ test('failed focus task saves are visible and do not close an unsaved editor', a
   assert.match(close, /if \(!\(await flushFocusedTaskSave\(\)\)\) return;/);
   assert.match(web, /role="alert"[^\n]*Не удалось сохранить изменения:/);
 });
+
+
+test('focused task autosave cannot change status implicitly', async () => {
+  const web = await readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8');
+  const keys = web.slice(web.indexOf('const FOCUSED_TASK_EDIT_KEYS = ['), web.indexOf('] as const satisfies readonly (keyof Task)[];'));
+  const snapshot = web.slice(web.indexOf('const focusedTaskEditableSnapshot ='), web.indexOf('const AI_CHAT_MODEL_OPTIONS'));
+  assert.doesNotMatch(keys, /['"]status['"]/, 'status must not be part of autosave dirty field keys');
+  assert.doesNotMatch(snapshot, /status:\\s*task\\.status/, 'status must not be part of autosave snapshots');
+  assert.match(web, /api\\.updateTask\\(task\\.id, \\{ status: 'DONE'/, 'explicit completion still works');
+  assert.match(web, /api\\.updateTask\\(task\\.id, \\{ status: 'TODO'/, 'explicit reopening still works');
+});
+
+test('task update logs distinguish browser mutations from internal tools', async () => {
+  const controller = await readFile(new URL('../src/controllers/task.controller.ts', import.meta.url), 'utf8');
+  const service = await readFile(new URL('../src/services/task.service.ts', import.meta.url), 'utf8');
+  assert.match(controller, /source: \`api:\\$\\{surface\\}\`/);
+  assert.match(service, /source: context\\.source \\?\\? 'internal'/);
+  assert.match(service, /requestedStatus: input\\.status \\?\\? null/);
+  assert.match(service, /updatedFields: Object\\.keys\\(input\\)/);
+});
