@@ -11,32 +11,32 @@ const mini = read('MiniApp.tsx');
 
 test('one neutral forwarding action is shared by website and Mini App', () => {
   assert.match(action, /className="telegram-quick-share__trigger"/);
-  assert.match(action, /<Send size=\{20\}/);
+  assert.match(action, /<Send size=\{19\}/);
   assert.doesNotMatch(action, /<Forward size=/);
   assert.match(web, /<TelegramMessageQuickShare text=\{/);
   assert.match(mini, /<TelegramMessageQuickShare text=\{/);
-  assert.match(css, /width:\s*28px\s*!important/);
-  assert.match(css, /height:\s*25px\s*!important/);
+  assert.match(css, /width:\s*26px\s*!important/);
+  assert.match(css, /height:\s*24px\s*!important/);
   assert.match(css, /place-items:\s*center\s*!important/);
   assert.match(css, /transform:\s*none\s*!important/);
   assert.match(css, /fill:\s*none\s*!important/);
   assert.match(css, /stroke:\s*currentColor\s*!important/);
 });
 
-test('reply and share use equal 20px glyphs, shared stroke and equal button hit areas', () => {
+test('reply and share use equal 19px glyphs, shared stroke and equal button hit areas', () => {
   const reply = read('components/AiMessageReply.tsx');
-  assert.match(action, /<Send size=\{20\} strokeWidth=\{1\.75\}/);
-  assert.match(reply, /<svg width=\{20\} height=\{20\} viewBox="0 0 24 24"/);
+  assert.match(action, /<Send size=\{19\} strokeWidth=\{1\.75\}/);
+  assert.match(reply, /<svg width=\{19\} height=\{19\} viewBox="0 0 24 24"/);
   assert.match(reply, /strokeWidth=\{1\.75\} strokeLinecap="round" strokeLinejoin="round"/);
   assert.match(reply, /M2 12h9c7 0 11 3 11 10/);
   assert.match(css, /body\[data-theme\] \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   assert.match(css, /\.miniapp-shell \.ai-message-forward-actions button\.ai-message-reply-trigger svg/);
   const matched = css.match(/\/\* Both action glyphs[\s\S]*?\*\/[\s\S]*?\{([^}]+)\}/)?.[1] ?? '';
-  assert.match(matched, /width:\s*20px !important/);
-  assert.match(matched, /height:\s*20px !important/);
+  assert.match(matched, /width:\s*19px !important/);
+  assert.match(matched, /height:\s*19px !important/);
   assert.match(matched, /stroke-width:\s*1\.75 !important/);
   assert.doesNotMatch(matched, /17px/);
-  assert.match(css, /\.ai-message-reply-trigger \{[\s\S]*?width: 28px !important;[\s\S]*?height: 25px !important;/);
+  assert.match(css, /\.ai-message-reply-trigger \{[\s\S]*?width: 26px !important;[\s\S]*?height: 24px !important;/);
 });
 
 test('light Mini App button overrides cannot add a white box around the paper-plane icon', () => {
