@@ -10,6 +10,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
@@ -1253,7 +1254,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
       const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
-      return text.includes(query);
+      return matchesWorkspaceText(text, query);
     };
 
     return tasks.filter((task) => matchesCommonFilters(task) && !task.parentTaskId);
@@ -1299,7 +1300,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
       const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
-      return text.includes(query);
+      return matchesWorkspaceText(text, query);
     });
   }, [sphereFilter, taskSearch, tasks, timeFilter]);
 
