@@ -33,8 +33,8 @@ test('quick desktop and mini general chat default to Luna, other web chats keep 
     readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
   ]);
   assert.ok(app.includes("quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna')"));
-  assert.ok(app.includes("selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini')"));
-  assert.ok(app.includes("activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : selectedAiChatModel"));
+  assert.ok(app.includes("readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL"));
+  assert.ok(app.includes("activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel"));
   assert.ok(mini.includes("selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna')"));
 });
 
