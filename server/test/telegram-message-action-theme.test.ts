@@ -34,7 +34,7 @@ test('reply and share use equal 17px glyphs, thinner stroke and unchanged button
   const matched = css.match(/\/\* Both action glyphs[\s\S]*?\*\/[\s\S]*?\{([^}]+)\}/)?.[1] ?? '';
   assert.match(matched, /width:\s*17px !important/);
   assert.match(matched, /height:\s*17px !important/);
-  assert.match(matched, /stroke-width:\s*1\.5 !important/);
+  assert.match(matched, /stroke-width:\s*1\.3 !important/);
   assert.doesNotMatch(matched, /(?:18|19|20)px/);
   assert.match(css, /\.ai-message-reply-trigger \{[\s\S]*?width: 28px !important;[\s\S]*?height: 25px !important;/);
 });
