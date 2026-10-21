@@ -36,7 +36,7 @@ test('Saved Messages leads the list without sticky scrolling', () => {
 test('web and Mini App share the neutral paper-plane and integration picker', () => {
   assert.match(web, /TelegramMessageQuickShare text=\{.*?\} compact/);
   assert.match(mini, /TelegramMessageQuickShare text=\{.*?\} compact/);
-  assert.match(share, /<Send size=\{19\} strokeWidth=\{1\.75\}/);
+  assert.match(share, /<Send size=\{20\} strokeWidth=\{1\.75\}/);
   assert.match(share, /data-message-forward-trigger="true"/);
   assert.match(share, /role="menu"/);
   assert.match(share, /role="menuitem"/);

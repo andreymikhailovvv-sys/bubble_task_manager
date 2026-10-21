@@ -301,7 +301,7 @@ export function TelegramMessageQuickShare({ text }: Props) {
           aria-expanded={menuOpen} aria-haspopup="menu"
           className="telegram-quick-share__trigger"
           data-message-forward-trigger="true">
-          <Send size={19} strokeWidth={1.75} aria-hidden="true" />
+          <Send size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>
         {menuOpen ? <div role="menu" className="telegram-quick-share__platform-menu">
           <div className="telegram-quick-share__menu-caption">Переслать в</div>

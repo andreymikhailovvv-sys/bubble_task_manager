@@ -210,7 +210,7 @@ body[data-theme] .telegram-quick-share__textarea:focus {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  min-height: 26px;
+  min-height: 27px;
   padding: 2px 2px 0;
   line-height: 1;
 }
@@ -228,10 +228,10 @@ body[data-theme] .miniapp-shell .ai-message-forward-actions button.telegram-quic
   place-items: center !important;
   position: relative !important;
   box-sizing: border-box !important;
-  width: 26px !important;
-  height: 24px !important;
-  min-width: 26px !important;
-  min-height: 24px !important;
+  width: 28px !important;
+  height: 25px !important;
+  min-width: 28px !important;
+  min-height: 25px !important;
   padding: 0 !important;
   margin: 0 !important;
   border: 0 !important;
@@ -271,10 +271,10 @@ body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg
 .miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
   position: static !important;
   display: block !important;
-  width: 19px !important;
-  height: 19px !important;
-  min-width: 19px !important;
-  min-height: 19px !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
   padding: 0 !important;
   margin: 0 !important;
   transform: none !important;
@@ -340,22 +340,23 @@ body[data-theme='dark'] .telegram-quick-share__platform-menu {
    Reply immediately precedes the paper-plane Telegram share icon. */
 .ai-message-forward-actions {
   justify-content: flex-end;
-  gap: 4px;
+  gap: 7px;
 }
 .ai-message-forward-actions > .telegram-quick-share__menu-anchor,
 .ai-message-forward-actions > .ai-message-reply-trigger {
-  flex: 0 0 26px;
+  flex: 0 0 28px;
 }
-/* Move reply subtly toward share, retaining matched 26x24px targets. */
+/* The reply arrow is optically centred a little to the right of its
+   hit area; leave both 28x25px click targets and Send alignment intact. */
 body[data-theme] .ai-message-forward-actions button.ai-message-reply-trigger svg,
 .miniapp-shell .ai-message-forward-actions button.ai-message-reply-trigger svg {
-  transform: translateX(2.5px) !important;
+  transform: translateX(2px) !important;
 }
 .ai-message-reply-trigger {
   display: grid !important;
   place-items: center !important;
-  width: 26px !important;
-  height: 24px !important;
+  width: 28px !important;
+  height: 25px !important;
   border: none !important;
   border-radius: 7px !important;
   background: transparent !important;
