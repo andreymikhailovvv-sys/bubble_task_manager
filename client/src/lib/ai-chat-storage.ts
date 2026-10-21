@@ -6,7 +6,7 @@ type CachedProject = {
   title: string;
   color: string;
   icon: string;
-  chats: Array<{ id: string; title: string; messages: CachedMessage[] }>;
+  chats: Array<{ id: string; title: string; messages: CachedMessage[]; model?: string; modelChangedAt?: string }>;
 };
 
 /**
@@ -23,6 +23,8 @@ export function persistAiChatProjectsCache(
     id: project.id, title: project.title, color: project.color, icon: project.icon,
     chats: project.chats.map(chat => ({
       id: chat.id, title: chat.title,
+      ...(chat.model ? { model: chat.model } : {}),
+      ...(chat.modelChangedAt ? { modelChangedAt: chat.modelChangedAt } : {}),
       messages: chat.messages.slice(-12).map(message => ({
         id: message.id,
         role: message.role,

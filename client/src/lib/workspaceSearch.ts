@@ -15,6 +15,30 @@ export const normalizeWorkspaceQuery = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').trim();
 
 const simplify = (value: string) => normalizeWorkspaceQuery(value).replace(/\s+/g, ' ');
+
+// The same physical key sequence on the English and Russian keyboard.
+// Convert query tokens, never indexed documents: existing English names remain
+// searchable normally, even if a mapped Russian token happens to match too.
+const EN_LAYOUT = "qwertyuiop[]asdfghjkl;'zxcvbnm,.";
+const RU_LAYOUT = "йцукенгшщзхъфывапролджэячсмитьбю";
+const EN_TO_RU = new Map([...EN_LAYOUT].map((key, index) => [key, RU_LAYOUT[index]]));
+const RU_TO_EN = new Map([...RU_LAYOUT].map((key, index) => [key, EN_LAYOUT[index]]));
+
+export function workspaceQueryVariants(query: string): string[] {
+  const normalized = simplify(query);
+  if (!normalized) return [];
+  const map = /[a-z]/u.test(normalized) && !/[а-я]/u.test(normalized) ? EN_TO_RU
+    : /[а-я]/u.test(normalized) && !/[a-z]/u.test(normalized) ? RU_TO_EN : null;
+  const mapped = map ? [...normalized].map(char => map.get(char) ?? char).join('') : normalized;
+  return mapped !== normalized ? [normalized, mapped] : [normalized];
+}
+
+const termVariants = (term: string): string[] => workspaceQueryVariants(term);
+export function matchesWorkspaceText(text: string, query: string): boolean {
+  const source = simplify(text);
+  const terms = simplify(query).split(' ').filter(Boolean).slice(0, 10);
+  return terms.length > 0 && terms.every(term => termVariants(term).some(variant => source.includes(variant)));
+}
 const decodeHtml = (value: string) => value.replace(/&#x([\da-f]+);/gi, (_match, code: string) => {
   const n = parseInt(code, 16);
   return n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : '';
@@ -54,12 +78,23 @@ export function scoreWorkspaceRow(row: SearchRow, query: string): WorkspaceSearc
   const title = simplify(row.title);
   const body = simplify(row.description);
   const context = simplify(row.context ?? '');
-  if (!terms.every(term => matchIndex(title, term) >= 0 || matchIndex(body, term) >= 0 || matchIndex(context, term) >= 0)) return null;
-  const fullQuery = terms.join(' ');
-  const score = (title === fullQuery ? 200 : title.includes(fullQuery) ? 110 : 0)
-    + (body.includes(fullQuery) ? 45 : 0)
-    + terms.reduce((n, term) => n + (matchIndex(title, term) >= 0 ? 35 : matchIndex(body, term) >= 0 ? 12 : 5), 0);
-  const firstFound = terms.map(term => matchIndex(body, term)).filter(idx => idx >= 0).sort((a,b)=>a-b)[0];
+  const matched = terms.map(term => {
+    const variants = termVariants(term);
+    // Prefer an exact-layout match over a converted match.
+    const match = variants.map(variant => ({
+      titleIndex: matchIndex(title, variant), bodyIndex: matchIndex(body, variant),
+      contextIndex: matchIndex(context, variant), variant
+    })).find(entry => entry.titleIndex >= 0 || entry.bodyIndex >= 0 || entry.contextIndex >= 0);
+    return match ?? null;
+  });
+  if (matched.some(entry => entry === null)) return null;
+  const hitTerms = matched.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const fullQueryVariants = workspaceQueryVariants(query);
+  const score = (fullQueryVariants.some(value => title === value) ? 200 :
+    fullQueryVariants.some(value => title.includes(value)) ? 110 : 0)
+    + (fullQueryVariants.some(value => body.includes(value)) ? 45 : 0)
+    + hitTerms.reduce((n, entry) => n + (entry.titleIndex >= 0 ? 35 : entry.bodyIndex >= 0 ? 12 : 5), 0);
+  const firstFound = hitTerms.map(entry => entry.bodyIndex).filter(idx => idx >= 0).sort((a,b)=>a-b)[0];
   const start = firstFound === undefined ? 0 : Math.max(0, firstFound - 55);
   return {
     id: row.id, kind: row.kind, title: row.title || 'Без названия', context: row.context,

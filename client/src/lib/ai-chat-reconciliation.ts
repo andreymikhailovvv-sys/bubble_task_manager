@@ -1,4 +1,5 @@
 import type { ChatMessage } from './types';
+import { preferRecentChatModel, readSavedAiChatModel } from './ai-chat-model';
 
 type IdentifiedChatMessage = ChatMessage & { id: string };
 
@@ -73,7 +74,7 @@ export function isolateTaskProposalChips<
 
 export type AiChatProjectOutline = {
   id: string; title: string; color: string; icon: string;
-  chats: Array<{ id: string; title: string }>;
+  chats: Array<{ id: string; title: string; model?: string; modelChangedAt?: string }>;
 };
 
 /**
@@ -101,9 +102,16 @@ export function reconcileAiChatProjectOutline<
     const chats = data.chats.map(thread => {
       const existing = previous?.chats.find(chat => chat.id === thread.id);
       if (!existing) { changed = true; return { ...thread, messages: [] } as unknown as TChat; }
-      if (existing.title === thread.title) return existing;
+      const mergedModel = preferRecentChatModel({ model: (existing as TChat & { model?: string }).model, modelChangedAt: (existing as TChat & { modelChangedAt?: string }).modelChangedAt }, {
+        model: readSavedAiChatModel(thread.model) ?? undefined, modelChangedAt: thread.modelChangedAt
+      });
+      const old = existing as TChat & { model?: string; modelChangedAt?: string };
+      const modelChanged = mergedModel.model !== old.model || mergedModel.modelChangedAt !== old.modelChangedAt;
+      if (existing.title === thread.title && !modelChanged) return existing;
       changed = true;
-      return { ...existing, title: thread.title };
+      return { ...existing, title: thread.title,
+        ...(mergedModel.model ? { model: mergedModel.model } : {}),
+        ...(mergedModel.modelChangedAt ? { modelChangedAt: mergedModel.modelChangedAt } : {}) };
     });
     if (!previous) {
       changed = true;

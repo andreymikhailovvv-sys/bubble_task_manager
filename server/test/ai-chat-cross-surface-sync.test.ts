@@ -181,3 +181,44 @@ test('cross-chat legacy proposal duplicates are excluded without deleting real i
   assert.deepEqual(client[0].chats[0].messages.map(m => m.id), ['legacy-id']);
   assert.deepEqual(client[0].chats[1].messages.map(m => m.id), ['different']);
 });
+
+
+test('project model belongs to one chat, survives stale device saves and quick chat stays Luna', () => {
+  const initial = [{id:'p',chats:[
+    {id:'quick-ai-requests',title:'Быстрые запросы',model:'gpt-6-luna',messages:[]},
+    {id:'a',title:'Разработка',model:'gpt-5.4-mini',modelChangedAt:'2026-10-20T10:00:00Z',messages:[]},
+    {id:'b',title:'Маркетинг',model:'gpt-6-luna',modelChangedAt:'2026-10-20T10:00:00Z',messages:[]}
+  ]}];
+  const selected = mergeChatProjectSnapshots(initial,[{id:'p',chats:[
+    {id:'quick-ai-requests',model:'gpt-6.1-sol',messages:[]},
+    {id:'a',model:'gpt-6.1-sol',modelChangedAt:'2026-10-21T12:00:00Z',messages:[]},
+    {id:'b',model:'gpt-6-luna',modelChangedAt:'2026-10-20T10:00:00Z',messages:[]}
+  ]}]);
+  const stale = mergeChatProjectSnapshots(selected,initial);
+  assert.equal(stale[0].chats![0].model,'gpt-6-luna');
+  assert.equal(stale[0].chats![1].model,'gpt-6.1-sol');
+  assert.equal(stale[0].chats![2].model,'gpt-6-luna');
+  const older = reconcileAiChatProjectOutline([{
+    id:'p',title:'Личный проект',color:'#888',icon:'✨',
+    chats:[{id:'a',title:'Разработка',model:'gpt-6.1-sol',modelChangedAt:'2026-10-21T12:00:00Z',messages:[]}]
+  }],[{id:'p',title:'Личный проект',color:'#888',icon:'✨',
+    chats:[{id:'a',title:'Разработка',model:'gpt-5.4-mini',modelChangedAt:'2026-10-20T10:00:00Z'}]}]);
+  assert.equal(older[0].chats[0].model,'gpt-6.1-sol');
+  const newer = reconcileAiChatProjectOutline(older,[{id:'p',title:'Личный проект',color:'#888',icon:'✨',
+    chats:[{id:'a',title:'Разработка',model:'gpt-5.4-mini',modelChangedAt:'2026-10-21T13:00:00Z'}]}]);
+  assert.equal(newer[0].chats[0].model,'gpt-5.4-mini');
+});
+
+test('web and mobile AI chat model is stored on the chosen thread, not one global selection', () => {
+  const app = source('../../client/src/App.tsx');
+  const mini = source('../../client/src/MiniApp.tsx');
+  const cached = source('../../client/src/lib/ai-chat-storage.ts');
+  const route = source('../src/routes/api.ts');
+  for (const client of [app, mini]) {
+    assert.match(client,/modelChangedAt: new Date\(\)\.toISOString\(\)/);
+    assert.match(client,/readSavedAiChatModel\(activeAiChat\?\.model\)/);
+    assert.match(client,/if \(activeAiChatId === QUICK_AI_CHAT_ID\) setQuickAiChatModel\(DEFAULT_QUICK_AI_CHAT_MODEL\)/);
+  }
+  assert.match(cached,/model: chat\.model/);
+  assert.match(route,/typeof item\.model === 'string'/);
+});

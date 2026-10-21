@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import type { Task } from '../../client/src/lib/types.js';
 import type { StandaloneNote } from '../../client/src/lib/api.js';
 import {
-  searchWorkspace, noteSearchText, scoreWorkspaceRow
+  searchWorkspace, noteSearchText, scoreWorkspaceRow, workspaceQueryVariants, matchesWorkspaceText
 } from '../../client/src/lib/workspaceSearch.js';
 
 const row = (id: string, title: string, description: string, parentTaskId?: string): Task =>
@@ -67,7 +67,7 @@ test('top search filters workspace as before and opens corresponding editors', a
     readFile(new URL('../../client/src/components/StandaloneNotesWorkspace.tsx',import.meta.url),'utf8'),
     readFile(new URL('../../client/src/styles.css',import.meta.url),'utf8')
   ]);
-  assert.match(app,/if \(search && !task\.title\.toLowerCase\(\)\.includes\(search\.toLowerCase\(\)\)\) return false/);
+  assert.match(app,/if \(search && !matchesWorkspaceText\(task\.title, search\)\) return false/);
   assert.match(app,/<WorkspaceGlobalSearch/);
   assert.match(app,/onOpenTask=\{openTaskWithFocusGuard\}/);
   assert.match(app,/onOpenSubtask=\{\(subtask\) => setEditorState\(\{ task: subtask \}\)\}/);
@@ -122,4 +122,28 @@ test('Mini App and mobile website share desktop global search, with note deep li
   assert.match(css, /body\[data-theme='light'\] \.workspace-global-search-panel-mobile/);
   assert.match(css, /body\[data-theme='dark'\] \.workspace-global-search-panel-mobile/);
   assert.match(css, /\.miniapp-shell \.miniapp-global-search-field input/);
+});
+
+
+test('English keyboard layout finds Russian tasks, subtasks and notes across all surfaces', () => {
+  const tasks = [row('task','Привет планировыч','Заказать сувениры на выставку')];
+  const children = [row('subtask','Проверить договор','Встретить гостя','task')];
+  const notes = [note('note','Приветствие','<p>Важная заметка про договор</p>')];
+  const result = searchWorkspace(tasks, children, notes,'ghbdtn');
+  assert.equal(result.task[0]?.id,'task');
+  assert.equal(result.note[0]?.id,'note');
+  assert.equal(searchWorkspace(tasks, children, notes,'ghjdthbnm ljujdjh').subtask[0]?.id,'subtask');
+  assert.equal(searchWorkspace(tasks, children, notes,'ljujdjh').note[0]?.id,'note');
+  assert.equal(matchesWorkspaceText('Проверить договор','ghjdthbnm ljujdjh'),true);
+  assert.equal(matchesWorkspaceText('Встреча','ghbdtn'),false);
+});
+
+test('Russian keyboard layout finds Latin texts without disrupting English searches', () => {
+  assert.deepEqual(workspaceQueryVariants('руддщ'), ['руддщ','hello']);
+  assert.deepEqual(workspaceQueryVariants('ghbdtn'), ['ghbdtn','привет']);
+  assert.equal(matchesWorkspaceText('Hello world','руддщ'),true);
+  assert.equal(scoreWorkspaceRow({id:'x',kind:'task',title:'Hello world',description:''},'hello')?.id,'x');
+  assert.equal(scoreWorkspaceRow({id:'x',kind:'task',title:'Hello world',description:''},'руддщ')?.id,'x');
+  assert.equal(matchesWorkspaceText('Согласовать договор','ghbdtn'),false);
+  assert.equal(matchesWorkspaceText('Привет и договор','ghbdtn договор'),true);
 });

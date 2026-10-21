@@ -33,7 +33,21 @@ export function mergeChatProjectSnapshots(previous: unknown, incoming: unknown):
         const existing = merged.get(message.id);
         merged.set(message.id, existing ? { ...existing, ...message } : message);
       }
-      return { ...chat, messages: [...merged.values()].slice(chat.id === 'quick-ai-requests' ? -100 : -300) };
+      // A stale mobile/web snapshot must not reset the selected model in a
+      // conversation changed by another device. Message merge is independent.
+      const savedChat = previousChats.get(chat.id);
+      const allowedModels = new Set(['gpt-6-luna', 'gpt-5.4-mini', 'gpt-6.1-sol']);
+      const incomingModel = allowedModels.has(String(chat.model)) ? chat.model : undefined;
+      const savedModel = allowedModels.has(String(savedChat?.model)) ? savedChat?.model : undefined;
+      const incomingStamp = typeof chat.modelChangedAt === 'string' ? Date.parse(chat.modelChangedAt) : NaN;
+      const savedStamp = typeof savedChat?.modelChangedAt === 'string' ? Date.parse(savedChat.modelChangedAt) : NaN;
+      const takeSaved = savedModel !== undefined && (!incomingModel ||
+        (Number.isFinite(savedStamp) && (!Number.isFinite(incomingStamp) || savedStamp > incomingStamp)));
+      const model = chat.id === 'quick-ai-requests' ? 'gpt-6-luna' : (takeSaved ? savedModel : incomingModel);
+      const modelChangedAt = chat.id === 'quick-ai-requests' ? undefined : (takeSaved ? savedChat?.modelChangedAt : chat.modelChangedAt);
+      return { ...chat, ...(model ? { model } : {}),
+        ...(typeof modelChangedAt === 'string' && Number.isFinite(Date.parse(modelChangedAt)) ? { modelChangedAt } : {}),
+        messages: [...merged.values()].slice(chat.id === 'quick-ai-requests' ? -100 : -300) };
     });
     return { ...project, chats };
   });

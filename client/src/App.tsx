@@ -25,6 +25,7 @@ import { browserNotificationPermission, requestBrowserNotificationPermission, sh
 import { NotesEditor } from './components/NotesEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { renderAiContentBlocks } from './components/AiCodeBlocks';
 import { noteHtmlToPlainText } from './lib/notes';
 import { LATEST_NEWS_ID, UpdatesMenu } from './components/UpdatesMenu';
@@ -44,6 +45,7 @@ import { TelegramIntegrationsMenu } from './components/TelegramIntegrationsMenu'
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
+import { DEFAULT_QUICK_AI_CHAT_MODEL, DEFAULT_WEB_PROJECT_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -349,7 +351,7 @@ type GeneralAiUndoOperation = {
 type GeneralAiMessage = ChatMessage & { id: string };
 type AiChatMessage = ChatMessage & { id: string; createdAt?: string; taskSuggestions?: string[]; approvedSuggestionIndices?: number[] };
 type SystemNotification = { id: string; eventKey?: string; taskId?: string | null; content: string; readAt?: string | null; createdAt: string };
-type AiChatThread = { id: string; title: string; messages: AiChatMessage[] };
+type AiChatThread = { id: string; title: string; messages: AiChatMessage[]; model?: AiChatModel; modelChangedAt?: string };
 type AiChatProject = { id: string; title: string; color: string; icon: string; chats: AiChatThread[] };
 const TELEGRAM_AI_MANAGED_PROJECT_ID = 'telegram-ai-assistant-project';
 const TELEGRAM_AI_MANAGED_CHAT_PREFIX = 'telegram-ai-assistant:';
@@ -439,13 +441,15 @@ function normalizeAiChatProjects(rawProjects: Array<Partial<AiChatProject>> | nu
       ? (project.chats ?? []) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat) => ({
       id: chat.id ?? crypto.randomUUID(),
       title: chat.title ?? 'Новый чат',
+      ...(readSavedAiChatModel(chat.model) ? { model: readSavedAiChatModel(chat.model)! } : {}),
+      ...(typeof chat.modelChangedAt === 'string' ? { modelChangedAt: chat.modelChangedAt } : {}),
       messages: chat.messages ?? []
     }))
   }));
   const defaultProject = normalized[0] ?? fallback[0];
   const existingQuickChatIndex = defaultProject.chats.findIndex((chat) => chat.id === QUICK_AI_CHAT_ID || chat.title === QUICK_AI_CHAT_TITLE);
   const existingQuickChat = existingQuickChatIndex >= 0 ? defaultProject.chats[existingQuickChatIndex] : undefined;
-  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, messages: reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100)) };
+  const mergedQuickChat: AiChatThread = { ...quickChat, ...existingQuickChat, id: QUICK_AI_CHAT_ID, title: QUICK_AI_CHAT_TITLE, model: DEFAULT_QUICK_AI_CHAT_MODEL, messages: reconcileAiChatMessagesWithChips(existingQuickChat?.messages ?? [], quickMessages.slice(-100)) };
   normalized[0] = { ...defaultProject, chats: [mergedQuickChat, ...defaultProject.chats.filter((_, index) => index !== existingQuickChatIndex)] };
   return isolateTaskProposalChips(sanitizeCachedTelegramAssistantProjects(normalized));
 }
@@ -1087,7 +1091,6 @@ export default function App() {
   const [quickAiChatDraft, setQuickAiChatDraft] = useState('');
   const [quickAiChatLoading, setQuickAiChatLoading] = useState(false);
   const [quickAiPreviewHovered, setQuickAiPreviewHovered] = useState(false);
-  const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-5.4-mini');
   const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>('gpt-6-luna');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
@@ -2751,6 +2754,18 @@ ${allContext}`,
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+  const activeProjectChatModel = readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL;
+  const changeProjectChatModel = (model: AiChatModel) => {
+    if (!activeAiChatProject?.id || !activeAiChat?.id || activeAiChat.id === QUICK_AI_CHAT_ID) return;
+    const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
+    setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : {
+      ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat
+        : { ...chat, model, modelChangedAt: new Date().toISOString() })
+    }));
+  };
+  useEffect(() => {
+    if (activeAiChatId === QUICK_AI_CHAT_ID) setQuickAiChatModel(DEFAULT_QUICK_AI_CHAT_MODEL);
+  }, [activeAiChatId, isAiChatOpen]);
   const quickAiChatMessages = aiChatProjects[0]?.chats.find((chat) => chat.id === QUICK_AI_CHAT_ID)?.messages ?? [];
   const quickAiChatTimeline = useMemo(() => [
     ...quickAiChatMessages.map((message, index) => ({ kind: 'message' as const, timestamp: message.createdAt ? new Date(message.createdAt).getTime() : index, message })),
@@ -3048,7 +3063,7 @@ ${allContext}`,
         clientRequestId: userMessage.id,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyTarget),
         history,
-        model: quick ? 'gpt-6-luna' : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : selectedAiChatModel,
+        model: quick ? DEFAULT_QUICK_AI_CHAT_MODEL : activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel,
         projectTitle: quick ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: quick ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         projectId: activeAiChatProject?.id,
@@ -3251,7 +3266,7 @@ ${allContext}`,
         question: 'Продолжи предыдущий запрос после разрешения пользователя прочитать выбранную Telegram-переписку.',
         history: chat.messages,
         telegramRead: approval,
-        model: quick ? quickAiChatModel : selectedAiChatModel,
+        model: quick ? quickAiChatModel : (readSavedAiChatModel(chat.model) ?? DEFAULT_WEB_PROJECT_CHAT_MODEL),
         projectTitle: project.title, chatTitle: chat.title, projectId, chatId,
         clientSurface: 'web'
       }, { onStatus: setAiChatProgress });
@@ -3589,7 +3604,7 @@ ${allContext}`,
           return date >= start && date < end;
         };
 
-        if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !matchesWorkspaceText(task.title, search)) return false;
         const isFilteringBySubset = shouldApplySphereFilter && spheres.length > 0 && selectedSphereIds.length > 0 && selectedSphereIds.length < spheres.length;
         if (isFilteringBySubset && (!task.sphereId || !selectedSphereIds.includes(task.sphereId))) return false;
         if (effectiveTimeFilter === 'focus') {
@@ -8331,7 +8346,7 @@ ${allContext}`,
           activeProject={activeAiChatProject}
           activeChat={activeAiChat}
           quickChatId={QUICK_AI_CHAT_ID}
-          model={activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : selectedAiChatModel}
+          model={activeAiChat?.id === QUICK_AI_CHAT_ID ? quickAiChatModel : activeProjectChatModel}
           modelOptions={AI_CHAT_MODEL_SELECT_OPTIONS}
           pendingFiles={aiChatPendingFiles}
           loading={aiChatLoading}
@@ -8346,7 +8361,7 @@ ${allContext}`,
           onDeleteProject={deleteAiChatProject}
           onDeleteChat={deleteAiChatThread}
           onContextMenu={openAiChatItemContextMenu}
-          onModelChange={activeAiChat?.id === QUICK_AI_CHAT_ID ? setQuickAiChatModel : setSelectedAiChatModel}
+          onModelChange={activeAiChat?.id === QUICK_AI_CHAT_ID ? setQuickAiChatModel : changeProjectChatModel}
           onAddFiles={addAiChatFiles}
           onRemoveFile={(file) => setAiChatPendingFiles((files) => files.filter((item) => item.name !== file.name || item.size !== file.size))}
           replyTo={activeAiChat?.id === QUICK_AI_CHAT_ID ? replyToQuickAi : replyToAiChat}

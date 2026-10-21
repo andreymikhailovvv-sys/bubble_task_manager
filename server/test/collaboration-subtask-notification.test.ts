@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { formatCollaborativeSubtaskCompletedNotification } from '../src/services/collaboration-subtask-notification.service.js';
+import { formatCollaborativeSubtaskCompletedNotification, formatCollaborativeSubtaskCreatedNotification } from '../src/services/collaboration-subtask-notification.service.js';
 
 test('формат уведомления о закрытии чужой подзадачи соответствует продуктовой формулировке', () => {
   assert.equal(
@@ -38,4 +38,29 @@ test('фильтр по участнику остаётся локальным �
   assert.match(miniAppSource, /openedTaskSubtaskAuthorFilterUserId, setOpenedTaskSubtaskAuthorFilterUserId.*useState/);
   assert.match(miniAppSource, /task\.creatorUserId === openedTaskSubtaskAuthorFilterUserId/);
   assert.match(miniAppSource, /onScroll=\{\(\) => setIsOpenedTaskSubtaskFilterOpen\(false\)\}/);
+});
+
+
+test('создатель совместной задачи получает название новой подзадачи и имя участника', async () => {
+  assert.equal(formatCollaborativeSubtaskCreatedNotification({
+    actorName: 'Мария', subtaskTitle: 'Подготовить афишу', taskTitle: 'Музейная выставка'
+  }), 'Пользователь Мария добавил подзадачу «Подготовить афишу» в совместную задачу «Музейная выставка»');
+  const [producer, notify, browser] = await Promise.all([
+    readFile(new URL('../src/services/task.service.ts',import.meta.url),'utf8'),
+    readFile(new URL('../src/services/collaboration-subtask-notification.service.ts',import.meta.url),'utf8'),
+    readFile(new URL('../../client/src/lib/browser-system-notifications.ts',import.meta.url),'utf8')
+  ]);
+  const create = producer.slice(producer.indexOf('create: async'), producer.indexOf('update: async'));
+  assert.match(create,/created\.parentTaskId && created\.collaborationId/);
+  assert.match(create,/notifyCollaborativeSubtaskCreated\(\{ subtaskId: created\.id, actorUserId: userId \}\)/);
+  assert.match(notify,/parent\.userId === input\.actorUserId/);
+  assert.match(notify,/isHidden: false/);
+  assert.match(notify,/userId: parent\.userId, taskId: parent\.id, eventKey, content/);
+  assert.match(notify,/collaboration-subtask-created:/);
+  assert.match(notify,/P2002/);
+  assert.match(notify,/telegramFetch/);
+  assert.match(notify,/escapeHtml\(subtask\.title\)/);
+  assert.match(notify,/escapeHtml\(parent\.title\)/);
+  assert.match(browser,/notification\.readAt == null/);
+  assert.match(browser,/input\.pageHidden/);
 });

@@ -10,6 +10,7 @@ import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
+import { matchesWorkspaceText } from './lib/workspaceSearch';
 import { MiniWorkspaceTools } from './components/MiniWorkspaceTools';
 import { TaskDescriptionInput } from './components/TaskDescriptionInput';
 import { measureTitleTextareaRows } from './lib/titleTextareaRows';
@@ -41,6 +42,7 @@ import { AiReplyAction, AiReplyPreview, AiReplyMessageBody, serializeAiReply, ty
 import { AiTaskProposalCard, proposalAppliedEvent } from './components/AiTaskProposalCard';
 import { isolateTaskProposalChips, reconcileActiveAiChatMessages, reconcileAiChatProjectOutline, mergeTelegramManagedMessages, reconcileAiChatMessagesWithChips, sanitizeCachedTelegramAssistantProjects, isTelegramAssistantProjectLike } from './lib/ai-chat-reconciliation';
 import { persistAiChatProjectsCache } from './lib/ai-chat-storage';
+import { DEFAULT_MOBILE_PROJECT_CHAT_MODEL, DEFAULT_QUICK_AI_CHAT_MODEL, readSavedAiChatModel } from './lib/ai-chat-model';
 import { TelegramInlineSendCard } from './components/TelegramInlineSendCard';
 import { TelegramAiReplySuggestionCard } from './components/TelegramAiReplySuggestionCard';
 import { TelegramReadConsentCard } from './components/TelegramReadConsentCard';
@@ -132,7 +134,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 
 
 type MiniAiChatMessage = ChatMessage & { id: string };
-type MiniAiChatThread = { id: string; title: string; messages: MiniAiChatMessage[] };
+type MiniAiChatThread = { id: string; title: string; messages: MiniAiChatMessage[]; model?: AiChatModel; modelChangedAt?: string };
 type MiniAiChatProject = { id: string; title: string; color: string; icon: string; chats: MiniAiChatThread[] };
 type MiniAiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: string; color: string; icon: string };
 
@@ -165,6 +167,8 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
     chats: (project.chats?.length || project.id === 'telegram-ai-assistant-project' ? (project.chats ?? []) : [{ id: crypto.randomUUID(), title: 'Новый чат', messages: [] }]).map((chat, chatIndex) => ({
       id: chat.id ?? crypto.randomUUID(),
       title: chat.title ?? `Чат ${chatIndex + 1}`,
+      ...(readSavedAiChatModel(chat.model) ? { model: readSavedAiChatModel(chat.model)! } : {}),
+      ...(typeof chat.modelChangedAt === 'string' ? { modelChangedAt: chat.modelChangedAt } : {}),
       messages: (chat.messages ?? [])
         .filter((message) => (message?.role === 'user' || message?.role === 'assistant') && typeof message?.content === 'string')
         .map((message) => ({
@@ -191,6 +195,7 @@ function normalizeMiniAiChatProjects(rawProjects: Array<Partial<MiniAiChatProjec
     ...existingQuickChat,
     id: QUICK_AI_CHAT_ID,
     title: QUICK_AI_CHAT_TITLE,
+    model: DEFAULT_QUICK_AI_CHAT_MODEL,
     messages: (existingQuickChat?.messages ?? []).slice(-100)
   };
   normalized[0] = {
@@ -828,6 +833,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [aiChatPendingFiles, setAiChatPendingFiles] = useState<File[]>([]);
   const [aiChatUploadProgress, setAiChatUploadProgress] = useState<number | null>(null);
   const [selectedAiChatModel, setSelectedAiChatModel] = useState<AiChatModel>('gpt-6-luna');
+  const [quickAiChatModel, setQuickAiChatModel] = useState<AiChatModel>(DEFAULT_QUICK_AI_CHAT_MODEL);
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatProgress, setAiChatProgress] = useState<AiChatProgressStatus>('analyzing_request');
   const [aiChatError, setAiChatError] = useState<string | null>(null);
@@ -1253,7 +1259,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
       const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
-      return text.includes(query);
+      return matchesWorkspaceText(text, query);
     };
 
     return tasks.filter((task) => matchesCommonFilters(task) && !task.parentTaskId);
@@ -1299,7 +1305,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       if (!matchesTimeFilter(task)) return false;
       if (!query) return true;
       const text = [task.title, noteHtmlToPlainText(task.description ?? '', { trimEnd: true })].join(' ').toLowerCase();
-      return text.includes(query);
+      return matchesWorkspaceText(text, query);
     });
   }, [sphereFilter, taskSearch, tasks, timeFilter]);
 
@@ -2641,6 +2647,23 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+  const generalAiChatModel = activeAiChat?.id === QUICK_AI_CHAT_ID
+    ? quickAiChatModel : (readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_MOBILE_PROJECT_CHAT_MODEL);
+  const changeGeneralAiChatModel = (model: AiChatModel) => {
+    if (activeAiChat?.id === QUICK_AI_CHAT_ID) {
+      setQuickAiChatModel(model);
+      return;
+    }
+    if (!activeAiChatProject?.id || !activeAiChat?.id) return;
+    const projectId = activeAiChatProject.id, chatId = activeAiChat.id;
+    setAiChatProjects(previous => previous.map(project => project.id !== projectId ? project : {
+      ...project, chats: project.chats.map(chat => chat.id !== chatId ? chat
+        : { ...chat, model, modelChangedAt: new Date().toISOString() })
+    }));
+  };
+  useEffect(() => {
+    if (activeAiChatId === QUICK_AI_CHAT_ID) setQuickAiChatModel(DEFAULT_QUICK_AI_CHAT_MODEL);
+  }, [activeAiChatId, isAiChatOpen]);
 
   useEffect(() => {
     const persistableProjects = stripAiChatProjectDisplayPreviews(aiChatProjects);
@@ -2788,7 +2811,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientRequestId: crypto.randomUUID(),
         question: 'Продолжи предыдущий запрос по разрешённой Telegram-переписке.',
         history: activeAiChat.messages, telegramRead: approval,
-        model: selectedAiChatModel, projectTitle: activeAiChatProject?.title,
+        model: generalAiChatModel, projectTitle: activeAiChatProject?.title,
         chatTitle: activeAiChat.title, projectId, chatId, clientSurface
       }, { onStatus: setAiChatProgress });
       const answer: MiniAiChatMessage = {
@@ -2866,7 +2889,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         clientRequestId: userMessage.id,
         question: serializeAiReply(question || 'Пользователь отправил сообщение с вложением. Проанализируй содержимое файлов.', replyToGeneral),
         history,
-        model: selectedAiChatModel,
+        model: generalAiChatModel,
         projectTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_PROJECT_TITLE : activeAiChatProject?.title,
         chatTitle: activeAiChat?.id === QUICK_AI_CHAT_ID ? QUICK_AI_CHAT_TITLE : activeAiChat?.title,
         projectId: activeAiChatProject?.id,
@@ -4781,7 +4804,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </div>
               </div>
               <button type="button" onClick={() => closeMiniWindowWithMotion('ai-chat', () => setIsAiChatOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть чат с ИИ"><X size={18} /></button>
-              <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
+              <select value={generalAiChatModel} onChange={(event) => changeGeneralAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель чата">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
