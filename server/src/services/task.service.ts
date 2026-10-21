@@ -2,7 +2,7 @@ import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { createCollaborationInviteToken } from '../lib/collaboration-security.js';
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
-import { notifyCollaborativeSubtaskCompleted } from './collaboration-subtask-notification.service.js';
+import { notifyCollaborativeSubtaskCompleted, notifyCollaborativeSubtaskCreated } from './collaboration-subtask-notification.service.js';
 import { computeNextSlotRecurrenceDueDate, validateManualRecurrenceSchedule } from './recurrence-slots.service.js';
 
 interface TaskInput {
@@ -296,6 +296,9 @@ export const taskService = {
       }
     });
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
+    if (created.parentTaskId && created.collaborationId) {
+      await notifyCollaborativeSubtaskCreated({ subtaskId: created.id, actorUserId: userId });
+    }
     return created;
   },
   update: async (id: string, userId: string, input: TaskInput) => {
