@@ -13,10 +13,20 @@ const AI_FRAGMENT_CHARS = 3000;
 export const TELEGRAM_PART_CHARS = 4000;
 
 export function validateQuickText(input: unknown): string {
+  // Keep the old bound for inline Telegram AI drafts and other unrelated tools.
+  if (typeof input !== 'string' || !input.trim() || input.length > 4000 ||
+      Buffer.byteLength(input, 'utf8') > 12_000 ||
+      /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(input)) {
+    throw new TelegramUserClientError(400, 'Сообщение должно быть непустым и короче 4000 символов');
+  }
+  return input;
+}
+
+export function validateShareText(input: unknown): string {
   if (typeof input !== 'string' || !input.trim() || input.length > MAX_QUICK_TEXT ||
       Buffer.byteLength(input, 'utf8') > MAX_QUICK_TEXT_BYTES ||
       /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(input)) {
-    throw new TelegramUserClientError(400, 'Сообщение должно быть непустым и короче 24 000 символов');
+    throw new TelegramUserClientError(400, 'Сообщение для пересылки должно быть непустым и короче 24 000 символов');
   }
   return input;
 }
@@ -85,14 +95,14 @@ export function parseQuickRewriteOutput(response: unknown): string {
       .map((part) => part && typeof part === 'object' && typeof (part as {text?: unknown}).text === 'string' ? (part as {text: string}).text : '')
       .join('');
   }
-  try { return validateQuickText(text.trim()); }
+  try { return validateShareText(text.trim()); }
   catch { throw new TelegramUserClientError(502, 'ИИ не подготовил подходящий текст. Измените запрос и повторите'); }
 }
 
 export type QuickRewriteResult = { text: string; creditsSpentMilli: number };
 export async function rewriteSharedQuickText(userId: string, original: string, instruction: string, destination: 'telegram' | 'notes'): Promise<QuickRewriteResult> {
   if (destination === 'telegram' && !isTelegramAiDraftEnabled()) throw new TelegramUserClientError(403, 'Изменение сообщений ИИ недоступно');
-  const text = validateQuickText(original);
+  const text = validateShareText(original);
   const task = validateQuickInstruction(instruction);
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) throw new TelegramUserClientError(503, 'ИИ временно недоступен');
@@ -113,7 +123,7 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
       const output = parseQuickRewriteOutput(call.responseJson);
       revised.push(output);
     }
-    const resultText = validateQuickText(revised.join(chunks.length > 1 ? '\n' : ''));
+    const resultText = validateShareText(revised.join(chunks.length > 1 ? '\n' : ''));
     // Settle only after every fragment passed validation. On incomplete output
     // none of the held reservations is charged.
     let creditsSpentMilli = 0;
