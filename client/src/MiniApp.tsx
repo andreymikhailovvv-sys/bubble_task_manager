@@ -688,6 +688,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [manualCheckupLoading, setManualCheckupLoading] = useState(false);
   const [manualCheckupError, setManualCheckupError] = useState<string | null>(null);
+  // The saved checkup is pinned locally until the regular Quick AI history
+  // includes it. A concurrent chat refresh must not make the result vanish.
+  const [latestManualCheckup, setLatestManualCheckup] = useState<MiniAiChatMessage | null>(null);
   const [aiNotificationDefault, setAiNotificationDefault] = useState(() =>
     localStorage.getItem('btm:ai-notifications-default-enabled') !== '0');
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
@@ -918,6 +921,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     try {
       const { message } = await api.generateAiCheckupNow();
       const received = attachChatMessageId(message, message.id ?? crypto.randomUUID());
+      // Show the actual saved message (and its approval chip) immediately,
+      // regardless of any in-flight 2.5s thread reconciliation response.
+      setLatestManualCheckup(received);
       setAiChatProjects(previous => {
         const updated = previous.map((project, index) => index !== 0 ? project : ({
           ...project,
@@ -941,6 +947,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       setManualCheckupLoading(false);
     }
   };
+
+  // User data must never leak into another authenticated session.
+  useEffect(() => {
+    setLatestManualCheckup(null);
+  }, [currentUser?.id]);
 
   const getTaskAiRecipientId = (task: Task) => {
     const selectedRecipientId = aiRecipientByTaskId[task.id] ?? 'ai';
@@ -2696,6 +2707,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
   const activeAiChatProject = aiChatProjects.find((project) => project.id === activeAiChatProjectId) ?? aiChatProjects[0];
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
+  // Both the Telegram mini-app and mobile web use this same chat renderer.
+  // De-duplicate by message ID/content once the server history catches up.
+  const visibleAiChatMessages = activeAiChat?.id === QUICK_AI_CHAT_ID && latestManualCheckup
+    ? reconcileAiChatMessagesWithChips(activeAiChat.messages, [latestManualCheckup])
+    : (activeAiChat?.messages ?? []);
   const generalAiChatModel = activeAiChat?.id === QUICK_AI_CHAT_ID
     ? quickAiChatModel : (readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_MOBILE_PROJECT_CHAT_MODEL);
   const changeGeneralAiChatModel = (model: AiChatModel) => {
@@ -2827,7 +2843,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     if (!generalAiChatNearBottomRef.current) return;
     container.scrollTop = container.scrollHeight;
     generalAiChatScrollTopRef.current = container.scrollTop;
-  }, [activeAiChat?.messages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
+  }, [visibleAiChatMessages.length, aiChatLoading, aiChatProgress, isAiChatOpen, activeAiChatId]);
 
   useEffect(() => {
     if (!isAiChatOpen) return;
@@ -4897,20 +4913,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 }}
                 className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
               {linkedCheckupProposal && activeAiChat?.id === QUICK_AI_CHAT_ID &&
-                !(activeAiChat?.messages ?? []).some(message => message.taskProposal?.id === linkedCheckupProposal.id) ? (
+                 !visibleAiChatMessages.some(message => message.taskProposal?.id === linkedCheckupProposal.id) ? (
                 <div className="max-w-[95%] rounded-2xl border border-[color:var(--panel-border)] p-3">
                   <p className="mb-2 text-sm font-semibold">Изменения из ИИ-чекапа</p>
                   <AiTaskProposalCard proposal={linkedCheckupProposal} />
                 </div>
               ) : null}
-              {(activeAiChat?.messages ?? []).length === 0 ? (
+              {visibleAiChatMessages.length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
                   <strong>ИИ готов помочь</strong>
                   <p>Задайте вопрос, обсудите идею или попросите составить план.</p>
                 </div>
               ) : null}
-              {(activeAiChat?.messages ?? []).map((message) => (
+              {visibleAiChatMessages.map((message) => (
                 <div key={message.id} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-general w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? 'miniapp-ai-chat-message-user rounded-br-lg' : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`}>
                   <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.role === 'assistant' ? 'ИИ' : 'Вы'}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`mini-chat-${message.id}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `mini-chat-${message.id}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `mini-chat-${message.id}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                   <div className="text-sm leading-relaxed">{message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
