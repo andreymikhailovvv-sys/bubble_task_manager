@@ -61,8 +61,8 @@ test('generate button appears in desktop and mini/mobile and opens the saved Qui
 test('mini-app shows a just-generated checkup immediately, even before polling refresh', async () => {
   const mini = await source('../../client/src/MiniApp.tsx');
   assert.match(mini, /setLatestManualCheckup\(\{ userId: currentUser\.id, message: received \}\)/);
-  assert.match(mini, /latestManualCheckup\?\.userId === currentUser\?\.id/);
-  assert.match(mini, /reconcileAiChatMessagesWithChips\(activeAiChat\.messages, \[latestManualCheckup\.message\]\)/);
+  assert.match(mini, /latestManualCheckup\?\.userId === currentUser\.id/);
+  assert.match(mini, /reconcileAiChatMessagesWithChips\(activeAiChat\.messages, \[pinnedManualCheckup\]\)/);
   assert.match(mini, /visibleAiChatMessages\.map\(\(message\)/);
   assert.match(mini, /visibleAiChatMessages\.length === 0/);
   assert.match(mini, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
