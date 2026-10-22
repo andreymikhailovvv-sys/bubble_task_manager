@@ -46,9 +46,15 @@ export async function createAiCheckup(input: {
     }
   }
 
+  // Never present AI-recommended changes as though they can be applied when
+  // a server-side ownership/snapshot error prevented creation of the chip.
+  const reportText = checkup.moves.length && !proposalId
+    ? checkup.text + '\n\n⚠️ Предложения сформированы, но карточку подтверждения не удалось сохранить. Изменения не применены.'
+    : checkup.text;
+
   // Persist first, before reporting success or attempting Telegram delivery.
   const stored = await aiAssistantService.appendGeneralDialogAssistantMessage({
-    userId: input.userId, content: checkup.text,
+    userId: input.userId, content: reportText,
     creditsSpentMilli: checkup.creditsSpentMilli,
     taskProposalId: proposalId
   });
@@ -58,7 +64,7 @@ export async function createAiCheckup(input: {
   if (input.sendTelegram) {
     try {
       await telegramService.notifyDailyAiCheckup({
-        userId: input.userId, text: checkup.text, proposalId
+        userId: input.userId, text: reportText, proposalId
       });
     } catch (error) {
       console.error('[AiCheckup] saved but Telegram delivery failed', {
@@ -68,8 +74,8 @@ export async function createAiCheckup(input: {
   }
   console.info('[AiCheckup] generated and saved', {
     userId: input.userId, messageId: stored.id,
-    proposalId, manual: !input.sendTelegram,
-    creditsSpentMilli: checkup.creditsSpentMilli
+    proposalId, proposedActions: checkup.moves.length,
+    manual: !input.sendTelegram, creditsSpentMilli: checkup.creditsSpentMilli
   });
 
   return {
