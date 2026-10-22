@@ -690,7 +690,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [manualCheckupError, setManualCheckupError] = useState<string | null>(null);
   // The saved checkup is pinned locally until the regular Quick AI history
   // includes it. A concurrent chat refresh must not make the result vanish.
-  const [latestManualCheckup, setLatestManualCheckup] = useState<MiniAiChatMessage | null>(null);
+  const [latestManualCheckup, setLatestManualCheckup] = useState<{ userId: string; message: MiniAiChatMessage } | null>(null);
   const [aiNotificationDefault, setAiNotificationDefault] = useState(() =>
     localStorage.getItem('btm:ai-notifications-default-enabled') !== '0');
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
@@ -923,7 +923,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       const received = attachChatMessageId(message, message.id ?? crypto.randomUUID());
       // Show the actual saved message (and its approval chip) immediately,
       // regardless of any in-flight 2.5s thread reconciliation response.
-      setLatestManualCheckup(received);
+      if (currentUser?.id) setLatestManualCheckup({ userId: currentUser.id, message: received });
       setAiChatProjects(previous => {
         const updated = previous.map((project, index) => index !== 0 ? project : ({
           ...project,
@@ -2709,8 +2709,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
   // Both the Telegram mini-app and mobile web use this same chat renderer.
   // De-duplicate by message ID/content once the server history catches up.
-  const visibleAiChatMessages = activeAiChat?.id === QUICK_AI_CHAT_ID && latestManualCheckup
-    ? reconcileAiChatMessagesWithChips(activeAiChat.messages, [latestManualCheckup])
+  const visibleAiChatMessages = activeAiChat?.id === QUICK_AI_CHAT_ID && latestManualCheckup?.userId === currentUser?.id
+    ? reconcileAiChatMessagesWithChips(activeAiChat.messages, [latestManualCheckup.message])
     : (activeAiChat?.messages ?? []);
   const generalAiChatModel = activeAiChat?.id === QUICK_AI_CHAT_ID
     ? quickAiChatModel : (readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_MOBILE_PROJECT_CHAT_MODEL);
