@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { reconcileAiChatMessagesWithChips } from '../../client/src/lib/ai-chat-reconciliation.js';
 
 async function source(path: string) {
   return readFile(new URL(path, import.meta.url), 'utf8');
@@ -55,4 +56,23 @@ test('generate button appears in desktop and mini/mobile and opens the saved Qui
     assert.match(ui, /formatAiRequestError\(error\)/);
   }
   assert.match(files[2], /generateAiCheckupNow: \(\) => request<\{ message: ChatMessage \}>/);
+});
+
+test('mini-app shows a just-generated checkup immediately, even before polling refresh', async () => {
+  const mini = await source('../../client/src/MiniApp.tsx');
+  assert.match(mini, /setLatestManualCheckup\(\{ userId: currentUser\.id, message: received \}\)/);
+  assert.match(mini, /latestManualCheckup\?\.userId === currentUser\?\.id/);
+  assert.match(mini, /reconcileAiChatMessagesWithChips\(activeAiChat\.messages, \[latestManualCheckup\.message\]\)/);
+  assert.match(mini, /visibleAiChatMessages\.map\(\(message\)/);
+  assert.match(mini, /visibleAiChatMessages\.length === 0/);
+  assert.match(mini, /setActiveAiChatId\(QUICK_AI_CHAT_ID\)/);
+  assert.match(mini, /api\.getAiChatThreadMessages\(projectId, chatId\)/);
+  const saved = { id: 'checkup-1', role: 'assistant' as const,
+    content: '✨ ИИ-чекап', taskProposal: { id: 'proposal-1' } };
+  const older = [{ id: 'old-1', role: 'user' as const, content: 'Привет' }];
+  const first = reconcileAiChatMessagesWithChips(older, [saved]);
+  assert.deepEqual(first.map(message => message.id), ['old-1', 'checkup-1']);
+  const confirmed = reconcileAiChatMessagesWithChips(first, [saved]);
+  assert.equal(confirmed.length, 2, 'server confirmation must not duplicate the checkup');
+  assert.equal(confirmed[1].taskProposal?.id, 'proposal-1');
 });
