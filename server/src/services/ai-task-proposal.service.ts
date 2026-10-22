@@ -9,7 +9,7 @@ import type { Prisma } from '@prisma/client';
  * A proposal is a durable, owner-bound command. The model and the browser may
  * suggest actions, but only this service is allowed to commit them.
  */
-export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant';
+export type TaskProposalSource = 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup';
 export type TaskProposalAction = Record<string, unknown>;
 export type NoteProposalAction = Record<string, unknown> & UpdatePersonalNoteArgs & { operation: 'update_note'; expectedUpdatedAt: string };
 export type CreateNoteProposalAction = Record<string, unknown> & CreatePersonalNoteArgs & { operation: 'create_note' };
@@ -242,7 +242,7 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     const reports: string[] = [];
     const createdIds: string[] = [];
     const createdNoteIds: string[] = [];
-    if (row.source === 'planner' || row.source === 'telegram_bot' ||
+    if (row.source === 'planner' || row.source === 'daily_checkup' || row.source === 'telegram_bot' ||
         (row.source === 'telegram_assistant' && actions.every(a => 'operation' in a))) {
       if (row.source === 'telegram_assistant' && row.autoApplied &&
           actions.some(a => !['create_task', 'create_event', 'create_reminder', 'create_subtask'].includes(String(a.operation)))) {
