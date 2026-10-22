@@ -142,7 +142,14 @@ async function performJob(job: {
     try {
       await connectedOwner(job.userId);
       if (!isTelegramAiDraftEnabled()) throw new TelegramUserClientError(403, 'ИИ-обработка выключена');
-      const revised = await rewriteTelegramQuickText(job.userId, payload.text, payload.instruction ?? '');
+      const revised = await rewriteTelegramQuickText(job.userId, payload.text, payload.instruction ?? '', async () => {
+        // A long rewrite can span multiple provider calls; keep the worker's
+        // claim alive to prevent a second worker from replaying billed AI work.
+        await prisma.telegramQuickSendJob.updateMany({
+          where: { id: job.id, state: 'PROCESSING', stage: 'REWRITE' },
+          data: { claimedAt: new Date() }
+        });
+      });
       const encrypted = encryptTelegramQuickShare(JSON.stringify({ ...payload, text: revised.text, instruction: null, mode: 'DIRECT' }), job.userId, job.id);
       await prisma.telegramQuickSendJob.updateMany({
         where: { id: job.id, state: 'PROCESSING', stage: 'REWRITE' },
