@@ -33,6 +33,13 @@ export function createOpenAiResponsesRequestPayload(cleanPayload: Record<string,
   return { ...cleanPayload, max_output_tokens: maxOutputTokens, ...(stream ? { stream: true } : {}) };
 }
 
+/** /responses/input_tokens does not accept store or max_tool_calls. Keep
+ * store:false on the real /responses request for private quick-share text. */
+export function createOpenAiResponsesTokenCountPayload(cleanPayload: Record<string, unknown>) {
+  const { max_tool_calls: _maxToolCalls, store: _store, ...preflightPayload } = cleanPayload;
+  return preflightPayload;
+}
+
 export type WebSearchCallAnalysis = {
   rawWebSearchItems: number;
   searchActionsRaw: number;
@@ -128,7 +135,7 @@ export async function runDynamicResponsesCall(input: { userId: string; actionId:
   const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${input.apiKey}` };
   let preflight;
   try {
-    const { max_tool_calls: _maxToolCalls, ...preflightPayload } = cleanPayload;
+    const preflightPayload = createOpenAiResponsesTokenCountPayload(cleanPayload);
     preflight = await openAiFetch('https://api.openai.com/v1/responses/input_tokens', { method: 'POST', headers: { ...headers, 'X-Client-Request-Id': tokenRequestId }, body: JSON.stringify(preflightPayload) });
   } catch (error) {
     console.error('[AI dynamic billing] input token preflight failed', { actionId: input.actionId, requestId: tokenRequestId, feature: input.feature, model, status: 'network' });
