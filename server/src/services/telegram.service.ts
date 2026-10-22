@@ -1149,7 +1149,7 @@ const handleIncomingMessage = async (updateMessage: NonNullable<TelegramUpdate['
     await resetBotMenuState(chatId);
     await sendMessage(
       chatId,
-      '👋 <b>Bubble Task Manager Bot</b>\n\nВойдите в существующий аккаунт или создайте новый.',
+      '👋 <b>Планировыч AI</b>\n\nВойдите в существующий аккаунт или создайте новый.',
       {
         inline_keyboard: [[
           TELEGRAM_AUTH_URL
