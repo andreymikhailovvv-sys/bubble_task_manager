@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib/telegram-quick-share-crypto.js';
 import { TELEGRAM_SAVED_MESSAGES_ID, validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
-import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateQuickInstruction, splitQuickText, MAX_QUICK_TEXT } from '../src/services/telegram-quick-share-ai.service.js';
+import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateShareText, validateQuickInstruction, splitQuickText, MAX_QUICK_TEXT } from '../src/services/telegram-quick-share-ai.service.js';
 
 test('quick send allows 1 to 3 people or groups, not raw channel/group peer IDs', () => {
   assert.deepEqual(validateQuickRecipients(['123', '987', '42']), ['123', '987', '42']);
@@ -35,8 +35,9 @@ test('direct send requires a unique request id, bounded text, strictly selected 
   assert.throws(() => validateQuickSendInput({ requestId: 'anything', recipientIds: ['123'], text: 'Привет', mode: 'DIRECT' }));
   assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: '', mode: 'DIRECT' }));
   assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'text', mode: 'UNKNOWN' }));
-  assert.equal(validateQuickText('X'.repeat(4001)).length, 4001);
-  assert.throws(() => validateQuickText('X'.repeat(MAX_QUICK_TEXT + 1)));
+  assert.throws(() => validateQuickText('X'.repeat(4001)));
+  assert.equal(validateShareText('X'.repeat(4001)).length, 4001);
+  assert.throws(() => validateShareText('X'.repeat(MAX_QUICK_TEXT + 1)));
   assert.throws(() => validateQuickText('a\u0000b'));
 });
 test('auto-rewrite mode cannot enqueue without explicit editing instructions', () => {
