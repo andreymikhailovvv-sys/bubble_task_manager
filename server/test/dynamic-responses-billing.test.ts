@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { analyzeWebSearchCalls, createCleanOpenAiResponsesPayload, createOpenAiResponsesRequestPayload, DYNAMIC_TEXT_OUTPUT_LIMITS, getOpenAiPreflightErrorDiagnostics, isDynamicTextBillingEnabled } from '../src/services/dynamic-responses-billing.service.js';
+import { analyzeWebSearchCalls, createCleanOpenAiResponsesPayload, createOpenAiResponsesRequestPayload, createOpenAiResponsesTokenCountPayload, DYNAMIC_TEXT_OUTPUT_LIMITS, getOpenAiPreflightErrorDiagnostics, isDynamicTextBillingEnabled } from '../src/services/dynamic-responses-billing.service.js';
 import { calculateOpenAiUsageCost, providerNanoUsdToMilliCredits } from '../src/services/ai-usage-metering.service.js';
 import { OPENAI_WEB_SEARCH_COST_NANO_USD } from '../src/config/openai-pricing.js';
 
@@ -107,4 +107,22 @@ test('preflight error diagnostics пропускает только безопа
   });
   assert.equal(JSON.stringify(diagnostics).includes('private user text'), false);
   assert.equal(JSON.stringify(diagnostics).includes('secret'), false);
+});
+
+test('notes rewrite privacy: token counting excludes store, actual Responses request keeps store:false', () => {
+  // Exact production failure: OpenAI /responses/input_tokens returned HTTP 400
+  // with unknown_parameter: store when quick notes rewriting was invoked.
+  const clean = createCleanOpenAiResponsesPayload({
+    model: 'gpt-6-luna',
+    input: [{ role: 'user', content: 'Отредактируй заметку' }],
+    store: false,
+    max_tool_calls: 1
+  });
+  const tokenCountPayload = createOpenAiResponsesTokenCountPayload(clean);
+  assert.equal('store' in tokenCountPayload, false);
+  assert.equal('max_tool_calls' in tokenCountPayload, false);
+  assert.equal(tokenCountPayload.model, 'gpt-6-luna');
+  assert.deepEqual(tokenCountPayload.input, clean.input);
+  const responsePayload = createOpenAiResponsesRequestPayload(clean, 1024);
+  assert.equal(responsePayload.store, false);
 });
