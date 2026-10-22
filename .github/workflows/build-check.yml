@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify public SEO landing pages bypass React workspace
+        run: node --import tsx --test server/test/public-seo-pages.test.ts
       - name: Verify task chat answer preservation and immediate-action prompt
         run: node --import tsx --test --test-name-pattern="task assistant не подменяет творческий ответ|task assistant сохраняет инструкцию выполнять изменения" server/test/ai-assistant.service.test.ts
       - name: Verify MTProto HTTP CONNECT and Telegram SOCKS5 proxy transport
