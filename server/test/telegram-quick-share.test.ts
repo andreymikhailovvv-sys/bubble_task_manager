@@ -87,10 +87,12 @@ test('long Telegram text is split losslessly and safely across Unicode code poin
   const chunks = splitQuickText(input);
   assert.ok(chunks.length > 2);
   assert.equal(chunks.join(''), input);
-  assert.ok(chunks.every(chunk => Array.from(chunk).length <= 4000));
+  assert.ok(chunks.every(chunk => chunk.length <= 4000));
   assert.ok(chunks.every(chunk => Buffer.byteLength(chunk, 'utf8') <= 35000));
   assert.deepEqual(splitQuickText('Короткое сообщение'), ['Короткое сообщение']);
-  assert.equal(splitQuickText('😀'.repeat(4500)).join(''), '😀'.repeat(4500));
+  const emoji = splitQuickText('😀'.repeat(4500));
+  assert.equal(emoji.join(''), '😀'.repeat(4500));
+  assert.ok(emoji.every(part => part.length <= 4000));
 });
 
 test('long quick rewrite uses token-billed wallet preflight, settlement and billing receipt', async () => {
