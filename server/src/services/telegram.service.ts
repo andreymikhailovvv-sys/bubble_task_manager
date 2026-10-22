@@ -132,9 +132,10 @@ const buildMiniAppTaskAiUrl = (taskId: string) => {
 
 // Inline Web App button launches the existing Mini App directly into
 // Personal project -> Quick AI requests. No bot-specific web route needed.
-const buildMiniAppQuickAiUrl = () => {
+const buildMiniAppQuickAiUrl = (proposalId?: string | null) => {
   const url = new URL(MINI_APP_URL, APP_URL || undefined);
   url.searchParams.set('openQuickAi', '1');
+  if (proposalId) url.searchParams.set('openCheckupProposal', proposalId);
   return url.toString();
 };
 
@@ -161,17 +162,13 @@ export function formatTelegramDailyCheckupPreview(text: string): string {
     consumed++;
   }
   return escaped + (consumed < points.length
-    ? '\n\n…\n📱 Продолжение и предложения действий доступны в общем чате с ИИ.'
+    ? '\n\n…\n📱 Полный чекап и рекомендации доступны в общем чате с ИИ.'
     : '');
 }
 
-export const telegramDailyCheckupKeyboard = (proposalId: string | null | undefined, pending: boolean) => ({
+export const telegramDailyCheckupKeyboard = (proposalId?: string | null) => ({
   inline_keyboard: [
-    ...(proposalId && pending ? [[
-      { text: '✅ Применить изменения', callback_data: 'ckap:' + proposalId },
-      { text: '❌ Отклонить', callback_data: 'ckrj:' + proposalId }
-    ]] : []),
-    [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppQuickAiUrl() } }]
+    [{ text: '📱 Посмотреть изменения', web_app: { url: buildMiniAppQuickAiUrl(proposalId) } }]
   ]
 });
 
@@ -1540,43 +1537,10 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
   const userId = session.userId;
 
+  // Legacy AI-checkup approval callbacks are intentionally disabled.
+  // All selection and approval now happens inside the application's chip.
   if (action === 'ckap' || action === 'ckrj') {
-    // Telegram buttons are an approval UI for the very same persisted chip in
-    // the general AI chat. Callback_data is only an ID, not authorization.
-    const owner = await prisma.user.findFirst({
-      where: { id: userId, telegramChatId: chatId }, select: { id: true }
-    });
-    if (!owner || !taskId || taskId.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
-      await answerCallback(callback.id, 'Недоступно для этого чата');
-      return;
-    }
-    try {
-      const existing = await prisma.aiTaskProposal.findFirst({
-        where: { id: taskId, userId, source: 'daily_checkup', autoApplied: false },
-        select: { id: true, status: true }
-      });
-      if (!existing) {
-        await answerCallback(callback.id, 'Предложение недоступно');
-        return;
-      }
-      const outcome = existing.status === 'PENDING'
-        ? action === 'ckap' ? await applyTaskProposal(userId, taskId) : await rejectTaskProposal(userId, taskId)
-        : await getTaskProposal(userId, taskId);
-      await answerCallback(callback.id,
-        outcome.status === 'APPLIED' ? 'Изменения применены' :
-        outcome.status === 'REJECTED' ? 'Предложение отклонено' :
-        outcome.status === 'CONFLICT' ? 'Задача изменилась. Откройте чекап в приложении' :
-        'Статус: ' + outcome.status);
-      // Sync the Telegram keyboard with the real, shared persisted state;
-      // further clicks can never replay a committed change.
-      await telegramRequest('editMessageReplyMarkup', {
-        chat_id: chatId, message_id: messageId,
-        reply_markup: telegramDailyCheckupKeyboard(taskId, outcome.status === 'PENDING')
-      });
-    } catch (error) {
-      console.error('[Telegram] daily checkup proposal callback failed', error);
-      await answerCallback(callback.id, 'Не удалось применить изменение');
-    }
+    await answerCallback(callback.id, 'Откройте ИИ-чекап в приложении для выбора изменений');
     return;
   }
 
@@ -2355,6 +2319,6 @@ export const telegramService = {
     // Even for a short checkup, provide an explicit path to its complete
     // message and proposal card, not a duplicate in a different conversation.
     await sendMessage(user.telegramChatId, preview,
-      telegramDailyCheckupKeyboard(input.proposalId, Boolean(input.proposalId)));
+      telegramDailyCheckupKeyboard(input.proposalId));
   }
 };
