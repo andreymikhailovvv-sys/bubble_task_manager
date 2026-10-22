@@ -15,29 +15,30 @@ test('morning AI checkup uses private structured JSON, not a server-side templat
   assert.throws(() => parseDailyCheckupResponse({ status: 'incomplete', output_text: '{"greeting":"Обрыв"}' }));
 });
 
-test('AI can only recommend postponing accessible, nonurgent tasks within a week', () => {
+test('checkup may propose today, overdue and earlier reschedules, never unknown tasks or past dates', () => {
   const now = new Date('2026-10-22T08:00:00Z');
   const tomorrow = new Date('2026-10-23T00:00:00Z');
   const tasks = [
-    { id: 'today', title: 'Срочно', dueDate: '2026-10-22T15:00:00Z' },
-    { id: 'later', title: 'Не срочно', dueDate: '2026-10-24T12:00:00Z' }
+    { id: 'today', title: 'Сегодня', dueDate: '2026-10-22T15:00:00Z' },
+    { id: 'later', title: 'На неделе', dueDate: '2026-10-24T12:00:00Z' },
+    { id: 'overdue', title: 'Просрочена', dueDate: '2026-10-20T14:00:00Z' }
   ];
-  const response = { greeting: 'Утро', workload: 'Три дела', risks: ['Недостаточно времени'],
-    insight: '', nextStep: 'Начните с важного',
-    priorities: [{ taskId: 'later', reason: 'Зависит от других' }, { taskId: 'secret', reason: 'Подсказка' }],
+  const result = formatSmartDailyCheckup({
+    greeting: 'Добрый день', workload: 'Три дела', risks: ['Высокая нагрузка'],
+    insight: '', nextStep: 'Начать с главного',
+    priorities: [{ taskId: 'later', reason: 'Важное' }, { taskId: 'secret', reason: 'Неизвестная задача' }],
     moves: [
-      { taskId: 'today', newDueAt: '2026-10-24T14:00:00Z', reason: 'Нельзя' },
-      { taskId: 'secret', newDueAt: '2026-10-25T14:00:00Z', reason: 'Нельзя' },
-      { taskId: 'later', newDueAt: '2026-10-25T14:00:00Z', reason: 'Освободить время' }
+      { taskId: 'today', newDueAt: '2026-10-23T14:00:00Z', reason: 'Освободить вечер' },
+      { taskId: 'secret', newDueAt: '2026-10-25T14:00:00Z', reason: 'Неизвестно' },
+      { taskId: 'later', newDueAt: '2026-10-23T12:00:00Z', reason: 'Сделать раньше' },
+      { taskId: 'overdue', newDueAt: '2026-10-22T14:00:00Z', reason: 'Вернуть в план' },
+      { taskId: 'today', newDueAt: '2026-10-25T14:00:00Z', reason: 'Дубль' },
+      { taskId: 'later', newDueAt: '2026-10-21T12:00:00Z', reason: 'Прошедшее время' }
     ]
-  };
-  const result = formatSmartDailyCheckup(response, tasks, tomorrow, now, 'Europe/Moscow');
-  assert.deepEqual(result.moves.map(m => m.taskId), []);
-  const permitted = formatSmartDailyCheckup({ ...response,
-    moves: [{ taskId: 'later', newDueAt: '2026-10-25T14:00:00Z', reason: 'Освободить время' }] },
-    tasks, tomorrow, now, 'Europe/Moscow');
-  assert.equal(permitted.moves.length, 1);
+  }, tasks, tomorrow, now, 'Europe/Moscow');
+  assert.deepEqual(result.moves.map(m => m.taskId), ['today', 'later', 'overdue']);
   assert.ok(result.text.includes('🎯 Главные приоритеты'));
+  assert.ok(result.text.startsWith('✨ ИИ-чекап'));
   assert.ok(!result.text.includes('secret'));
 });
 
