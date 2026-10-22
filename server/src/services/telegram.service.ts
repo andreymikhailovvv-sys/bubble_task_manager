@@ -145,6 +145,36 @@ const buildMiniAppTelegramAssistantChatUrl = (policyId: string) => {
   return url.toString();
 };
 
+/**
+ * The Telegram bot displays only a safe excerpt. The complete report and
+ * its interactive AiTaskProposalCard live in the user's existing general AI chat.
+ */
+export function formatTelegramDailyCheckupPreview(text: string): string {
+  const limit = 3500; // After HTML escaping; safely below Bot API's 4096.
+  let escaped = '';
+  let consumed = 0;
+  const points = Array.from(text);
+  for (const character of points) {
+    const piece = escapeHtml(character);
+    if (escaped.length + piece.length > limit) break;
+    escaped += piece;
+    consumed++;
+  }
+  return escaped + (consumed < points.length
+    ? '\n\n…\n📱 Продолжение и предложения действий доступны в общем чате с ИИ.'
+    : '');
+}
+
+export const telegramDailyCheckupKeyboard = (proposalId: string | null | undefined, pending: boolean) => ({
+  inline_keyboard: [
+    ...(proposalId && pending ? [[
+      { text: '✅ Применить изменения', callback_data: 'ckap:' + proposalId },
+      { text: '❌ Отклонить', callback_data: 'ckrj:' + proposalId }
+    ]] : []),
+    [{ text: '📱 Посмотреть в приложении', web_app: { url: buildMiniAppQuickAiUrl() } }]
+  ]
+});
+
 export const telegramAssistantProposalKeyboard = (proposalId: string, policyId: string, pending: boolean) => ({
   inline_keyboard: [
     ...(pending ? [[
@@ -1510,6 +1540,46 @@ const handleCallback = async (update: TelegramUpdate) => {
   }
   const userId = session.userId;
 
+  if (action === 'ckap' || action === 'ckrj') {
+    // Telegram buttons are an approval UI for the very same persisted chip in
+    // the general AI chat. Callback_data is only an ID, not authorization.
+    const owner = await prisma.user.findFirst({
+      where: { id: userId, telegramChatId: chatId }, select: { id: true }
+    });
+    if (!owner || !taskId || taskId.length > 50 || !/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+      await answerCallback(callback.id, 'Недоступно для этого чата');
+      return;
+    }
+    try {
+      const existing = await prisma.aiTaskProposal.findFirst({
+        where: { id: taskId, userId, source: 'daily_checkup', autoApplied: false },
+        select: { id: true, status: true }
+      });
+      if (!existing) {
+        await answerCallback(callback.id, 'Предложение недоступно');
+        return;
+      }
+      const outcome = existing.status === 'PENDING'
+        ? action === 'ckap' ? await applyTaskProposal(userId, taskId) : await rejectTaskProposal(userId, taskId)
+        : await getTaskProposal(userId, taskId);
+      await answerCallback(callback.id,
+        outcome.status === 'APPLIED' ? 'Изменения применены' :
+        outcome.status === 'REJECTED' ? 'Предложение отклонено' :
+        outcome.status === 'CONFLICT' ? 'Задача изменилась. Откройте чекап в приложении' :
+        'Статус: ' + outcome.status);
+      // Sync the Telegram keyboard with the real, shared persisted state;
+      // further clicks can never replay a committed change.
+      await telegramRequest('editMessageReplyMarkup', {
+        chat_id: chatId, message_id: messageId,
+        reply_markup: telegramDailyCheckupKeyboard(taskId, outcome.status === 'PENDING')
+      });
+    } catch (error) {
+      console.error('[Telegram] daily checkup proposal callback failed', error);
+      await answerCallback(callback.id, 'Не удалось применить изменение');
+    }
+    return;
+  }
+
   if (action === 'tgpa' || action === 'tgpr') {
     // Callback data carries only a proposal identifier, never authority.
     // Telegram session AND owner's linked bot chat must match.
@@ -2276,13 +2346,15 @@ export const telegramService = {
       telegramAssistantProposalKeyboard(input.proposalId, input.policyId, input.pending));
   },
   async notifyDailyAiCheckup(input: { userId: string; text: string; proposalId?: string | null }) {
-    if (!BOT_TOKEN) return;
-    if (!input.text.trim()) return;
+    if (!BOT_TOKEN || !input.text.trim()) return;
     const user = await prisma.user.findUnique({
-      where: { id: input.userId },
-      select: { telegramChatId: true }
+      where: { id: input.userId }, select: { telegramChatId: true }
     });
     if (!user?.telegramChatId) return;
-    await sendMessage(user.telegramChatId, input.text);
+    const preview = formatTelegramDailyCheckupPreview(input.text);
+    // Even for a short checkup, provide an explicit path to its complete
+    // message and proposal card, not a duplicate in a different conversation.
+    await sendMessage(user.telegramChatId, preview,
+      telegramDailyCheckupKeyboard(input.proposalId, Boolean(input.proposalId)));
   }
 };
