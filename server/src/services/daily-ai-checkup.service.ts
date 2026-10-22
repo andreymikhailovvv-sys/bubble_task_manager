@@ -107,7 +107,7 @@ export async function generateSmartDailyCheckup(userId: string): Promise<SmartDa
   const lastWeek = new Date(today.getTime() - 7 * 86400000);
   const [tasks, done, events, habits] = await Promise.all([
     prisma.task.findMany({ where: { AND: [taskAccessWhere(userId)], parentTaskId: null, status: { not: 'DONE' },
-      dueDate: { lt: new Date(today.getTime() + 8 * 86400000) } },
+      OR: [{ dueDate: { lt: new Date(today.getTime() + 8 * 86400000) } }, { dueDate: null }] },
       select: { id: true, title: true, dueDate: true, importance: true, urgency: true,
         subtasks: { select: { status: true }, take: 30 } },
       orderBy: [{ dueDate: 'asc' }, { importance: 'desc' }], take: 45 }),
