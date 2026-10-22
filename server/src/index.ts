@@ -11,6 +11,7 @@ import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { aiAssistantService } from './services/ai-assistant.service.js';
+import { prepareTaskProposal } from './services/ai-task-proposal.service.js';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
@@ -170,10 +171,34 @@ setInterval(() => {
 
       try {
         const checkup = await aiAssistantService.generateDailyCheckup({ userId: user.id });
+        // Store a durable owner-only chip. The user's global auto-apply setting
+        // must NEVER apply morning checkup suggestions without a click.
+        let proposalId: string | null = null;
+        if (checkup.moves.length) {
+          try {
+            const proposal = await prepareTaskProposal({
+              userId: user.id, requestId: 'daily-checkup:' + slot.dateKey,
+              source: 'daily_checkup', userTimeZone: timeZone, autoApply: false,
+              resolvedItemIds: checkup.moves.map(m => m.taskId),
+              actions: checkup.moves.map(m => ({
+                operation: 'reschedule', itemId: m.taskId, parentTaskId: null,
+                title: null, description: null, dueDate: m.newDueAt,
+                importance: null, urgency: null, notifyBeforeMinutes: null,
+                sphereId: null, location: null
+              }))
+            });
+            proposalId = proposal.id;
+          } catch (error) {
+            console.warn('[MorningCheckup] proposal not stored; no schedule modified', {
+              userId: user.id, reason: error instanceof Error ? error.message.slice(0, 120) : 'unknown'
+            });
+          }
+        }
         await aiAssistantService.appendGeneralDialogAssistantMessage({
-          userId: user.id, content: checkup.text, creditsSpentMilli: checkup.creditsSpentMilli
+          userId: user.id, content: checkup.text, creditsSpentMilli: checkup.creditsSpentMilli,
+          taskProposalId: proposalId
         });
-        await telegramService.notifyDailyAiCheckup({ userId: user.id, text: checkup.text });
+        await telegramService.notifyDailyAiCheckup({ userId: user.id, text: checkup.text, proposalId });
       } catch (error) {
         console.error(`[AI] daily checkup failed for userId=${user.id}`, error);
       }
