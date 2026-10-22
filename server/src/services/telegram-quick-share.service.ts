@@ -7,7 +7,7 @@ import { connectedOwner, openClient, checkManualTelegramSendWindow } from './tel
 import { isTelegramAiDraftEnabled } from './telegram-user-client-draft.service.js';
 import { isManualTelegramSendingEnabled } from './telegram-user-client-send.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
-import { rewriteTelegramQuickText, splitQuickText, validateQuickInstruction, validateQuickText } from './telegram-quick-share-ai.service.js';
+import { rewriteTelegramQuickText, splitQuickText, validateQuickInstruction, validateShareText } from './telegram-quick-share-ai.service.js';
 
 export type QuickSendMode = 'DIRECT' | 'REWRITE_AND_SEND';
 type Payload = { recipientIds: string[]; text: string; instruction: string | null; mode: QuickSendMode };
@@ -42,7 +42,7 @@ export function validateQuickSendInput(input: {
     requestId: input.requestId.toLowerCase(),
     mode: input.mode,
     recipientIds: validateQuickRecipients(input.recipientIds),
-    text: validateQuickText(input.text),
+    text: validateShareText(input.text),
     instruction: input.mode === 'REWRITE_AND_SEND' ? validateQuickInstruction(input.instruction) : null
   };
 }
@@ -293,7 +293,7 @@ export const telegramQuickShare = {
 
   async rewritePreview(userId: string, original: unknown, instruction: unknown) {
     await connectedOwner(userId);
-    return rewriteTelegramQuickText(userId, validateQuickText(original), validateQuickInstruction(instruction));
+    return rewriteTelegramQuickText(userId, validateShareText(original), validateQuickInstruction(instruction));
   },
 
   async drain() {
