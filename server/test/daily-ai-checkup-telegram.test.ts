@@ -9,7 +9,7 @@ test('daily checkup Telegram preview is <4000 characters, valid HTML and shows c
   assert.ok(preview.length < 4000);
   assert.ok(preview.includes('&lt;важная задача&gt;'));
   assert.ok(preview.includes('&amp;'));
-  assert.ok(preview.includes('Продолжение'));
+  assert.ok(preview.includes('Полный чекап'));
   assert.ok(!preview.includes('\uFFFD'));
   assert.ok(!preview.includes('<важная задача>'));
   const short = formatTelegramDailyCheckupPreview('Короткий чекап');
