@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { runDynamicResponsesCall, settleDynamicResponsesCall, refundDynamicResponsesCall, type DynamicResponsesCall } from './dynamic-responses-billing.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
 import { isTelegramAiDraftEnabled } from './telegram-user-client-draft.service.js';
+import { supportsReasoningEffort } from '../lib/openai-model-capabilities.js';
 
 const MODEL = process.env.OPENAI_MODEL_TELEGRAM_DRAFT?.trim() || 'gpt-6-luna';
 // A bounded request prevents runaway AI costs and oversized encrypted queue records.
@@ -10,6 +11,10 @@ export const MAX_QUICK_TEXT = 24_000;
 export const MAX_QUICK_TEXT_BYTES = 96_000;
 export const MAX_QUICK_INSTRUCTION = 700;
 const AI_FRAGMENT_CHARS = 3000;
+const MAX_REWRITE_ATTEMPTS_PER_FRAGMENT = 2;
+// If a model returns only reasoning/incomplete output, use a separate,
+// established text model for one recovery attempt rather than blaming the user.
+const REWRITE_RECOVERY_MODEL = 'gpt-5.4-mini';
 export const TELEGRAM_PART_CHARS = 4000;
 
 export function validateQuickText(input: unknown): string {
@@ -72,6 +77,9 @@ export function splitQuickText(input: string, maxChars = TELEGRAM_PART_CHARS): s
 export function buildQuickRewritePayload(original: string, instruction: string, model: string = MODEL, destination: 'telegram' | 'notes' = 'telegram', part?: { index: number; total: number }) {
   return {
     model, store: false, max_output_tokens: 8192, tool_choice: 'none' as const,
+    // A quick rewrite must spend its output budget producing text, not prolonged
+    // reasoning. The model capability allowlist avoids unsupported parameters.
+    ...(supportsReasoningEffort(model) ? { reasoning: { effort: 'low' as const } } : {}),
     input: [
       { role: 'system' as const, content: [
         destination === 'notes' ? 'Ты редактируешь текст для сохранения в личные заметки пользователя.' : 'Ты редактируешь одно сообщение пользователя перед пересылкой в Telegram.',
@@ -86,8 +94,33 @@ export function buildQuickRewritePayload(original: string, instruction: string, 
   };
 }
 
+export function getQuickRewriteResponseDiagnostics(response: unknown) {
+  // Never log note contents, prompt text or generated content.
+  const obj = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+  const usage = obj.usage && typeof obj.usage === 'object' ? obj.usage as Record<string, unknown> : {};
+  const outputDetails = usage.output_tokens_details && typeof usage.output_tokens_details === 'object'
+    ? usage.output_tokens_details as Record<string, unknown> : {};
+  const incompleteDetails = obj.incomplete_details && typeof obj.incomplete_details === 'object'
+    ? obj.incomplete_details as Record<string, unknown> : {};
+  return {
+    responseStatus: typeof obj.status === 'string' ? obj.status : null,
+    incompleteReason: typeof incompleteDetails.reason === 'string' ? incompleteDetails.reason : null,
+    outputTokens: typeof usage.output_tokens === 'number' ? usage.output_tokens : null,
+    reasoningTokens: typeof outputDetails.reasoning_tokens === 'number' ? outputDetails.reasoning_tokens : null,
+    outputTypes: Array.isArray(obj.output)
+      ? obj.output.map(part => part && typeof part === 'object' && typeof (part as {type?: unknown}).type === 'string'
+        ? (part as {type: string}).type : 'unknown').slice(0, 10)
+      : []
+  };
+}
+
 export function parseQuickRewriteOutput(response: unknown): string {
   const obj = response && typeof response === 'object' ? response as Record<string, unknown> : {};
+  // An incomplete response can contain a valid-looking *fragment* of the
+  // rewrite. Never silently save partial text as the full edited note.
+  if (obj.status === 'incomplete' || obj.status === 'failed') {
+    throw new TelegramUserClientError(502, 'ИИ не завершил изменение текста. Повторите попытку.');
+  }
   let text = typeof obj.output_text === 'string' ? obj.output_text : '';
   if (!text.trim() && Array.isArray(obj.output)) {
     text = obj.output.flatMap((part) => part && typeof part === 'object' && Array.isArray((part as {content?: unknown}).content)
@@ -96,7 +129,7 @@ export function parseQuickRewriteOutput(response: unknown): string {
       .join('');
   }
   try { return validateShareText(text.trim()); }
-  catch { throw new TelegramUserClientError(502, 'ИИ не подготовил подходящий текст. Измените запрос и повторите'); }
+  catch { throw new TelegramUserClientError(502, 'ИИ не вернул пригодный текст. Кредиты за эту попытку не списаны.'); }
 }
 
 export type QuickRewriteResult = { text: string; creditsSpentMilli: number };
@@ -113,14 +146,37 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
   const settledCalls = new Set<DynamicResponsesCall>();
   try {
     for (const [index, chunk] of chunks.entries()) {
-      const payload = buildQuickRewritePayload(chunk, task, MODEL, destination, {index: index + 1, total: chunks.length});
-      const call = await runDynamicResponsesCall({
-        userId, actionId, providerCallIndex: index + 1,
-        feature: destination === 'notes' ? 'notes_quick_rewrite' : 'telegram_quick_rewrite',
-        apiKey, payload
-      });
-      calls.push(call);
-      const output = parseQuickRewriteOutput(call.responseJson);
+      let output: string | null = null;
+      for (let attempt = 1; attempt <= MAX_REWRITE_ATTEMPTS_PER_FRAGMENT; attempt += 1) {
+        const model = attempt === 1 ? MODEL : REWRITE_RECOVERY_MODEL;
+        const payload = buildQuickRewritePayload(chunk, task, model, destination, {index: index + 1, total: chunks.length});
+        // Unique provider-call indices are essential for wallet reservations,
+        // usage records and API request IDs across recovery attempts.
+        const providerCallIndex = index * MAX_REWRITE_ATTEMPTS_PER_FRAGMENT + attempt;
+        const call = await runDynamicResponsesCall({
+          userId, actionId, providerCallIndex,
+          feature: destination === 'notes' ? 'notes_quick_rewrite' : 'telegram_quick_rewrite',
+          apiKey, payload
+        });
+        try {
+          output = parseQuickRewriteOutput(call.responseJson);
+          calls.push(call); // Only validated fragments may be charged.
+          break;
+        } catch (error) {
+          // The upstream model may have used its entire budget for reasoning,
+          // returned an incomplete response, or emitted an empty message.
+          // Refund first; a transparent, bounded recovery uses a new request.
+          await refundDynamicResponsesCall(call);
+          console.warn('[QuickShareAI] invalid rewrite output', {
+            actionId, destination, fragmentIndex: index + 1, fragmentCount: chunks.length,
+            attempt, model, ...getQuickRewriteResponseDiagnostics(call.responseJson)
+          });
+          if (attempt === MAX_REWRITE_ATTEMPTS_PER_FRAGMENT) {
+            throw new TelegramUserClientError(502, 'ИИ дважды не смог завершить изменение текста. Кредиты за неудачные попытки не списаны. Попробуйте снова.');
+          }
+        }
+      }
+      if (output === null) throw new TelegramUserClientError(502, 'ИИ не вернул текст для сохранения.');
       revised.push(output);
       await onChunkComplete?.();
     }
