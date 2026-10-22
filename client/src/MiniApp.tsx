@@ -2709,8 +2709,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const activeAiChat = activeAiChatProject?.chats.find((chat) => chat.id === activeAiChatId) ?? activeAiChatProject?.chats[0];
   // Both the Telegram mini-app and mobile web use this same chat renderer.
   // De-duplicate by message ID/content once the server history catches up.
-  const visibleAiChatMessages = activeAiChat?.id === QUICK_AI_CHAT_ID && latestManualCheckup?.userId === currentUser?.id
-    ? reconcileAiChatMessagesWithChips(activeAiChat.messages, [latestManualCheckup.message])
+  const pinnedManualCheckup = currentUser?.id && latestManualCheckup?.userId === currentUser.id
+    ? latestManualCheckup.message : null;
+  const visibleAiChatMessages = activeAiChat?.id === QUICK_AI_CHAT_ID && pinnedManualCheckup
+    ? reconcileAiChatMessagesWithChips(activeAiChat.messages, [pinnedManualCheckup])
     : (activeAiChat?.messages ?? []);
   const generalAiChatModel = activeAiChat?.id === QUICK_AI_CHAT_ID
     ? quickAiChatModel : (readSavedAiChatModel(activeAiChat?.model) ?? DEFAULT_MOBILE_PROJECT_CHAT_MODEL);
