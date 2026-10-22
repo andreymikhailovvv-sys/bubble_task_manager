@@ -96,6 +96,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   const [autoApply, setAutoApply] = useState(false);
   const [error, setError] = useState('');
   const telegram = ['telegram_assistant', 'telegram_bot', 'telegram_bot_task'].includes(proposal.source);
+  const checkup = proposal.source === 'daily_checkup';
   const hasNotes = proposal.operations.some(item => ['update_note', 'create_note'].includes(item.type));
   const onlyNotes = proposal.operations.every(item => ['update_note', 'create_note'].includes(item.type));
   // Auto-applied edits arrive in the response with APPLIED already set,
@@ -108,11 +109,11 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
   useEffect(() => {
     let active = true;
     void api.aiTaskProposal(initial.id).then(value => { if (active) setProposal(value); }).catch(() => {});
-    if (!telegram) void api.aiTaskProposalPreference().then(({ autoApply: auto }) => {
+    if (!telegram && !checkup) void api.aiTaskProposalPreference().then(({ autoApply: auto }) => {
       if (active) setAutoApply(auto);
     }).catch(() => {});
     return () => { active = false; };
-  }, [initial.id, telegram]);
+  }, [initial.id, telegram, checkup]);
   useEffect(() => {
     const sync = (event: Event) => setAutoApply(Boolean((event as CustomEvent<boolean>).detail));
     window.addEventListener(preferenceEvent, sync);
@@ -185,7 +186,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
       <div className="flex items-center gap-2">
         <span className="ai-task-proposal__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"><ClipboardCheck size={17} /></span>
         <div className="min-w-0 flex-1">
-          <strong className="block">{onlyNotes ? 'Изменения заметки' : hasNotes ? 'Изменения задач и заметок' : 'Изменения задач'}</strong>
+          <strong className="block">{checkup ? 'Предложение утреннего ИИ-чекапа' : onlyNotes ? 'Изменения заметки' : hasNotes ? 'Изменения задач и заметок' : 'Изменения задач'}</strong>
           <span className="ai-task-proposal__muted text-xs">{proposal.operations.length} действий · {STATUS[proposal.status]}</span>
         </div>
         {isApplied ? <CheckCircle2 size={18} className="text-emerald-500" /> : null}
@@ -219,7 +220,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
             </button>
             <button type="button" disabled={busy} onClick={() => void run('reject')} className="ai-task-proposal__secondary flex items-center justify-center gap-1 rounded-xl border px-3 py-2.5 font-medium disabled:opacity-50"><X size={14}/>Отклонить</button>
           </div>
-          {!telegram ? <label className="ai-task-proposal__muted flex cursor-pointer items-center gap-2 text-xs">
+          {!telegram && !checkup ? <label className="ai-task-proposal__muted flex cursor-pointer items-center gap-2 text-xs">
             <input type="checkbox" checked={autoApply} disabled={busy} onChange={event => void toggleAuto(event.target.checked)} />
             Применять новые изменения автоматически
           </label> : null}
@@ -236,7 +237,7 @@ export function AiTaskProposalCard({ proposal: initial, onApplied }: {
           Вернуть
         </button>
       ) : null}
-      {!telegram && proposal.status !== 'PENDING' ? (
+      {!telegram && !checkup && proposal.status !== 'PENDING' ? (
         <label className="ai-task-proposal__muted mt-2 flex cursor-pointer items-center gap-2 text-xs">
           <input type="checkbox" checked={autoApply} disabled={busy} onChange={event => void toggleAuto(event.target.checked)} />
           Применять новые изменения автоматически
