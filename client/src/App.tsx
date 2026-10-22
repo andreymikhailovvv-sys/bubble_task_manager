@@ -881,6 +881,8 @@ export default function App() {
   });
   const [isMorningAiCheckupEnabled, setIsMorningAiCheckupEnabled] = useState(false);
   const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
+  const [manualCheckupLoading, setManualCheckupLoading] = useState(false);
+  const [manualCheckupError, setManualCheckupError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSavingKey, setSettingsSavingKey] = useState<'timeZone' | 'checkupEnabled' | 'checkupTime' | 'browserNotifications' | 'taskReport' | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -1328,6 +1330,35 @@ export default function App() {
       setSettingsError(error instanceof Error ? error.message : 'Не удалось сохранить настройки');
     } finally {
       setSettingsSavingKey(null);
+    }
+  };
+
+  const generateManualCheckup = async () => {
+    if (manualCheckupLoading) return;
+    setManualCheckupLoading(true);
+    setManualCheckupError(null);
+    try {
+      const { message } = await api.generateAiCheckupNow();
+      const received: AiChatMessage = { ...message, id: message.id ?? crypto.randomUUID() };
+      setAiChatProjects(previous => {
+        const updated = previous.map((project, index) => index !== 0 ? project : ({
+          ...project,
+          chats: project.chats.map(chat => chat.id !== QUICK_AI_CHAT_ID ? chat : ({
+            ...chat, messages: reconcileAiChatMessagesWithChips(chat.messages, [received]).slice(-100)
+          }))
+        }));
+        aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+        return updated;
+      });
+      setActiveAiChatProjectId(aiChatProjects[0]?.id ?? '');
+      setActiveAiChatId(QUICK_AI_CHAT_ID);
+      setIsSettingsOpen(false);
+      setIsAiChatOpen(true);
+      void api.getMe().then(({ user }) => setCurrentUser(user)).catch(() => undefined);
+    } catch (error) {
+      setManualCheckupError(formatAiRequestError(error));
+    } finally {
+      setManualCheckupLoading(false);
     }
   };
 
@@ -5039,6 +5070,13 @@ ${allContext}`,
                     }}
                   />
                 </label>
+                <button type="button" onClick={() => { void generateManualCheckup(); }}
+                  disabled={manualCheckupLoading}
+                  className="primary-button mt-3 w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-wait disabled:opacity-60">
+                  {manualCheckupLoading ? 'Формируем ИИ-чекап…' : 'Сформировать чекап сейчас'}
+                </button>
+                <p className="mt-2 text-[11px] leading-snug text-subtle">Запуск в любое время, независимо от ежедневного расписания. Кредиты списываются по фактическим токенам.</p>
+                {manualCheckupError ? <p className="mt-2 text-[11px] text-rose-500" role="alert">{manualCheckupError}</p> : null}
               </div>
               {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
               <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">

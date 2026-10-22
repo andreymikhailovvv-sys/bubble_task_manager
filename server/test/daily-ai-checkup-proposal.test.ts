@@ -5,12 +5,14 @@ import { validateCheckupSelectedIndices } from '../src/services/ai-task-proposal
 
 test('checkup proposals are durable, owner-bound and always require manual approval', async () => {
   const index = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
+  const delivery = await readFile(new URL('../src/services/ai-checkup-delivery.service.ts', import.meta.url), 'utf8');
   const proposals = await readFile(new URL('../src/services/ai-task-proposal.service.ts', import.meta.url), 'utf8');
   const card = await readFile(new URL('../../client/src/components/AiTaskProposalCard.tsx', import.meta.url), 'utf8');
-  assert.match(index, /source: 'daily_checkup', userTimeZone: timeZone, autoApply: false/);
-  assert.match(index, /taskProposalId: proposalId/);
+  assert.match(delivery, /source: 'daily_checkup'/);
+  assert.match(delivery, /autoApply: false/);
+  assert.match(delivery, /taskProposalId: proposalId/);
   assert.match(index, /requestId: 'daily-checkup:' \+ slot.dateKey/);
-  assert.match(index, /operation: 'reschedule'/);
+  assert.match(delivery, /operation: 'reschedule'/);
   assert.match(proposals, /row.source === 'daily_checkup'/);
   assert.match(proposals, /where: \{ id, userId, status: 'PENDING' \}/);
   assert.match(card, /proposal.source === 'daily_checkup'/);

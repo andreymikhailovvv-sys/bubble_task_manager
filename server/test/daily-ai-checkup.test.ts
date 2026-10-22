@@ -47,11 +47,12 @@ test('checkup may propose today, overdue and earlier reschedules, never unknown 
 test('daily checkup dynamically settles actual provider token cost and stores it in the general dialog', async () => {
   const billing = await readFile(new URL('../src/services/dynamic-responses-billing.service.ts', import.meta.url), 'utf8');
   const service = await readFile(new URL('../src/services/daily-ai-checkup.service.ts', import.meta.url), 'utf8');
-  const index = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
+  const delivery = await readFile(new URL('../src/services/ai-checkup-delivery.service.ts', import.meta.url), 'utf8');
   assert.match(billing, /daily_checkup: \{ min: 768, max: 4096 \}/);
   assert.match(service, /runDynamicResponsesCall\(/);
   assert.match(service, /settleDynamicResponsesCall\(call\)/);
   assert.match(service, /refundDynamicResponsesCall\(call\)/);
-  assert.match(index, /creditsSpentMilli: checkup.creditsSpentMilli/);
-  assert.ok(!index.includes('messages: [{ role: \'assistant\', content: text }]'));
+  assert.match(delivery, /creditsSpentMilli: checkup.creditsSpentMilli/);
+  assert.match(delivery, /appendGeneralDialogAssistantMessage/);
+  assert.ok(!delivery.includes('messages: [{ role: \'assistant\', content: text }]'));
 });
