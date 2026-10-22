@@ -468,6 +468,7 @@ export const api = {
     method: 'PUT',
     body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
+  generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
   updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
