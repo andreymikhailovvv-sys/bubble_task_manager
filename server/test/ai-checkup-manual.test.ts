@@ -69,7 +69,9 @@ test('mini-app shows a just-generated checkup immediately, even before polling r
   assert.match(mini, /api\.getAiChatThreadMessages\(projectId, chatId\)/);
   const saved = { id: 'checkup-1', role: 'assistant' as const,
     content: '✨ ИИ-чекап', taskProposal: { id: 'proposal-1' } };
-  const older = [{ id: 'old-1', role: 'user' as const, content: 'Привет' }];
+  const older: Array<{ id: string; role: 'assistant' | 'user'; content: string; taskProposal?: { id: string } }> = [
+    { id: 'old-1', role: 'user', content: 'Привет' }
+  ];
   const first = reconcileAiChatMessagesWithChips(older, [saved]);
   assert.deepEqual(first.map(message => message.id), ['old-1', 'checkup-1']);
   const confirmed = reconcileAiChatMessagesWithChips(first, [saved]);
