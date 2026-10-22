@@ -79,3 +79,18 @@ test('notes forwarding allows an explicit group and matches the source task sect
   assert.equal((web.match(/initialNoteSphereId=\{focusedTask\?\.sphereId \?\? null\}/g) ?? []).length, 2);
   assert.equal((mini.match(/initialNoteSphereId=\{openedTask\?\.sphereId \?\? null\}/g) ?? []).length, 1);
 });
+
+
+test('notes AI edit step has only rewrite and back actions; direct save remains on initial step', async () => {
+  const share = await clientFile('components/TelegramMessageQuickShare.tsx');
+  const edit = share.slice(share.indexOf("          ) : mode === 'edit' ? ("), share.indexOf("          ) : (\n            <>\n              <p className=\"telegram-quick-share__subtitle", share.indexOf("          ) : mode === 'edit' ? (")));
+  const noteActions = edit.slice(edit.indexOf("              {destination === 'notes' ? ("), edit.indexOf("              ) : (", edit.indexOf("              {destination === 'notes' ? (")));
+  assert.ok(noteActions.includes("Изменить через ИИ"));
+  assert.ok(noteActions.includes("Назад"));
+  assert.ok(noteActions.includes("setMode('note')"));
+  assert.ok(!edit.includes('Сохранить без ИИ'));
+  assert.ok(!noteActions.includes('saveNote('));
+  const initialNotes = share.slice(share.indexOf("          {mode === 'note' ? ("), share.indexOf("          ) : mode === 'recipients' ? ("));
+  assert.ok(initialNotes.includes('saveNote(baseText)'));
+  assert.ok(edit.includes("destination === 'telegram' ? ("));
+});
