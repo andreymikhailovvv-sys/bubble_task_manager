@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { createPublicSeoPagesMiddleware } from '../src/lib/public-seo-pages.js';
 
 const clientDist = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -12,11 +13,12 @@ let server: ReturnType<ReturnType<typeof express>['listen']>;
 let baseUrl: string;
 
 before(async () => {
-  for (const file of ['index.html', 'seo-pages.css', 'task-manager/index.html', 'ai-planner/index.html']) {
+  for (const file of ['index.html', 'seo-pages.css', 'task-manager/index.html', 'ai-planner/index.html', 'welcome/index.html', 'welcome/welcome.css', 'welcome/welcome.js']) {
     assert.ok(existsSync(path.join(clientDist, file)), `Run the client build before this test (missing ${file})`);
   }
 
   const app = express();
+  app.use(cookieParser());
   app.use(createPublicSeoPagesMiddleware(clientDist));
   app.use(express.static(clientDist, { index: false }));
   app.get('*', (_, res) => res.sendFile(path.join(clientDist, 'index.html')));
@@ -74,4 +76,46 @@ test('regular workspace and other SPA paths keep the existing fallback', async (
     assert.equal(response.status, 200);
     assert.match(body, /<div id="root"><\/div>/);
   }
+});
+
+test('welcome URL serves a fully rendered lightweight landing page', async () => {
+  const response = await fetch(`${baseUrl}/welcome/`);
+  const body = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') ?? '', /text\/html/);
+  assert.match(body, /Хаоса больше нет/);
+  assert.match(body, /rel="canonical" href="https:\/\/planirovych\.ru\/"/);
+  assert.match(body, /data-enter-app/);
+  assert.doesNotMatch(body, /<div id="root">/);
+  assert.doesNotMatch(body, /<script[^>]*type="module"/);
+  assert.doesNotMatch(body, /telegram\.org\/js/);
+});
+
+test('welcome stylesheet and small behavior script are served without SPA fallback', async () => {
+  for (const [resource, contentType, pattern] of [
+    ['/welcome/welcome.css', /text\/css/, /\.hero-layout/],
+    ['/welcome/welcome.js', /javascript/, /planirovych_welcome_seen_v1/]
+  ] as const) {
+    const response = await fetch(baseUrl + resource);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', contentType);
+    assert.match(await response.text(), pattern);
+  }
+});
+
+test('welcome canonical URL and UTM query preserved in 301 redirect', async () => {
+  const response = await fetch(baseUrl + '/welcome?utm_source=yandex', { redirect: 'manual' });
+  assert.equal(response.status, 301);
+  assert.equal(response.headers.get('location'), '/welcome/?utm_source=yandex');
+});
+
+test('existing authenticated or guest session receives a welcome-skip cookie', async () => {
+  for (const cookie of ['btm_auth=placeholder-token', 'btm_device=placeholder-device']) {
+    const response = await fetch(baseUrl + '/', { headers: { cookie } });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('set-cookie') ?? '', /planirovych_welcome_seen=1/);
+    assert.match(response.headers.get('set-cookie') ?? '', /SameSite=Lax/i);
+  }
+  const fresh = await fetch(baseUrl + '/');
+  assert.equal(fresh.headers.get('set-cookie'), null);
 });
