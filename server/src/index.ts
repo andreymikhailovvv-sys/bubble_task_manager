@@ -169,12 +169,11 @@ setInterval(() => {
       if (claimed.count === 0) continue;
 
       try {
-        const text = await aiAssistantService.generateDailyCheckup({ userId: user.id });
-        await aiAssistantService.appendGeneralDialogMessages({
-          userId: user.id,
-          messages: [{ role: 'assistant', content: text }]
+        const checkup = await aiAssistantService.generateDailyCheckup({ userId: user.id });
+        await aiAssistantService.appendGeneralDialogAssistantMessage({
+          userId: user.id, content: checkup.text, creditsSpentMilli: checkup.creditsSpentMilli
         });
-        await telegramService.notifyDailyAiCheckup({ userId: user.id, text });
+        await telegramService.notifyDailyAiCheckup({ userId: user.id, text: checkup.text });
       } catch (error) {
         console.error(`[AI] daily checkup failed for userId=${user.id}`, error);
       }
