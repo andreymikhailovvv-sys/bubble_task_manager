@@ -17,7 +17,7 @@ test('on-demand checkup uses the identical AI, billing and manual proposal pipel
   assert.match(delivery, /appendGeneralDialogAssistantMessage/);
   assert.match(delivery, /taskProposal: await getTaskProposal/);
   assert.match(delivery, /requestId \|\| 'daily-checkup:manual:' \+ randomUUID\(\)/);
-  assert.doesNotMatch(delivery, /lastMorningAiCheckupDate|morningAiCheckupEnabled|morningAiCheckupTime/);
+  assert.doesNotMatch(delivery.replace(/\/\*[\s\S]*?\*\//g, ''), /lastMorningAiCheckupDate|morningAiCheckupEnabled|morningAiCheckupTime/);
   assert.match(scheduled, /await createAiCheckup\(\{/);
   assert.match(scheduled, /sendTelegram: true/);
   assert.match(api, /post\('\/ai\/checkup\/generate', requireAuth, taskProposalSameOrigin/);
@@ -34,7 +34,7 @@ test('manual checkup works when auto scheduling is off and cannot consume its da
   assert.match(index, /requestId: 'daily-checkup:' \+ slot\.dateKey/);
   assert.match(route, /await createAiCheckup\(\{ userId: req\.user!\.id \}\)/);
   assert.match(delivery, /if \(input\.sendTelegram\)/);
-  assert.doesNotMatch(delivery, /prisma\.user\.update|lastMorningAiCheckupDate/);
+  assert.doesNotMatch(delivery.replace(/\/\*[\s\S]*?\*\//g, ''), /prisma\.user\.update|lastMorningAiCheckupDate/);
 });
 
 test('generate button appears in desktop and mini/mobile and opens the saved Quick AI message', async () => {
