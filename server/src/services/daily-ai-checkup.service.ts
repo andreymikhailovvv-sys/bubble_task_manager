@@ -66,7 +66,7 @@ export function parseDailyCheckupResponse(response: Record<string, unknown>): Re
 }
 
 const short = (s: unknown, max = 330) => typeof s === 'string' ? s.trim().slice(0, max) : '';
-export function formatSmartDailyCheckup(response: Record<string, unknown>, tasks: Array<{ id: string; title: string; dueDate: string | null }>, tomorrow: Date, now: Date, timeZone: string) {
+export function formatSmartDailyCheckup(response: Record<string, unknown>, tasks: Array<{ id: string; title: string; dueDate: string | null }>, _tomorrow: Date, now: Date, timeZone: string) {
   const byId = new Map(tasks.map(t => [t.id, t]));
   const lines = ['✨ ИИ-чекап'];
   if (short(response.greeting)) lines.push('', short(response.greeting, 240));
