@@ -97,7 +97,7 @@ export type AiTaskProposal = {
   source: 'planner' | 'telegram_bot' | 'task_chat' | 'telegram_bot_task' | 'legacy_general' | 'telegram_assistant' | 'daily_checkup';
   autoApplied: boolean;
   operations: Array<{ type: string; title: string; before?: string; after?: string; dueDate?: string | null; parentTitle?: string; details?: string[] }>;
-  result: { reports?: string[]; createdIds?: string[] } | null;
+  result: { reports?: string[]; createdIds?: string[]; selectedIndices?: number[]; totalOperations?: number } | null;
   error: string | null;
 };
 
