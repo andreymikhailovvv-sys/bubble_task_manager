@@ -21,7 +21,8 @@ test('checkup may propose today, overdue and earlier reschedules, never unknown 
   const tasks = [
     { id: 'today', title: 'Сегодня', dueDate: '2026-10-22T15:00:00Z' },
     { id: 'later', title: 'На неделе', dueDate: '2026-10-24T12:00:00Z' },
-    { id: 'overdue', title: 'Просрочена', dueDate: '2026-10-20T14:00:00Z' }
+    { id: 'overdue', title: 'Просрочена', dueDate: '2026-10-20T14:00:00Z' },
+    { id: 'undated', title: 'Без срока', dueDate: null }
   ];
   const result = formatSmartDailyCheckup({
     greeting: 'Добрый день', workload: 'Три дела', risks: ['Высокая нагрузка'],
@@ -32,11 +33,12 @@ test('checkup may propose today, overdue and earlier reschedules, never unknown 
       { taskId: 'secret', newDueAt: '2026-10-25T14:00:00Z', reason: 'Неизвестно' },
       { taskId: 'later', newDueAt: '2026-10-23T12:00:00Z', reason: 'Сделать раньше' },
       { taskId: 'overdue', newDueAt: '2026-10-22T14:00:00Z', reason: 'Вернуть в план' },
+      { taskId: 'undated', newDueAt: '2026-10-22T16:00:00Z', reason: 'Выделить время' },
       { taskId: 'today', newDueAt: '2026-10-25T14:00:00Z', reason: 'Дубль' },
       { taskId: 'later', newDueAt: '2026-10-21T12:00:00Z', reason: 'Прошедшее время' }
     ]
   }, tasks, tomorrow, now, 'Europe/Moscow');
-  assert.deepEqual(result.moves.map(m => m.taskId), ['today', 'later', 'overdue']);
+  assert.deepEqual(result.moves.map(m => m.taskId), ['today', 'later', 'overdue', 'undated']);
   assert.ok(result.text.includes('🎯 Главные приоритеты'));
   assert.ok(result.text.startsWith('✨ ИИ-чекап'));
   assert.ok(!result.text.includes('secret'));

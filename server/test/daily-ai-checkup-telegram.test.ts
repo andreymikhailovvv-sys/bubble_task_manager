@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { formatTelegramDailyCheckupPreview, telegramDailyCheckupKeyboard } from '../src/services/telegram.service.js';
+// Ensure the WebApp URL builder has a valid origin in a hermetic CI run.
+process.env.APP_URL ||= 'https://planirovych.ru';
+const { formatTelegramDailyCheckupPreview, telegramDailyCheckupKeyboard } =
+  await import('../src/services/telegram.service.js');
 
 test('daily checkup Telegram preview is <4000 characters, valid HTML and shows continuation', () => {
   const unsafe = '<важная задача> & длинный текст 😀\n'.repeat(260);
