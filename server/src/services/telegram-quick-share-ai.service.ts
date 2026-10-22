@@ -36,19 +36,24 @@ export function validateQuickInstruction(input: unknown): string {
  */
 export function splitQuickText(input: string, maxChars = TELEGRAM_PART_CHARS): string[] {
   if (!input) return [];
-  const codepoints = Array.from(input);
+  const points = Array.from(input);
   const result: string[] = [];
   let offset = 0;
-  while (offset < codepoints.length) {
-    const end = Math.min(offset + maxChars, codepoints.length);
+  while (offset < points.length) {
+    let length = 0;
+    let end = offset;
+    while (end < points.length && length + points[end].length <= maxChars) {
+      length += points[end].length; // Telegram counts UTF-16 code units; never split a surrogate pair.
+      end += 1;
+    }
+    if (end === offset) throw new RangeError('Invalid text fragment size');
     let cut = end;
-    if (end < codepoints.length) {
-      const window = codepoints.slice(offset, end);
-      for (let i = window.length - 1; i >= Math.floor(window.length * 0.8); i--) {
-        if (window[i] === '\n' || window[i] === ' ') { cut = offset + i + 1; break; }
+    if (end < points.length) {
+      for (let i = end - 1; i >= offset + Math.floor((end - offset) * 0.8); i--) {
+        if (points[i] === '\n' || points[i] === ' ') { cut = i + 1; break; }
       }
     }
-    result.push(codepoints.slice(offset, cut).join(''));
+    result.push(points.slice(offset, cut).join(''));
     offset = cut;
   }
   return result;
