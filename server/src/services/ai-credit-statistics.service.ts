@@ -14,7 +14,7 @@ const FEATURE_LABELS: Record<string, string> = {
   optimize_timeline: 'Оптимизация таймлайна',
   overdue_postpone: 'Перенос просроченных задач',
   overdue_nudge: 'Подсказка по просроченной задаче',
-  daily_checkup: 'Утренний ИИ-чекап',
+  daily_checkup: 'ИИ-чекап',
   telegram_monitor: 'ИИ-мониторинг Telegram',
   audio_transcription: 'Расшифровка голосового',
   image_generation: 'Генерация изображений',
