@@ -80,7 +80,7 @@ export function TaskCompletionReportDialog(props: {
           aria-label="Закрыть"><X size={18} /></button>
         <p className="mt-2 break-words text-sm font-semibold text-primary">{props.taskTitle}</p>
         <p className="mt-2 text-sm leading-relaxed text-muted">
-          ИИ Luna 6 соберёт историю выполнения в Word: этапы и обсуждения, подзадачи с доступными датами, вложения и зафиксированные решения. Отсутствующие исторические данные не будут выдумываться.
+          ИИ соберёт историю выполнения в Word: этапы и обсуждения, подзадачи с доступными датами, вложения и зафиксированные решения. Отсутствующие исторические данные не будут выдумываться.
         </p>
         {error ? <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 p-3 text-sm text-rose-500">{error}</p> : null}
         {!document ? (
@@ -91,7 +91,7 @@ export function TaskCompletionReportDialog(props: {
             </label> : null}
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row">
               <button type="button" onClick={() => void finish()} disabled={loading}
-                className="surface-muted flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-primary">Не сейчас</button>
+                className="surface-muted flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-primary">Нет, спасибо</button>
               <button type="button" onClick={() => void generate()} disabled={loading}
                 className="primary-button inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
