@@ -7,6 +7,7 @@ import { escapeNoteText } from '../lib/notes';
 import { api, type StandaloneNoteGroup, type TelegramSendTarget, type TelegramQuickSendJob } from '../lib/api';
 
 const SAVED_MESSAGES_ID = 'saved';
+const formatShareCredits = (milli: number) => (milli / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 3 });
 type Mode = 'recipients' | 'note' | 'edit' | 'preview';
 type Destination = 'telegram' | 'notes';
 const defaultNoteTitle = (text: string) => {
@@ -50,6 +51,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
   const [instruction, setInstruction] = useState('');
   const [baseText, setBaseText] = useState(text);
   const [modifiedText, setModifiedText] = useState('');
+  const [rewriteCreditsSpentMilli, setRewriteCreditsSpentMilli] = useState(0);
   const [job, setJob] = useState<TelegramQuickSendJob | null>(null);
   const [toast, setToast] = useState('');
   const submittingRef = useRef(false);
@@ -93,15 +95,21 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
         const next = await api.telegramQuickSendStatus(job.id);
         if (!active || !alive.current) return;
         setJob(next);
+        const creditSuffix = next.rewriteCreditsSpentMilli > 0
+          ? ` Списано ${formatShareCredits(next.rewriteCreditsSpentMilli)} ИИ-кредитов за изменение текста.`
+          : '';
+        if (next.state === 'QUEUED' && next.stage === 'SEND' && next.rewriteCreditsSpentMilli > 0) {
+          setToast(`Telegram: текст изменён через ИИ, отправка в очереди.${creditSuffix}`);
+        }
         if (next.state === 'DONE') {
-          setToast(next.unknownCount
+          setToast((next.unknownCount
             ? `Telegram: отправлено ${next.sentCount}; результат неизвестен для ${next.unknownCount}. Проверьте вручную.`
             : next.failedCount
               ? `Telegram: отправлено ${next.sentCount}, не отправлено ${next.failedCount}.`
-              : `Telegram: отправлено ${next.sentCount} из ${next.recipientCount}.`);
+              : `Telegram: отправлено ${next.sentCount} из ${next.recipientCount}.`) + creditSuffix);
         }
         if (next.state === 'FAILED') {
-          setToast(`Telegram: операция остановлена. Уже отправлено ${next.sentCount} из ${next.recipientCount}. Остальные не отправлены либо требуют ручной проверки.`);
+          setToast(`Telegram: операция остановлена. Уже отправлено ${next.sentCount} из ${next.recipientCount}. Остальные не отправлены либо требуют ручной проверки.${creditSuffix}`);
         }
       } catch {
         // Network response can be temporarily unavailable; the durable job
@@ -122,6 +130,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
     setChosen([]);
     setInstruction('');
     setModifiedText('');
+    setRewriteCreditsSpentMilli(0);
     setBaseText(text);
     setDialogs([]);
     setDialogsLoaded(false);
@@ -163,6 +172,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
     setNoteGroupsReady(false);
     setInstruction('');
     setModifiedText('');
+    setRewriteCreditsSpentMilli(0);
   };
 
   const saveNote = async (value: string) => {
@@ -178,7 +188,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
       await api.createStandaloneNote({ title: noteTitle.trim() || 'Из чата с ИИ', content, groupId: noteGroupId || null });
       if (!alive.current) return;
       window.dispatchEvent(new Event('standalone-notes-updated'));
-      setToast('Сообщение сохранено в заметках.');
+      setToast(`Сообщение сохранено в заметках.${rewriteCreditsSpentMilli > 0 ? ' Списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за изменение текста.' : ''}`);
       setOpen(false);
     } catch (cause) {
       if (alive.current) setError(cause instanceof Error ? cause.message : 'Не удалось сохранить заметку');
@@ -218,9 +228,10 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
       });
       if (!alive.current) return;
       setJob(accepted);
-      setToast(modeToSend === 'REWRITE_AND_SEND'
+      setToast((modeToSend === 'REWRITE_AND_SEND'
         ? 'Запрос будет обработан ИИ и отправлен выбранным пользователям.'
-        : 'Сообщение принято к отправке в Telegram.');
+        : 'Сообщение принято к отправке в Telegram.') +
+        (rewriteCreditsSpentMilli > 0 ? ' Ранее списано ' + formatShareCredits(rewriteCreditsSpentMilli) + ' ИИ-кредитов за предварительное редактирование.' : ''));
       setOpen(false);
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось принять запрос на отправку');
@@ -231,7 +242,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
   };
 
   const acceptRewrite = async () => {
-    if (busy || !instruction.trim() || !baseText.trim() || baseText.length > 4000) return;
+    if (busy || !instruction.trim() || !baseText.trim() || baseText.length > 24000) return;
     setBusy(true);
     setError('');
     try {
@@ -240,6 +251,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
         : await api.telegramQuickRewrite({ text: baseText, instruction });
       if (!alive.current) return;
       setModifiedText(result.text);
+      setRewriteCreditsSpentMilli((previous) => previous + result.creditsSpentMilli);
       setMode('preview');
     } catch (e) {
       if (alive.current) setError(e instanceof Error ? e.message : 'Не удалось изменить сообщение');
@@ -368,7 +380,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
               <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
               <label className="block text-sm font-medium">
                 {destination === 'notes' ? 'Текст заметки' : 'Текст сообщения'}
-                <textarea value={baseText} maxLength={destination === 'notes' ? undefined : 4000} rows={5}
+                <textarea value={baseText} maxLength={destination === 'notes' ? undefined : 24000} rows={5}
                   onChange={(e) => setBaseText(e.target.value)}
                   aria-label={destination === 'notes' ? 'Редактировать текст заметки' : 'Редактировать текст сообщения'}
                   className="telegram-quick-share__textarea mt-2 block max-h-40 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm" />
@@ -382,7 +394,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
               </label>
               {destination === 'notes' ? (
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim() || baseText.length > 4000}
+                  <button type="button" disabled={busy || !baseText.trim() || !instruction.trim() || baseText.length > 24000}
                     onClick={() => void acceptRewrite()}
                     className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
                     {busy ? 'Изменяем…' : 'Изменить через ИИ'}
@@ -392,7 +404,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
                     className="telegram-quick-share__back flex-1 rounded-xl border px-4 py-3 text-sm font-medium disabled:opacity-40">
                     Назад
                   </button>
-                  {baseText.length > 4000 ? <p className="telegram-quick-share__muted w-full text-xs">ИИ может изменить до 4000 символов. Сократите текст для обработки.</p> : null}
+                  {baseText.length > 24000 ? <p className="telegram-quick-share__muted w-full text-xs">Для одного ИИ-запроса поддерживается до 24 000 символов. Сократите текст перед обработкой.</p> : null}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -407,7 +419,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
                     </span>
                   </div>
                   <div className="telegram-quick-share__tooltip-anchor relative min-w-0 flex-1">
-                    <button type="button" disabled={busy || !baseText.trim() || !instruction.trim()} onClick={() => void acceptRewrite()}
+                    <button type="button" disabled={busy || !baseText.trim() || !instruction.trim() || baseText.length > 24000} onClick={() => void acceptRewrite()}
                       className="telegram-quick-share__secondary w-full rounded-xl px-3 py-3 text-sm font-semibold disabled:opacity-40">
                       {busy ? 'Обрабатываем…' : 'Изменить'}
                     </button>
@@ -426,6 +438,7 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
             <>
               <p className="telegram-quick-share__subtitle flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} /> Изменённое сообщение</p>
               <p className="telegram-quick-share__muted text-xs">{destination === 'notes' ? 'Заметка: ' + (noteTitle.trim() || 'Без названия') : 'Получатели: ' + selectedNames.join(', ')}</p>
+              {rewriteCreditsSpentMilli > 0 ? <p role="status" className="telegram-quick-share__muted text-xs">Списано за ИИ-редактирование: {formatShareCredits(rewriteCreditsSpentMilli)} кредитов</p> : null}
               {destination === 'notes' ? (
                 <textarea value={modifiedText} rows={7} onChange={(event) => setModifiedText(event.target.value)}
                   className="telegram-quick-share__textarea block max-h-72 w-full resize-y overflow-y-auto rounded-xl border p-3 text-sm"

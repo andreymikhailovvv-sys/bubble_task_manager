@@ -316,6 +316,7 @@ export type TelegramQuickSendJob = {
   stage: 'REWRITE' | 'SEND';
   recipientCount: number;
   sentCount: number;
+  rewriteCreditsSpentMilli: number;
   failedCount: number;
   unknownCount: number;
   createdAt: string;
@@ -497,7 +498,7 @@ export const api = {
     request<{ ok: true }>(`/api/note-groups/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getStandaloneNotes: () => request<StandaloneNote[]>('/api/notes'),
   rewriteTextForNote: (payload: { text: string; instruction: string }) =>
-    request<{ text: string }>('/api/notes/quick-rewrite', { method: 'POST', body: JSON.stringify(payload) }),
+    request<{ text: string; creditsSpentMilli: number }>('/api/notes/quick-rewrite', { method: 'POST', body: JSON.stringify(payload) }),
   createStandaloneNote: (payload: { title?: string; content?: string; groupId?: string | null } = {}) =>
     request<StandaloneNote>('/api/notes', { method: 'POST', body: JSON.stringify(payload) }),
   updateStandaloneNote: (id: string, payload: { title?: string; content?: string; groupId?: string | null }) =>
@@ -730,7 +731,7 @@ export const api = {
   telegramQuickSendStatus: (jobId: string) =>
     request<TelegramQuickSendJob>(`/api/telegram-user-client/chat/quick-send/${encodeURIComponent(jobId)}`),
   telegramQuickRewrite: (payload: { text: string; instruction: string }) =>
-    request<{ text: string }>('/api/telegram-user-client/chat/quick-rewrite', {
+    request<{ text: string; creditsSpentMilli: number }>('/api/telegram-user-client/chat/quick-rewrite', {
       method: 'POST', body: JSON.stringify(payload)
     }),
   telegramChatCapability: () =>

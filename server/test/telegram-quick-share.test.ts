@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib/telegram-quick-share-crypto.js';
 import { TELEGRAM_SAVED_MESSAGES_ID, validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
-import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateQuickInstruction } from '../src/services/telegram-quick-share-ai.service.js';
+import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateShareText, validateQuickInstruction, splitQuickText, MAX_QUICK_TEXT } from '../src/services/telegram-quick-share-ai.service.js';
 
 test('quick send allows 1 to 3 people or groups, not raw channel/group peer IDs', () => {
   assert.deepEqual(validateQuickRecipients(['123', '987', '42']), ['123', '987', '42']);
@@ -36,6 +36,8 @@ test('direct send requires a unique request id, bounded text, strictly selected 
   assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: '', mode: 'DIRECT' }));
   assert.throws(() => validateQuickSendInput({ requestId, recipientIds: ['123'], text: 'text', mode: 'UNKNOWN' }));
   assert.throws(() => validateQuickText('X'.repeat(4001)));
+  assert.equal(validateShareText('X'.repeat(4001)).length, 4001);
+  assert.throws(() => validateShareText('X'.repeat(MAX_QUICK_TEXT + 1)));
   assert.throws(() => validateQuickText('a\u0000b'));
 });
 test('auto-rewrite mode cannot enqueue without explicit editing instructions', () => {
@@ -76,5 +78,40 @@ test('AI rewrite is text-only, excludes Telegram sessions, peers and all callabl
   assert.ok(!serial.includes('recipientIds'));
   assert.ok(!serial.includes('sendMessage'));
   assert.equal(parseQuickRewriteOutput({ output_text: 'Переработанный текст' }), 'Переработанный текст');
-  assert.throws(() => parseQuickRewriteOutput({ output_text: 'a'.repeat(4001) }));
+  assert.equal(parseQuickRewriteOutput({ output_text: 'a'.repeat(4001) }).length, 4001);
+  assert.throws(() => parseQuickRewriteOutput({ output_text: 'a'.repeat(MAX_QUICK_TEXT + 1) }));
+});
+
+
+test('long Telegram text is split losslessly and safely across Unicode code points', () => {
+  const input = 'Привет 🌍!\n'.repeat(1900);
+  const chunks = splitQuickText(input);
+  assert.ok(chunks.length > 2);
+  assert.equal(chunks.join(''), input);
+  assert.ok(chunks.every(chunk => chunk.length <= 4000));
+  assert.ok(chunks.every(chunk => Buffer.byteLength(chunk, 'utf8') <= 35000));
+  assert.deepEqual(splitQuickText('Короткое сообщение'), ['Короткое сообщение']);
+  const emoji = splitQuickText('😀'.repeat(4500));
+  assert.equal(emoji.join(''), '😀'.repeat(4500));
+  assert.ok(emoji.every(part => part.length <= 4000));
+});
+
+test('long quick rewrite uses token-billed wallet preflight, settlement and billing receipt', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const ai = await readFile(new URL('../src/services/telegram-quick-share-ai.service.ts', import.meta.url), 'utf8');
+  const worker = await readFile(new URL('../src/services/telegram-quick-share.service.ts', import.meta.url), 'utf8');
+  const billing = await readFile(new URL('../src/services/dynamic-responses-billing.service.ts', import.meta.url), 'utf8');
+  const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+  assert.match(ai, /runDynamicResponsesCall\(/);
+  assert.match(ai, /settleDynamicResponsesCall\(/);
+  assert.match(ai, /refundDynamicResponsesCall\(/);
+  assert.match(ai, /creditsSpentMilli/);
+  assert.match(billing, /notes_quick_rewrite: \{ min:/);
+  assert.match(billing, /telegram_quick_rewrite: \{ min:/);
+  assert.match(worker, /rewriteCreditsSpentMilli: revised\.creditsSpentMilli/);
+  assert.match(worker, /fragments\[partIndex\]/);
+  assert.match(worker, /partIndex \? ':' \+ partIndex : ''/);
+  assert.match(schema, /rewriteCreditsSpentMilli\s+Int\s+@default\(0\)/);
+  const payload = buildQuickRewritePayload('Начало текста', 'Улучши стиль', 'test-model', 'notes');
+  assert.ok(!JSON.stringify(payload).includes('Максимум 4000 символов'));
 });

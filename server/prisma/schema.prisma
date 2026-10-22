@@ -661,6 +661,7 @@ model TelegramQuickSendJob {
   recipientCount    Int
   recipientIndex    Int      @default(0)
   sentCount         Int      @default(0)
+  rewriteCreditsSpentMilli Int @default(0)
   unknownCount      Int      @default(0)
   failedCount       Int      @default(0)
   nextRunAt         DateTime @default(now())

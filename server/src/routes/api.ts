@@ -1263,7 +1263,7 @@ apiRouter.post('/notes/quick-rewrite', requireAuth, async (req, res) => {
   if (rejectOnRateLimit(res, notesRewriteLimiter.consume(req.user!.id))) return;
   try {
     const rewritten = await rewriteNotesQuickText(req.user!.id, req.body?.text, req.body?.instruction);
-    res.json({ text: rewritten });
+    res.json(rewritten);
   } catch (error) { telegramAuthError(res, error); }
 });
 apiRouter.post('/notes', requireAuth, asyncHandler(async (req, res) => {

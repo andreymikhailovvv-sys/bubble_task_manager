@@ -7,7 +7,7 @@ import { connectedOwner, openClient, checkManualTelegramSendWindow } from './tel
 import { isTelegramAiDraftEnabled } from './telegram-user-client-draft.service.js';
 import { isManualTelegramSendingEnabled } from './telegram-user-client-send.service.js';
 import { TelegramUserClientError } from './telegram-user-client-auth.service.js';
-import { rewriteTelegramQuickText, validateQuickInstruction, validateQuickText } from './telegram-quick-share-ai.service.js';
+import { rewriteTelegramQuickText, splitQuickText, validateQuickInstruction, validateShareText } from './telegram-quick-share-ai.service.js';
 
 export type QuickSendMode = 'DIRECT' | 'REWRITE_AND_SEND';
 type Payload = { recipientIds: string[]; text: string; instruction: string | null; mode: QuickSendMode };
@@ -42,14 +42,14 @@ export function validateQuickSendInput(input: {
     requestId: input.requestId.toLowerCase(),
     mode: input.mode,
     recipientIds: validateQuickRecipients(input.recipientIds),
-    text: validateQuickText(input.text),
+    text: validateShareText(input.text),
     instruction: input.mode === 'REWRITE_AND_SEND' ? validateQuickInstruction(input.instruction) : null
   };
 }
 
-function publicStatus(job: { id: string; state: string; stage: string; recipientCount: number; sentCount: number; unknownCount: number; failedCount: number; createdAt: Date; completedAt: Date | null }) {
+function publicStatus(job: { id: string; state: string; stage: string; recipientCount: number; sentCount: number; rewriteCreditsSpentMilli: number; unknownCount: number; failedCount: number; createdAt: Date; completedAt: Date | null }) {
   return { id: job.id, state: job.state, stage: job.stage, recipientCount: job.recipientCount,
-    sentCount: job.sentCount, unknownCount: job.unknownCount, failedCount: job.failedCount,
+    sentCount: job.sentCount, rewriteCreditsSpentMilli: job.rewriteCreditsSpentMilli, unknownCount: job.unknownCount, failedCount: job.failedCount,
     createdAt: job.createdAt, completedAt: job.completedAt };
 }
 
@@ -142,31 +142,46 @@ async function performJob(job: {
     try {
       await connectedOwner(job.userId);
       if (!isTelegramAiDraftEnabled()) throw new TelegramUserClientError(403, 'ИИ-обработка выключена');
-      const revised = await rewriteTelegramQuickText(job.userId, payload.text, payload.instruction ?? '');
-      const encrypted = encryptTelegramQuickShare(JSON.stringify({ ...payload, text: revised, instruction: null, mode: 'DIRECT' }), job.userId, job.id);
+      const revised = await rewriteTelegramQuickText(job.userId, payload.text, payload.instruction ?? '', async () => {
+        // A long rewrite can span multiple provider calls; keep the worker's
+        // claim alive to prevent a second worker from replaying billed AI work.
+        await prisma.telegramQuickSendJob.updateMany({
+          where: { id: job.id, state: 'PROCESSING', stage: 'REWRITE' },
+          data: { claimedAt: new Date() }
+        });
+      });
+      const encrypted = encryptTelegramQuickShare(JSON.stringify({ ...payload, text: revised.text, instruction: null, mode: 'DIRECT' }), job.userId, job.id);
       await prisma.telegramQuickSendJob.updateMany({
         where: { id: job.id, state: 'PROCESSING', stage: 'REWRITE' },
-        data: { encryptedPayload: encrypted, stage: 'SEND', state: 'QUEUED', claimedAt: null, nextRunAt: new Date() }
+        data: { encryptedPayload: encrypted, rewriteCreditsSpentMilli: revised.creditsSpentMilli,
+          stage: 'SEND', state: 'QUEUED', claimedAt: null, nextRunAt: new Date() }
       });
     } catch { await failJob(job.id, 'ai_rewrite'); }
     return;
   }
   const target = payload.recipientIds[job.recipientIndex];
-  const auditId = `${job.id}:${job.recipientIndex}`;
   if (!target) { await failJob(job.id, 'invalid_index'); return; }
-
-  // Recovered after a crash: a PENDING audit means the network side effect
-  // may already have happened. Never attempt that recipient twice.
-  const prior = await prisma.telegramUserClientSendAudit.findUnique({ where: { id: auditId } });
-  if (prior) {
-    const settled = prior.result === 'SENT' ? 'SENT' : prior.result === 'FAILED' ? 'FAILED' : 'UNKNOWN';
+  const fragments = splitQuickText(payload.text);
+  if (!fragments.length) { await failJob(job.id, 'invalid_message'); return; }
+  // The audit ledger tracks each fragment separately, without new cursors in
+  // the database. Confirmed fragments are never re-sent after a worker crash.
+  let partIndex = 0;
+  for (; partIndex < fragments.length; partIndex++) {
+    const partAuditId = `${job.id}:${job.recipientIndex}${partIndex ? ':' + partIndex : ''}`;
+    const prior = await prisma.telegramUserClientSendAudit.findUnique({ where: { id: partAuditId } });
+    if (!prior) break;
+    if (prior.result === 'SENT') continue;
     if (prior.result === 'PENDING') await prisma.telegramUserClientSendAudit.updateMany({
-      where: { id: auditId, result: 'PENDING' },
+      where: { id: partAuditId, result: 'PENDING' },
       data: { result: 'UNKNOWN', completedAt: new Date() }
     });
-    await finishRecipient(job, settled);
+    // If delivery is unknown, do not continue with subsequent fragments or
+    // repeat the ambiguous fragment. The owner must inspect Telegram manually.
+    await finishRecipient(job, prior.result === 'FAILED' ? 'FAILED' : 'UNKNOWN');
     return;
   }
+  if (partIndex === fragments.length) { await finishRecipient(job, 'SENT'); return; }
+  const auditId = `${job.id}:${job.recipientIndex}${partIndex ? ':' + partIndex : ''}`;
 
   let client: Awaited<ReturnType<typeof openClient>> | null = null;
   let sendStarted = false;
@@ -200,19 +215,26 @@ async function performJob(job: {
     }
     const claimed = await claimAudit(job.userId, saved ? owner.telegramAccountId : target, auditId, owner.telegramAccountId, recipientKind);
     if (claimed.kind === 'delay') { await postpone(job.id, claimed.seconds); return; }
-    if (claimed.kind === 'existing') { await finishRecipient(job, claimed.result); return; }
+    if (claimed.kind === 'existing') {
+      if (claimed.result === 'SENT' && partIndex + 1 < fragments.length) await postpone(job.id, 1);
+      else await finishRecipient(job, claimed.result);
+      return;
+    }
     auditClaimed = true;
     // This is the only call that can send the message. The audit claim is
     // durable and single-use before starting the remote side effect.
     sendStarted = true;
     await client.sendMessage(inputEntity, {
-      message: payload.text, formattingEntities: [], linkPreview: false
+      message: fragments[partIndex], formattingEntities: [], linkPreview: false
     });
     await prisma.telegramUserClientSendAudit.updateMany({
       where: { id: auditId, result: 'PENDING' },
       data: { result: 'SENT', completedAt: new Date() }
     });
-    await finishRecipient(job, 'SENT');
+    auditClaimed = false; // Delivery is durably recorded; DB queue errors must not turn it UNKNOWN.
+    sendStarted = false;
+    if (partIndex + 1 === fragments.length) await finishRecipient(job, 'SENT');
+    else await postpone(job.id, 1); // Send the next part after the durable audit commit.
   } catch (error) {
     if (auditClaimed) {
       const result = sendStarted ? 'UNKNOWN' : 'FAILED';
@@ -278,7 +300,7 @@ export const telegramQuickShare = {
 
   async rewritePreview(userId: string, original: unknown, instruction: unknown) {
     await connectedOwner(userId);
-    return { text: await rewriteTelegramQuickText(userId, validateQuickText(original), validateQuickInstruction(instruction)) };
+    return rewriteTelegramQuickText(userId, validateShareText(original), validateQuickInstruction(instruction));
   },
 
   async drain() {
