@@ -222,7 +222,7 @@ export async function generateSmartDailyCheckup(userId: string): Promise<SmartDa
           } else {
             const explanation = short(reviewed.noChangesReason, 230);
             output = { ...output, text: output.text +
-              '\\n\\n🗓️ Предлагаемых изменений нет.' +
+              '\n\n🗓️ Предлагаемых изменений нет.' +
               (explanation ? ' ' + explanation : ' ИИ не нашёл обоснованных переносов.') };
           }
         } catch (error) {
@@ -231,7 +231,7 @@ export async function generateSmartDailyCheckup(userId: string): Promise<SmartDa
             actionId, reason: error instanceof Error ? error.message.slice(0, 130) : 'unknown'
           });
           output = { ...output, text: output.text +
-            '\\n\\n🗓️ Предложений по изменению расписания нет; дополнительная проверка не завершилась.' };
+            '\n\n🗓️ Предложений по изменению расписания нет; дополнительная проверка не завершилась.' };
         }
       }
       return { ...output, creditsSpentMilli };
