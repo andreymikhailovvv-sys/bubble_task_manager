@@ -138,6 +138,26 @@ body[data-theme] .telegram-quick-share__textarea:focus {
   border-color: var(--tqs-highlight-border) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--tqs-highlight-border) 17%, transparent);
 }
+/* Match the existing notes group chooser while remaining legible in both themes. */
+body[data-theme] .telegram-quick-share__group-trigger {
+  background: var(--tqs-field) !important;
+  color: var(--tqs-text) !important;
+  border: 1px solid var(--tqs-border) !important;
+  box-shadow: none !important;
+}
+body[data-theme] .telegram-quick-share__group-trigger:hover:not(:disabled) {
+  background: var(--tqs-hover) !important;
+}
+body[data-theme] .telegram-quick-share__group-trigger:focus-visible {
+  outline: 2px solid var(--tqs-highlight-border);
+  outline-offset: 2px;
+}
+body[data-theme] .telegram-quick-share__group-picker {
+  background: var(--panel-bg) !important;
+  border-color: var(--panel-border) !important;
+  color: var(--text-primary) !important;
+}
+
 .telegram-quick-share__primary {
   background: #0284c7 !important;
   color: #ffffff !important;
