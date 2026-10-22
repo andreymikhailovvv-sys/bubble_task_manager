@@ -195,10 +195,53 @@ export async function rejectTaskProposal(userId: string, id: string) {
   return getTaskProposal(userId, id);
 }
 
-export async function applyTaskProposal(userId: string, id: string): Promise<TaskProposalView> {
-  // Compare-and-swap: a repeated click (or a second replica) cannot replay writes.
+/**
+ * A checkup selection is an index list into the original immutable proposal.
+ * Never trust action payloads or task IDs from the browser.
+ */
+export function validateCheckupSelectedIndices(indices: unknown, length: number): number[] {
+  if (!Array.isArray(indices) || indices.length === 0 || indices.length > length ||
+      indices.some(value => !Number.isInteger(value) || value < 0 || value >= length) ||
+      new Set(indices).size !== indices.length) {
+    throw new Error('Выберите хотя бы одно действительное изменение ИИ-чекапа.');
+  }
+  return [...indices].sort((a: number, b: number) => a - b);
+}
+
+export async function applyTaskProposal(userId: string, id: string, selectedIndices?: number[]): Promise<TaskProposalView> {
+  // For checkups, the user's explicit selection is mandatory. Persist only the
+  // selected commands inside the same atomic PENDING -> APPLYING claim so an
+  // old tab, another request or another worker cannot execute a second subset.
+  const current = await prisma.aiTaskProposal.findFirst({ where: { id, userId } });
+  if (!current) throw new Error('Предложение не найдено.');
+  if (current.status !== 'PENDING') return proposalView(current);
+  if (current.source !== 'daily_checkup' && selectedIndices !== undefined) {
+    throw new Error('Выбор отдельных действий доступен только для ИИ-чекапа.');
+  }
+  let subset: { actions: TaskProposalAction[]; indices: number[]; originalCount: number;
+    snapshots: Array<{ kind?: string; id: string; updatedAt: string }>; ids: { items: string[]; spheres: string[] } } | null = null;
+  if (current.source === 'daily_checkup') {
+    const originalActions = Array.isArray(current.operations) ? current.operations as TaskProposalAction[] : [];
+    const indices = validateCheckupSelectedIndices(selectedIndices, originalActions.length);
+    const actions = indices.map(index => originalActions[index]);
+    const ids = new Set(actions.flatMap(actionIds));
+    const snapshots = (Array.isArray(current.snapshots) ? current.snapshots : [])
+      .filter((snapshot): snapshot is { kind?: string; id: string; updatedAt: string } =>
+        Boolean(snapshot && typeof snapshot === 'object' && typeof (snapshot as { id?: unknown }).id === 'string'))
+      .filter(snapshot => ids.has(snapshot.id));
+    subset = { actions, indices, originalCount: originalActions.length, snapshots,
+      ids: { items: [...ids], spheres: [] } };
+  }
   const claimed = await prisma.aiTaskProposal.updateMany({
-    where: { id, userId, status: 'PENDING' }, data: { status: 'APPLYING' }
+    where: { id, userId, status: 'PENDING' },
+    data: {
+      status: 'APPLYING',
+      ...(subset ? {
+        operations: subset.actions as unknown as Prisma.InputJsonValue,
+        snapshots: subset.snapshots as unknown as Prisma.InputJsonValue,
+        resolvedIds: subset.ids as Prisma.InputJsonValue
+      } : {})
+    }
   });
   if (!claimed.count) return getTaskProposal(userId, id);
   const row = await prisma.aiTaskProposal.findFirstOrThrow({ where: { id, userId } });
@@ -300,7 +343,8 @@ export async function applyTaskProposal(userId: string, id: string): Promise<Tas
     const undoData = await captureProposalAfter(userId, before, createdIds, notesBefore, createdNoteIds);
     await prisma.aiTaskProposal.update({ where: { id }, data: {
       status: 'APPLIED', undoData: undoData as unknown as Prisma.InputJsonValue,
-      result: { reports, createdIds, createdNoteIds } as Prisma.InputJsonValue
+      result: { reports, createdIds, createdNoteIds,
+        ...(subset ? { selectedIndices: subset.indices, totalOperations: subset.originalCount } : {}) } as Prisma.InputJsonValue
     } });
   } catch (error) {
     // A failed command must never be retried automatically: the network/database
