@@ -168,10 +168,10 @@ test('notes rewrite has at most two attempts per fragment and refunds invalid re
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../src/services/telegram-quick-share-ai.service.ts', import.meta.url), 'utf8');
   assert.match(source, /const MAX_REWRITE_ATTEMPTS_PER_FRAGMENT = 2/);
-  assert.match(source, /const REWRITE_RECOVERY_MODEL = 'gpt-5\\.4-mini'/);
-  assert.match(source, /index \\* MAX_REWRITE_ATTEMPTS_PER_FRAGMENT \\+ attempt/);
-  assert.match(source, /await refundDynamicResponsesCall\\(call\\)/);
-  assert.match(source, /if \\(attempt === MAX_REWRITE_ATTEMPTS_PER_FRAGMENT\\)/);
-  assert.match(source, /calls\\.push\\(call\\); \\/\\/ Only validated fragments/);
-  assert.match(source, /getQuickRewriteResponseDiagnostics\\(call\\.responseJson\\)/);
+  assert.match(source, /const REWRITE_RECOVERY_MODEL = 'gpt-5\.4-mini'/);
+  assert.match(source, /index \* MAX_REWRITE_ATTEMPTS_PER_FRAGMENT \+ attempt/);
+  assert.match(source, /await refundDynamicResponsesCall\(call\)/);
+  assert.match(source, /if \(attempt === MAX_REWRITE_ATTEMPTS_PER_FRAGMENT\)/);
+  assert.match(source, /calls\.push\(call\); \/\/ Only validated fragments/);
+  assert.match(source, /getQuickRewriteResponseDiagnostics\(call\.responseJson\)/);
 });
