@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { encryptTelegramQuickShare, decryptTelegramQuickShare } from '../src/lib/telegram-quick-share-crypto.js';
 import { TELEGRAM_SAVED_MESSAGES_ID, validateQuickRecipients, validateQuickSendInput } from '../src/services/telegram-quick-share.service.js';
-import { buildQuickRewritePayload, parseQuickRewriteOutput, validateQuickText, validateShareText, validateQuickInstruction, splitQuickText, MAX_QUICK_TEXT } from '../src/services/telegram-quick-share-ai.service.js';
+import { buildQuickRewritePayload, parseQuickRewriteOutput, getQuickRewriteResponseDiagnostics, validateQuickText, validateShareText, validateQuickInstruction, splitQuickText, MAX_QUICK_TEXT } from '../src/services/telegram-quick-share-ai.service.js';
 
 test('quick send allows 1 to 3 people or groups, not raw channel/group peer IDs', () => {
   assert.deepEqual(validateQuickRecipients(['123', '987', '42']), ['123', '987', '42']);
@@ -114,4 +114,64 @@ test('long quick rewrite uses token-billed wallet preflight, settlement and bill
   assert.match(schema, /rewriteCreditsSpentMilli\s+Int\s+@default\(0\)/);
   const payload = buildQuickRewritePayload('Начало текста', 'Улучши стиль', 'test-model', 'notes');
   assert.ok(!JSON.stringify(payload).includes('Максимум 4000 символов'));
+});
+
+test('quick notes rewrite limits reasoning and extracts text from actual Responses message content', () => {
+  const payload = buildQuickRewritePayload('Подробный текст', 'Сделай короче', 'gpt-6-luna', 'notes');
+  assert.deepEqual(payload.reasoning, { effort: 'low' });
+  assert.equal(payload.store, false);
+  const response = {
+    status: 'completed',
+    output: [
+      { type: 'reasoning', summary: [] },
+      { type: 'message', content: [{ type: 'output_text', text: 'Краткий текст' }] }
+    ]
+  };
+  assert.equal(parseQuickRewriteOutput(response), 'Краткий текст');
+});
+
+test('quick notes rewrite never saves an incomplete response, even if it contains partial text', () => {
+  assert.throws(
+    () => parseQuickRewriteOutput({
+      status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' },
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'Только начало' }] }]
+    }),
+    /не завершил изменение текста/
+  );
+  assert.throws(
+    () => parseQuickRewriteOutput({
+      status: 'completed',
+      output: [{ type: 'reasoning', summary: [] }],
+      usage: { output_tokens: 297, output_tokens_details: { reasoning_tokens: 291 } }
+    }),
+    /не вернул пригодный текст/
+  );
+});
+
+test('failed notes rewrite diagnostics report output/reasoning counts but never any user text', () => {
+  const diagnostic = getQuickRewriteResponseDiagnostics({
+    status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' },
+    output: [
+      { type: 'reasoning', content: 'Личный текст заметки' },
+      { type: 'message', content: [{ type: 'output_text', text: 'Личный текст заметки' }] }
+    ],
+    usage: { output_tokens: 297, output_tokens_details: { reasoning_tokens: 291 } }
+  });
+  assert.deepEqual(diagnostic, {
+    responseStatus: 'incomplete', incompleteReason: 'max_output_tokens',
+    outputTokens: 297, reasoningTokens: 291, outputTypes: ['reasoning', 'message']
+  });
+  assert.ok(!JSON.stringify(diagnostic).includes('Личный текст заметки'));
+});
+
+test('notes rewrite has at most two attempts per fragment and refunds invalid responses before retry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../src/services/telegram-quick-share-ai.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /const MAX_REWRITE_ATTEMPTS_PER_FRAGMENT = 2/);
+  assert.match(source, /const REWRITE_RECOVERY_MODEL = 'gpt-5\\.4-mini'/);
+  assert.match(source, /index \\* MAX_REWRITE_ATTEMPTS_PER_FRAGMENT \\+ attempt/);
+  assert.match(source, /await refundDynamicResponsesCall\\(call\\)/);
+  assert.match(source, /if \\(attempt === MAX_REWRITE_ATTEMPTS_PER_FRAGMENT\\)/);
+  assert.match(source, /calls\\.push\\(call\\); \\/\\/ Only validated fragments/);
+  assert.match(source, /getQuickRewriteResponseDiagnostics\\(call\\.responseJson\\)/);
 });
