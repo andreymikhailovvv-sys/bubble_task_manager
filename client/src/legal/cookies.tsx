@@ -1,4 +1,4 @@
-export const COOKIE_POLICY_REVISION_DATE = '27.09.2026';
+export const COOKIE_POLICY_REVISION_DATE = '23.10.2026';
 
 export function CookiePolicyContent() {
   return (
@@ -29,6 +29,12 @@ export function CookiePolicyContent() {
                 <td>Идентификация устройства/безопасность</td>
                 <td>до 180 дней</td>
                 <td>Необходимая</td>
+              </tr>
+              <tr>
+                <td><code>planirovych_welcome_seen</code> cookie и <code>planirovych_welcome_seen_v1</code> в localStorage</td>
+                <td>Запоминает выбор «Открыть сервис», чтобы повторно не показывать вводную страницу</td>
+                <td>cookie до 1 года; localStorage до удаления пользователем/приложением</td>
+                <td>Функциональная</td>
               </tr>
               <tr>
                 <td><code>localStorage: timezone</code></td>
