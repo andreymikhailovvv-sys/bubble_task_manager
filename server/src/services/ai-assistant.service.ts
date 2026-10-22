@@ -1839,7 +1839,7 @@ export const aiAssistantService = {
   appendGeneralDialogAssistantMessage: async (input: { userId: string; content: string; creditsSpentMilli: number; taskProposalId?: string | null }) => {
     const content = input.content.trim();
     if (!content) return;
-    await prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null } });
+    return prisma.generalAiMessage.create({ data: { userId: input.userId, role: 'assistant', content, creditsSpentMilli: input.creditsSpentMilli, aiTaskProposalId: input.taskProposalId ?? null } });
   },
 
   askTaskAssistant: async (input: AskTaskAssistantInput) => {
