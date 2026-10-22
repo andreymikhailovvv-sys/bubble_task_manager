@@ -87,3 +87,16 @@ test('desktop task AI welcome card matches the Mini App and keeps no-results sea
   assert.match(shared, /Спросите, как эффективнее выполнить эту задачу/);
   assert.match(app, /: <p className="text-xs text-subtle">Сообщения не найдены\.<\/p>/);
 });
+
+
+test('task report offer and Telegram /start use current user-facing product wording', async () => {
+  const [dialog, telegram] = await Promise.all([
+    readFile(new URL('../../client/src/components/TaskCompletionReportDialog.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/telegram.service.ts', import.meta.url), 'utf8')
+  ]);
+  assert.match(dialog, /Нет, спасибо<\\/button>/);
+  assert.match(dialog, /ИИ соберёт историю выполнения в Word/);
+  assert.doesNotMatch(dialog, /ИИ Luna 6|>Не сейчас<\\/button>/);
+  assert.match(telegram, /👋 <b>Планировыч AI<\\/b>/);
+  assert.doesNotMatch(telegram, /Bubble Task Manager Bot/);
+});
