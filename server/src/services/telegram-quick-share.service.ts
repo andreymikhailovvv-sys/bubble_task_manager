@@ -208,7 +208,11 @@ async function performJob(job: {
     }
     const claimed = await claimAudit(job.userId, saved ? owner.telegramAccountId : target, auditId, owner.telegramAccountId, recipientKind);
     if (claimed.kind === 'delay') { await postpone(job.id, claimed.seconds); return; }
-    if (claimed.kind === 'existing') { await finishRecipient(job, claimed.result); return; }
+    if (claimed.kind === 'existing') {
+      if (claimed.result === 'SENT' && partIndex + 1 < fragments.length) await postpone(job.id, 1);
+      else await finishRecipient(job, claimed.result);
+      return;
+    }
     auditClaimed = true;
     // This is the only call that can send the message. The audit claim is
     // durable and single-use before starting the remote side effect.
@@ -220,6 +224,8 @@ async function performJob(job: {
       where: { id: auditId, result: 'PENDING' },
       data: { result: 'SENT', completedAt: new Date() }
     });
+    auditClaimed = false; // Delivery is durably recorded; DB queue errors must not turn it UNKNOWN.
+    sendStarted = false;
     if (partIndex + 1 === fragments.length) await finishRecipient(job, 'SENT');
     else await postpone(job.id, 1); // Send the next part after the durable audit commit.
   } catch (error) {
