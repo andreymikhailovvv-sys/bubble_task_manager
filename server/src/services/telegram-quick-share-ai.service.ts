@@ -118,7 +118,8 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
     return { text: resultText, creditsSpentMilli };
   } catch (error) {
     await Promise.all(calls.map(call => refundDynamicResponsesCall(call).catch(() => undefined)));
-    if (error instanceof TelegramUserClientError || (error instanceof Error && error.message.includes('Недостаточно AI кредитов'))) throw error;
+    if (error instanceof TelegramUserClientError) throw error;
+    if (error instanceof Error && error.message.includes('Недостаточно AI кредитов')) throw new TelegramUserClientError(402, 'Недостаточно AI кредитов');
     console.warn('[QuickShareAI] rewrite error', { actionId, destination, category: 'provider_or_billing' });
     throw new TelegramUserClientError(503, 'Не удалось изменить сообщение через ИИ. Попробуйте снова');
   }
