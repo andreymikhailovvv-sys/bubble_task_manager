@@ -107,3 +107,43 @@ test('manual checkup does not silently disguise failed approval-card creation as
   assert.match(delivery, /Предложения сформированы, но карточку подтверждения не удалось сохранить/);
   assert.match(delivery, /proposedActions: checkup.moves.length/);
 });
+
+test('checkup keeps user sector instructions and applies them only to matching task sector', async () => {
+  const context = {
+    date: '2026-10-22T16:00:00Z', timeZone: 'Europe/Moscow',
+    tasks: [
+      { id: 'museum', title: 'Обновить афишу', sphereId: 'museum-sector', dueDate: null },
+      { id: 'personal', title: 'Зарядка', sphereId: 'personal-sector', dueDate: null },
+      { id: 'unassigned', title: 'Другое', sphereId: null, dueDate: null }
+    ],
+    sectors: [
+      { id: 'museum-sector', name: 'Музей', instructions: 'Сначала проверять даты мероприятий' },
+      { id: 'personal-sector', name: 'Личное', instructions: 'Не назначать тренировки поздно вечером' }
+    ]
+  };
+  for (const payload of [
+    buildDailyCheckupPayload(context, 'gpt-6-luna'),
+    buildCheckupProposalRecoveryPayload(context, { priorities: [], workload: 'Есть дела' }, 'gpt-6-luna')
+  ]) {
+    const instructions = payload.input[0].content;
+    const data = JSON.parse(payload.input[1].content);
+    assert.match(instructions, /sector|сектор/i);
+    assert.match(instructions, /instructions/);
+    assert.match(instructions, /sphereId/);
+    const museumTask = data.tasks?.find((task: { id: string }) => task.id === 'museum') ??
+      data.context.tasks.find((task: { id: string }) => task.id === 'museum');
+    const personalTask = data.tasks?.find((task: { id: string }) => task.id === 'personal') ??
+      data.context.tasks.find((task: { id: string }) => task.id === 'personal');
+    const sectors = data.sectors ?? data.context.sectors;
+    assert.equal(museumTask.sphereId, 'museum-sector');
+    assert.equal(personalTask.sphereId, 'personal-sector');
+    assert.equal(sectors[0].instructions, 'Сначала проверять даты мероприятий');
+    assert.equal(sectors[1].instructions, 'Не назначать тренировки поздно вечером');
+  }
+  const service = await readFile(new URL('../src/services/daily-ai-checkup.service.ts', import.meta.url), 'utf8');
+  assert.match(service, /prisma\.sphere\.findMany\(\{ where: \{ userId \}/);
+  assert.match(service, /select: \{ id: true, name: true, generalPrompt: true \}/);
+  assert.match(service, /sphereId: true/);
+  assert.match(service, /sphereId: t\.sphereId \?\? null/);
+  assert.match(service, /instructions: sector\.generalPrompt\?\.trim\(\) \|\| null/);
+});
