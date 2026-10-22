@@ -94,3 +94,20 @@ test('notes AI edit step has only rewrite and back actions; direct save remains 
   assert.ok(initialNotes.includes('saveNote(baseText)'));
   assert.ok(edit.includes("destination === 'telegram' ? ("));
 });
+
+
+test('AI rewrite in notes and Telegram does not cap at 4000 and displays charged credits', async () => {
+  const ui = await clientFile('components/TelegramMessageQuickShare.tsx');
+  const api = await clientFile('lib/api.ts');
+  const routes = await serverFile('routes/api.ts');
+  const stats = await serverFile('services/ai-credit-statistics.service.ts');
+  assert.ok(!ui.includes('baseText.length > 4000'));
+  assert.ok(!ui.includes('ИИ может изменить до 4000'));
+  assert.ok(ui.includes('rewriteCreditsSpentMilli'));
+  assert.ok(ui.includes('Списано за ИИ-редактирование'));
+  assert.ok(ui.includes('formatShareCredits(next.rewriteCreditsSpentMilli)'));
+  assert.ok(api.includes('creditsSpentMilli: number'));
+  assert.ok(routes.includes('res.json(rewritten)'));
+  assert.ok(stats.includes("notes_quick_rewrite: 'Изменение текста для заметок'"));
+  assert.ok(stats.includes("telegram_quick_rewrite: 'Изменение текста для Telegram'"));
+});
