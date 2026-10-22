@@ -18,6 +18,8 @@ const FEATURE_LABELS: Record<string, string> = {
   telegram_monitor: 'ИИ-мониторинг Telegram',
   audio_transcription: 'Расшифровка голосового',
   image_generation: 'Генерация изображений',
+  notes_quick_rewrite: 'Изменение текста для заметок',
+  telegram_quick_rewrite: 'Изменение текста для Telegram',
   web_search: 'Веб-поиск'
 };
 
