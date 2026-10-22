@@ -686,6 +686,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   });
   const [autoThemeTick, setAutoThemeTick] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [manualCheckupLoading, setManualCheckupLoading] = useState(false);
+  const [manualCheckupError, setManualCheckupError] = useState<string | null>(null);
   const [aiNotificationDefault, setAiNotificationDefault] = useState(() =>
     localStorage.getItem('btm:ai-notifications-default-enabled') !== '0');
   const [reportPromptTask, setReportPromptTask] = useState<Task | null>(null);
@@ -908,6 +910,37 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     }).catch(() => {});
     return () => { active = false; };
   }, [launchParams.openCheckupProposal, currentUser?.id]);
+
+  const generateManualCheckup = async () => {
+    if (manualCheckupLoading) return;
+    setManualCheckupLoading(true);
+    setManualCheckupError(null);
+    try {
+      const { message } = await api.generateAiCheckupNow();
+      const received = attachChatMessageId(message, message.id ?? crypto.randomUUID());
+      setAiChatProjects(previous => {
+        const updated = previous.map((project, index) => index !== 0 ? project : ({
+          ...project,
+          chats: project.chats.map(chat => chat.id !== QUICK_AI_CHAT_ID ? chat : ({
+            ...chat, messages: reconcileAiChatMessagesWithChips(chat.messages, [received]).slice(-100)
+          }))
+        }));
+        aiChatProjectsRemoteSnapshotRef.current = JSON.stringify(updated);
+        return updated;
+      });
+      const project = aiChatProjects.find(item => item.chats.some(chat => chat.id === QUICK_AI_CHAT_ID));
+      setActiveAiChatProjectId(project?.id ?? aiChatProjects[0]?.id ?? '');
+      setActiveAiChatId(QUICK_AI_CHAT_ID);
+      generalAiChatNearBottomRef.current = true;
+      setIsSettingsOpen(false);
+      setIsAiChatOpen(true);
+      void api.getMe().then(({ user }) => setAiCredits(user.aiCredits ?? 0)).catch(() => undefined);
+    } catch (error) {
+      setManualCheckupError(formatAiRequestError(error));
+    } finally {
+      setManualCheckupLoading(false);
+    }
+  };
 
   const getTaskAiRecipientId = (task: Task) => {
     const selectedRecipientId = aiRecipientByTaskId[task.id] ?? 'ai';
@@ -3615,6 +3648,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       .then(({ user }) => setCurrentUser(user))
                       .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить время'))}/>
                 </label>
+                <button type="button"
+                  onClick={() => { void generateManualCheckup(); }}
+                  disabled={manualCheckupLoading}
+                  className="primary-button mt-3 w-full rounded-xl px-3 py-2.5 text-sm font-semibold disabled:cursor-wait disabled:opacity-60">
+                  {manualCheckupLoading ? 'Формируем ИИ-чекап…' : 'Сформировать чекап сейчас'}
+                </button>
+                <p className="mt-2 text-xs leading-relaxed text-muted">Запуск в любое время, независимо от ежедневного расписания. Кредиты списываются по фактическим токенам.</p>
+                {manualCheckupError ? <p className="mt-2 text-xs text-rose-500" role="alert">{manualCheckupError}</p> : null}
               </div>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Уведомления от ИИ в новых задачах</p>
