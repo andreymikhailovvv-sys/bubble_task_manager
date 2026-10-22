@@ -15,6 +15,7 @@ import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-u
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
 import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
+import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -74,6 +75,9 @@ app.use('/api', (error: unknown, req: express.Request, res: express.Response, _n
 const clientDist = process.env.CLIENT_DIST_PATH
   ? path.resolve(__dirname, process.env.CLIENT_DIST_PATH)
   : path.resolve(__dirname, '../../client/dist');
+
+// Serve public HTML landing pages before the SPA fallback (static uses index:false).
+app.use(createPublicSeoPagesMiddleware(clientDist));
 
 // HTML must be revalidated after each Timeweb deployment. Bundled JS/CSS
 // filenames carry content hashes and may keep their ordinary static caching.
