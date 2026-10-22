@@ -24,7 +24,7 @@ export const isDynamicTextBillingEnabled = (userId: string) => {
   return allowlist.length === 0 || allowlist.includes(userId);
 };
 
-const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls', 'reasoning', 'text', 'temperature', 'top_p'] as const;
+const PROVIDER_KEYS = ['model', 'input', 'instructions', 'tools', 'tool_choice', 'parallel_tool_calls', 'max_tool_calls', 'reasoning', 'text', 'temperature', 'top_p', 'store'] as const;
 export function createCleanOpenAiResponsesPayload(payload: Record<string, unknown>) {
   return Object.fromEntries(PROVIDER_KEYS.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]]));
 }
