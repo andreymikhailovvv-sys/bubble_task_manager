@@ -94,9 +94,10 @@ test('task report offer and Telegram /start use current user-facing product word
     readFile(new URL('../../client/src/components/TaskCompletionReportDialog.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../src/services/telegram.service.ts', import.meta.url), 'utf8')
   ]);
-  assert.match(dialog, /Нет, спасибо<\\/button>/);
-  assert.match(dialog, /ИИ соберёт историю выполнения в Word/);
-  assert.doesNotMatch(dialog, /ИИ Luna 6|>Не сейчас<\\/button>/);
-  assert.match(telegram, /👋 <b>Планировыч AI<\\/b>/);
-  assert.doesNotMatch(telegram, /Bubble Task Manager Bot/);
+  assert.ok(dialog.includes('Нет, спасибо</button>'));
+  assert.ok(dialog.includes('ИИ соберёт историю выполнения в Word'));
+  assert.ok(!dialog.includes('ИИ Luna 6'));
+  assert.ok(!dialog.includes('>Не сейчас</button>'));
+  assert.ok(telegram.includes('👋 <b>Планировыч AI</b>'));
+  assert.ok(!telegram.includes('Bubble Task Manager Bot'));
 });
