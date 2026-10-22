@@ -2275,7 +2275,7 @@ export const telegramService = {
     return sendMessage(owner.telegramChatId, input.text,
       telegramAssistantProposalKeyboard(input.proposalId, input.policyId, input.pending));
   },
-  async notifyDailyAiCheckup(input: { userId: string; text: string }) {
+  async notifyDailyAiCheckup(input: { userId: string; text: string; proposalId?: string | null }) {
     if (!BOT_TOKEN) return;
     if (!input.text.trim()) return;
     const user = await prisma.user.findUnique({
