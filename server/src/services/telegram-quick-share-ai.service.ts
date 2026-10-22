@@ -100,7 +100,7 @@ export function parseQuickRewriteOutput(response: unknown): string {
 }
 
 export type QuickRewriteResult = { text: string; creditsSpentMilli: number };
-export async function rewriteSharedQuickText(userId: string, original: string, instruction: string, destination: 'telegram' | 'notes'): Promise<QuickRewriteResult> {
+export async function rewriteSharedQuickText(userId: string, original: string, instruction: string, destination: 'telegram' | 'notes', onChunkComplete?: () => Promise<void>): Promise<QuickRewriteResult> {
   if (destination === 'telegram' && !isTelegramAiDraftEnabled()) throw new TelegramUserClientError(403, 'Изменение сообщений ИИ недоступно');
   const text = validateShareText(original);
   const task = validateQuickInstruction(instruction);
@@ -122,6 +122,7 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
       calls.push(call);
       const output = parseQuickRewriteOutput(call.responseJson);
       revised.push(output);
+      await onChunkComplete?.();
     }
     const resultText = validateShareText(revised.join(chunks.length > 1 ? '\n' : ''));
     // Settle only after every fragment passed validation. On incomplete output
@@ -142,7 +143,7 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
   }
 }
 
-export const rewriteTelegramQuickText = (userId: string, original: string, instruction: string) =>
-  rewriteSharedQuickText(userId, original, instruction, 'telegram');
+export const rewriteTelegramQuickText = (userId: string, original: string, instruction: string, onChunkComplete?: () => Promise<void>) =>
+  rewriteSharedQuickText(userId, original, instruction, 'telegram', onChunkComplete);
 export const rewriteNotesQuickText = (userId: string, original: string, instruction: string) =>
   rewriteSharedQuickText(userId, original, instruction, 'notes');
