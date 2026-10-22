@@ -5005,9 +5005,9 @@ ${allContext}`,
 
               <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
-                  <span>Утренний ИИ-чекап</span>
+                  <span>ИИ-чекап</span>
                   <span className="ai-checkup-credit-badge inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
-                    2 <Coins size={11} /> за чекап
+                    <Coins size={11} /> по фактическим токенам
                   </span>
                 </div>
                 <p className="mb-2 text-[11px] leading-snug text-subtle">
@@ -5023,7 +5023,7 @@ ${allContext}`,
                   options={[{ value: 'disabled', label: 'Выключен' }, { value: 'enabled', label: 'Включен' }]}
                   buttonClassName={settingsSavingKey === 'checkupEnabled' ? 'cursor-not-allowed opacity-60' : ''}
                   disabled={settingsSavingKey === 'checkupEnabled'}
-                  ariaLabel="Утренний ИИ-чекап"
+                  ariaLabel="ИИ-чекап"
                 />
                 <label className="mt-2 block text-[11px] text-slate-400">
                   Время чекапа

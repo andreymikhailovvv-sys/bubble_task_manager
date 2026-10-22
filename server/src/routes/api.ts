@@ -1654,8 +1654,13 @@ apiRouter.get('/ai/task-proposals/:id', requireAuth, asyncHandler(async (req, re
   catch { res.status(404).json({ error: 'Предложение не найдено' }); }
 }));
 apiRouter.post('/ai/task-proposals/:id/approve', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
-  try { res.json(await applyTaskProposal(req.user!.id, req.params.id)); }
-  catch { res.status(404).json({ error: 'Предложение не найдено' }); }
+  try {
+    const selectedIndices = req.body?.selectedIndices;
+    res.set('Cache-Control', 'no-store, private').json(await applyTaskProposal(req.user!.id, req.params.id, selectedIndices));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Ошибка подтверждения.';
+    res.status(message === 'Предложение не найдено.' ? 404 : 400).json({ error: message });
+  }
 }));
 apiRouter.post('/ai/task-proposals/:id/undo', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'no-store, private').json(await undoTaskProposal(req.user!.id, req.params.id)); }

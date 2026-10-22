@@ -23,7 +23,7 @@ import { noteHtmlToPlainText } from './lib/notes';
 import { CalendarExportDialog } from './components/CalendarExportDialog';
 import { AutoGrowingTextarea } from './components/AutoGrowingTextarea';
 import { MiniAiChatComposer, type MiniAiChatComposerHandle } from './components/MiniAiChatComposer';
-import type { AiChatModel, ChatAttachmentPayload, ChatMessage, GeneratedDocument, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
+import type { AiChatModel, AiTaskProposal, ChatAttachmentPayload, ChatMessage, GeneratedDocument, Habit, HabitDurationMode, HabitRecurrenceType, Sphere, Task, TaskAttachment, TaskComment } from './lib/types';
 import { formatCreditsSpent } from './lib/credits';
 import { getCreatorInitial } from './lib/creatorInitial';
 import { TaskAiProgress } from './components/TaskAiProgress';
@@ -886,12 +886,28 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get('taskId')?.trim() || null;
     const openAi = ['1', 'true', 'yes'].includes((params.get('openAi') ?? '').toLowerCase());
-    const openQuickAi = ['1', 'true', 'yes'].includes((params.get('openQuickAi') ?? '').toLowerCase());
+    const requestedCheckupProposal = params.get('openCheckupProposal')?.trim() || null;
+    const openCheckupProposal = requestedCheckupProposal && /^[a-zA-Z0-9_-]{1,50}$/.test(requestedCheckupProposal)
+      ? requestedCheckupProposal : null;
+    const openQuickAi = ['1', 'true', 'yes'].includes((params.get('openQuickAi') ?? '').toLowerCase()) || Boolean(openCheckupProposal);
     const openTelegramAiChat = params.get('openTelegramAiChat')?.trim() || null;
     const commentTaskId = params.get('commentTaskId')?.trim() || null;
     const chatRecipientUserId = params.get('chatRecipientUserId')?.trim() || null;
-    return { taskId, openAi, openQuickAi, openTelegramAiChat, commentTaskId, chatRecipientUserId };
+    return { taskId, openAi, openQuickAi, openCheckupProposal, openTelegramAiChat, commentTaskId, chatRecipientUserId };
   }, []);
+
+  const [linkedCheckupProposal, setLinkedCheckupProposal] = useState<AiTaskProposal | null>(null);
+  useEffect(() => {
+    const id = launchParams.openCheckupProposal;
+    if (!id || !currentUser?.id) return;
+    let active = true;
+    // The latest 100 chat messages may not contain an older checkup.
+    // Fetch its exact existing proposal by owner, never reconstruct it.
+    void api.aiTaskProposal(id).then(value => {
+      if (active && value.source === 'daily_checkup') setLinkedCheckupProposal(value);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [launchParams.openCheckupProposal, currentUser?.id]);
 
   const getTaskAiRecipientId = (task: Task) => {
     const selectedRecipientId = aiRecipientByTaskId[task.id] ?? 'ai';
@@ -2787,6 +2803,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     generalAiChatScrollTopRef.current = aiChatDialogContainerRef.current?.scrollTop ?? 0;
   }, [isAiChatOpen, activeAiChatId]);
 
+  const checkupLinkFocusedRef = useRef(false);
+  useEffect(() => {
+    const id = launchParams.openCheckupProposal;
+    const container = aiChatDialogContainerRef.current;
+    if (!id || !isAiChatOpen || activeAiChatId !== QUICK_AI_CHAT_ID ||
+        !container || checkupLinkFocusedRef.current) return;
+    const matching = Array.from(container.querySelectorAll<HTMLElement>('[data-ai-task-proposal]'))
+      .find(element => element.dataset.aiTaskProposal === id);
+    if (!matching) return;
+    matching.scrollIntoView({ block: 'center', behavior: 'auto' });
+    generalAiChatNearBottomRef.current = false;
+    checkupLinkFocusedRef.current = true;
+  }, [launchParams.openCheckupProposal, isAiChatOpen, activeAiChatId, aiChatProjects, linkedCheckupProposal]);
+
   const updateActiveAiChatMessages = (updater: (messages: MiniAiChatMessage[]) => MiniAiChatMessage[]) => {
     setAiChatProjects((prev) => prev.map((project) => project.id !== activeAiChatProject?.id ? project : {
       ...project,
@@ -3569,14 +3599,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   ariaLabel="Часовой пояс пользователя" detachedPopup popupVariant="settings" />
               </div>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
-                <p className="mb-2 text-sm font-semibold text-primary">Утренний ИИ-чекап</p>
+                <p className="mb-2 text-sm font-semibold text-primary">ИИ-чекап</p>
                 <p className="mb-2 text-xs leading-relaxed text-muted">Ежедневный обзор задач в общем чате с ИИ и Telegram, если бот подключён.</p>
                 <CustomSelect value={currentUser?.morningAiCheckupEnabled === true ? 'enabled' : 'disabled'}
                   onChange={(value) => void api.updateUserSettings({ morningAiCheckupEnabled: value === 'enabled' })
                     .then(({ user }) => setCurrentUser(user))
                     .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
                   options={[{ value:'disabled',label:'Выключен' },{ value:'enabled',label:'Включен' }]}
-                  ariaLabel="Утренний ИИ-чекап" detachedPopup popupVariant="settings" />
+                  ariaLabel="ИИ-чекап" detachedPopup popupVariant="settings" />
                 <label className="mt-3 block text-sm text-primary">
                   Время чекапа
                   <input type="time" className="surface-input mt-1 w-full rounded-xl border px-3 py-2"
@@ -4825,6 +4855,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) generalAiChatUserScrollEnabledRef.current = true;
                 }}
                 className="miniapp-ai-chat-thread h-full min-h-0 space-y-3 overflow-y-auto p-3">
+              {linkedCheckupProposal && activeAiChat?.id === QUICK_AI_CHAT_ID &&
+                !(activeAiChat?.messages ?? []).some(message => message.taskProposal?.id === linkedCheckupProposal.id) ? (
+                <div className="max-w-[95%] rounded-2xl border border-[color:var(--panel-border)] p-3">
+                  <p className="mb-2 text-sm font-semibold">Изменения из ИИ-чекапа</p>
+                  <AiTaskProposalCard proposal={linkedCheckupProposal} />
+                </div>
+              ) : null}
               {(activeAiChat?.messages ?? []).length === 0 ? (
                 <div className="miniapp-ai-chat-empty" role="status">
                   <span className="miniapp-ai-chat-empty-icon" aria-hidden="true"><Sparkles size={34} strokeWidth={1.8} /></span>
