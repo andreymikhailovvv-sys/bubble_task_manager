@@ -70,8 +70,10 @@ test('notes forwarding allows an explicit group and matches the source task sect
   assert.match(share, /group\.sphereId === initialNoteSphereId/);
   assert.match(share, /setNoteGroupId\(taskGroup\?\.id \?\? ''\)/);
   assert.match(share, /aria-label="Группа заметки"/);
-  assert.match(share, /<option value="">/);
-  assert.match(share, /onChange=\{\(event\) => setNoteGroupId\(event\.target\.value\)\}/);
+  assert.doesNotMatch(share, /<select value=\{noteGroupId\}/);
+  assert.match(share, /className="standalone-group-picker-option/);
+  assert.match(share, /Создать новую группу/);
+  assert.match(share, /onClick=\{\(\) => \{ setNoteGroupId\(group\.id\); setGroupPickerPosition\(null\); \}\}/);
   assert.match(share, /groupId: noteGroupId \|\| null/);
   assert.match(share, /!noteGroupsReady \|\| noteGroupsLoading \|\| noteGroupsError/);
   // Regular task AI, focus AI and mobile task AI, but not general AI chat.
@@ -110,4 +112,25 @@ test('AI rewrite in notes and Telegram does not cap at 4000 and displays charged
   assert.ok(routes.includes('res.json(rewritten)'));
   assert.ok(stats.includes("notes_quick_rewrite: 'Изменение текста для заметок'"));
   assert.ok(stats.includes("telegram_quick_rewrite: 'Изменение текста для Telegram'"));
+});
+
+
+test('group picker uses a portal and reusable group manager above the share dialog without closing draft', async () => {
+  const share = await clientFile('components/TelegramMessageQuickShare.tsx');
+  const manager = await clientFile('components/StandaloneNoteGroupManager.tsx');
+  const css = await clientFile('components/TelegramMessageQuickShare.css');
+  assert.match(share, /groupPickerPosition \? createPortal\(/);
+  assert.match(share, /z-\[2147483646\]/);
+  assert.match(share, /<StandaloneNoteGroupManager/);
+  assert.match(manager, /z-\[2147483647\]/);
+  assert.match(share, /startNew/);
+  assert.match(share, /onCreated=\{\(created\) => \{/);
+  assert.match(share, /setNoteGroupId\(created\.id\)/);
+  assert.match(share, /setCreateGroupOpen\(false\)/);
+  assert.match(share, /setNoteGroups\(current => \[\.\.\.current, created\]\)/);
+  assert.match(share, /api\.createStandaloneNoteGroup\(data\)/);
+  assert.match(share, /noteGroupStyle\(group\.color\)/);
+  assert.match(share, /createGroupOpen\) return;/);
+  assert.match(css, /telegram-quick-share__group-trigger/);
+  assert.doesNotMatch(share, /<select value=\{noteGroupId\}/);
 });
