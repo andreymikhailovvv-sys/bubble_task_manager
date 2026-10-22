@@ -3,7 +3,7 @@ import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, c
 import { refundAiCreditReservation, reserveAiCreditsMilliUpTo, settleAiCreditReservation, type AiCreditReservation } from './ai-credit-wallet.service.js';
 import { readOpenAiResponsesStreamWithRecovery, retrieveOpenAiResponse } from './openai-responses-stream.service.js';
 
-export type DynamicTextFeature = 'ai_chat' | 'ai_chat_planner' | 'general_assistant' | 'recurrence' | 'generate_subtasks' | 'generate_task' | 'optimize_timeline' | 'overdue_postpone';
+export type DynamicTextFeature = 'ai_chat' | 'ai_chat_planner' | 'general_assistant' | 'recurrence' | 'generate_subtasks' | 'generate_task' | 'optimize_timeline' | 'overdue_postpone' | 'notes_quick_rewrite' | 'telegram_quick_rewrite';
 
 export const DYNAMIC_TEXT_OUTPUT_LIMITS: Record<DynamicTextFeature, { min: number; max: number }> = {
   ai_chat: { min: 512, max: 8192 },
@@ -13,7 +13,9 @@ export const DYNAMIC_TEXT_OUTPUT_LIMITS: Record<DynamicTextFeature, { min: numbe
   generate_subtasks: { min: 256, max: 2048 },
   generate_task: { min: 512, max: 4096 },
   optimize_timeline: { min: 256, max: 4096 },
-  overdue_postpone: { min: 256, max: 2048 }
+  overdue_postpone: { min: 256, max: 2048 },
+  notes_quick_rewrite: { min: 256, max: 8192 },
+  telegram_quick_rewrite: { min: 256, max: 8192 }
 };
 
 export const isDynamicTextBillingEnabled = (userId: string) => {
