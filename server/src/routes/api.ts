@@ -1,5 +1,6 @@
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
+import { createAiCheckup } from '../services/ai-checkup-delivery.service.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
@@ -1640,6 +1641,25 @@ const taskProposalSameOrigin = (req: Request, res: Response, next: NextFunction)
   }
   next();
 };
+// A deliberately independent, user-initiated checkup. It neither requires
+// automatic checkups to be enabled nor consumes their daily scheduling slot.
+// The same-origin check protects the authenticated cookie from cross-site POSTs.
+apiRouter.post('/ai/checkup/generate', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try {
+    const result = await createAiCheckup({ userId: req.user!.id });
+    res.set('Cache-Control', 'no-store, private').status(201).json(result);
+  } catch (error) {
+    console.error('[AiCheckup] manual generation failed', {
+      userId: req.user!.id, reason: error instanceof Error ? error.message.slice(0, 150) : 'unknown'
+    });
+    const message = error instanceof Error ? error.message : 'Не удалось сформировать ИИ-чекап';
+    const insufficient = /Недостаточно (?:AI|ИИ) кредитов/i.test(message);
+    res.status(insufficient ? 402 : 503).json({
+      error: insufficient ? 'Недостаточно AI кредитов' : 'Не удалось сформировать ИИ-чекап. Попробуйте ещё раз.'
+    });
+  }
+}));
+
 apiRouter.get('/ai/task-proposals/preferences', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, select: { aiTaskAutoApply: true } });
   res.set('Cache-Control', 'no-store, private').json({ autoApply: user.aiTaskAutoApply });
