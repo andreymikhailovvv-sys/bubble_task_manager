@@ -40,6 +40,38 @@
       }
     </script>
     <script>
+      // First-time visitors see the lightweight welcome page before React loads.
+      // Established browsers and direct application links keep their existing behavior.
+      (function () {
+        if (location.pathname !== '/' || location.hash) return;
+
+        // Do not intercept authentication callbacks or unknown deep-link parameters.
+        const params = new URLSearchParams(location.search);
+        if (params.has('enter')) return;
+        for (const key of params.keys()) {
+          if (!/^utm_[a-z0-9_]+$/i.test(key) && !/^(yclid|gclid|fbclid)$/i.test(key)) return;
+        }
+
+        if (document.cookie.split(';').some(function (cookie) {
+          return cookie.trim() === 'planirovych_welcome_seen=1';
+        })) return;
+        try {
+          const storage = localStorage;
+          if (storage.getItem('planirovych_welcome_seen_v1') === '1') return;
+          if (storage.getItem('planirovych_cookie_consent') !== null) return;
+          for (let index = 0; index < storage.length; index += 1) {
+            const key = storage.key(index);
+            if (key && key.indexOf('btm:') === 0) return;
+          }
+        } catch {
+          // If storage is blocked, prefer the working app to a redirect loop.
+          return;
+        }
+
+        location.replace('/welcome/' + location.search);
+      })();
+    </script>
+    <script>
       // Show before the JS bundle downloads, only for the desktop planner.
       if (location.pathname === '/' && matchMedia('(min-width: 1025px)').matches) {
         document.documentElement.classList.add('web-workspace-preload');
