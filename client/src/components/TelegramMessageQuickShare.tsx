@@ -382,16 +382,17 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
               </label>
               {destination === 'notes' ? (
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={busy || !baseText.trim() || !noteGroupsReady || noteGroupsLoading || Boolean(noteGroupsError)} onClick={() => void saveNote(baseText)}
-                    className="flex-1 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
-                    Сохранить без ИИ
-                  </button>
                   <button type="button" disabled={busy || !baseText.trim() || !instruction.trim() || baseText.length > 4000}
                     onClick={() => void acceptRewrite()}
                     className="flex-1 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
                     {busy ? 'Изменяем…' : 'Изменить через ИИ'}
                   </button>
-                  {baseText.length > 4000 ? <p className="telegram-quick-share__muted w-full text-xs">ИИ может изменить до 4000 символов. Сократите текст для ИИ или сохраните его без изменений.</p> : null}
+                  <button type="button" disabled={busy}
+                    onClick={() => { setMode('note'); setError(''); }}
+                    className="telegram-quick-share__back flex-1 rounded-xl border px-4 py-3 text-sm font-medium disabled:opacity-40">
+                    Назад
+                  </button>
+                  {baseText.length > 4000 ? <p className="telegram-quick-share__muted w-full text-xs">ИИ может изменить до 4000 символов. Сократите текст для обработки.</p> : null}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
@@ -416,8 +417,10 @@ export function TelegramMessageQuickShare({ text, initialNoteSphereId = null }: 
                   </div>
                 </div>
               )}
-              <button type="button" disabled={busy} onClick={() => { setMode(destination === 'notes' ? 'note' : 'recipients'); setError(''); }}
-                className="telegram-quick-share__back inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-40">Назад</button>
+              {destination === 'telegram' ? (
+                <button type="button" disabled={busy} onClick={() => { setMode('recipients'); setError(''); }}
+                  className="telegram-quick-share__back inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-40">Назад</button>
+              ) : null}
             </>
           ) : (
             <>
