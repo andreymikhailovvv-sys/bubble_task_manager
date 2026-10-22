@@ -95,6 +95,7 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
   const chunks = splitQuickText(text, AI_FRAGMENT_CHARS);
   const calls: DynamicResponsesCall[] = [];
   const revised: string[] = [];
+  const settledCalls = new Set<DynamicResponsesCall>();
   try {
     for (const [index, chunk] of chunks.entries()) {
       const payload = buildQuickRewritePayload(chunk, task, MODEL, destination, {index: index + 1, total: chunks.length});
@@ -114,10 +115,11 @@ export async function rewriteSharedQuickText(userId: string, original: string, i
     for (const call of calls) {
       const settled = await settleDynamicResponsesCall(call);
       creditsSpentMilli += settled.chargedMilli;
+      settledCalls.add(call);
     }
     return { text: resultText, creditsSpentMilli };
   } catch (error) {
-    await Promise.all(calls.map(call => refundDynamicResponsesCall(call).catch(() => undefined)));
+    await Promise.all(calls.filter(call => !settledCalls.has(call)).map(call => refundDynamicResponsesCall(call).catch(() => undefined)));
     if (error instanceof TelegramUserClientError) throw error;
     if (error instanceof Error && error.message.includes('Недостаточно AI кредитов')) throw new TelegramUserClientError(402, 'Недостаточно AI кредитов');
     console.warn('[QuickShareAI] rewrite error', { actionId, destination, category: 'provider_or_billing' });
