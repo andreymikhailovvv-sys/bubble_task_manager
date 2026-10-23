@@ -1,5 +1,7 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
+export type TaskMonitoringStatus = { id: string; label: string; detail?: string | null; createdAt: string };
+
 export type ApiError = Error & { status?: number; code?: string };
 export type AiCheckupSchedule = { id: string; time: string; instructions: string };
 export type AttachmentStorage = { usedBytes: number; limitBytes: number; count: number; overLimit: boolean; plan: string };
@@ -514,6 +516,9 @@ export const api = {
   deleteSphere: (id: string) => request<{ ok: true }>(`/api/spheres/${id}`, { method: 'DELETE' }),
   getTasks: () => request<Task[]>('/api/tasks'),
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
+  getTaskMonitoringStatuses: (id: string) => request<TaskMonitoringStatus[]>(`/api/tasks/${id}/monitoring/statuses`),
+  addTaskMonitoringStatus: (id: string, payload: { label: string; detail?: string }) =>
+    request<TaskMonitoringStatus>(`/api/tasks/${id}/monitoring/statuses`, { method: 'POST', body: JSON.stringify(payload) }),
   generateTaskCompletionReport: (id: string) => request<{ document: GeneratedDocument; model: string; creditsSpentMilli: number; coveredEvents: number; omittedEvents: number }>(`/api/tasks/${encodeURIComponent(id)}/completion-report`, { method: 'POST' }),
   updateTask: (id: string, payload: Partial<Task> & { collaborationScope?: 'me' | 'all' }) => request<Task>(`/api/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteTask: (id: string, scope: 'me' | 'all' = 'me') => request<{ ok: true }>(`/api/tasks/${id}?scope=${scope}`, { method: 'DELETE' }),

@@ -21,6 +21,7 @@ interface TaskInput {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | Date | null;
   aiNotificationsEnabled?: boolean;
+  aiMonitoringEnabled?: boolean;
   taskType?: 'TASK' | 'EVENT' | 'REMINDER';
   location?: string | null;
   collaborationScope?: 'me' | 'all';
@@ -290,8 +291,9 @@ export const taskService = {
         recurrenceJson: isSubtask ? Prisma.JsonNull : toRecurrenceJson(input.recurrenceJson),
         recurrenceSummary: isSubtask ? null : (input.recurrenceSummary ?? null),
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
-        aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true)
-        ,
+        aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true),
+        aiMonitoringEnabled: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true,
+        
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
     });
@@ -309,6 +311,10 @@ export const taskService = {
       where: { id, AND: [taskAccessWhere(userId)] }
     });
     if (currentTask.collaborationId && input.collaborationScope === 'all' && currentTask.userId !== userId) throw new Error('Only collaboration owner can update everyone');
+    if (input.aiMonitoringEnabled === true &&
+        (currentTask.userId !== userId || currentTask.collaborationId || currentTask.parentTaskId || currentTask.taskType !== 'TASK')) {
+      throw new TypeError('Мониторинг beta доступен только для личных основных задач.');
+    }
 
     // Validate referenced objects *before* any member status or task changes.
     // Own-sector assignments remain legal for each member of a shared task.
@@ -332,6 +338,7 @@ export const taskService = {
     }
 
     const patch: Prisma.TaskUpdateInput = {};
+    if (input.aiMonitoringEnabled !== undefined) patch.aiMonitoringEnabled = input.aiMonitoringEnabled === true;
     const isCollaborativeRoot = Boolean(currentTask.collaborationId && !currentTask.parentTaskId);
     const personalSettingsPatch: Prisma.CollaborativeTaskMemberUpdateInput = {};
     const ownMember = isCollaborativeRoot && currentTask.collaborationId

@@ -7,6 +7,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
+import { TaskMonitoringControls } from './components/TaskMonitoringControls';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
@@ -235,6 +236,7 @@ type TaskDraft = {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | null;
   aiNotificationsEnabled?: boolean;
+  aiMonitoringEnabled?: boolean;
   subtasks?: CreateSubtaskDraft[];
 };
 
@@ -251,7 +253,8 @@ const taskToMiniDraft = (task: Task): TaskDraft => ({
   recurrenceJson: task.recurrenceJson,
   recurrenceSummary: task.recurrenceSummary,
   recurrenceUntil: task.recurrenceUntil,
-  aiNotificationsEnabled: task.aiNotificationsEnabled
+  aiNotificationsEnabled: task.aiNotificationsEnabled,
+  aiMonitoringEnabled: task.aiMonitoringEnabled
 });
 
 type HabitDraft = {
@@ -753,6 +756,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceSummary: null,
     recurrenceUntil: null,
     aiNotificationsEnabled: true,
+    aiMonitoringEnabled: false,
     subtasks: []
   });
   const [createTaskPendingFiles, setCreateTaskPendingFiles] = useState<File[]>([]);
@@ -1799,7 +1803,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         ...(changed.recurrenceJson !== undefined ? { recurrenceJson: draft.recurrenceJson } : {}),
         ...(changed.recurrenceSummary !== undefined ? { recurrenceSummary: draft.recurrenceSummary } : {}),
         ...(changed.recurrenceUntil !== undefined ? { recurrenceUntil: draft.recurrenceUntil } : {}),
-        ...(changed.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {})
+        ...(changed.aiNotificationsEnabled !== undefined ? { aiNotificationsEnabled: draft.aiNotificationsEnabled } : {}),
+        ...(changed.aiMonitoringEnabled !== undefined ? { aiMonitoringEnabled: draft.aiMonitoringEnabled } : {})
       });
       taskDraftOriginalByIdRef.current[taskId] = { ...baseline, ...changed };
       await loadData();
@@ -1984,6 +1989,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     recurrenceSummary: null,
     recurrenceUntil: null,
     aiNotificationsEnabled: aiNotificationDefault,
+    aiMonitoringEnabled: false,
     subtasks: []
   });
 
@@ -2087,7 +2093,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         recurrenceJson: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceJson ?? null) : null,
         recurrenceSummary: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceSummary ?? null) : null,
         recurrenceUntil: createTaskDraft.isRecurring ? (createTaskDraft.recurrenceUntil ?? null) : null,
-        aiNotificationsEnabled: createTaskDraft.aiNotificationsEnabled ?? true
+        aiNotificationsEnabled: createTaskDraft.aiNotificationsEnabled ?? true,
+        aiMonitoringEnabled: createEditorType === 'task' && createTaskDraft.aiMonitoringEnabled === true
       });
       const draftSubtasks = (createEditorType === 'event' ? [] : (createTaskDraft.subtasks ?? []))
         .map((subtask) => ({
@@ -4284,6 +4291,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       />
                       уведомления от ИИ
                     </label> : null}
+                    {openedTask.taskType === 'TASK' ? <TaskMonitoringControls
+                      enabled={openedTaskDraft.aiMonitoringEnabled === true}
+                      onChange={(enabled) => onChangeDraft(openedTask.id, { aiMonitoringEnabled: enabled })}
+                      taskId={openedTask.id}
+                      allowed={!openedTask.parentTaskId && !openedTask.isCollaborative}
+                    /> : null}
                     {openedTaskDraft.isRecurring ? (
                       <div className="rounded-2xl border border-violet-200/70 p-2 text-xs">
                         <p className="mb-1 text-slate-500">Опишите как должно повторяться {openedTask.taskType === 'EVENT' ? 'событие' : 'задача'}</p>
@@ -5183,6 +5196,10 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         />
                         уведомления от ИИ
                       </label> : null}
+                      {createEditorType === 'task' ? <div className="mt-3"><TaskMonitoringControls
+                        enabled={createTaskDraft.aiMonitoringEnabled === true}
+                        onChange={(enabled) => setCreateTaskDraft(previous => ({ ...previous, aiMonitoringEnabled: enabled }))}
+                      /></div> : null}
                       {createTaskDraft.isRecurring ? (
                         <div className="mt-3 rounded-2xl border border-violet-200/70 p-2 text-xs">
                           <p className="mb-1 text-slate-500">Опишите как должно повторяться {createEditorType === 'event' ? 'событие' : 'задача'}</p>
