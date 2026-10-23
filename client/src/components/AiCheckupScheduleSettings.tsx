@@ -101,7 +101,7 @@ export function AiCheckupScheduleSettings({ user, onUserUpdated, children }: Pro
                 <span className="mb-1 flex items-center gap-1.5"><Clock3 size={13} /> Время</span>
                 <input type="time" value={slot.time} className="surface-input w-full rounded-lg border px-3 py-2 text-base text-primary"
                   onChange={(event) => update(slot.id, { time: event.target.value })}
-                  onBlur={() => { if (/^([01]\\d|2[0-3]):[0-5]\\d$/.test(slot.time)) commit({ aiCheckupSchedules: schedules }); }}
+                  onBlur={() => { if (/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.time)) commit({ aiCheckupSchedules: schedules }); }}
                 />
               </label>
               <label className="mt-3 block text-xs text-muted">
