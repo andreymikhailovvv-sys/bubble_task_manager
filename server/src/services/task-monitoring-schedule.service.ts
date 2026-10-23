@@ -1,0 +1,89 @@
+import { Prisma } from '@prisma/client';
+import { prisma } from '../db/prisma.js';
+import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
+
+type Db = Prisma.TransactionClient | typeof prisma;
+const MONITOR_KIND = 'overdue';
+const isActive = (row: { status: string; dueDate: Date | null }) =>
+  row.status !== 'DONE' && Boolean(row.dueDate);
+
+/**
+ * Rebuild the ONE future deadline for this task or subtask. A shared/chat/task
+ * update never receives an AI tool merely because a deadline exists.
+ * Call inside the same transaction as a task edit whenever possible.
+ */
+export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
+  const source = await db.task.findUnique({
+    where: { id: sourceId },
+    select: { id: true, userId: true, parentTaskId: true, taskType: true,
+      status: true, dueDate: true, title: true, collaborationId: true }
+  });
+  await db.taskMonitoringRun.updateMany({
+    where: { sourceTaskId: sourceId, kind: MONITOR_KIND, state: 'scheduled' },
+    data: { state: 'cancelled' }
+  });
+  if (!source || !isActive(source) || source.taskType !== 'TASK') return;
+  const root = source.parentTaskId
+    ? await db.task.findUnique({
+        where: { id: source.parentTaskId },
+        select: { id: true, userId: true, aiMonitoringEnabled: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
+      })
+    : await db.task.findUnique({
+        where: { id: source.id },
+        select: { id: true, userId: true, aiMonitoringEnabled: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
+      });
+  if (!root || !root.aiMonitoringEnabled || root.userId !== source.userId ||
+      root.status === 'DONE' || root.collaborationId || root.parentTaskId || root.taskType !== 'TASK' ||
+      source.collaborationId) return;
+
+  const eventKey = 'overdue:' + root.id + ':' + source.id + ':' + source.dueDate!.toISOString();
+  try {
+    await db.taskMonitoringRun.create({ data: {
+      taskId: root.id, userId: root.userId, sourceTaskId: source.id,
+      eventKey, kind: MONITOR_KIND, dueAt: source.dueDate, state: 'scheduled'
+    } });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+    // Re-enabling or restoring an earlier due date can resurrect a cancelled
+    // event, but must never replay a completed/processing AI request.
+    await db.taskMonitoringRun.updateMany({
+      where: { eventKey, state: 'cancelled' },
+      data: { state: 'scheduled', dueAt: source.dueDate }
+    });
+  }
+}
+
+export async function rescheduleMonitoringTree(db: Db, rootId: string) {
+  const children = await db.task.findMany({
+    where: { parentTaskId: rootId },
+    select: { id: true }
+  });
+  await rescheduleMonitoringSource(db, rootId);
+  for (const child of children) await rescheduleMonitoringSource(db, child.id);
+}
+
+export async function cancelMonitoringSource(db: Db, sourceId: string) {
+  await db.taskMonitoringRun.updateMany({
+    where: { sourceTaskId: sourceId, kind: MONITOR_KIND, state: 'scheduled' },
+    data: { state: 'cancelled' }
+  });
+}
+
+/** One-time upgrade/restart reconciliation, not a recurring overdue scan. */
+export async function recoverMonitoredDeadlinesOnBoot() {
+  let cursor: string | undefined;
+  for (;;) {
+    const roots = await prisma.task.findMany({
+      where: { aiMonitoringEnabled: true, parentTaskId: null,
+        collaborationId: null, taskType: 'TASK', status: { not: 'DONE' } },
+      orderBy: { id: 'asc' }, take: 100,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: { id: true }
+    });
+    if (!roots.length) break;
+    for (const root of roots) await rescheduleMonitoringTree(prisma, root.id);
+    cursor = roots[roots.length - 1]!.id;
+    if (roots.length < 100) break;
+  }
+  signalTaskMonitoringWakeup();
+}
