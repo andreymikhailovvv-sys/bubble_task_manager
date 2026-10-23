@@ -24,6 +24,7 @@ import { cancelPendingMonitoringTriggers } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
 import { taskService, computeNextRecurringDueDate } from './task.service.js';
+import { refreshMonitoringAfterExternalWrite } from './task-monitoring-schedule.service.js';
 import { makeManualRecurrenceSchedule, type RecurrenceSchedule as StoredRecurrenceSchedule } from './recurrence-slots.service.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { loadAiFileCatalog, formatAiFileCatalog, extractAiReplyFileReferences, type AiFileHistoryReference } from './ai-file-catalog.service.js';
@@ -2721,6 +2722,7 @@ export const aiAssistantService = {
           status: operation.previous.status
         }
       });
+      await refreshMonitoringAfterExternalWrite([operation.taskId]);
     }
     return { ok: true };
   },
@@ -2896,6 +2898,7 @@ ${lines}`}] }) });
     const map = new Map(overdue.map((t)=>[t.id,t]));
     const updates = parsed.tasks.filter((x)=> map.has(x.taskId) && x.dueDate).map((x)=>({taskId:x.taskId, dueDate:new Date(x.dueDate!)})).filter((x)=>!Number.isNaN(x.dueDate.getTime()));
     await prisma.$transaction(async (tx)=>{ for (const u of updates) { await tx.task.updateMany({ where:{id:u.taskId, userId:input.userId, taskType: { notIn: ['EVENT', 'REMINDER'] }, AND:[taskAccessWhere(input.userId)]}, data:{dueDate:u.dueDate} }); }});
+    await refreshMonitoringAfterExternalWrite(updates.map(u => u.taskId));
     return { ok: true as const, model: OTHER_AI_MODEL, summary: parsed.summary || 'Просроченные задачи перераспределены', updatedTaskIds: updates.map((u)=>u.taskId), billing: { mode: 'legacy' as const, creditsSpentMilli: creditsToMilli(2) } };
   },
 
@@ -2908,6 +2911,7 @@ ${lines}`}] }) });
         await tx.task.updateMany({ where: { id: task.id, userId: input.userId, AND: [taskAccessWhere(input.userId)] }, data: { dueDate: taskDue && !Number.isNaN(taskDue.getTime()) ? taskDue : null } });
       }
     });
+    await refreshMonitoringAfterExternalWrite(input.plan.map(item => item.taskId));
     return { ok: true as const };
   },
 
@@ -3198,6 +3202,7 @@ export async function applyTaskChatProposalActions(input: {
                 continue;
               }
               await prisma.task.update({ where: { id: task.id }, data: { dueDate: nextDueDate } });
+              await refreshMonitoringAfterExternalWrite([task.id]);
               actionReports.push(`Перенёс задачу "${task.title}" на ${nextDueDate.toLocaleString('ru-RU', { timeZone: input.userTimeZone || MOSCOW_TIMEZONE })}.`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
@@ -3241,6 +3246,7 @@ export async function applyTaskChatProposalActions(input: {
                   ...(action.notifyBeforeMinutes !== undefined ? { notifyBeforeMinutes: action.notifyBeforeMinutes === null ? 0 : Math.max(0, Math.round(action.notifyBeforeMinutes)) } : {})
                 }
               });
+              if (dueDate !== undefined) await refreshMonitoringAfterExternalWrite([task.id]);
               actionReports.push(`Обновил параметры задачи "${task.title}".`);
               appliedActionsCount += 1;
               console.info('[AI] Task action applied', { requestId, taskId: task.id, actionType: action.type });
@@ -3408,6 +3414,7 @@ export async function applyLegacyGeneralProposalActions(input: {
               data: { dueDate: nextDue }
             });
           }
+          await refreshMonitoringAfterExternalWrite(candidates.map(item => item.id));
           actionReports.push(`Распределил задачи на сегодня более равномерно (${candidates.length} шт.).`);
           appliedActionsCount += 1;
           continue;
