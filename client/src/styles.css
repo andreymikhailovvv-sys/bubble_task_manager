@@ -10022,3 +10022,28 @@ body[data-theme='light'] .miniapp-shell .miniapp-task-feed .miniapp-task-list-ca
   background: #ffffff !important;
   background-image: none !important;
 }
+
+
+/* Status history lives in the monitored task AI chat, not task settings. */
+.task-monitor-status-anchor { z-index: 85; }
+.task-monitor-status-popover {
+  max-height: min(42dvh, 285px);
+  background-color: #182337;
+  border-color: rgba(129, 144, 172, .27);
+  box-shadow: 0 18px 45px rgba(4, 8, 23, .32);
+}
+.task-monitor-status-timeline { scrollbar-width: thin; }
+body[data-theme='light'] .task-monitor-status-popover,
+.miniapp-shell.miniapp-light .task-monitor-status-popover {
+  background-color: #ffffff;
+  border-color: rgba(211, 221, 235, .95);
+  box-shadow: 0 16px 32px rgba(28, 46, 81, .12);
+}
+.miniapp-ai-chat-header-task:has(.task-monitor-status-anchor) {
+  overflow: visible;
+  z-index: 70;
+}
+.miniapp-shell .task-monitor-status-popover { width: min(83vw, 315px); }
+@media (max-height: 620px) {
+  .task-monitor-status-popover { max-height: min(45dvh, 240px); }
+}
