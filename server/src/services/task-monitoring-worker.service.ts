@@ -30,6 +30,7 @@ async function deadlineStillCurrent(taskId: string, sourceId: string, dueAt: Dat
 
 /** Exactly one worker owns the delivery attempt. No implicit retry of paid AI calls. */
 async function deliver(run: Run, question: string, checkCurrent: () => Promise<boolean>) {
+  console.info('[TaskMonitoring] AI delivery starting', { runId: run.id, taskId: run.taskId });
   try {
     await requireMonitoredTask(run.userId, run.taskId);
     if (!await checkCurrent()) { await markRun(run.id, 'cancelled'); return; }
@@ -71,6 +72,7 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
       answer: result.answer
     });
     await markRun(run.id, 'completed');
+    console.info('[TaskMonitoring] AI delivery completed', { runId: run.id, taskId: run.taskId });
   } catch (error) {
     await markRun(run.id, 'failed');
     console.error('[TaskMonitoring] automatic request failed', {
@@ -160,6 +162,10 @@ export async function pollTaskMonitoring(now = new Date()) {
         data: { state: 'processing' }
       });
       if (!claimed.count) continue;
+      console.info('[TaskMonitoring] deadline claimed', {
+        runId: job.id, taskId: job.taskId, sourceTaskId: job.sourceTaskId,
+        dueAt: job.dueAt.toISOString()
+      });
       remaining -= 1;
       const check = async () => Boolean(
         await deadlineStillCurrent(job.taskId, job.sourceTaskId!, job.dueAt!)
@@ -208,13 +214,19 @@ async function armNextDeadline() {
 }
 
 export function startTaskMonitoringWorker() {
+  console.info('[TaskMonitoring] event worker started');
   registerTaskMonitoringWakeup(() => {
+    // A newly created job can already be overdue. Dispatch immediately,
+    // rather than relying on the timer when many task updates race.
+    void pollTaskMonitoring().catch(error =>
+      console.error('[TaskMonitoring] immediate dispatch failed', error));
     void armNextDeadline().catch(error =>
       console.error('[TaskMonitoring] wakeup failed', error));
   });
   // Crash recovery is a one-time bootstrap of previously opted-in tasks.
   // Restarts never depend on in-memory timeouts surviving the process.
   void (async () => {
+    console.info('[TaskMonitoring] recovery starting');
     await prisma.taskMonitoringRun.updateMany({
       where: { state: 'processing', updatedAt: { lt: new Date(Date.now() - 15 * 60_000) } },
       data: { state: 'failed' } // at most once; do not double-charge for partial AI calls
