@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ListFilter, Sparkles, StickyNote } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, Clock3, List, ListFilter, Loader2, Sparkles, StickyNote } from 'lucide-react';
 import type { Sphere } from '../lib/types';
 
 type TimeFilter = 'all' | 'today' | 'tomorrow' | 'week' | 'month';
@@ -26,6 +26,10 @@ type Props = {
   timelineSphereId: string;
   onTimelineSphereChange: (id: string) => void;
   onNotesOpen: () => void;
+  onDisplayModeChange: (mode: 'list' | 'timeline') => void;
+  onPostpone: () => void;
+  postponing: boolean;
+  canPostpone: boolean;
 };
 
 /**
@@ -35,7 +39,8 @@ type Props = {
 export function MiniWorkspaceTools({
   mode, timeFilter, onTimeFilterChange, sortMode, onSortChange,
   spheres, selectedSphereIds, onSelectAllSpheres, onToggleSphere,
-  timelineSphereId, onTimelineSphereChange, onNotesOpen
+  timelineSphereId, onTimelineSphereChange, onNotesOpen,
+  onDisplayModeChange, onPostpone, postponing, canPostpone
 }: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,16 +67,19 @@ export function MiniWorkspaceTools({
     : timelineSphereId !== 'all');
 
   return (
-    <div className={`miniapp-workspace-tools grid grid-cols-[1fr_auto_1fr] items-center gap-2 ${open ? 'is-filter-menu-open' : ''}`}>
-      <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-notes justify-self-start"
-        onClick={onNotesOpen} aria-label="Открыть заметки">
-        <StickyNote size={17} aria-hidden="true" /><span>Заметки</span>
-      </button>
-      <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-optimize justify-self-center"
-        disabled aria-disabled="true" title="Оптимизация пока недоступна">
-        <Sparkles size={16} aria-hidden="true" /><span>Оптимизировать</span>
-      </button>
-      <div ref={rootRef} className="relative justify-self-end">
+    <div className={`miniapp-workspace-tools ${open ? 'is-filter-menu-open' : ''}`}>
+      <div className="miniapp-workspace-primary">
+        <div className="display-mode-toggle-group miniapp-workspace-display-mode" role="group" aria-label="Режим отображения">
+          <button type="button" className={`display-mode-toggle-button ${mode === 'list' ? 'display-mode-toggle-button-active' : ''}`}
+            aria-pressed={mode === 'list'} onClick={() => onDisplayModeChange('list')}>
+            <List size={16} aria-hidden="true" /><span>Список</span>
+          </button>
+          <button type="button" className={`display-mode-toggle-button ${mode === 'timeline' ? 'display-mode-toggle-button-active' : ''}`}
+            aria-pressed={mode === 'timeline'} onClick={() => onDisplayModeChange('timeline')}>
+            <CalendarDays size={16} aria-hidden="true" /><span>Таймлайн</span>
+          </button>
+        </div>
+        <div ref={rootRef} className="miniapp-workspace-filter-anchor relative justify-self-end">
         <button type="button"
           className={`miniapp-workspace-tool miniapp-workspace-tool-filter ${hasFilters ? 'is-filtered' : ''}`}
           onClick={() => setOpen(value => !value)}
@@ -139,6 +147,24 @@ export function MiniWorkspaceTools({
             </label>}
           </div>
         ) : null}
+      </div>
+      </div>
+      <div className="miniapp-workspace-actions">
+        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-notes"
+          onClick={onNotesOpen} aria-label="Открыть заметки">
+          <StickyNote size={16} aria-hidden="true" /><span>Заметки</span>
+        </button>
+        <button type="button" className="miniapp-postpone-button miniapp-workspace-tool-postpone"
+          onClick={onPostpone} disabled={postponing || !canPostpone}
+          title="Перенести просроченные задачи на сегодня на это же время"
+          aria-label="Перенести просроченные задачи на сегодня на это же время">
+          {postponing ? <Loader2 size={15} className="animate-spin" /> : <Clock3 size={15} />}
+          <span>Отложить</span>
+        </button>
+        <button type="button" className="miniapp-workspace-tool miniapp-workspace-tool-optimize"
+          disabled aria-disabled="true" title="Оптимизация пока недоступна">
+          <Sparkles size={16} aria-hidden="true" /><span>Оптимизировать</span>
+        </button>
       </div>
     </div>
   );

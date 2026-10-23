@@ -3721,7 +3721,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         </div>, document.body
       ) : null}
       <div className="mx-auto max-w-2xl space-y-4">
-        <section className={`sticky top-0 z-30 rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
+        <section className={`sticky top-0 z-30 miniapp-premium-topbar rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 backdrop-blur transition-transform duration-200 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[130%]'}`}>
           <div className="flex items-center gap-2">
             <WorkspaceGlobalSearch
               mobile
@@ -3825,7 +3825,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
         {displayMode === 'list' ? (
           <div className="space-y-4">
-          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
+          <section className="miniapp-premium-habits space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Привычки</h2>
               <span className="miniapp-habits-summary rounded-full px-2.5 py-1 text-xs font-semibold">
@@ -3877,30 +3877,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             </div>
           </section>
 
-          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="miniapp-list-toolbar flex items-center gap-3">
-              <div className="display-mode-toggle-group inline-flex min-w-0 flex-1 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
-                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="true">
-                  <List size={16} className="text-violet-300" aria-hidden="true" />
-                  <span>Список</span>
-                </button>
-                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="false">
-                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
-                  <span>Таймлайн</span>
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время"
-              >
-                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
-                Отложить
-              </button>
-            </div>
+          <div className="miniapp-list-workspace">
+            <div className="miniapp-workspace-toolbar-card">
             <MiniWorkspaceTools
               mode={displayMode}
               timeFilter={timeFilter}
@@ -3914,7 +3892,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
+              onDisplayModeChange={setDisplayMode}
+              onPostpone={() => void postponeAllOverdueToToday()}
+              postponing={isPostponingOverdue}
+              canPostpone={overdueTasks.length > 0}
             />
+            </div>
+            <div className="miniapp-task-feed">
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
             ) : null}
@@ -3922,8 +3906,9 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
             {listTasks.map((task) => {
               const isEvent = task.taskType === 'EVENT';
               const hasOverdueState = !isEvent && isOverdue(task);
-              const taskSphereColor = task.sphereId ? spheres.find((item) => item.id === task.sphereId)?.color ?? null : null;
-              const leftStripeColor = hexToRgba(taskSphereColor ?? '', 0.95) ?? 'rgba(100,116,139,0.95)';
+              const taskSphere = task.sphereId ? spheres.find((item) => item.id === task.sphereId) : undefined;
+              const taskSphereColor = taskSphere?.color ?? (isEvent ? '#d97706' : '#64748b');
+              const taskSphereLabel = taskSphere?.name ?? (isEvent ? 'Событие' : 'Без сектора');
               const importanceRating = Math.max(0, Math.min(1, task.importance / 5));
               const importanceBadgeColor = `rgba(${Math.round(80 + importanceRating * 170)}, ${Math.round(165 - importanceRating * 95)}, ${Math.round(220 - importanceRating * 190)}, ${isLightTheme ? 0.48 : 0.32})`;
               const subtaskProgress = subtaskProgressByParent.get(task.id);
@@ -3931,14 +3916,14 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               const progressPercent = hasSubtasks
                 ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
                 : 0;
-              const taskCardStyle: CSSProperties & Record<'--miniapp-task-stripe', string> = isEvent
-                ? { '--miniapp-task-stripe': 'rgba(245,158,11,0.95)', borderColor: 'rgba(245,158,11,0.72)', borderLeftWidth: '1px', borderLeftColor: 'rgba(245,158,11,0.95)' }
-                : { '--miniapp-task-stripe': leftStripeColor, borderLeftWidth: '4px', borderLeftColor: leftStripeColor };
+              const taskCardStyle = {
+                '--miniapp-sector-color': taskSphereColor
+              } as CSSProperties;
 
               return (
                 <article
                   key={task.id}
-                  className={`miniapp-task-list-card border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
+                  className={`miniapp-task-list-card relative border border-slate-700 bg-slate-800/80 p-3 ${hasOverdueState ? 'miniapp-task-overdue' : ''} ${isEvent ? 'miniapp-task-list-event-card' : ''}`}
                   style={taskCardStyle}
                 >
                   <button
@@ -3946,8 +3931,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     className="relative flex w-full items-start gap-2 text-left"
                     onClick={() => openTaskModal(task)}
                   >
-                    <div className="min-w-0 flex-1 pr-5">
-                      <h3 className="truncate font-semibold">{task.title}</h3>
+                    <div className="min-w-0 flex-1 pr-9">
+                      <span className="miniapp-task-sector-badge mb-2 inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2.5 py-1 text-[11px] font-semibold">
+                        <span className="miniapp-task-sector-dot h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
+                        <span className="truncate">{taskSphereLabel}</span>
+                      </span>
+                      <h3 className="miniapp-task-title truncate font-semibold">{task.title}</h3>
                       {listSortMode === 'importance' ? (
                         <>
                           <p className={`mt-1 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
@@ -3962,8 +3951,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         </>
                       ) : (
                         <>
-                          <p className="mt-1 text-xs text-slate-300">{isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}</p>
-                          <p className={`mt-0.5 text-xs font-medium ${hasOverdueState ? 'miniapp-overdue-label' : 'text-sky-200'}`}>{formatRemaining(task.dueDate)}</p>
+                          <p className="miniapp-task-date mt-1 inline-flex items-center gap-1.5 text-xs">
+                            <CalendarDays size={13} aria-hidden="true" />
+                            {isEvent ? 'Событие' : 'Дедлайн'}: {formatDueDate(task.dueDate)}
+                          </p>
+                          <p className={`miniapp-task-time mt-1 flex items-center gap-1.5 text-xs font-semibold ${hasOverdueState ? 'miniapp-overdue-label' : ''}`}>
+                            <Clock3 size={13} aria-hidden="true" />{formatRemaining(task.dueDate)}
+                          </p>
                         </>
                       )}
                     </div>
@@ -3978,55 +3972,26 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       </span>
                     ) : null}
                   </button>
+                  {!isEvent ? (
+                    <button type="button"
+                      className="miniapp-task-complete-trigger absolute right-3 top-3 inline-flex items-center justify-center rounded-full"
+                      onClick={() => void completeTask(task.id)}
+                      disabled={completingId === task.id}
+                      aria-label={`Завершить задачу: ${task.title}`}
+                      title="Завершить задачу">
+                      {completingId === task.id ? <Loader2 size={18} className="animate-spin" /> : <span className="miniapp-task-complete-ring" />}
+                    </button>
+                  ) : null}
                 </article>
               );
             })}
-          </section>
+            </div>
+          </div>
           </div>
         ) : (
 
-          <section className="miniapp-timeline-section -mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
-            <div className="miniapp-timeline-toolbar flex items-center justify-between gap-3">
-              <div className="display-mode-toggle-group inline-flex min-w-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
-                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="false">
-                  <List size={16} className="text-violet-300" aria-hidden="true" />
-                  <span>Список</span>
-                </button>
-                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="true">
-                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
-                  <span>Таймлайн</span>
-                </button>
-              </div>
-              <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
-                {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
-                  <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="miniapp-timeline-period-toolbar mb-3 mt-3 flex items-center justify-between gap-2">
-              <div className="miniapp-timeline-date-nav">
-                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
-                <div className="miniapp-timeline-date-current" aria-live="polite">
-                  <CalendarDays size={16} aria-hidden="true" />
-                  <span className="miniapp-timeline-date-copy">
-                    <strong>{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</strong>
-                    <small>{timelineView === 'day' ? 'Выбранный день' : timelineView === 'week' ? 'Выбранная неделя' : 'Выбранный месяц'}</small>
-                  </span>
-                </div>
-                <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время"
-              >
-                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
-                Отложить
-              </button>
-            </div>
+          <section className="miniapp-timeline-section miniapp-premium-timeline -mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
+            <div className="miniapp-workspace-toolbar-card miniapp-workspace-timeline-toolbar">
             <MiniWorkspaceTools
               mode={displayMode}
               timeFilter={timeFilter}
@@ -4040,7 +4005,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
+              onDisplayModeChange={setDisplayMode}
+              onPostpone={() => void postponeAllOverdueToToday()}
+              postponing={isPostponingOverdue}
+              canPostpone={overdueTasks.length > 0}
             />
+            </div>
+            <div className="miniapp-timeline-navigation">
+              <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
+                {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
+                  <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
+                ))}
+              </div>
+              <div className="miniapp-timeline-period-toolbar">
+              <div className="miniapp-timeline-date-nav">
+                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
+                <div className="miniapp-timeline-date-current" aria-live="polite">
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span className="miniapp-timeline-date-copy">
+                    <strong>{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</strong>
+                    <small>{timelineView === 'day' ? 'Выбранный день' : timelineView === 'week' ? 'Выбранная неделя' : 'Выбранный месяц'}</small>
+                  </span>
+                </div>
+                <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
+              </div>
+              </div>
+            </div>
             {timelineView === 'day' ? <div className="relative overflow-x-hidden">
               <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                 {timelineToday.hourTops.map((top, hour) => {

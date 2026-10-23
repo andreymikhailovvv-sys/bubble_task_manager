@@ -53,7 +53,7 @@ test('workspace tools remain below dialogs and the credits popover on both compa
   const openRule = css.match(/\.miniapp-workspace-tools\.is-filter-menu-open \{([^}]+)\}/)?.[1] ?? '';
   const normalLayer = Number(toolbarRule.match(/z-index:\s*(\d+)/)?.[1]);
   const openLayer = Number(openRule.match(/z-index:\s*(\d+)/)?.[1]);
-  const headerLayer = Number(mini.match(/sticky top-0 z-(\d+) rounded-xl/)?.[1]);
+  const headerLayer = Number(mini.match(/sticky top-0 z-(\d+)(?: miniapp-premium-topbar)? rounded-xl/)?.[1]);
   const createTaskLayer = Number(mini.match(/miniapp-slide-backdrop fixed inset-0 z-(\d+) flex items-end/)?.[1]);
   assert.equal(normalLayer, 1);
   assert.ok(normalLayer < openLayer && openLayer < headerLayer);
@@ -105,4 +105,47 @@ test('fresh mobile browser navigations receive current app HTML rather than cach
   assert.match(server, /endsWith\('\.html'\)/);
   assert.match(server, /'Cache-Control', 'no-store, must-revalidate'/);
   assert.match(server, /app\.get\('\*'/);
+});
+
+
+test('compact premium toolbar keeps symmetric mode/filter and note/postpone/optimize rows in both displays', async () => {
+  const [mini, tools, styles] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/components/MiniWorkspaceTools.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  assert.equal((mini.match(/<MiniWorkspaceTools/g) ?? []).length, 2);
+  assert.equal((mini.match(/onDisplayModeChange=\{setDisplayMode\}/g) ?? []).length, 2);
+  assert.equal((mini.match(/onPostpone=\{\(\) => void postponeAllOverdueToToday\(\)\}/g) ?? []).length, 2);
+  const topStart = tools.indexOf('className="miniapp-workspace-primary"');
+  const filterStart = tools.indexOf('ref={rootRef}', topStart);
+  const bottomStart = tools.indexOf('className="miniapp-workspace-actions"', filterStart);
+  assert.ok(topStart > 0 && filterStart > topStart && bottomStart > filterStart);
+  assert.match(tools.slice(topStart, filterStart), /Режим отображения/);
+  assert.match(tools.slice(filterStart, bottomStart), /Фильтры задач/);
+  assert.match(tools.slice(bottomStart), /Заметки/);
+  assert.match(tools.slice(bottomStart), /Отложить/);
+  assert.match(tools.slice(bottomStart), /Оптимизировать/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-workspace-primary \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 2\.7rem/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-workspace-actions \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1\.05fr\) minmax\(0, 1\.48fr\)/);
+  assert.match(mini, /miniapp-premium-timeline/);
+  assert.match(mini, /miniapp-premium-habits/);
+});
+
+test('compact task cards use themed sector badges rather than left color bars and retain task actions', async () => {
+  const [mini, styles] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  const list = mini.slice(mini.indexOf('{listTasks.map((task) => {'), mini.indexOf('          </div>\n          </div>\n        ) : (', mini.indexOf('{listTasks.map((task) => {')));
+  assert.match(list, /miniapp-task-sector-badge/);
+  assert.match(list, /taskSphere\?\.name \?\?/);
+  assert.match(list, /'--miniapp-sector-color': taskSphereColor/);
+  assert.doesNotMatch(list, /borderLeftWidth: '4px'|leftStripeColor|--miniapp-task-stripe/);
+  assert.match(list, /onClick=\{\(\) => openTaskModal\(task\)\}/);
+  assert.match(list, /onClick=\{\(\) => void completeTask\(task\.id\)\}/);
+  assert.match(list, /hasSubtasks/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-task-feed \.miniapp-task-list-card/);
+  assert.match(styles, /\.miniapp-shell\.miniapp-light \.miniapp-task-feed \.miniapp-task-sector-badge/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-task-complete-trigger/);
 });
