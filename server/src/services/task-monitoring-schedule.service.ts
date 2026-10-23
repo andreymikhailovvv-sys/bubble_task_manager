@@ -26,17 +26,17 @@ export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
   const root = source.parentTaskId
     ? await db.task.findUnique({
         where: { id: source.parentTaskId },
-        select: { id: true, userId: true, aiMonitoringEnabled: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
+        select: { id: true, userId: true, aiMonitoringEnabled: true, aiMonitoringGeneration: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
       })
     : await db.task.findUnique({
         where: { id: source.id },
-        select: { id: true, userId: true, aiMonitoringEnabled: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
+        select: { id: true, userId: true, aiMonitoringEnabled: true, aiMonitoringGeneration: true, status: true, collaborationId: true, parentTaskId: true, taskType: true }
       });
   if (!root || !root.aiMonitoringEnabled || root.userId !== source.userId ||
       root.status === 'DONE' || root.collaborationId || root.parentTaskId || root.taskType !== 'TASK' ||
       source.collaborationId) return;
 
-  const eventKey = 'overdue:' + root.id + ':' + source.id + ':' + source.dueDate!.toISOString();
+  const eventKey = 'overdue:' + root.id + ':g' + root.aiMonitoringGeneration + ':' + source.id + ':' + source.dueDate!.toISOString();
   // skipDuplicates emits ON CONFLICT DO NOTHING on PostgreSQL and does not
   // poison a surrounding task-edit transaction if the event already exists.
   await db.taskMonitoringRun.createMany({
@@ -45,6 +45,11 @@ export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
       eventKey, kind: MONITOR_KIND, dueAt: source.dueDate, state: 'scheduled'
     }],
     skipDuplicates: true
+  });
+  console.info('[TaskMonitoring] event queued', {
+    rootId: root.id, sourceId: source.id,
+    generation: root.aiMonitoringGeneration,
+    dueAt: source.dueDate!.toISOString()
   });
   // Only cancelled deliveries can be restored. Completed/processing events
   // are never retried at the same timestamp, avoiding duplicate AI charges.
@@ -86,6 +91,7 @@ export async function recoverMonitoredDeadlinesOnBoot() {
     cursor = roots[roots.length - 1]!.id;
     if (roots.length < 100) break;
   }
+  console.info('[TaskMonitoring] boot recovery complete');
   signalTaskMonitoringWakeup();
 }
 

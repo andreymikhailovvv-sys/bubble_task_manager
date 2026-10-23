@@ -329,6 +329,7 @@ model Task {
   overdueAiNotifiedAt DateTime?
   aiNotificationsEnabled Boolean @default(true)
   aiMonitoringEnabled Boolean @default(false)
+  aiMonitoringGeneration Int @default(0)
   monitoringStatuses TaskMonitoringStatus[]
   monitoringTriggers TaskMonitoringTrigger[]
   monitoringRuns TaskMonitoringRun[]

@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
-import { addMonitoringStatus, listMonitoringStatuses } from '../services/task-monitoring.service.js';
+import { addMonitoringStatus, listMonitoringStatuses, requireMonitoredTask } from '../services/task-monitoring.service.js';
 import { getMonitoringTriggers } from '../services/task-monitoring-trigger.service.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
@@ -1707,6 +1707,42 @@ apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
 apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAssistantAction);
+apiRouter.get('/tasks/:id/monitoring/diagnostics', requireAuth, asyncHandler(async (req, res) => {
+  try {
+    const task = await requireMonitoredTask(req.user!.id, req.params.id);
+    const [subtasks, runs, pendingTriggers] = await Promise.all([
+      prisma.task.findMany({
+        where: { parentTaskId: task.id, userId: req.user!.id },
+        select: { id: true, status: true, dueDate: true },
+        orderBy: { dueDate: 'asc' }, take: 100
+      }),
+      prisma.taskMonitoringRun.findMany({
+        where: { taskId: task.id, kind: 'overdue' },
+        select: { sourceTaskId: true, dueAt: true, state: true, updatedAt: true, eventKey: true },
+        orderBy: [{ createdAt: 'desc' }], take: 100
+      }),
+      prisma.taskMonitoringTrigger.count({
+        where: { taskId: task.id, state: 'pending' }
+      })
+    ]);
+    const now = new Date();
+    res.set('Cache-Control', 'private, no-store').json({
+      monitoringEnabled: true, taskId: task.id,
+      generation: task.aiMonitoringGeneration,
+      task: { status: task.status, dueAt: task.dueDate },
+      subtasks,
+      queue: runs.map(run => ({
+        sourceTaskId: run.sourceTaskId, dueAt: run.dueAt, state: run.state,
+        updatedAt: run.updatedAt,
+        generationMatches: run.eventKey.includes(':g' + task.aiMonitoringGeneration + ':'),
+        isDue: Boolean(run.dueAt && run.dueAt <= now)
+      })),
+      pendingTriggers
+    });
+  } catch {
+    res.status(404).json({ error: 'Мониторинг выключен или задача недоступна' });
+  }
+}));
 apiRouter.get('/tasks/:id/monitoring/triggers', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'private, no-store').json(await getMonitoringTriggers(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Мониторинг недоступен' }); }
