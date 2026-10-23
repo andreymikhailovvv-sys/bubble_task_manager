@@ -7442,7 +7442,7 @@ ${allContext}`,
                     onChange={handleTaskAttachmentFileSelect}
                   />
                   {isFocusedSettingsOpen ? (
-                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 w-[min(92vw,360px)] space-y-4 rounded-3xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                    <div className="focused-task-settings-panel absolute right-5 top-16 z-30 max-h-[calc(100dvh-110px)] w-[min(92vw,360px)] space-y-4 overflow-y-auto overscroll-contain rounded-3xl border p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="text-sm font-semibold text-primary">Настройки задачи</h4>
                         <button type="button" className="focused-task-icon-button h-8 w-8 border" onClick={() => setIsFocusedSettingsOpen(false)} aria-label="Закрыть настройки"><X size={14} /></button>
