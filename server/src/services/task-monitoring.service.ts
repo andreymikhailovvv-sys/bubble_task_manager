@@ -28,7 +28,7 @@ export async function addMonitoringStatus(userId: string, taskId: string, label:
 /** Called after a real user response, not by a model-generated message. */
 export async function cancelPendingMonitoringTriggers(userId: string, taskId: string, receivedAt = new Date()) {
   return prisma.taskMonitoringTrigger.updateMany({
-    where: { userId, taskId, state: 'pending', updatedAt: { lte: receivedAt } },
+    where: { userId, taskId, state: { in: ['pending', 'fired'] }, updatedAt: { lte: receivedAt } },
     data: { state: 'answered' }
   });
 }
