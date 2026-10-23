@@ -10024,26 +10024,40 @@ body[data-theme='light'] .miniapp-shell .miniapp-task-feed .miniapp-task-list-ca
 }
 
 
-/* Status history lives in the monitored task AI chat, not task settings. */
-.task-monitor-status-anchor { z-index: 85; }
-.task-monitor-status-popover {
-  max-height: min(42dvh, 285px);
-  background-color: #182337;
-  border-color: rgba(129, 144, 172, .27);
-  box-shadow: 0 18px 45px rgba(4, 8, 23, .32);
+/* The beta status panel is portaled to <body> so AI chat overflow and
+   transforms cannot crop it. Both themes follow their originating button. */
+.task-monitor-status-anchor { z-index: 1; }
+.task-monitor-status-popover.task-monitor-status-portal {
+  position: fixed;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  background: #182337;
+  color: #f8fafc;
+  border-color: rgba(129, 144, 172, .3);
+  box-shadow: 0 22px 60px rgba(4, 8, 23, .38);
+  --panel-border: rgba(129, 144, 172, .3);
+  --input-bg: #202e46;
+  --text-primary: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-subtle: #94a3b8;
+  color-scheme: dark;
 }
-.task-monitor-status-timeline { scrollbar-width: thin; }
-body[data-theme='light'] .task-monitor-status-popover,
-.miniapp-shell.miniapp-light .task-monitor-status-popover {
-  background-color: #ffffff;
-  border-color: rgba(211, 221, 235, .95);
-  box-shadow: 0 16px 32px rgba(28, 46, 81, .12);
+.task-monitor-status-popover.task-monitor-status-portal[data-status-theme='light'] {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #d4dfed;
+  box-shadow: 0 18px 48px rgba(28, 46, 81, .15);
+  --panel-border: #d4dfed;
+  --input-bg: #ffffff;
+  --text-primary: #0f172a;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+  color-scheme: light;
 }
-.miniapp-ai-chat-header-task:has(.task-monitor-status-anchor) {
-  overflow: visible;
-  z-index: 70;
+.task-monitor-status-portal .task-monitor-status-timeline {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, .6) transparent;
 }
-.miniapp-shell .task-monitor-status-popover { width: min(83vw, 315px); }
-@media (max-height: 620px) {
-  .task-monitor-status-popover { max-height: min(45dvh, 240px); }
+.task-monitor-status-portal .task-monitor-status-timeline > div:last-child {
+  padding-bottom: 2px;
 }
