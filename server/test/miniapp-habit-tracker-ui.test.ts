@@ -7,7 +7,7 @@ test('создание и редактирование привычки пока
   assert.match(source, /isHabitModalOpen && !editingHabitId/);
   assert.match(source, /isHabitModalOpen && editingHabit/);
   assert.match(source, /miniapp-habit-editor-panel/);
-  assert.match(source, /MiniAppHabitTracker habit=\{editingHabit\}/);
+  assert.match(source, /MiniAppHabitTracker habit=\{editingHabit\} onHabitChanged=/);
   assert.match(source, /setIsHabitSettingsOpen\(\(open\) => !open\)/);
   assert.equal((source.match(/\{renderHabitSettingsFields\(\)\}/g) ?? []).length, 2);
   assert.match(source, /if \(editingHabitId\) closeMiniWindowWithMotion\('habit', closeHabitModal\)/);
@@ -74,4 +74,17 @@ test('создание привычки сохраняет прежние пол
     assert.ok(sharedFields.includes(field), field);
   }
   assert.equal((source.match(/\{renderHabitSettingsFields\(\)\}/g) ?? []).length, 2);
+});
+
+test('переключение дней календаря сохраняется через сервер и обновляет статистику', async () => {
+  const [tracker, mini] = await Promise.all([
+    readFile(new URL('../../client/src/components/MiniAppHabitTracker.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(tracker, /api\.uncompleteHabit\(habit\.id/);
+  assert.match(tracker, /api\.completeHabit\(habit\.id/);
+  assert.match(tracker, /pendingDayKey/);
+  assert.match(tracker, /setEditedDays/);
+  assert.match(tracker, /onHabitChanged\?\.\(updated\)/);
+  assert.match(mini, /onHabitChanged=\{\(updated\) =>/);
 });
