@@ -2886,11 +2886,12 @@ ${allContext}`,
   const refreshSystemNotifications = async () => {
     try {
       const result = await api.getSystemNotifications();
-      const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+      const visibleNotifications = result.notifications.filter(notification => !notification.eventKey?.startsWith('monitoring:'));
+      const newNotifications = visibleNotifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
       const newestUnseen = [...newNotifications].reverse()[0];
       result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
-      setSystemNotifications(result.notifications);
-      setUnreadSystemNotificationCount(result.unreadCount);
+      setSystemNotifications(visibleNotifications);
+      setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
       deliverBrowserSystemNotifications(newNotifications);
       if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
@@ -2912,11 +2913,12 @@ ${allContext}`,
       try {
         const result = await api.getSystemNotifications();
         if (cancelled) return;
-        const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+        const visibleNotifications = result.notifications.filter(notification => !notification.eventKey?.startsWith('monitoring:'));
+      const newNotifications = visibleNotifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
         const newestUnseen = [...newNotifications].reverse()[0];
         result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
-        setSystemNotifications(result.notifications);
-        setUnreadSystemNotificationCount(result.unreadCount);
+        setSystemNotifications(visibleNotifications);
+        setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
         // The first load is a baseline: never produce a pile of historical OS alerts.
         if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
         baselineLoaded = true;
