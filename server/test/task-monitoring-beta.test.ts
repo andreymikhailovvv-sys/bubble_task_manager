@@ -47,3 +47,29 @@ test('same beta opt-in/status UI exists on web, Telegram and mobile web', async 
   assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
   assert.match(types, /aiMonitoringEnabled\?: boolean/);
 });
+
+
+test('status popover escapes task-chat clipping and stays within the visible viewport in both themes', async () => {
+  const [component, css, desktop, mini] = await Promise.all([
+    file('../../client/src/components/TaskMonitoringStatuses.tsx'),
+    file('../../client/src/styles.css'),
+    file('../../client/src/App.tsx'),
+    file('../../client/src/MiniApp.tsx')
+  ]);
+  assert.match(component, /import \{ createPortal \} from 'react-dom'/);
+  assert.match(component, /\), document\.body/);
+  assert.match(component, /className="task-monitor-status-popover task-monitor-status-portal fixed/);
+  assert.match(component, /const left = Math\.max\(GUTTER, Math\.min\(/);
+  assert.match(component, /const openAbove = availableBelow < 260 && availableAbove > availableBelow/);
+  assert.match(component, /style=\{\{ left: layout\.left, top: layout\.top, width: layout\.width, maxHeight: layout\.maxHeight \}\}/);
+  assert.match(component, /window\.addEventListener\('resize', reposition\)/);
+  assert.match(component, /window\.addEventListener\('scroll', reposition, true\)/);
+  assert.match(component, /document\.addEventListener\('pointerdown', onPointerDown\)/);
+  assert.match(component, /event\.key === 'Escape'/);
+  assert.match(component, /data-status-theme=\{layout\.theme\}/);
+  assert.match(css, /task-monitor-status-popover\.task-monitor-status-portal\[data-status-theme='light'\]/);
+  assert.match(css, /max-width: calc\(100vw - 24px\)/);
+  assert.doesNotMatch(css, /\.miniapp-ai-chat-header-task:has\(\.task-monitor-status-anchor\)/);
+  assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
+  assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
+});
