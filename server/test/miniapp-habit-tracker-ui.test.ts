@@ -88,3 +88,17 @@ test('переключение дней календаря сохраняетс�
   assert.match(tracker, /onHabitChanged\?\.\(updated\)/);
   assert.match(mini, /onHabitChanged=\{\(updated\) =>/);
 });
+
+
+test('светлая тема подсвечивает выполненный день насыщенным зелёным цветом', async () => {
+  const styles = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  const lightDoneStart = styles.indexOf('.miniapp-light .miniapp-habit-tracker-day-done {');
+  assert.ok(lightDoneStart >= 0);
+  const lightDone = styles.slice(lightDoneStart, styles.indexOf('}', lightDoneStart) + 1);
+  assert.match(lightDone, /background: color-mix\(in srgb, var\(--tracker-accent\) 85%, #166534\)/);
+  assert.match(lightDone, /color: #fff/);
+  assert.doesNotMatch(lightDone, /33%, white/);
+  const connectedStart = styles.indexOf('.miniapp-light .miniapp-habit-tracker-day-connected-left::before');
+  const connected = styles.slice(connectedStart, styles.indexOf('}', connectedStart) + 1);
+  assert.match(connected, /85%, #166534/);
+});
