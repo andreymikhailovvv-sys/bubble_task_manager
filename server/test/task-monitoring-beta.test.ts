@@ -15,61 +15,61 @@ test('monitoring is opt-in and persisted only for personal root tasks', async ()
   assert.match(service, /currentTask\.collaborationId \|\| currentTask\.parentTaskId \|\| currentTask\.taskType !== 'TASK'/);
 });
 
-test('status endpoints re-check owner and monitoring before reading or writing', async () => {
-  const [monitor, routes] = await Promise.all([
-    file('../src/services/task-monitoring.service.ts'), file('../src/routes/api.ts')
+test('owner can read archived statuses even when opted out; writing still requires beta', async () => {
+  const [monitor, routes, schema] = await Promise.all([
+    file('../src/services/task-monitoring.service.ts'),
+    file('../src/routes/api.ts'), file('../prisma/schema.prisma')
   ]);
-  assert.match(monitor, /userId, parentTaskId: null, collaborationId: null, taskType: 'TASK', aiMonitoringEnabled: true/);
-  assert.match(monitor, /requireMonitoredTask\(userId, taskId\)/);
-  assert.match(routes, /apiRouter\.get\('\/tasks\/:id\/monitoring\/statuses'/);
+  assert.match(monitor, /requireMonitoringOwner\(userId, taskId\)/);
+  assert.match(monitor, /!task\.aiMonitoringEnabled/);
+  assert.match(monitor, /getMonitoringStatusUnread/);
+  assert.match(monitor, /markMonitoringStatusesSeen/);
+  assert.match(routes, /\/tasks\/:id\/monitoring\/statuses\/unread/);
+  assert.match(routes, /\/tasks\/:id\/monitoring\/statuses\/seen/);
   assert.match(routes, /apiRouter\.post\('\/tasks\/:id\/monitoring\/statuses', requireAuth, taskProposalSameOrigin/);
+  assert.match(schema, /aiMonitoringStatusSeenAt DateTime\?/);
 });
 
-test('same beta opt-in/status UI exists on web, Telegram and mobile web', async () => {
-  const [web, mini, panel, types] = await Promise.all([
-    file('../../client/src/components/TaskEditor.tsx'), file('../../client/src/MiniApp.tsx'),
-    file('../../client/src/components/TaskMonitoringControls.tsx'), file('../../client/src/lib/types.ts')
+test('same AI-chat monitoring panel exists on desktop, Telegram and mobile web', async () => {
+  const [editor, mini, panel, desktop, statuses, types] = await Promise.all([
+    file('../../client/src/components/TaskEditor.tsx'),
+    file('../../client/src/MiniApp.tsx'),
+    file('../../client/src/components/TaskMonitoringControls.tsx'),
+    file('../../client/src/App.tsx'),
+    file('../../client/src/components/TaskMonitoringStatuses.tsx'),
+    file('../../client/src/lib/types.ts')
   ]);
-  assert.match(web, /<TaskMonitoringControls/);
-  assert.match(mini, /<TaskMonitoringControls/g);
+  assert.doesNotMatch(editor, /<TaskMonitoringControls/);
+  assert.doesNotMatch(mini, /<TaskMonitoringControls/);
+  assert.doesNotMatch(desktop, /<TaskMonitoringControls/);
   assert.match(panel, /Автомониторинг/);
   assert.match(panel, /beta/);
   assert.match(panel, /Что такое автомониторинг\?/);
-  const statuses = await file('../../client/src/components/TaskMonitoringStatuses.tsx');
-  const desktop = await file('../../client/src/App.tsx');
-  assert.doesNotMatch(panel, /task-monitor-status-timeline|statuses\.map\(/);
+  assert.match(statuses, /<TaskMonitoringControls enabled=\{monitorEnabled\}/);
   assert.match(statuses, /История статусов/);
-  assert.match(statuses, /task-monitor-status-timeline/);
-  assert.match(desktop, /<TaskMonitoringControls/);
-  assert.match(desktop, /aiMonitoringEnabled: task.aiMonitoringEnabled/);
-  assert.match(desktop, /'aiNotificationsEnabled', 'aiMonitoringEnabled'/);
+  assert.match(statuses, /getTaskMonitoringUnread/);
+  assert.match(statuses, /markTaskMonitoringSeen/);
+  assert.match(statuses, /task-monitor-unread/);
   assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
   assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
   assert.match(types, /aiMonitoringEnabled\?: boolean/);
 });
 
-
-test('status popover escapes task-chat clipping and stays within the visible viewport in both themes', async () => {
-  const [component, css, desktop, mini] = await Promise.all([
+test('monitor panel escapes clipping and repositions on the viewport in both themes', async () => {
+  const [component, css] = await Promise.all([
     file('../../client/src/components/TaskMonitoringStatuses.tsx'),
-    file('../../client/src/styles.css'),
-    file('../../client/src/App.tsx'),
-    file('../../client/src/MiniApp.tsx')
+    file('../../client/src/styles.css')
   ]);
   assert.match(component, /import \{ createPortal \} from 'react-dom'/);
-  assert.match(component, /<\/div>, document\.body/);
+  assert.match(component, /document\.body/);
   assert.match(component, /className="task-monitor-status-popover task-monitor-status-portal fixed/);
   assert.match(component, /const left = Math\.max\(GUTTER, Math\.min\(/);
-  assert.match(component, /const openAbove = availableBelow < 260 && availableAbove > availableBelow/);
-  assert.match(component, /style=\{\{ left: layout\.left, top: layout\.top, width: layout\.width, maxHeight: layout\.maxHeight \}\}/);
   assert.match(component, /window\.addEventListener\('resize', reposition\)/);
   assert.match(component, /window\.addEventListener\('scroll', reposition, true\)/);
-  assert.match(component, /document\.addEventListener\('pointerdown', onPointerDown\)/);
+  assert.match(component, /document\.addEventListener\('pointerdown', outside\)/);
   assert.match(component, /event\.key === 'Escape'/);
   assert.match(component, /data-status-theme=\{layout\.theme\}/);
   assert.match(css, /task-monitor-status-popover\.task-monitor-status-portal\[data-status-theme='light'\]/);
-  assert.match(css, /max-width: calc\(100vw - 24px\)/);
-  assert.doesNotMatch(css, /\.miniapp-ai-chat-header-task:has\(\.task-monitor-status-anchor\)/);
-  assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
-  assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
+  assert.match(css, /task-monitor-chat-link/);
+  assert.match(css, /task-monitor-button/);
 });
