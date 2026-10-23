@@ -115,7 +115,7 @@ export type ChatMessage = {
   webCitations?: WebCitation[];
   authorName?: string;
   authorColor?: string;
-  messageKind?: 'AI' | 'HUMAN';
+  messageKind?: 'AI' | 'HUMAN' | 'MONITOR_ACTION';
   recipientUserId?: string;
   recipientName?: string;
   generatedDocument?: GeneratedDocument;
