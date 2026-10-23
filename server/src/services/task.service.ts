@@ -4,6 +4,8 @@ import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
 import { notifyCollaborativeSubtaskCompleted, notifyCollaborativeSubtaskCreated } from './collaboration-subtask-notification.service.js';
 import { computeNextSlotRecurrenceDueDate, validateManualRecurrenceSchedule } from './recurrence-slots.service.js';
+import { cancelMonitoringSource, rescheduleMonitoringSource, rescheduleMonitoringTree } from './task-monitoring-schedule.service.js';
+import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
 interface TaskInput {
   title?: string;
@@ -263,7 +265,7 @@ export const taskService = {
 
     const parent = input.parentTaskId ? await prisma.task.findFirst({
       where: { id: input.parentTaskId, AND: [taskAccessWhere(userId)] },
-      select: { collaborationId: true }
+      select: { collaborationId: true, aiMonitoringEnabled: true }
     }) : null;
     if (input.parentTaskId && !parent) throw new Error('Parent task not found');
     // A guessed sphere ID must never attach the new task to another user's sector.
@@ -297,6 +299,10 @@ export const taskService = {
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
     });
+    if (created.aiMonitoringEnabled || parent?.aiMonitoringEnabled) {
+      await rescheduleMonitoringSource(prisma, created.id);
+      signalTaskMonitoringWakeup();
+    }
     console.info('[Task] create', { userId, taskId: created.id, parentTaskId: created.parentTaskId, status: created.status, dueDate: created.dueDate?.toISOString() ?? null });
     if (created.parentTaskId && created.collaborationId) {
       await notifyCollaborativeSubtaskCreated({ subtaskId: created.id, actorUserId: userId });
@@ -537,8 +543,22 @@ export const taskService = {
         });
       }
 
+      if (input.aiMonitoringEnabled !== undefined || input.dueDate !== undefined ||
+          input.status !== undefined || input.parentTaskId !== undefined ||
+          (currentTask.aiMonitoringEnabled && input.recurrenceJson !== undefined)) {
+        if (currentTask.parentTaskId) {
+          await rescheduleMonitoringSource(tx, id);
+        } else if (currentTask.aiMonitoringEnabled || finalTask.aiMonitoringEnabled) {
+          await rescheduleMonitoringTree(tx, id);
+        }
+      }
       return finalTask;
     });
+
+    if (input.aiMonitoringEnabled !== undefined || input.dueDate !== undefined ||
+        input.status !== undefined || input.parentTaskId !== undefined || input.recurrenceJson !== undefined) {
+      signalTaskMonitoringWakeup();
+    }
 
     if (shouldNotifyForeignSubtaskCompletion) {
       await notifyCollaborativeSubtaskCompleted({ subtaskId: id, actorUserId: userId });
@@ -577,6 +597,10 @@ export const taskService = {
       await prisma.collaborativeTaskMember.update({ where: { collaborationId_userId: { collaborationId: taskWithCollaboration.collaborationId, userId } }, data: { isHidden: true } });
     } else {
       await prisma.task.delete({ where: { id } });
+    }
+    if (existing.parentTaskId) {
+      await cancelMonitoringSource(prisma, id);
+      signalTaskMonitoringWakeup();
     }
     console.info('[Task] remove', { userId, taskId: id, parentTaskId: existing?.parentTaskId ?? null, status: existing?.status ?? null, dueDate: existing?.dueDate?.toISOString() ?? null });
   },
