@@ -1704,6 +1704,7 @@ export const aiAssistantService = {
       content: message.content,
       ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
       ...(message.role === 'user' && dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
+      ...(message.messageKind === 'MONITOR_ACTION' ? { messageKind: 'MONITOR_ACTION' as const } : {}),
       ...(message.messageKind === 'HUMAN' ? {
         messageKind: 'HUMAN' as const,
         recipientUserId: message.recipientUserId ?? undefined,
