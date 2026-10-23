@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const read = (p: string) => readFile(new URL(p, import.meta.url), 'utf8');
 
-test('one monitoring event creates only a real general AI reply, not a system notification', async () => {
+test('one monitoring event creates one visible AI reply plus an unread badge-only event', async () => {
   const [delivery, schema, migration] = await Promise.all([
     read('../src/services/task-monitoring-delivery.service.ts'),
     read('../prisma/schema.prisma'),
@@ -13,6 +13,9 @@ test('one monitoring event creates only a real general AI reply, not a system no
   assert.match(delivery, /monitoringEventKey: eventKey/);
   assert.match(delivery, /skipDuplicates: true/);
   assert.doesNotMatch(delivery, /systemNotification\.createMany/);
+  assert.match(delivery, /systemNotification\.create\(/);
+  assert.match(delivery, /eventKey,\s*content:/);
+  assert.match(delivery, /P2002/);
   assert.match(schema, /monitoringEventKey String\? @unique/);
   assert.match(migration, /GeneralAiMessage_monitoringEventKey_key/);
 });
@@ -50,4 +53,35 @@ test('task-chat settings have a single monitoring entry with badges on all clien
   assert.match(popup, /getTaskMonitoringUnread/);
   assert.match(popup, /markTaskMonitoringSeen/);
   assert.match(css, /\.task-monitor-chat-link/);
+});
+
+
+test('monitoring unread events light up the round Quick AI launcher without duplicate chat bubbles', async () => {
+  const [app, delivery] = await Promise.all([
+    read('../../client/src/App.tsx'),
+    read('../src/services/task-monitoring-delivery.service.ts')
+  ]);
+  assert.match(delivery, /systemNotification\.create\(/);
+  assert.match(app, /visibleNotifications = result\.notifications\.filter\(notification => !notification\.eventKey\?\.startsWith\('monitoring:'\)\)/);
+  assert.match(app, /setUnreadSystemNotificationCount\(result\.notifications\.filter\(notification => notification\.readAt == null\)\.length\)/);
+  assert.match(app, /unreadSystemNotificationCount > 0 \? <span/);
+  assert.match(app, /markSystemNotificationsRead\(\)/);
+});
+
+test('expanded task chat has monitoring control to the left of clear button, not floating below icons', async () => {
+  const app = await read('../../client/src/App.tsx');
+  const expanded = app.slice(app.indexOf('focused-task-ai-expanded-panel relative'), app.indexOf('<AiModelChip value={focusedAiModel}', app.indexOf('focused-task-ai-expanded-panel relative')));
+  assert.match(expanded, /<TaskMonitoringStatuses taskId=\{focusedTask\.id\}/);
+  assert.ok(expanded.indexOf('<TaskMonitoringStatuses taskId={focusedTask.id}') < expanded.indexOf('onClick={clearFocusedAiDialog}'));
+  assert.doesNotMatch(expanded, /absolute right-5 top-16/);
+});
+
+test('monitoring panel uses an accessible pill switch instead of a checkbox', async () => {
+  const controls = await read('../../client/src/components/TaskMonitoringControls.tsx');
+  assert.match(controls, /role="switch" aria-checked=\{enabled\}/);
+  assert.match(controls, /disabled=\{!allowed\}/);
+  assert.match(controls, /onClick=\{\(\) => onChange\(!enabled\)\}/);
+  assert.match(controls, /Вкл/);
+  assert.match(controls, /Выкл/);
+  assert.doesNotMatch(controls, /type="checkbox"/);
 });
