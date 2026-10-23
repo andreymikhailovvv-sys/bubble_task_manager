@@ -328,6 +328,10 @@ model Task {
   recurrenceUntil     DateTime?
   overdueAiNotifiedAt DateTime?
   aiNotificationsEnabled Boolean @default(true)
+  aiMonitoringEnabled Boolean @default(false)
+  monitoringStatuses TaskMonitoringStatus[]
+  monitoringTriggers TaskMonitoringTrigger[]
+  monitoringRuns TaskMonitoringRun[]
   telegramNotifiedAt  DateTime?
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
@@ -349,6 +353,49 @@ model Task {
   @@index([parentTaskId])
   @@index([status])
   @@index([collaborationId])
+}
+
+// Human-readable progress milestones. These are distinct from TODO/DONE lifecycle.
+model TaskMonitoringStatus {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  label     String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+model TaskMonitoringTrigger {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     String
+  dueAt      DateTime
+  state      String   @default("pending")
+  question   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([state, dueAt])
+  @@index([taskId, state])
+}
+
+model TaskMonitoringRun {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  eventKey  String   @unique
+  kind      String
+  state     String   @default("pending")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId, createdAt])
+  @@index([state, createdAt])
 }
 
 model CollaborativeTask {
