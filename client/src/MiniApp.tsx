@@ -1389,18 +1389,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     return map;
   }, [tasks]);
 
-  const subtaskProgressByParent = useMemo(() => {
-    const map = new Map<string, { total: number; completed: number }>();
-    for (const task of tasks) {
-      if (!task.parentTaskId) continue;
-      const current = map.get(task.parentTaskId) ?? { total: 0, completed: 0 };
-      current.total += 1;
-      if (task.status === 'DONE') current.completed += 1;
-      map.set(task.parentTaskId, current);
-    }
-    return map;
-  }, [tasks]);
-
   const listTasks = useMemo(() => {
     const selectedSpheres = new Set(listSelectedSphereIds ?? spheres.map((sphere) => sphere.id));
     const isSectorSubsetSelected = listSelectedSphereIds !== null && listSelectedSphereIds.length < spheres.length;
