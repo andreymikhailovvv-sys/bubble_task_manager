@@ -17,7 +17,7 @@ async function callTaskMonitor(userId: string, taskId: string, eventKey: string,
   try {
     run = await prisma.taskMonitoringRun.create({ data: { taskId, userId, eventKey, kind } });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return;
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return false;
     throw error;
   }
   try {
@@ -51,6 +51,7 @@ async function callTaskMonitor(userId: string, taskId: string, eventKey: string,
     await prisma.taskMonitoringRun.update({ where: { id: run.id }, data: { state: 'failed' } });
     console.error('[TaskMonitoring] automatic check failed', { taskId, eventKey, reason: error instanceof Error ? error.message : 'unknown' });
   }
+  return true;
 }
 
 export async function pollTaskMonitoring(now = new Date()) {
@@ -63,7 +64,7 @@ export async function pollTaskMonitoring(now = new Date()) {
       orderBy: { dueAt: 'asc' }, take: remaining
     });
     for (const trigger of triggers) {
-      if (remaining-- <= 0) break;
+      if (remaining <= 0) break;
       const claimed = await prisma.taskMonitoringTrigger.updateMany({
         where: { id: trigger.id, state: 'pending' }, data: { state: 'fired' }
       });
@@ -76,9 +77,9 @@ export async function pollTaskMonitoring(now = new Date()) {
         await prisma.taskMonitoringTrigger.update({ where: { id: trigger.id }, data: { state: 'answered' } });
         continue;
       }
-      await callTaskMonitor(trigger.userId, trigger.taskId, 'trigger:' + trigger.id,
+      if (await callTaskMonitor(trigger.userId, trigger.taskId, 'trigger:' + trigger.id,
         'Время ожидания ответа истекло. Пользователь не ответил на вопрос: ' + trigger.question +
-        '. Вежливо напомни в чате, что осталось уточнить.', 'trigger');
+        '. Вежливо напомни в чате, что осталось уточнить.', 'trigger')) remaining -= 1;
     }
     if (remaining <= 0) return;
     const roots = await prisma.task.findMany({
@@ -87,7 +88,8 @@ export async function pollTaskMonitoring(now = new Date()) {
         OR: [{ dueDate: { lt: now } }, { subtasks: { some: { status: { not: 'DONE' }, dueDate: { lt: now } } } }]
       },
       include: { subtasks: { where: { status: { not: 'DONE' }, dueDate: { lt: now } }, select: { id: true, title: true, dueDate: true } } },
-      take: 24
+      orderBy: { id: 'asc' },
+      take: 200
     });
     for (const root of roots) {
       const events = [
@@ -97,11 +99,11 @@ export async function pollTaskMonitoring(now = new Date()) {
         }))
       ];
       for (const event of events) {
-        if (remaining-- <= 0) return;
+        if (remaining <= 0) return;
         const key = 'overdue:' + root.id + ':' + event.id + ':' + event.due.toISOString();
-        await callTaskMonitor(root.userId, root.id, key,
+        if (await callTaskMonitor(root.userId, root.id, key,
           (event.kind === 'subtask' ? 'Просрочена подзадача: ' : 'Просрочен срок задачи: ') +
-          event.name + '. Дедлайн UTC: ' + event.due.toISOString(), 'overdue');
+          event.name + '. Дедлайн UTC: ' + event.due.toISOString(), 'overdue')) remaining -= 1;
       }
     }
   } finally {
