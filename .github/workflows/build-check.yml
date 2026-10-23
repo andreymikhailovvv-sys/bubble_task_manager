@@ -29,6 +29,8 @@ jobs:
         run: npm ci --include=dev --no-audit --no-fund
       - name: Compile web client and API server
         run: npm run build
+      - name: Verify rectangular bubble packing and sector boundaries
+        run: npm run test -w client -- --test-name-pattern="rectangular|sectors|unpartitioned"
       - name: Verify public SEO pages and first-visit welcome
         run: node --import tsx --test server/test/public-seo-pages.test.ts server/test/welcome-first-visit.test.ts
       - name: Verify task chat answer preservation and immediate-action prompt
