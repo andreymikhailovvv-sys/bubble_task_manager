@@ -570,7 +570,7 @@ export function BubbleField({
   const sectorStroke = 'var(--sector-line)';
 
 
-  const renderBubble = (bubble: (typeof bubbles)[number]) => {
+  const renderBubble = (bubble: (typeof visibleBubbles)[number]) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
