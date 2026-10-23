@@ -754,7 +754,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
     aiNotificationsEnabled: true,
     subtasks: []
   });
+  const [createTaskPendingFiles, setCreateTaskPendingFiles] = useState<File[]>([]);
   const [isCreateTaskSettingsOpen, setIsCreateTaskSettingsOpen] = useState(false);
+  useEffect(() => {
+    if (!isCreateTaskModalOpen) setCreateTaskPendingFiles([]);
+  }, [isCreateTaskModalOpen]);
   const [createTaskNotifyPreset, setCreateTaskNotifyPreset] = useState('0');
   const [createTaskRecurrenceLoading, setCreateTaskRecurrenceLoading] = useState(false);
   const [createTaskRecurrenceNextDueLabel, setCreateTaskRecurrenceNextDueLabel] = useState<string | null>(null);
@@ -2113,8 +2117,25 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           importance: createTaskDraft.importance ?? 3
         });
       }
+      let uploadError: string | null = null;
+      if (createEditorType === 'event') {
+        for (const file of createTaskPendingFiles) {
+          try {
+            await api.createTaskAttachment(createdTask.id, await fileToAttachmentPayload(file));
+          } catch (cause) {
+            uploadError = cause instanceof Error ? cause.message : 'Не удалось загрузить вложение';
+            break;
+          }
+        }
+      }
       await loadData();
       setIsCreateTaskModalOpen(false);
+      if (uploadError) {
+        // The event already exists. Open it instead of leaving the creation
+        // form active, which could otherwise create a duplicate on retry.
+        openTaskModal(createdTask);
+        setError('Событие создано, но не все вложения загрузились: ' + uploadError);
+      }
       setCreateTaskDraft(createEmptyTaskDraft());
       setCreateEditorType('task');
       setIsCreateTaskSettingsOpen(false);
@@ -4403,8 +4424,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     onDragLeave={(event) => { event.preventDefault(); setIsTaskAttachmentDragActive(false); }}
                     onDrop={(event) => { event.preventDefault(); void uploadTaskAttachmentFiles(Array.from(event.dataTransfer.files ?? [])); }}
                     disabled={isUploadingTaskAttachment}
-                    title="Добавить файлы к задаче"
-                    aria-label="Добавить файлы к задаче"
+                    title={openedTask.taskType === 'EVENT' ? 'Добавить файлы к событию' : 'Добавить файлы к задаче'}
+                    aria-label={openedTask.taskType === 'EVENT' ? 'Добавить файлы к событию' : 'Добавить файлы к задаче'}
                   >
                       <Paperclip size={15} />
                   </button>
@@ -5168,7 +5189,11 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     </div>
                   </div>
                 </div>
-                <MiniAppHabitTracker habit={editingHabit} />
+                <MiniAppHabitTracker habit={editingHabit} onHabitChanged={(updated) => {
+                  setHabits((current) => updated.isAutoCompleted
+                    ? current.filter((item) => item.id !== updated.id)
+                    : current.map((item) => item.id === updated.id ? updated : item));
+                }} />
               </div>
               {error ? <p role="alert" className="mt-3 rounded-xl border border-rose-400/50 bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{error}</p> : null}
             </div>
@@ -5269,6 +5294,33 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                     placeholder="Введите описание"
                   />
                 </div>
+                {createEditorType === 'event' ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <label className="miniapp-focus-icon-button inline-flex cursor-pointer items-center justify-center" title="Добавить вложения к событию" aria-label="Добавить вложения к событию">
+                      <Paperclip size={15} />
+                      <input type="file" className="sr-only" multiple accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt"
+                        onChange={(event) => {
+                          const files = Array.from(event.target.files ?? []);
+                          event.target.value = '';
+                          if (!files.length) return;
+                          if (files.some((file) => !(/\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name) || SUPPORTED_AI_FILE_TYPES.has(file.type)))) {
+                            setError('Поддерживаются PDF, DOCX, XLS/XLSX, TXT и изображения.'); return;
+                          }
+                          if (files.some((file) => file.size > MAX_AI_ATTACHMENT_SIZE || file.size === 0)) {
+                            setError('Файл должен быть от 1 байта до 8 МБ.'); return;
+                          }
+                          setError(null);
+                          setCreateTaskPendingFiles((previous) => [...previous, ...files]);
+                        }} />
+                    </label>
+                    {createTaskPendingFiles.map((file, index) => (
+                      <span key={index} className="miniapp-focus-attachment-pill inline-flex max-w-[210px] items-center gap-1 rounded-xl border px-2 py-1 text-[11px]">
+                        <span className="truncate">{file.name}</span>
+                        <button type="button" aria-label={`Убрать ${file.name}`} onClick={() => setCreateTaskPendingFiles((current) => current.filter((_, i) => i !== index))}><X size={12}/></button>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="task-edit-compact-grid mt-4 grid grid-cols-2 gap-2">
                   <CustomSelect
                     value={createTaskDraft.sphereId ?? 'none'}
