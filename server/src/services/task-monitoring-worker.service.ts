@@ -178,7 +178,10 @@ async function armNextDeadline() {
       orderBy: { dueAt: 'asc' }, select: { dueAt: true }
     }),
     prisma.taskMonitoringTrigger.findFirst({
-      where: { state: 'pending' }, orderBy: { dueAt: 'asc' },
+      where: { state: 'pending', task: {
+        aiMonitoringEnabled: true, parentTaskId: null, collaborationId: null,
+        taskType: 'TASK', status: { not: 'DONE' }
+      } }, orderBy: { dueAt: 'asc' },
       select: { dueAt: true }
     })
   ]);
