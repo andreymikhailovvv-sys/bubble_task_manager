@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { taskAccessWhere } from '../lib/task-access.js';
+import { rescheduleMonitoringSource } from './task-monitoring-schedule.service.js';
+import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
 const fields = {
   id: true, userId: true, parentTaskId: true, collaborationId: true,
@@ -233,6 +235,9 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
         });
         if (!updated.count) throw new Error('Задача изменилась во время отката.');
       }
+      // The undo may restore deadlines/statuses without passing through
+      // taskService.update; rebuild their persisted beta events atomically.
+      for (const item of saved.before) await rescheduleMonitoringSource(tx, item.id);
       // Reject a created-note deletion if anything has changed since the AI
       // created it; never silently discard content the user subsequently edited.
       for (const note of noteHistory?.created ?? []) {
@@ -252,6 +257,7 @@ export async function undoStoredProposal(userId: string, proposalId: string) {
       }
       await tx.aiTaskProposal.update({ where: { id: proposalId }, data: { status: 'UNDONE', error: null } });
     });
+    signalTaskMonitoringWakeup();
   } catch (err) {
     await prisma.aiTaskProposal.updateMany({
       where: { id: proposalId, userId, status: 'UNDOING' },
