@@ -1743,7 +1743,7 @@ export const aiAssistantService = {
     });
   },
 
-  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[]; clientRequestId?: string }) => {
+  appendTaskDialogMessages: async (input: { userId: string; taskId: string; messages: ChatMessage[]; clientRequestId?: string; replyReceivedAt?: Date }) => {
     const normalizedMessages = normalizeHistory(input.messages);
     if (normalizedMessages.length === 0) {
       return;
@@ -1768,7 +1768,7 @@ export const aiAssistantService = {
       }))
     });
     if (normalizedMessages.some(message => message.role === 'user')) {
-      await cancelPendingMonitoringTriggers(input.userId, input.taskId);
+      await cancelPendingMonitoringTriggers(input.userId, input.taskId, input.replyReceivedAt);
     }
   },
 
