@@ -1844,6 +1844,10 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       return { taskId: parentTask.id, childCount };
     });
     if (completed) {
+      await prisma.taskMonitoringTrigger.updateMany({
+        where: { taskId: completed.taskId, state: { in: ['pending', 'fired'] } },
+        data: { state: 'cancelled' }
+      });
       if (completed.childCount > 0) {
         await rescheduleMonitoringTree(prisma, completed.taskId);
         signalTaskMonitoringWakeup();
