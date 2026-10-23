@@ -144,8 +144,44 @@ test('compact task cards use themed sector badges rather than left color bars an
   assert.doesNotMatch(list, /borderLeftWidth: '4px'|leftStripeColor|--miniapp-task-stripe/);
   assert.match(list, /onClick=\{\(\) => openTaskModal\(task\)\}/);
   assert.match(list, /onClick=\{\(\) => void completeTask\(task\.id\)\}/);
-  assert.match(list, /hasSubtasks/);
+  // The lower-right subtask progress ring was deliberately removed.
+  assert.doesNotMatch(list, /miniapp-subtask-progress|hasSubtasks|progressPercent/);
   assert.match(styles, /\.miniapp-shell \.miniapp-task-feed \.miniapp-task-list-card/);
   assert.match(styles, /\.miniapp-shell\.miniapp-light \.miniapp-task-feed \.miniapp-task-sector-badge/);
   assert.match(styles, /\.miniapp-shell \.miniapp-task-complete-trigger/);
+});
+
+
+test('white cards and no subtask-progress rings are shared by Telegram and mobile web', async () => {
+  const [mini, css, entry] = await Promise.all([
+    read('../../client/src/MiniApp.tsx'),
+    read('../../client/src/styles.css'),
+    read('../../client/src/main.tsx')
+  ]);
+  assert.match(entry, /isMiniAppRoute\s*\?\s*<MiniApp runtime="telegram"\s*\/>/);
+  assert.match(entry, /isCompactWorkspaceViewport\s*\?\s*<MiniApp runtime="web"\s*\/>/);
+  const list = mini.slice(mini.indexOf('{listTasks.map((task) => {'), mini.indexOf('          </div>\n          </div>\n        ) : (', mini.indexOf('{listTasks.map((task) => {')));
+  assert.doesNotMatch(list, /miniapp-subtask-progress|hasSubtasks|progressPercent/);
+  assert.match(css, /body\[data-theme='light'\] \.miniapp-shell \.miniapp-task-feed \.miniapp-task-list-card,[\s\S]*?background: #ffffff !important/);
+  assert.match(css, /background-image: none !important/);
+});
+
+test('desktop list cards match the premium sector-chip design without red overdue surfaces', async () => {
+  const [app, css] = await Promise.all([
+    read('../../client/src/App.tsx'),
+    read('../../client/src/styles.css')
+  ]);
+  const list = app.slice(app.indexOf('{activeListTasks.map((task) => {'), app.indexOf('            </ul>', app.indexOf('{activeListTasks.map((task) => {')));
+  assert.match(list, /list-task-item-premium/);
+  assert.match(list, /list-task-sector-badge/);
+  assert.match(list, /--desktop-list-sector-color/);
+  assert.match(list, /taskSphere\?\.name \?\? 'Без сектора'/);
+  assert.doesNotMatch(list, /borderLeftWidth: '4px'|borderLeftColor: sphereColor|list-task-sector-icon/);
+  assert.match(list, /list-task-deadline-overdue/);
+  assert.match(list, /onClick=\{\(\) => \{ if \(!isClosingTask\) openTaskWithFocusGuard\(task\)/);
+  assert.match(list, /renderWorkspaceAttachmentIndicator\(task\)/);
+  assert.match(css, /\.list-mode-canvas \.list-task-item-premium\.list-task-item-overdue::before/);
+  assert.match(css, /\.list-mode-canvas \.list-task-item-premium\.list-task-item-overdue,[\s\S]*?background: linear-gradient/);
+  assert.match(css, /body\[data-theme='light'\] \.list-mode-canvas \.list-task-item-premium\.list-task-item-overdue,[\s\S]*?background: #ffffff !important/);
+  assert.match(css, /\.list-mode-canvas \.list-task-item-premium \.list-task-deadline-overdue \{[\s\S]*?color: #fb7185/);
 });

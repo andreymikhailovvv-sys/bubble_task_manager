@@ -5884,7 +5884,7 @@ ${allContext}`,
                   <motion.li
                     key={task.id}
                     layout
-                    className={`list-task-item relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
+                    className={`list-task-item list-task-item-premium relative flex cursor-pointer items-start gap-3 overflow-hidden rounded-lg border px-3 py-2 text-sm transition ${isClosingTask ? 'list-task-item-completing ring-1 ring-emerald-300/70' : ''} ${
                       hasOverdueState
                         ? 'list-task-item-overdue'
                         : hasReminderState
@@ -5897,10 +5897,7 @@ ${allContext}`,
                                 ? 'list-task-item-ai'
                                 : ''
                     }`}
-                    style={{
-                      borderLeftWidth: '4px',
-                      borderLeftColor: sphereColor
-                    }}
+                    style={{ '--desktop-list-sector-color': sphereColor } as CSSProperties}
                     title={taskSphere?.name ?? 'Без сектора'}
                     onContextMenu={(event) => {
                       event.preventDefault();
@@ -5926,6 +5923,10 @@ ${allContext}`,
                     />
                     {isClosingTask ? <Check size={14} className="timeline-task-chip-success mt-1 shrink-0" /> : null}
                     <div className="min-w-0 flex-1">
+                      <span className="list-task-sector-badge mb-1.5 inline-flex max-w-[min(100%,15rem)] items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" title={taskSphere?.name ?? 'Без сектора'}>
+                        <SphereIcon size={12} className="shrink-0" aria-hidden="true" />
+                        <span className="truncate">{taskSphere?.name ?? 'Без сектора'}</span>
+                      </span>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <span className={`min-w-0 flex-1 truncate text-base font-semibold ${task.status === 'DONE' || isClosingTask ? 'timeline-task-chip-completed text-subtle line-through opacity-70 decoration-2' : 'text-primary'}`}>
                           <LinkifiedText text={task.title} stopPropagationOnLinkClick />
@@ -5938,8 +5939,9 @@ ${allContext}`,
                           <LinkifiedText text={noteHtmlToPlainText(task.description ?? '', { trimEnd: true })} stopPropagationOnLinkClick />
                         </p>
                       ) : null}
-                      <p className={`mt-1 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
-                        Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}
+                      <p className={`list-task-deadline mt-1 inline-flex min-w-0 items-center gap-1.5 text-[11px] ${hasOverdueState ? 'list-task-deadline-overdue' : 'text-subtle'}`}>
+                        <CalendarDays size={13} className="shrink-0" aria-hidden="true" />
+                        <span className="min-w-0 truncate">Дедлайн: {formatTaskDueDate(task.dueDate)}{task.dueDate ? ` · ${formatDeadlineLeft(task.dueDate)}` : ''}</span>
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -5962,17 +5964,6 @@ ${allContext}`,
                           {task.importance}
                         </span>
                       )}
-                      <span
-                        className="list-task-sector-icon inline-flex h-5 w-5 items-center justify-center rounded-full border"
-                        style={{
-                          borderColor: sphereColor,
-                          backgroundColor: hexToRgba(sphereColor, effectiveThemeMode === 'light' ? 0.36 : 0.26) ?? 'rgba(100,116,139,0.25)',
-                          color: sphereColor
-                        }}
-                        title={taskSphere?.name ?? 'Без сектора'}
-                      >
-                        <SphereIcon size={12} />
-                      </span>
                     </div>
                   </motion.li>
                 );

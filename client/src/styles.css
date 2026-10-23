@@ -9933,3 +9933,92 @@ body[data-theme='dark'] .workspace-global-search-panel-mobile {
   .miniapp-shell .miniapp-task-feed .miniapp-task-list-card,
   .miniapp-shell .miniapp-task-complete-ring { transition: none; }
 }
+
+
+/* Premium list task cards: desktop workspace and compact mobile surfaces.
+   The deadline alone communicates overdue state; cards stay neutral. */
+.list-mode-canvas .list-task-item-premium {
+  height: auto;
+  min-height: 7.3rem;
+  padding: .9rem 1rem;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, rgba(26, 40, 61, .98), rgba(20, 34, 55, .98));
+  border-color: rgba(110, 133, 164, .29);
+  box-shadow: 0 9px 24px rgba(2, 6, 23, .17), inset 0 1px 0 rgba(255, 255, 255, .045);
+}
+.list-mode-canvas .list-task-item-premium:hover {
+  border-color: rgba(147, 164, 190, .48);
+  background: linear-gradient(145deg, rgba(30, 45, 68, .99), rgba(24, 38, 59, .98));
+  box-shadow: 0 12px 26px rgba(2, 6, 23, .21);
+}
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium,
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium:hover {
+  border-color: rgba(216, 226, 239, .9) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 22px rgba(25, 48, 84, .07) !important;
+}
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium:hover {
+  border-color: rgba(186, 202, 226, .9) !important;
+  box-shadow: 0 12px 26px rgba(25, 48, 84, .1) !important;
+}
+.list-mode-canvas .list-task-item-premium.list-task-item-overdue,
+.list-mode-canvas .list-task-item-premium.list-task-item-subtask-overdue {
+  border-color: rgba(110, 133, 164, .29);
+  background: linear-gradient(145deg, rgba(26, 40, 61, .98), rgba(20, 34, 55, .98));
+  box-shadow: 0 9px 24px rgba(2, 6, 23, .17), inset 0 1px 0 rgba(255, 255, 255, .045);
+}
+.list-mode-canvas .list-task-item-premium.list-task-item-overdue:hover,
+.list-mode-canvas .list-task-item-premium.list-task-item-subtask-overdue:hover {
+  border-color: rgba(147, 164, 190, .48);
+  background: linear-gradient(145deg, rgba(30, 45, 68, .99), rgba(24, 38, 59, .98));
+}
+.list-mode-canvas .list-task-item-premium.list-task-item-overdue::before,
+.list-mode-canvas .list-task-item-premium.list-task-item-subtask-overdue::before {
+  opacity: 0;
+  background: none;
+}
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium.list-task-item-overdue,
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium.list-task-item-subtask-overdue,
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium.list-task-item-overdue:hover,
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium.list-task-item-subtask-overdue:hover {
+  border-color: rgba(216, 226, 239, .9) !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 22px rgba(25, 48, 84, .07) !important;
+}
+.list-mode-canvas .list-task-sector-badge {
+  border: 1px solid color-mix(in srgb, var(--desktop-list-sector-color) 32%, transparent);
+  background: color-mix(in srgb, var(--desktop-list-sector-color) 21%, #14243b);
+  color: color-mix(in srgb, var(--desktop-list-sector-color) 72%, #ffffff);
+}
+body[data-theme='light'] .list-mode-canvas .list-task-sector-badge {
+  border-color: color-mix(in srgb, var(--desktop-list-sector-color) 18%, #ffffff);
+  background: color-mix(in srgb, var(--desktop-list-sector-color) 14%, #ffffff);
+  color: color-mix(in srgb, var(--desktop-list-sector-color) 76%, #18263d);
+}
+.list-mode-canvas .list-task-item-premium .list-task-deadline {
+  max-width: 100%;
+}
+.list-mode-canvas .list-task-item-premium .list-task-deadline-overdue {
+  color: #fb7185;
+  font-weight: 700;
+}
+body[data-theme='light'] .list-mode-canvas .list-task-item-premium .list-task-deadline-overdue {
+  color: #e11d48;
+}
+/* Light-mode mobile surfaces must be genuinely white, regardless of whether
+   body[data-theme] or the Mini App's own theme class is authoritative. */
+body[data-theme='light'] .miniapp-shell .miniapp-task-feed .miniapp-task-list-card,
+.miniapp-shell.miniapp-light .miniapp-task-feed .miniapp-task-list-card {
+  background: #ffffff !important;
+  background-image: none !important;
+  background-color: #ffffff !important;
+  border-color: rgba(216, 226, 239, .82) !important;
+  box-shadow: 0 9px 24px rgba(25, 48, 84, .07) !important;
+}
+body[data-theme='light'] .miniapp-shell .miniapp-task-feed .miniapp-task-list-card:hover,
+.miniapp-shell.miniapp-light .miniapp-task-feed .miniapp-task-list-card:hover {
+  background: #ffffff !important;
+  background-image: none !important;
+}
