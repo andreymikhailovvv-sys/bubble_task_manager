@@ -10061,3 +10061,49 @@ body[data-theme='light'] .miniapp-shell .miniapp-task-feed .miniapp-task-list-ca
 .task-monitor-status-portal .task-monitor-status-timeline > div:last-child {
   padding-bottom: 2px;
 }
+
+/* The task AI monitoring control is intentionally calm in both themes. */
+.task-monitor-button {
+  border-color: rgba(100, 160, 180, .32);
+  color: #bbd7e1;
+  background: rgba(59, 92, 110, .19);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.task-monitor-button:hover { background: rgba(78, 120, 142, .27); }
+body[data-theme='light'] .task-monitor-button,
+.miniapp-light .task-monitor-button {
+  border-color: rgba(80, 132, 154, .24);
+  color: #396375;
+  background: #eaf2f5;
+}
+body[data-theme='light'] .task-monitor-button:hover,
+.miniapp-light .task-monitor-button:hover { background: #e1edf2; }
+.task-monitor-unread {
+  background: #e2edf1;
+  border: 1px solid #8ba8b5;
+  color: #274657;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .16);
+}
+.task-monitor-status-portal .task-monitor-panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148,163,184,.45) transparent;
+}
+.task-monitor-status-portal .task-monitoring-settings { background: rgba(110, 133, 158, .07); }
+.task-monitor-status-portal[data-status-theme='light'] .task-monitoring-settings { background: #f7fafc; }
+.task-monitor-status-portal .task-monitor-add { border-color: rgba(116, 145, 163, .32); color: #a7c8d5; }
+.task-monitor-status-portal[data-status-theme='light'] .task-monitor-add { color: #32667c; }
+.task-monitor-chat-link {
+  color: #d8e8ef;
+  border-color: rgba(123, 169, 190, .35);
+  background: #33485c;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+.task-monitor-chat-link:hover { background: #3c5368; }
+body[data-theme='light'] .task-monitor-chat-link,
+.miniapp-light .task-monitor-chat-link {
+  color: #254f68;
+  border-color: #c5d9e4;
+  background: #e6f1f6;
+}
+body[data-theme='light'] .task-monitor-chat-link:hover,
+.miniapp-light .task-monitor-chat-link:hover { background: #d7e9f2; }
