@@ -273,6 +273,7 @@ export const aiController = {
         res.status(403).json({ error: 'Подтверждение Telegram допустимо только из Планировыча' });
         return;
       }
+      const taskReplyReceivedAt = new Date();
       const { question, userMessage } = req.body as {
         question?: string;
         userMessage?: string;
@@ -355,7 +356,8 @@ export const aiController = {
           userId: req.user!.id,
           taskId: req.params.id,
           messages: [{ role: 'user', content: normalizedUserMessage }],
-          clientRequestId: req.body?.clientRequestId
+          clientRequestId: req.body?.clientRequestId,
+          replyReceivedAt: taskReplyReceivedAt
         });
       }
       await aiAssistantService.appendTaskDialogAssistantMessage({
