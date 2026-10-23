@@ -88,3 +88,24 @@ export async function recoverMonitoredDeadlinesOnBoot() {
   }
   signalTaskMonitoringWakeup();
 }
+
+/** For legacy bulk and Telegram handlers that write Task rows directly. */
+export async function refreshMonitoringAfterExternalWrite(sourceIds: readonly string[]) {
+  let changed = false;
+  for (const sourceId of new Set(sourceIds)) {
+    const source = await prisma.task.findUnique({
+      where: { id: sourceId },
+      select: { id: true, parentTaskId: true, aiMonitoringEnabled: true }
+    });
+    if (!source) continue;
+    const root = source.parentTaskId
+      ? await prisma.task.findUnique({
+          where: { id: source.parentTaskId }, select: { aiMonitoringEnabled: true }
+        })
+      : source;
+    if (!root?.aiMonitoringEnabled) continue; // ordinary tasks remain untouched
+    await rescheduleMonitoringSource(prisma, sourceId);
+    changed = true;
+  }
+  if (changed) signalTaskMonitoringWakeup();
+}
