@@ -1071,6 +1071,7 @@ export function TaskEditor({
                   </div>
                 )) : null}
               </div>
+              {(isEventEditor || isSubtask) && aiError ? <p role="alert" className="mt-2 text-xs text-rose-500">{aiError}</p> : null}
               <input
                 ref={aiAttachmentInputRef}
                 type="file"
