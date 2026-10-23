@@ -8263,7 +8263,7 @@ ${allContext}`,
                 <div key={`message-${item.message.id}`} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user' : 'quick-ai-chat-message-assistant'}`}>
                   <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}
                   {item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
-                    <button type="button" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-400/30 px-2.5 py-1 text-xs font-semibold text-violet-500"
+                    <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
                       onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
                       <ArrowUpRight size={12} /> Ответить в чате задачи
                     </button>
