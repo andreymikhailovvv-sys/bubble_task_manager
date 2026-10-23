@@ -18,6 +18,7 @@ import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
 import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
 import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
+import { pollTaskMonitoring } from './services/task-monitoring-worker.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -121,6 +122,11 @@ setInterval(() => {
     console.error('[Notifications] notifyShiningTasks failed', error);
   });
 }, telegramPollIntervalMs).unref();
+
+// Monitoring remains silent until a task owner opts into beta.
+setInterval(() => {
+  void pollTaskMonitoring().catch(error => console.error('[TaskMonitoring] poll failed', error));
+}, 60_000).unref();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {
