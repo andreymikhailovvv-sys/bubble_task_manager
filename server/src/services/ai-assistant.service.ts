@@ -20,6 +20,7 @@ import { calculateAffordableOutputTokens, calculateMaximumRequestCreditsMilli, c
 import { buildTaskChatContext, isTaskChatContextV2Enabled, type TaskChatContextDiagnostics } from './task-chat-context.service.js';
 import { formatTaskChatMemory, isTaskChatMemoryEnabled, resolveTaskChatActiveHistoryLimits, TASK_CHAT_MEMORY_TARGET_MAX_MESSAGES, TASK_CHAT_MEMORY_TARGET_TOKEN_BUDGET, TASK_CHAT_MEMORY_TRIGGER_MAX_MESSAGES, TASK_CHAT_MEMORY_TRIGGER_TOKEN_BUDGET, updateTaskChatMemoryIfNeeded, type TaskChatContextMessage } from './task-chat-memory.service.js';
 import { TASK_MONITOR_FOLLOWUP_TOOL, createMonitoringTrigger } from './task-monitoring-trigger.service.js';
+import { TASK_MONITOR_ACTION_TOOLS, executeTaskMonitoringAction } from './task-monitoring-actions.service.js';
 import { cancelPendingMonitoringTriggers } from './task-monitoring.service.js';
 import { executeTaskContextLookup, TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS, TASK_CHAT_CONTEXT_MAX_TOOL_CALLS, TASK_CHAT_STORED_FILE_FETCH_LIMIT, TASK_CONTEXT_LOOKUP_TOOL, type TaskContextLookupArguments } from './task-chat-context-lookup.service.js';
 import type { TaskAiProgressStatus } from './task-ai-progress.js';
@@ -255,7 +256,7 @@ export function createTaskChatOpenAiPayload(model: string, messages: TaskChatPro
       return { type: message.type, call_id: message.call_id, output: message.output };
     }),
     text: { format: TASK_ASSISTANT_RESPONSE_FORMAT },
-    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
+    ...(allowTools ? { tools: [TASK_CONTEXT_LOOKUP_TOOL, AI_IMAGE_TOOL, AI_READ_FILE_TOOL, AI_EDIT_FILE_TOOL, TELEGRAM_PREPARE_SEND_TOOL, TELEGRAM_REQUEST_READ_TOOL, ...(options?.monitoringTools ? [TASK_MONITOR_FOLLOWUP_TOOL, ...TASK_MONITOR_ACTION_TOOLS] : []), ...(allowWebSearch ? [AI_CHAT_WEB_SEARCH_TOOL] : [])], tool_choice: 'auto', parallel_tool_calls: false, ...(allowWebSearch ? { max_tool_calls: 1 } : {}) } : { tool_choice: 'none' }),
     ...(options?.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
     ...(maxOutputTokens === undefined ? {} : { max_output_tokens: maxOutputTokens })
   };
@@ -1704,6 +1705,7 @@ export const aiAssistantService = {
       content: message.content,
       ...(message.role === 'user' && message.user ? { authorName: message.user.name || message.user.username || 'Участник' } : {}),
       ...(message.role === 'user' && dialogTask.collaboration ? { authorColor: dialogTask.collaboration.members.find((member) => member.userId === message.userId)?.color ?? '#8b5cf6' } : {}),
+      ...(message.messageKind === 'MONITOR_ACTION' ? { messageKind: 'MONITOR_ACTION' as const } : {}),
       ...(message.messageKind === 'HUMAN' ? {
         messageKind: 'HUMAN' as const,
         recipientUserId: message.recipientUserId ?? undefined,
@@ -1904,6 +1906,13 @@ export const aiAssistantService = {
 
     const monitoringEnabled = task.aiMonitoringEnabled === true && task.userId === input.userId &&
       !task.parentTaskId && !task.collaborationId && task.taskType === 'TASK';
+    const monitoringStatuses = monitoringEnabled
+      ? await prisma.taskMonitoringStatus.findMany({
+          where: { taskId: task.id, userId: input.userId },
+          orderBy: { createdAt: 'desc' }, take: 12,
+          select: { label: true, detail: true, createdAt: true }
+        })
+      : [];
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
     const history = useContextV2 ? input.history : normalizeHistory(input.history);
     const question = input.question.trim();
@@ -2007,8 +2016,12 @@ export const aiAssistantService = {
       },
       { role: 'user', content: `Контекст задачи:\n${taskContext}` },
       ...(monitoringEnabled ? [{ role: 'system' as const,
-        content: 'Владелец включил beta-автомониторинг этой задачи. Если ожидаешь ответ от пользователя, можешь использовать set_task_monitoring_trigger. В остальных задачах такого инструмента нет. Отвечай по существу, избегай навязчивых повторений. Не заявляй о выполненных внешних действиях, пока они не подтверждены.' }] : []),
+        content: 'Владелец включил beta-автомониторинг этой задачи. Можно использовать set_task_monitoring_trigger для ожидания ответа, create_monitoring_subtask для конкретных необходимых действий с дедлайном, change_monitoring_importance при обоснованной переоценке и add_monitoring_status для фиксации проверенного результата. Не создавай много лишних подзадач и не меняй важность ради активности. Каждый вызов разрешён сервером только в beta-режиме. В остальных задачах инструментов нет. Не заявляй о выполненных внешних действиях без подтверждения.' }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
+      ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
+        'История статусов задачи (от последнего к первому):\\n' +
+        monitoringStatuses.map(status => status.createdAt.toISOString() + ' — ' + status.label +
+          (status.detail ? ' (' + status.detail + ')' : '')).join('\\n') }] : []),
       ...(memoryReady ? [{ role: 'user' as const, content: formatTaskChatMemory(memoryResult!.memory!.summary) }] : []),
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),
@@ -2092,6 +2105,7 @@ export const aiAssistantService = {
         const loadedSubtaskIds = new Set<string>();
         let rawAnswer = '';
         let toolCallsExecuted = 0;
+      let monitoringActionsExecuted = 0;
         for (let modelProviderCallIndex = 0; modelProviderCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS && providerCallIndex < TASK_CHAT_CONTEXT_MAX_PROVIDER_CALLS; modelProviderCallIndex += 1) {
           providerCallIndex += 1;
           const isForcedFinalRound = toolCallsExecuted >= TASK_CHAT_CONTEXT_MAX_TOOL_CALLS;
@@ -2199,6 +2213,19 @@ export const aiAssistantService = {
             try { args = JSON.parse(call.arguments) as TaskContextLookupArguments; } catch {
               providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify({ ok: false, code: 'INVALID_ARGUMENTS' }) });
               console.info('[AI task chat round] completed', { requestId, taskId: input.taskId, userId: input.userId, providerCallIndex, toolCallsExecuted, hadToolCall: true, toolOperation: null, inputTokens: usage?.input_tokens ?? null, outputTokens: usage?.output_tokens ?? null, actualCreditsMilli: roundCost, isForcedFinalRound });
+              continue;
+            }
+            if (TASK_MONITOR_ACTION_TOOLS.some(tool => tool.name === call.name)) {
+              toolCallsExecuted += 1;
+              monitoringActionsExecuted += 1;
+              const action = monitoringEnabled && monitoringActionsExecuted <= 3
+                ? await executeTaskMonitoringAction({
+                  userId: input.userId, taskId: input.taskId, requestId,
+                  callId: call.call_id, name: call.name, args
+                })
+                : { ok: false, code: monitoringEnabled ? 'ACTION_LIMIT_REACHED' : 'MONITORING_DISABLED' };
+              providerInput.push({ type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(action) });
+              input.onProgress?.('forming_answer');
               continue;
             }
             if (call.name === 'set_task_monitoring_trigger') {
