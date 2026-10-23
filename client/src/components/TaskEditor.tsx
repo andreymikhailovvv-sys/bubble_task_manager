@@ -45,6 +45,7 @@ type Props = {
   onSave: (
     payload: Partial<Task>,
     draftSubtasks?: Array<Pick<Task, "title" | "description">>,
+    eventAttachments?: ChatAttachmentPayload[],
   ) => Promise<void>;
   onAutoSave?: (payload: Partial<Task>) => Promise<void>;
   onSphereChange?: (sphereId: string | null) => void;
@@ -348,10 +349,11 @@ export function TaskEditor({
   const [placeSuggestions, setPlaceSuggestions] = useState<string[]>([]);
   const [titleRows, setTitleRows] = useState(1);
   const [isCalendarExportOpen, setIsCalendarExportOpen] = useState(false);
-  const [subtaskAttachments, setSubtaskAttachments] = useState<TaskAttachment[]>([]);
-  const [isUploadingSubtaskAttachment, setIsUploadingSubtaskAttachment] = useState(false);
+  const [editorAttachments, setEditorAttachments] = useState<TaskAttachment[]>([]);
+  const [pendingEventFiles, setPendingEventFiles] = useState<File[]>([]);
+  const [isUploadingEditorAttachment, setIsUploadingEditorAttachment] = useState(false);
   const aiAttachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const subtaskAttachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const editorAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
   const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autosaveSignatureRef = useRef<string | null>(null);
@@ -526,14 +528,14 @@ export function TaskEditor({
     setForm((previous) => ({ ...previous, description }));
 
   useEffect(() => {
-    setSubtaskAttachments([]);
-    if (!task?.id || !task.parentTaskId) return;
+    setEditorAttachments([]);
+    if (!task?.id || (!task.parentTaskId && !isEventEditor)) return;
     let isCancelled = false;
     void api.getTaskAttachments(task.id).then((attachments) => {
-      if (!isCancelled) setSubtaskAttachments(attachments);
+      if (!isCancelled) setEditorAttachments(attachments);
     });
     return () => { isCancelled = true; };
-  }, [task?.id, task?.parentTaskId]);
+  }, [task?.id, task?.parentTaskId, isEventEditor]);
 
   useLayoutEffect(() => {
     const textarea = titleInputRef.current;
@@ -601,31 +603,36 @@ export function TaskEditor({
     });
   };
 
-  const uploadSubtaskAttachments = async (event: ChangeEvent<HTMLInputElement>) => {
+  const uploadEditorAttachments = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!task?.id || !isSubtask || files.length === 0) return;
+    if (files.length === 0 || (!isSubtask && !isEventEditor)) return;
     const normalized = files.filter((file) => SUPPORTED_AI_FILE_TYPES.has(file.type) || /\.(pdf|docx|xlsx?|png|jpe?g|webp|gif|txt)$/i.test(file.name));
-    if (normalized.length !== files.length) { setAiError("Для подзадачи можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения."); return; }
+    if (normalized.length !== files.length) { setAiError("Для события или подзадачи можно прикреплять PDF, DOCX, XLS/XLSX, TXT и изображения."); return; }
     const oversized = normalized.find((file) => file.size > MAX_AI_ATTACHMENT_SIZE);
     if (oversized) { setAiError(`Файл "${oversized.name}" превышает лимит 8MB.`); return; }
-    setIsUploadingSubtaskAttachment(true);
+    if (!task?.id) {
+      setPendingEventFiles((previous) => [...previous, ...normalized]);
+      setAiError(null);
+      return;
+    }
+    setIsUploadingEditorAttachment(true);
     try {
       for (const file of normalized) await api.createTaskAttachment(task.id, await fileToAttachmentPayload(file));
-      setSubtaskAttachments(await api.getTaskAttachments(task.id));
+      setEditorAttachments(await api.getTaskAttachments(task.id));
       setAiError(null);
       // Subtask attachment upload is complete; no disruptive blocking alert.
     } catch (error) {
-      setAiError(error instanceof Error ? error.message : "Не удалось загрузить файл к подзадаче");
+      setAiError(error instanceof Error ? error.message : "Не удалось загрузить вложение");
     } finally {
-      setIsUploadingSubtaskAttachment(false);
+      setIsUploadingEditorAttachment(false);
     }
   };
 
-  const removeSubtaskAttachment = async (attachmentId: string) => {
+  const removeEditorAttachment = async (attachmentId: string) => {
     if (!task?.id) return;
     await api.deleteTaskAttachment(task.id, attachmentId);
-    setSubtaskAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+    setEditorAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
   const submitAiGenerate = async () => {
@@ -806,7 +813,14 @@ export function TaskEditor({
     }
     if (isRecurring && (recurrenceError || !form.recurrenceJson || (recurrenceMethod === "ai" && !recurrenceAiReady))) { setRecurrenceError("Сначала настройте расписание повторения."); return; }
     setTitleError(null);
-    await onSave(form, draftSubtasks);
+    try {
+      const eventAttachments = isEventEditor && pendingEventFiles.length
+        ? await Promise.all(pendingEventFiles.map((file) => fileToAttachmentPayload(file)))
+        : [];
+      await onSave(form, draftSubtasks, eventAttachments);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'Не удалось сохранить событие с вложениями');
+    }
   };
 
   const addDraftSubtask = () => {
@@ -1040,20 +1054,20 @@ export function TaskEditor({
                 <button
                   type="button"
                   className="focused-task-icon-button focused-task-calendar-like-button inline-flex h-8 w-8 items-center justify-center rounded-full border transition"
-                  onClick={() => (isSubtask ? subtaskAttachmentInputRef : aiAttachmentInputRef).current?.click()}
-                  disabled={isSubtask && (!task?.id || isUploadingSubtaskAttachment)}
+                  onClick={() => (isSubtask || isEventEditor ? editorAttachmentInputRef : aiAttachmentInputRef).current?.click()}
+                  disabled={(isSubtask && !task?.id) || isUploadingEditorAttachment}
                   title="Добавить файл"
                 >
                   <Paperclip size={15} />
                 </button>
-                <AiAttachmentTiles files={aiPendingFiles} onRemove={(file) =>
-                  setAiPendingFiles((prev) => prev.filter((item) => item !== file))
+                <AiAttachmentTiles files={isEventEditor ? pendingEventFiles : aiPendingFiles} onRemove={(file) =>
+                  isEventEditor ? setPendingEventFiles((prev) => prev.filter((item) => item !== file)) : setAiPendingFiles((prev) => prev.filter((item) => item !== file))
                 } busy={isGeneratingByAi} />
 
-                {isSubtask ? subtaskAttachments.map((attachment) => (
+                {(isSubtask || isEventEditor) && task?.id ? editorAttachments.map((attachment) => (
                   <div key={attachment.id} className="task-attachment-pill inline-flex max-w-[220px] items-center gap-1 rounded-full border px-2 py-1 text-[11px]">
                     <a className="inline-flex min-w-0 items-center gap-1" href={api.getTaskAttachmentDownloadUrl(task!.id, attachment.id)} download={attachment.name}><Paperclip size={11} /><span className="truncate">{attachment.name}</span></a>
-                    <button type="button" className="task-attachment-remove rounded-md p-0.5" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeSubtaskAttachment(attachment.id)}><X size={11} /></button>
+                    <button type="button" className="task-attachment-remove rounded-md p-0.5" aria-label={`Удалить ${attachment.name}`} onClick={() => void removeEditorAttachment(attachment.id)}><X size={11} /></button>
                   </div>
                 )) : null}
               </div>
@@ -1065,7 +1079,7 @@ export function TaskEditor({
                 className="hidden"
                 onChange={handleAiFileSelect}
               />
-              <input ref={subtaskAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt" multiple className="hidden" onChange={uploadSubtaskAttachments} />
+              <input ref={editorAttachmentInputRef} type="file" accept=".pdf,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.gif,.txt" multiple className="hidden" onChange={uploadEditorAttachments} />
               {isSubtask && parentTaskTitle && onOpenParentTask ? (
                 <button
                   type="button"
