@@ -11,6 +11,8 @@ import { telegramService } from './services/telegram.service.js';
 import { prisma } from './db/prisma.js';
 import { reconcilePendingCreditPurchases } from './services/credit-purchase-recovery.service.js';
 import { createAiCheckup } from './services/ai-checkup-delivery.service.js';
+import { resolveAiCheckupSchedules } from './lib/ai-checkup-schedules.js';
+import { Prisma } from '@prisma/client';
 import { telegramUpdateQueue, TelegramUpdateWorker } from './services/telegram-update-queue.service.js';
 import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
@@ -121,8 +123,6 @@ setInterval(() => {
 }, telegramPollIntervalMs).unref();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
-const DEFAULT_CHECKUP_TIME = '10:00';
-const CHECKUP_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {
   const format = (targetTimeZone: string) => new Intl.DateTimeFormat('en-CA', {
     timeZone: targetTimeZone,
@@ -153,33 +153,38 @@ setInterval(() => {
     const now = new Date();
     const users = await prisma.user.findMany({
       where: { morningAiCheckupEnabled: true },
-      select: { id: true, timeZone: true, morningAiCheckupTime: true, lastMorningAiCheckupDate: true }
+      select: { id: true, timeZone: true, morningAiCheckupTime: true, lastMorningAiCheckupDate: true, aiCheckupSchedules: true }
     });
 
     for (const user of users) {
       const timeZone = user.timeZone || 'Europe/Moscow';
-      const configuredTime = CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime) ? user.morningAiCheckupTime : DEFAULT_CHECKUP_TIME;
-      const slot = formatLocalCheckupSlot(now, timeZone);
-      if (slot.time !== configuredTime || user.lastMorningAiCheckupDate === slot.dateKey) continue;
-
-      const claimed = await prisma.user.updateMany({
-        where: {
-          id: user.id,
-          morningAiCheckupEnabled: true,
-          OR: [{ lastMorningAiCheckupDate: null }, { NOT: { lastMorningAiCheckupDate: slot.dateKey } }]
-        },
-        data: { lastMorningAiCheckupDate: slot.dateKey }
-      });
-      if (claimed.count === 0) continue;
-
-      try {
-        await createAiCheckup({
-          userId: user.id,
-          requestId: 'daily-checkup:' + slot.dateKey,
-          sendTelegram: true
-        });
-      } catch (error) {
-        console.error(`[AI] daily checkup failed for userId=${user.id}`, error);
+      const local = formatLocalCheckupSlot(now, timeZone);
+      const schedules = resolveAiCheckupSchedules(user.aiCheckupSchedules, user.morningAiCheckupTime);
+      for (const schedule of schedules) {
+        if (schedule.time !== local.time) continue;
+        // Preserve the legacy one-per-day claim for users whose settings have
+        // not yet migrated to the multi-checkup editor.
+        if (schedule.id === 'legacy' && user.lastMorningAiCheckupDate === local.dateKey) continue;
+        try {
+          await prisma.aiCheckupRun.create({
+            data: { userId: user.id, scheduleId: schedule.id, dateKey: local.dateKey }
+          });
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue;
+          throw error;
+        }
+        try {
+          await createAiCheckup({
+            userId: user.id,
+            requestId: 'daily-checkup:' + local.dateKey + ':' + schedule.id,
+            instructions: schedule.instructions,
+            sendTelegram: true
+          });
+        } catch (error) {
+          // Retain the unique claim if generation fails. An automatic retry
+          // in the same minute could otherwise duplicate paid AI requests.
+          console.error(`[AI] scheduled checkup failed for userId=${user.id} scheduleId=${schedule.id}`, error);
+        }
       }
     }
   })().catch((error) => {
