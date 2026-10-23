@@ -21,6 +21,7 @@ export type Task = {
   recurrenceSummary?: string | null;
   recurrenceUntil?: string | null;
   aiNotificationsEnabled?: boolean;
+  aiMonitoringEnabled?: boolean;
   importance: number;
   urgency: number;
   priorityScore: number;
