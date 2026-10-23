@@ -806,6 +806,29 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(0);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [monitoringNotificationToast, setMonitoringNotificationToast] = useState<{ id: string; taskId: string; content: string } | null>(null);
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let alive = true;
+    let baselineLoaded = false;
+    const known = new Set<string>();
+    const refreshMonitoringNotifications = async () => {
+      try {
+        const feed = await api.getSystemNotifications();
+        if (!alive) return;
+        const recent = feed.notifications.filter(item => item.eventKey?.startsWith('monitoring:') && item.taskId);
+        const unseen = baselineLoaded ? recent.filter(item => !known.has(item.id) && !item.readAt) : [];
+        recent.forEach(item => known.add(item.id));
+        baselineLoaded = true;
+        const latest = unseen.at(-1);
+        if (latest?.taskId) setMonitoringNotificationToast({ id: latest.id, taskId: latest.taskId, content: latest.content });
+      } catch { /* Telegram delivery remains available when an in-app refresh fails. */ }
+    };
+    void refreshMonitoringNotifications();
+    const timer = window.setInterval(() => void refreshMonitoringNotifications(), 30000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [currentUser?.id]);
+
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
   const effectiveMiniTheme = useMemo(
     () => resolveThemeMode(miniThemeMode, userTimeZone, new Date()),
@@ -3620,6 +3643,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
+      {monitoringNotificationToast ? (
+        <div role="status" className="fixed bottom-24 left-3 right-3 z-[160] mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-violet-400/30 bg-slate-900 p-3 text-xs text-slate-100 shadow-2xl">
+          <span className="min-w-0 flex-1 truncate">🤖 {monitoringNotificationToast.content}</span>
+          <button type="button" className="shrink-0 rounded-lg bg-violet-600 px-2.5 py-2 font-semibold text-white" onClick={() => {
+            const task = tasks.find(item => item.id === monitoringNotificationToast.taskId && !item.parentTaskId);
+            if (task) { openTaskModal(task); setIsAiDialogOpen(true); }
+            setMonitoringNotificationToast(null);
+          }}>Ответить</button>
+          <button type="button" onClick={() => setMonitoringNotificationToast(null)} aria-label="Закрыть уведомление"><X size={15} /></button>
+        </div>
+      ) : null}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
           onDownload={startAiGeneratedDocumentDownload}
