@@ -4,7 +4,7 @@ import { telegramService } from './telegram.service.js';
 
 /**
  * A single automatic answer is published to the existing task chat, quick AI
- * inbox, browser/system feed and (if connected) Telegram. The event key
+ * inbox and (if connected) Telegram. The event key
  * prevents duplicate mirrors on retried execution.
  */
 export async function publishTaskMonitoringReply(input: {
@@ -17,22 +17,17 @@ export async function publishTaskMonitoringReply(input: {
   const title = task.title.trim().slice(0, 150);
   const header = input.kind === 'trigger' ? 'Напоминание по триггеру' : 'Мониторинг задачи';
   const display = '🤖 ' + header + ' «' + title + '»\n\n' + answer;
-  const mirrored = await prisma.$transaction(async tx => {
-    const claim = await tx.systemNotification.createMany({
-      data: [{
-        userId: input.userId, taskId: task.id, eventKey,
-        content: header + ': «' + title + '». ИИ прислал сообщение. Открыть чат задачи.'
-      }],
-      skipDuplicates: true
-    });
-    if (claim.count !== 1) return false;
-    await tx.generalAiMessage.create({
-      data: { userId: input.userId, role: 'assistant', content: display.slice(0, 6500),
-        monitoringTaskId: task.id, creditsSpentMilli: 0 }
-    });
-    return true;
+  // Only the actual AI reply belongs in the general chat. A second
+  // system notification would duplicate the same information.
+  const mirrored = await prisma.generalAiMessage.createMany({
+    data: [{
+      userId: input.userId, role: 'assistant', content: display.slice(0, 6500),
+      monitoringTaskId: task.id, monitoringEventKey: eventKey,
+      creditsSpentMilli: 0
+    }],
+    skipDuplicates: true
   });
-  if (!mirrored) return;
+  if (mirrored.count !== 1) return;
   // A disconnected Telegram account cannot prevent the other three channels
   // from receiving their persisted messages.
   try {

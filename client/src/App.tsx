@@ -9,7 +9,7 @@ import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
-import { TaskMonitoringControls } from './components/TaskMonitoringControls';
+
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
@@ -2886,11 +2886,12 @@ ${allContext}`,
   const refreshSystemNotifications = async () => {
     try {
       const result = await api.getSystemNotifications();
-      const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+      const visibleNotifications = result.notifications.filter(notification => !notification.eventKey?.startsWith('monitoring:'));
+      const newNotifications = visibleNotifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
       const newestUnseen = [...newNotifications].reverse()[0];
       result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
-      setSystemNotifications(result.notifications);
-      setUnreadSystemNotificationCount(result.unreadCount);
+      setSystemNotifications(visibleNotifications);
+      setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
       deliverBrowserSystemNotifications(newNotifications);
       if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
@@ -2912,11 +2913,12 @@ ${allContext}`,
       try {
         const result = await api.getSystemNotifications();
         if (cancelled) return;
-        const newNotifications = result.notifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
+        const visibleNotifications = result.notifications.filter(notification => !notification.eventKey?.startsWith('monitoring:'));
+      const newNotifications = visibleNotifications.filter(notification => !knownSystemNotificationIdsRef.current.has(notification.id));
         const newestUnseen = [...newNotifications].reverse()[0];
         result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
-        setSystemNotifications(result.notifications);
-        setUnreadSystemNotificationCount(result.unreadCount);
+        setSystemNotifications(visibleNotifications);
+        setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
         // The first load is a baseline: never produce a pile of historical OS alerts.
         if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
         baselineLoaded = true;
@@ -7112,7 +7114,13 @@ ${allContext}`,
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
                 </div>
-                {focusedTask.aiMonitoringEnabled ? <TaskMonitoringStatuses taskId={focusedTask.id} /> : null}
+                <TaskMonitoringStatuses taskId={focusedTask.id}
+                  enabled={focusedTask.aiMonitoringEnabled === true}
+                  allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
+                  onTaskUpdated={(updated) => {
+                    setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                    setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
+                  }} />
               </div>
               <div className="relative mb-2 min-h-0 flex-1">
                 <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />
@@ -7527,14 +7535,6 @@ ${allContext}`,
                     уведомления от ИИ
                   </label>
                   </div>
-                  {focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId ? (
-                    <TaskMonitoringControls
-                      enabled={focusedDraft.aiMonitoringEnabled === true}
-                      onChange={(enabled) => setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: enabled } : previous)}
-                      taskId={focusedTask.id}
-                      allowed={!focusedTask.isCollaborative}
-                    />
-                  ) : null}
                   {focusedDraft.isRecurring ? (
                     <label className="block text-xs">Описание повторения
                       <textarea
@@ -7950,7 +7950,13 @@ ${allContext}`,
                 </div>
               </div>
             </div>
-            {focusedTask?.aiMonitoringEnabled ? <div className="absolute right-5 top-16 z-30"><TaskMonitoringStatuses taskId={focusedTask.id} /></div> : null}
+            {focusedTask ? <div className="absolute right-5 top-16 z-30"><TaskMonitoringStatuses taskId={focusedTask.id}
+                  enabled={focusedTask.aiMonitoringEnabled === true}
+                  allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
+                  onTaskUpdated={(updated) => {
+                    setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                    setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
+                  }} /></div> : null}
             <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
@@ -8259,7 +8265,7 @@ ${allContext}`,
                 <div key={`message-${item.message.id}`} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user' : 'quick-ai-chat-message-assistant'}`}>
                   <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}
                   {item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
-                    <button type="button" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-400/30 px-2.5 py-1 text-xs font-semibold text-violet-500"
+                    <button type="button" className="task-monitor-chat-link mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold"
                       onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
                       <ArrowUpRight size={12} /> Ответить в чате задачи
                     </button>

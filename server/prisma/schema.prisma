@@ -329,6 +329,7 @@ model Task {
   overdueAiNotifiedAt DateTime?
   aiNotificationsEnabled Boolean @default(true)
   aiMonitoringEnabled Boolean @default(false)
+  aiMonitoringStatusSeenAt DateTime?
   aiMonitoringGeneration Int @default(0)
   monitoringStatuses TaskMonitoringStatus[]
   monitoringTriggers TaskMonitoringTrigger[]
@@ -539,6 +540,7 @@ model TaskAiConversationMemory {
 model GeneralAiMessage {
   aiTaskProposalId String?
   monitoringTaskId String?
+  monitoringEventKey String? @unique
   id        String        @id @default(cuid())
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)

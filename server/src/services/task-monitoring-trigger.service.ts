@@ -6,7 +6,7 @@ import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js'
 export const TASK_MONITOR_FOLLOWUP_TOOL = {
   type: 'function' as const,
   name: 'set_task_monitoring_trigger',
-  description: 'Schedule ONE server follow-up in the current monitored task chat if the user does not answer. Only available when the task owner has enabled beta monitoring. Never use for unmonitored tasks.',
+  description: 'Schedule or replace ONE follow-up in this monitored task. Use whenever a useful next contact is needed, normally after an assistant reply. MUST honor explicit user reminder dates/relative durations in their timezone (convert to minutes). If no time was given, pick an appropriate interval based on deadline and next action. Skip if task is complete or user declines reminders. Only for enabled beta monitoring.',
   parameters: {
     type: 'object', additionalProperties: false,
     properties: {

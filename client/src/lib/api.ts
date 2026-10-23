@@ -519,6 +519,9 @@ export const api = {
   createTask: (payload: Partial<Task>) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(payload) }),
   getTaskMonitoringTriggers: (id: string) => request<TaskMonitoringTrigger[]>(`/api/tasks/${id}/monitoring/triggers`),
   getTaskMonitoringStatuses: (id: string) => request<TaskMonitoringStatus[]>(`/api/tasks/${id}/monitoring/statuses`),
+  getTaskMonitoringUnread: (id: string) => request<{ unreadCount: number }>(`/api/tasks/${id}/monitoring/statuses/unread`),
+  markTaskMonitoringSeen: (id: string) =>
+    request<{ unreadCount: number }>(`/api/tasks/${id}/monitoring/statuses/seen`, { method: 'POST' }),
   addTaskMonitoringStatus: (id: string, payload: { label: string; detail?: string }) =>
     request<TaskMonitoringStatus>(`/api/tasks/${id}/monitoring/statuses`, { method: 'POST', body: JSON.stringify(payload) }),
   generateTaskCompletionReport: (id: string) => request<{ document: GeneratedDocument; model: string; creditsSpentMilli: number; coveredEvents: number; omittedEvents: number }>(`/api/tasks/${encodeURIComponent(id)}/completion-report`, { method: 'POST' }),
