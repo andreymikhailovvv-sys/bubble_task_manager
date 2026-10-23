@@ -11,7 +11,7 @@ test('checkup proposals are durable, owner-bound and always require manual appro
   assert.match(delivery, /source: 'daily_checkup'/);
   assert.match(delivery, /autoApply: false/);
   assert.match(delivery, /taskProposalId: proposalId/);
-  assert.match(index, /requestId: 'daily-checkup:' \+ slot.dateKey/);
+  assert.match(index, /requestId: 'daily-checkup:' \+ local\.dateKey \+ ':' \+ schedule\.id/);
   assert.match(delivery, /operation: 'reschedule'/);
   assert.match(proposals, /row.source === 'daily_checkup'/);
   assert.match(proposals, /where: \{ id, userId, status: 'PENDING' \}/);
