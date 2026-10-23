@@ -57,7 +57,7 @@ test('status popover escapes task-chat clipping and stays within the visible vie
     file('../../client/src/MiniApp.tsx')
   ]);
   assert.match(component, /import \{ createPortal \} from 'react-dom'/);
-  assert.match(component, /\), document\.body/);
+  assert.match(component, /<\/div>, document\.body/);
   assert.match(component, /className="task-monitor-status-popover task-monitor-status-portal fixed/);
   assert.match(component, /const left = Math\.max\(GUTTER, Math\.min\(/);
   assert.match(component, /const openAbove = availableBelow < 260 && availableAbove > availableBelow/);
