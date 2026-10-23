@@ -3825,82 +3825,8 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
 
         {displayMode === 'list' ? (
           <div className="space-y-4">
-          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Привычки</h2>
-              <span className="miniapp-habits-summary rounded-full px-2.5 py-1 text-xs font-semibold">
-                Выполнено {sortedHabits.filter((habit) => getHabitCompletedForDate(habit, toDateKey(new Date())) >= habit.targetCount).length} из {sortedHabits.length}
-              </span>
-            </div>
-            <div className="miniapp-habits-strip flex items-center gap-2 overflow-x-auto pb-1">
-              {sortedHabits.map((habit) => {
-                const completed = getHabitCompletedForDate(habit, toDateKey(new Date()));
-                const cappedCompleted = Math.min(completed, habit.targetCount);
-                const progress = Math.round((cappedCompleted / Math.max(1, habit.targetCount)) * 100);
-                const isCompleted = completed >= habit.targetCount;
-                const isPulsing = completedHabitPulseId === habit.id;
-                return (
-                  <button
-                    key={habit.id}
-                    type="button"
-                    className={`miniapp-habit-circle relative inline-flex h-[58px] w-[58px] shrink-0 select-none items-center justify-center rounded-full border text-center transition-transform ${isCompleted ? 'miniapp-habit-circle-completed' : ''} ${isPulsing ? 'miniapp-habit-complete-pulse scale-110' : ''}`}
-                    style={{
-                      '--habit-color': isCompleted ? '#94a3b8' : habit.color,
-                      '--habit-progress': `${progress}%`
-                    } as CSSProperties}
-                    onMouseDown={() => startHabitPress(habit)}
-                    onMouseUp={() => finishHabitPress(habit)}
-                    onMouseLeave={cancelHabitPress}
-                    onTouchStart={() => startHabitPress(habit)}
-                    onTouchEnd={() => finishHabitPress(habit)}
-                    onTouchCancel={cancelHabitPress}
-                    aria-label={`${habit.name}: ${cappedCompleted} из ${habit.targetCount}`}
-                    title={isCompleted ? 'Привычка выполнена' : 'Нажмите для редактирования, зажмите для отметки'}
-                  >
-                    <span className="miniapp-habit-circle-core absolute inset-[5px] rounded-full" />
-                    <span className="relative z-10 flex flex-col items-center leading-none">
-                      <span className="text-lg">{habit.icon}</span>
-                      <span className="mt-1 text-[10px] font-semibold">{cappedCompleted}/{habit.targetCount}</span>
-                    </span>
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={openCreateHabitModal}
-                className="miniapp-habit-add inline-flex h-[58px] min-w-[58px] shrink-0 items-center justify-center rounded-full border border-dashed border-emerald-400/70 bg-emerald-500/10 text-emerald-300"
-                aria-label="Добавить привычку"
-                title="Добавить привычку"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-          </section>
-
-          <section className="space-y-3 rounded-xl border border-slate-700 bg-slate-900 p-3">
-            <div className="miniapp-list-toolbar flex items-center gap-3">
-              <div className="display-mode-toggle-group inline-flex min-w-0 flex-1 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
-                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="true">
-                  <List size={16} className="text-violet-300" aria-hidden="true" />
-                  <span>Список</span>
-                </button>
-                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="false">
-                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
-                  <span>Таймлайн</span>
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время"
-              >
-                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
-                Отложить
-              </button>
-            </div>
+          <div className="miniapp-list-workspace">
+            <div className="miniapp-workspace-toolbar-card">
             <MiniWorkspaceTools
               mode={displayMode}
               timeFilter={timeFilter}
@@ -3914,7 +3840,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
+              onDisplayModeChange={setDisplayMode}
+              onPostpone={() => void postponeAllOverdueToToday()}
+              postponing={isPostponingOverdue}
+              canPostpone={overdueTasks.length > 0}
             />
+            </div>
+            <div className="miniapp-task-feed">
             {listTasks.length === 0 ? (
               <div className="rounded-lg border border-slate-700 bg-slate-800/80 p-4 text-sm text-slate-300">Задачи не найдены.</div>
             ) : null}
@@ -3981,52 +3913,13 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                 </article>
               );
             })}
-          </section>
+            </div>
+          </div>
           </div>
         ) : (
 
           <section className="miniapp-timeline-section -mx-4 border-y border-slate-700 bg-slate-900 px-3 py-3 sm:mx-0 sm:rounded-xl sm:border">
-            <div className="miniapp-timeline-toolbar flex items-center justify-between gap-3">
-              <div className="display-mode-toggle-group inline-flex min-w-0 items-center rounded-xl border p-1" role="group" aria-label="Режим отображения">
-                <button type="button" className="display-mode-toggle-button inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('list')} aria-pressed="false">
-                  <List size={16} className="text-violet-300" aria-hidden="true" />
-                  <span>Список</span>
-                </button>
-                <button type="button" className="display-mode-toggle-button display-mode-toggle-button-active inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition" onClick={() => setDisplayMode('timeline')} aria-pressed="true">
-                  <CalendarDays size={16} className="text-amber-300" aria-hidden="true" />
-                  <span>Таймлайн</span>
-                </button>
-              </div>
-              <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
-                {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
-                  <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="miniapp-timeline-period-toolbar mb-3 mt-3 flex items-center justify-between gap-2">
-              <div className="miniapp-timeline-date-nav">
-                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
-                <div className="miniapp-timeline-date-current" aria-live="polite">
-                  <CalendarDays size={16} aria-hidden="true" />
-                  <span className="miniapp-timeline-date-copy">
-                    <strong>{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</strong>
-                    <small>{timelineView === 'day' ? 'Выбранный день' : timelineView === 'week' ? 'Выбранная неделя' : 'Выбранный месяц'}</small>
-                  </span>
-                </div>
-                <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void postponeAllOverdueToToday()}
-                disabled={isPostponingOverdue || overdueTasks.length === 0}
-                className="miniapp-postpone-button inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-45"
-                title="Перенести просроченные задачи на сегодня на это же время"
-                aria-label="Перенести просроченные задачи на сегодня на это же время"
-              >
-                {isPostponingOverdue ? <Loader2 size={14} className="animate-spin" /> : <Clock3 size={14} />}
-                Отложить
-              </button>
-            </div>
+            <div className="miniapp-workspace-toolbar-card miniapp-workspace-timeline-toolbar">
             <MiniWorkspaceTools
               mode={displayMode}
               timeFilter={timeFilter}
@@ -4040,7 +3933,32 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               timelineSphereId={sphereFilter}
               onTimelineSphereChange={setSphereFilter}
               onNotesOpen={() => { setRequestedStandaloneNote(null); setIsStandaloneNotesOpen(true); }}
+              onDisplayModeChange={setDisplayMode}
+              onPostpone={() => void postponeAllOverdueToToday()}
+              postponing={isPostponingOverdue}
+              canPostpone={overdueTasks.length > 0}
             />
+            </div>
+            <div className="miniapp-timeline-navigation">
+              <div className="miniapp-timeline-view-switch" role="group" aria-label="Масштаб таймлайна">
+                {([['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']] as const).map(([view, label]) => (
+                  <button key={view} type="button" className={timelineView === view ? 'is-active' : ''} onClick={() => setTimelineView(view)} aria-pressed={timelineView === view}>{label}</button>
+                ))}
+              </div>
+              <div className="miniapp-timeline-period-toolbar">
+              <div className="miniapp-timeline-date-nav">
+                <button type="button" onClick={() => moveTimelinePeriod(-1)} className="miniapp-timeline-date-arrow" aria-label="Предыдущий период" title="Предыдущий период"><ChevronLeft size={17} /></button>
+                <div className="miniapp-timeline-date-current" aria-live="polite">
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span className="miniapp-timeline-date-copy">
+                    <strong>{timelineView === 'day' ? timelineToday.anchorLabel : timelineCalendar.label}</strong>
+                    <small>{timelineView === 'day' ? 'Выбранный день' : timelineView === 'week' ? 'Выбранная неделя' : 'Выбранный месяц'}</small>
+                  </span>
+                </div>
+                <button type="button" onClick={() => moveTimelinePeriod(1)} className="miniapp-timeline-date-arrow" aria-label="Следующий период" title="Следующий период"><ChevronRight size={17} /></button>
+              </div>
+              </div>
+            </div>
             {timelineView === 'day' ? <div className="relative overflow-x-hidden">
               <div ref={timelineGridRef} className="relative" style={{ height: `${timelineToday.totalHeight}px` }}>
                 {timelineToday.hourTops.map((top, hour) => {
