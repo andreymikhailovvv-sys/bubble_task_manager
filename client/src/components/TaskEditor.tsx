@@ -34,7 +34,7 @@ import { ResizableDescriptionSurface } from "./ResizableDescriptionSurface";
 import { measureTitleTextareaRows } from "../lib/titleTextareaRows";
 import { NotesEditor as TaskNotesEditor } from "./NotesEditor";
 import { CustomSelect } from "./CustomSelect";
-import { TaskMonitoringControls } from "./TaskMonitoringControls";
+
 import { CalendarExportDialog } from "./CalendarExportDialog";
 import { buildManualRecurrence, defaultRecurrenceSlots, loadManualRecurrence, recurrenceWeekdays, type RecurrencePeriod, type RecurrenceSlot } from "../lib/recurrenceSchedule";
 
@@ -1223,12 +1223,6 @@ export function TaskEditor({
                   ) : null}
                 </div>
               ) : null}
-              {!isEventEditor ? <TaskMonitoringControls
-                enabled={form.aiMonitoringEnabled === true}
-                onChange={(enabled) => setForm(previous => ({ ...previous, aiMonitoringEnabled: enabled }))}
-                taskId={task?.id}
-                allowed={!task?.parentTaskId && !task?.isCollaborative && task?.taskType !== 'REMINDER'}
-              /> : null}
               {isRecurring ? (
                 <section className="recurrence-configuration surface-card mt-3 shrink-0 space-y-3 rounded-2xl border p-3 text-xs" aria-label="Расписание постоянной задачи">
                   <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ настройки расписания">
