@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
-import { addMonitoringStatus, listMonitoringStatuses, requireMonitoredTask } from '../services/task-monitoring.service.js';
+import { addMonitoringStatus, listMonitoringStatuses, requireMonitoredTask, getMonitoringStatusUnread, markMonitoringStatusesSeen } from '../services/task-monitoring.service.js';
 import { getMonitoringTriggers } from '../services/task-monitoring-trigger.service.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
@@ -1746,6 +1746,14 @@ apiRouter.get('/tasks/:id/monitoring/diagnostics', requireAuth, asyncHandler(asy
 apiRouter.get('/tasks/:id/monitoring/triggers', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'private, no-store').json(await getMonitoringTriggers(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Мониторинг недоступен' }); }
+}));
+apiRouter.get('/tasks/:id/monitoring/statuses/unread', requireAuth, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'private, no-store').json(await getMonitoringStatusUnread(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Статусы недоступны' }); }
+}));
+apiRouter.post('/tasks/:id/monitoring/statuses/seen', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'private, no-store').json(await markMonitoringStatusesSeen(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Статусы недоступны' }); }
 }));
 apiRouter.get('/tasks/:id/monitoring/statuses', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'private, no-store').json(await listMonitoringStatuses(req.user!.id, req.params.id)); }
