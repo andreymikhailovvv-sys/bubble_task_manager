@@ -393,8 +393,14 @@ type AiChatProjectDraft = { mode: 'create' | 'edit'; projectId?: string; title: 
 type AiChatContextMenu = { type: 'project' | 'chat'; id: string; x: number; y: number };
 type TaskAiMessage = ChatMessage & { id: string };
 
-function SystemNotificationContent({ notification, tasks, onOpenTask }: { notification: SystemNotification; tasks: Task[]; onOpenTask: (task: Task) => void }) {
+function SystemNotificationContent({ notification, tasks, onOpenTask, onOpenTaskAi }: { notification: SystemNotification; tasks: Task[]; onOpenTask: (task: Task) => void; onOpenTaskAi: (task: Task) => void }) {
   const task = notification.taskId ? tasks.find((item) => item.id === notification.taskId) : undefined;
+  if (notification.eventKey?.startsWith('monitoring:') && task) {
+    return <>🤖 ИИ по задаче <strong>{task.title}</strong> прислал сообщение.{' '}
+      <button type="button" className="system-notification-task-button rounded-full bg-violet-600 px-2.5 py-1 text-xs font-semibold text-white"
+        onClick={() => onOpenTaskAi(task)}>Ответить в чате задачи <ArrowUpRight size={12} className="inline" /></button>
+    </>;
+  }
   if (!task || !notification.content.includes(task.title)) return <>{notification.content}</>;
 
   const [beforeTitle, ...afterTitleParts] = notification.content.split(task.title);
@@ -2805,6 +2811,15 @@ ${allContext}`,
 
   const openSystemNotification = (notification: SystemNotification) => {
     const eventKey = notification.eventKey ?? '';
+    if (eventKey.startsWith('monitoring:') && notification.taskId) {
+      const target = tasks.find(task => task.id === notification.taskId);
+      if (target?.aiMonitoringEnabled) {
+        setIsAiChatOpen(false);
+        setFocusedTaskId(target.id);
+        setIsAiExpanded(true);
+        return;
+      }
+    }
     const telegramKey = eventKey.startsWith('telegram-ai-task:')
       ? eventKey.slice('telegram-ai-task:'.length)
       : eventKey;
@@ -8238,11 +8253,17 @@ ${allContext}`,
               {quickAiChatTimeline.slice(-30).map((item) => item.kind === 'notification' ? (
                 <div key={`notification-${item.notification.id}`} className="system-notification-message ai-system-notification-spacing mr-6 rounded-2xl border px-3 py-2 shadow-sm">
                   <b className="system-notification-label mb-0.5 block text-[10px] uppercase tracking-wide">⚙️ Системное уведомление</b>
-                  <SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} />
+                  <SystemNotificationContent notification={item.notification} tasks={aiTaskReferenceTasks} onOpenTask={openTaskReferenceFromAi} onOpenTaskAi={(task) => { setIsAiChatOpen(false); setFocusedTaskId(task.id); setIsAiExpanded(true); }} />
                 </div>
               ) : (
                 <div key={`message-${item.message.id}`} className={`ai-message-forward-group w-fit max-w-[calc(100%-2rem)] ${item.message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`quick-ai-chat-message w-full rounded-2xl px-3 py-2 shadow-sm ${item.message.role === 'user' ? 'quick-ai-chat-message-user' : 'quick-ai-chat-message-assistant'}`}>
                   <b>{item.message.role === 'user' ? 'Вы' : 'ИИ'}:</b> {item.message.role === 'assistant' ? <AiMessageContentWithTaskRefs content={item.message.content} tasks={aiTaskReferenceTasks} onOpenTaskReference={openTaskReferenceFromAi} showTaskReferenceButtons /> : <CollapsibleUserMessage>{renderAiMessageContent(item.message.content, item.message.attachmentPreviews, item.message.id)}</CollapsibleUserMessage>}
+                  {item.message.monitoringTaskId && aiTaskReferenceTasks.some(task => task.id === item.message.monitoringTaskId) ? (
+                    <button type="button" className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-400/30 px-2.5 py-1 text-xs font-semibold text-violet-500"
+                      onClick={() => { setIsAiChatOpen(false); setFocusedTaskId(item.message.monitoringTaskId!); setIsAiExpanded(true); }}>
+                      <ArrowUpRight size={12} /> Ответить в чате задачи
+                    </button>
+                  ) : null}
                   {item.message.role === 'assistant' && item.message.webSearchUsed ? <WebCitations sources={item.message.webSources} /> : null}
                   {item.message.role === 'assistant' && item.message.generatedDocument ? <AiGeneratedDocumentButton document={item.message.generatedDocument} /> : null}{item.message.role === 'assistant' && item.message.taskProposal ? <AiTaskProposalCard proposal={item.message.taskProposal} onApplied={() => void load()} /> : null}{item.message.role === 'assistant' && item.message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={item.message.telegramSuggestedReply} /> : null}{item.message.role === 'assistant' && item.message.telegramSendDraft ? <TelegramInlineSendCard draft={item.message.telegramSendDraft} /> : null}{item.message.role === 'assistant' && item.message.telegramReadDraft ? <TelegramReadConsentCard draft={item.message.telegramReadDraft} onContinue={(approval) => continueTelegramReadAiChat(approval, aiChatProjects[0].id, QUICK_AI_CHAT_ID)} /> : null}
                 </div>
