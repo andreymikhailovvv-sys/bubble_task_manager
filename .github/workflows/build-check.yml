@@ -95,6 +95,8 @@ jobs:
         run: node --import tsx --test server/test/task-monitoring-beta.test.ts
       - name: Verify opt-in monitoring scheduler and follow-up triggers
         run: node --import tsx --test server/test/task-monitoring-scheduler.test.ts
+      - name: Verify autonomous monitoring action limits and badges
+        run: node --import tsx --test server/test/task-monitoring-actions.test.ts
       - name: Verify note group pills, unassigned sector, bulk postpone exclusions and web boot splash
         run: node --import tsx --test server/test/web-notes-postpone-bubbles-boot.test.ts
       - name: Verify newest Focus subtasks, AI note editing, chat scrolling and themed calendar
