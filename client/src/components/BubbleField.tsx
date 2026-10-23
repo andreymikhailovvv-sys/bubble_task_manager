@@ -1,9 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, ChevronRight, Coins, Gauge, LoaderCircle, MessageCircle, Plus, Repeat, Sparkles } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { buildBubbles, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
-import { layoutRectangleBubbles } from '../lib/rectangleBubbleLayout';
+import { buildBubbles, buildSectorGeometry, getBubbleSectorIndex, getBubbleSectorSpheres, getTaskCoefficient, type BubbleRankingMode } from '../lib/layout';
 import { noteHtmlToPlainText } from '../lib/notes';
 import { resolveSphereIcon } from '../lib/sphereIcons';
 import type { Sphere, Task } from '../lib/types';
@@ -47,8 +46,9 @@ const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
   5: '#ef4444'
 };
 
-// Use real rectangular sector geometry and bubble packing rather than
-// distorting circular coordinates after their collision resolution.
+// Keep the entire rounded desktop canvas available for task bubbles.
+// The source layout stays circular for its collision solver; rendering projects
+// its sector rays to the borders of this rectangular viewBox.
 const SIZE = 900;
 const FIELD_RADIUS = SIZE * 0.47;
 const VIEWBOX_WIDTH = 1840;
@@ -58,7 +58,9 @@ const VIEWBOX_TOP = 0;
 const VIEWBOX_RIGHT = VIEWBOX_LEFT + VIEWBOX_WIDTH;
 const VIEWBOX_BOTTOM = VIEWBOX_TOP + VIEWBOX_HEIGHT;
 const BUBBLE_FIELD_CENTER_X = VIEWBOX_LEFT + VIEWBOX_WIDTH / 2;
-const BUBBLE_FIELD_CENTER_Y = VIEWBOX_TOP + VIEWBOX_HEIGHT / 2;
+const BUBBLE_FIELD_CENTER_Y = VIEWBOX_TOP + VIEWBOX_HEIGHT * 0.43;
+const SECTOR_ROTATION = -Math.PI / 2;
+const FIELD_CONTENT_INSET = 18;
 const HOVER_EXIT_DELAY_MS = 120;
 const BUBBLE_HOVER_SCALE = 1.08;
 const SUBTASK_REMINDER_GLOW_STYLE =
@@ -317,7 +319,7 @@ export function BubbleField({
     if (!matrix) return spheres[0] ?? null;
     const svgPoint = point.matrixTransform(matrix.inverse());
     if (sectorCount <= 1) return bubbleSectors[0] ?? null;
-    const angle = ((Math.atan2(svgPoint.y - BUBBLE_FIELD_CENTER_Y, svgPoint.x - BUBBLE_FIELD_CENTER_X) - sectorRotation) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const angle = ((Math.atan2(svgPoint.y - BUBBLE_FIELD_CENTER_Y, svgPoint.x - BUBBLE_FIELD_CENTER_X) - SECTOR_ROTATION) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     const sectorIndex = sectorGeometry.findIndex((geometry) => angle >= geometry.startAngle && angle < geometry.endAngle);
     return bubbleSectors[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
   };
@@ -421,27 +423,43 @@ export function BubbleField({
     [sourceTaskById, spheres, subtaskMap, tasks]
   );
 
-  const sourceBubbles = useMemo(
+  const bubbles = useMemo(
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
     [tasks, spheres, mode, rankingMode, subtaskMap]
   );
-  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
-  const sectorCount = Math.max(1, bubbleSectors.length);
-  const rectangularLayout = useMemo(
-    () => layoutRectangleBubbles(sourceBubbles, sectorCount, {
-      left: VIEWBOX_LEFT, top: VIEWBOX_TOP, right: VIEWBOX_RIGHT, bottom: VIEWBOX_BOTTOM
-    }),
-    [sourceBubbles, sectorCount]
-  );
-  const visibleBubbles = rectangularLayout.bubbles;
-  const sectorGeometry = rectangularLayout.geometry;
-  const sectorRotation = rectangularLayout.rotation;
+  const mapToRectangle = useCallback((x: number, y: number, padding = FIELD_CONTENT_INSET) => {
+    const dx = x - SIZE / 2;
+    const dy = y - SIZE / 2;
+    const length = Math.hypot(dx, dy);
+    if (length < 0.00001) return { x: BUBBLE_FIELD_CENTER_X, y: BUBBLE_FIELD_CENTER_Y };
+    const angle = Math.atan2(dy, dx) + SECTOR_ROTATION;
+    const edge = rectangleRayEnd(angle, padding);
+    const fraction = Math.min(1, length / FIELD_RADIUS) * 0.94;
+    return {
+      x: BUBBLE_FIELD_CENTER_X + (edge.x - BUBBLE_FIELD_CENTER_X) * fraction,
+      y: BUBBLE_FIELD_CENTER_Y + (edge.y - BUBBLE_FIELD_CENTER_Y) * fraction
+    };
+  }, []);
+
+  const visibleBubbles = bubbles;
+
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
   const hoveredDescription = hoveredBubble
     ? noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true }).trim()
     : '';
+  const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
+  const sectorCount = Math.max(1, bubbleSectors.length);
+  const sectorTaskCounts = useMemo(() => {
+    if (sectorCount === 1) return [tasks.length];
+    const counts = Array.from({ length: sectorCount }, () => 0);
+    tasks.forEach((task) => {
+      counts[getBubbleSectorIndex(task, bubbleSectors)] += 1;
+    });
+    return counts;
+  }, [sectorCount, bubbleSectors, tasks]);
+  const sectorGeometry = useMemo(() => buildSectorGeometry(sectorCount, sectorTaskCounts), [sectorCount, sectorTaskCounts]);
 
   const orderedBubbles = visibleBubbles;
 
@@ -479,16 +497,15 @@ export function BubbleField({
     if (sectorCount === 1) return [];
     return bubbleSectors.map((sphere, idx) => {
       const angle = sectorGeometry[idx]?.midAngle ?? 0;
-      const point = rectangleRayEnd(angle + sectorRotation, 76);
-      point.x = clamp(point.x, VIEWBOX_LEFT + 96, VIEWBOX_RIGHT - 96);
-      point.y = clamp(point.y, VIEWBOX_TOP + 50, VIEWBOX_BOTTOM - 55);
+      const distance = FIELD_RADIUS * 0.9;
+      const point = mapToRectangle(SIZE / 2 + Math.cos(angle) * distance, SIZE / 2 + Math.sin(angle) * distance, 76);
       return {
         sphere,
         x: point.x,
         y: point.y,
       };
     });
-  }, [sectorCount, sectorGeometry, bubbleSectors, sectorRotation]);
+  }, [mapToRectangle, sectorCount, sectorGeometry, bubbleSectors]);
 
   const cancelHoverExit = () => {
     if (hoverExitTimer.current) {
@@ -551,7 +568,7 @@ export function BubbleField({
   const workspaceMin = VIEWBOX_TOP;
   const workspaceMax = VIEWBOX_BOTTOM;
   const workspaceMaxX = VIEWBOX_RIGHT;
-  const hoverPoint = hoveredBubble ? { x: hoveredBubble.x, y: hoveredBubble.y } : null;
+  const hoverPoint = hoveredBubble ? mapToRectangle(hoveredBubble.x, hoveredBubble.y, hoveredBubble.radius + FIELD_CONTENT_INSET) : null;
   const hoverCardX = hoveredBubble && hoverPoint
     ? clamp(
       hoverPoint.x + hoveredBubble.radius + hoverInfoCard.width + 18 < workspaceMaxX
@@ -570,7 +587,7 @@ export function BubbleField({
   const sectorStroke = 'var(--sector-line)';
 
 
-  const renderBubble = (bubble: (typeof visibleBubbles)[number]) => {
+  const renderBubble = (bubble: (typeof bubbles)[number]) => {
     const isPopping = poppingTaskId === bubble.task.id;
     const hasUrgentSubtask = bubble.task.status !== 'DONE'
       && (subtaskMap[bubble.task.id] ?? []).some((subtask) => shouldSubtaskAffectParentReminder(subtask));
@@ -609,7 +626,7 @@ export function BubbleField({
     const commentBadgeX = bubble.radius * 0.78;
     const commentBadgeY = bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
-    const displayPoint = { x: bubble.x, y: bubble.y };
+    const displayPoint = mapToRectangle(bubble.x, bubble.y, bubble.radius + FIELD_CONTENT_INSET);
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -816,7 +833,7 @@ export function BubbleField({
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
-            const point = rectangleRayEnd(angle + sectorRotation);
+            const point = rectangleRayEnd(angle + SECTOR_ROTATION);
             return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
