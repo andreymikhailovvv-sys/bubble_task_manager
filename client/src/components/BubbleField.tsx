@@ -46,23 +46,29 @@ const IMPORTANCE_BUBBLE_COLORS: Record<number, string> = {
   5: '#ef4444'
 };
 
-// Keep the entire rounded desktop canvas available for task bubbles.
-// The source layout stays circular for its collision solver; rendering projects
-// its sector rays to the borders of this rectangular viewBox.
 const SIZE = 900;
+const WORKSPACE_PADDING = 80;
 const FIELD_RADIUS = SIZE * 0.47;
+const VIEWBOX_HEIGHT = SIZE + WORKSPACE_PADDING * 2;
 const VIEWBOX_WIDTH = 1840;
-const VIEWBOX_HEIGHT = 860;
-const VIEWBOX_LEFT = 0;
-const VIEWBOX_TOP = 0;
+const VIEWBOX_LEFT = -180;
+const VIEWBOX_TOP = -WORKSPACE_PADDING;
 const VIEWBOX_RIGHT = VIEWBOX_LEFT + VIEWBOX_WIDTH;
 const VIEWBOX_BOTTOM = VIEWBOX_TOP + VIEWBOX_HEIGHT;
-const BUBBLE_FIELD_CENTER_X = VIEWBOX_LEFT + VIEWBOX_WIDTH / 2;
-const BUBBLE_FIELD_CENTER_Y = VIEWBOX_TOP + VIEWBOX_HEIGHT * 0.43;
-const SECTOR_ROTATION = -Math.PI / 2;
-const FIELD_CONTENT_INSET = 18;
+const TASK_INFO_PANEL_WIDTH = 620;
+const TASK_INFO_PANEL_X = VIEWBOX_LEFT + 24;
+const BUBBLE_WORKSPACE_GAP = 36;
+const BUBBLE_WORKSPACE_X = TASK_INFO_PANEL_X + TASK_INFO_PANEL_WIDTH + BUBBLE_WORKSPACE_GAP;
+const BUBBLE_WORKSPACE_WIDTH = VIEWBOX_RIGHT - BUBBLE_WORKSPACE_X - 8;
+const BUBBLE_FIELD_CENTER_X = BUBBLE_WORKSPACE_X + BUBBLE_WORKSPACE_WIDTH / 2;
+const BUBBLE_FIELD_CENTER_Y = SIZE / 2;
+const ELLIPSE_RADIUS_X = BUBBLE_WORKSPACE_WIDTH / 2 - 16;
+const ELLIPSE_RADIUS_Y = VIEWBOX_HEIGHT / 2 - 38;
+const ELLIPSE_X_SCALE = ELLIPSE_RADIUS_X / FIELD_RADIUS;
+const ELLIPSE_Y_SCALE = ELLIPSE_RADIUS_Y / FIELD_RADIUS;
 const HOVER_EXIT_DELAY_MS = 120;
 const BUBBLE_HOVER_SCALE = 1.08;
+const ENABLE_BUBBLE_HOVER_DETAILS = false;
 const SUBTASK_REMINDER_GLOW_STYLE =
   '0 0 0 1px rgba(56,189,248,0.24), inset 0 0 12px rgba(56,189,248,0.28)';
 const SUBTASK_OVERDUE_GLOW_STYLE =
@@ -233,17 +239,6 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
-// Project every sector ray to the actual rectangular boundary, not an ellipse.
-// Padding for bubble centers prevents circles from getting cropped at the edges.
-function rectangleRayEnd(angle: number, padding = 0) {
-  const dx = Math.cos(angle);
-  const dy = Math.sin(angle);
-  const xLimit = dx >= 0 ? VIEWBOX_RIGHT - padding - BUBBLE_FIELD_CENTER_X : BUBBLE_FIELD_CENTER_X - VIEWBOX_LEFT - padding;
-  const yLimit = dy >= 0 ? VIEWBOX_BOTTOM - padding - BUBBLE_FIELD_CENTER_Y : BUBBLE_FIELD_CENTER_Y - VIEWBOX_TOP - padding;
-  const distance = Math.min(xLimit / Math.max(Math.abs(dx), 0.00001), yLimit / Math.max(Math.abs(dy), 0.00001));
-  return { x: BUBBLE_FIELD_CENTER_X + dx * distance, y: BUBBLE_FIELD_CENTER_Y + dy * distance };
-}
-
 export function BubbleField({
   tasks,
   subtaskMap,
@@ -319,7 +314,7 @@ export function BubbleField({
     if (!matrix) return spheres[0] ?? null;
     const svgPoint = point.matrixTransform(matrix.inverse());
     if (sectorCount <= 1) return bubbleSectors[0] ?? null;
-    const angle = ((Math.atan2(svgPoint.y - BUBBLE_FIELD_CENTER_Y, svgPoint.x - BUBBLE_FIELD_CENTER_X) - SECTOR_ROTATION) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const angle = ((Math.atan2((svgPoint.y - BUBBLE_FIELD_CENTER_Y) / ELLIPSE_Y_SCALE, (svgPoint.x - BUBBLE_FIELD_CENTER_X) / ELLIPSE_X_SCALE) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const sectorIndex = sectorGeometry.findIndex((geometry) => angle >= geometry.startAngle && angle < geometry.endAngle);
     return bubbleSectors[sectorIndex >= 0 ? sectorIndex : 0] ?? null;
   };
@@ -427,28 +422,19 @@ export function BubbleField({
     () => buildBubbles(tasks, spheres, mode, SIZE, rankingMode, subtaskMap),
     [tasks, spheres, mode, rankingMode, subtaskMap]
   );
-  const mapToRectangle = useCallback((x: number, y: number, padding = FIELD_CONTENT_INSET) => {
-    const dx = x - SIZE / 2;
-    const dy = y - SIZE / 2;
-    const length = Math.hypot(dx, dy);
-    if (length < 0.00001) return { x: BUBBLE_FIELD_CENTER_X, y: BUBBLE_FIELD_CENTER_Y };
-    const angle = Math.atan2(dy, dx) + SECTOR_ROTATION;
-    const edge = rectangleRayEnd(angle, padding);
-    const fraction = Math.min(1, length / FIELD_RADIUS) * 0.94;
-    return {
-      x: BUBBLE_FIELD_CENTER_X + (edge.x - BUBBLE_FIELD_CENTER_X) * fraction,
-      y: BUBBLE_FIELD_CENTER_Y + (edge.y - BUBBLE_FIELD_CENTER_Y) * fraction
-    };
-  }, []);
+  const mapToOval = useCallback((x: number, y: number) => ({
+    x: BUBBLE_FIELD_CENTER_X + (x - SIZE / 2) * ELLIPSE_X_SCALE,
+    y: BUBBLE_FIELD_CENTER_Y + (y - SIZE / 2) * ELLIPSE_Y_SCALE
+  }), []);
 
   const visibleBubbles = bubbles;
 
   const hoveredBubble = useMemo(() => visibleBubbles.find((bubble) => bubble.task.id === hoveredTaskId) ?? null, [hoveredTaskId, visibleBubbles]);
   const hoveredSubtasks = hoveredBubble ? (subtaskMap[hoveredBubble.task.id] ?? []).filter((subtask) => subtask.status !== 'DONE') : [];
+  const hoveredSphere = hoveredBubble?.task.sphereId ? spheres.find((sphere) => sphere.id === hoveredBubble.task.sphereId) : null;
   const hoveredTaskCoefficient = hoveredBubble ? getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap) : 0;
-  const hoveredDescription = hoveredBubble
-    ? noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true }).trim()
-    : '';
+  const visibleHoverSubtasks = hoveredSubtasks.slice(0, 6);
+  const hiddenHoverSubtaskCount = Math.max(0, hoveredSubtasks.length - visibleHoverSubtasks.length);
   const bubbleSectors = useMemo(() => getBubbleSectorSpheres(tasks, spheres, mode), [tasks, spheres, mode]);
   const sectorCount = Math.max(1, bubbleSectors.length);
   const sectorTaskCounts = useMemo(() => {
@@ -497,15 +483,15 @@ export function BubbleField({
     if (sectorCount === 1) return [];
     return bubbleSectors.map((sphere, idx) => {
       const angle = sectorGeometry[idx]?.midAngle ?? 0;
-      const distance = FIELD_RADIUS * 0.9;
-      const point = mapToRectangle(SIZE / 2 + Math.cos(angle) * distance, SIZE / 2 + Math.sin(angle) * distance, 76);
+      const distance = SIZE * 0.46;
+      const point = mapToOval(SIZE / 2 + Math.cos(angle) * distance, SIZE / 2 + Math.sin(angle) * distance);
       return {
         sphere,
         x: point.x,
         y: point.y,
       };
     });
-  }, [mapToRectangle, sectorCount, sectorGeometry, bubbleSectors]);
+  }, [mapToOval, sectorCount, sectorGeometry, bubbleSectors]);
 
   const cancelHoverExit = () => {
     if (hoverExitTimer.current) {
@@ -548,7 +534,7 @@ export function BubbleField({
   };
 
 
-  const hoverInfoCard = { width: 370, height: 224 };
+  const hoverInfoCard = { width: 340, height: 228 };
   const hoverSubtasksCard = { width: 400, height: 340 };
 
   const getSubtasksCardY = (bubbleY: number, bubbleRadius: number) => {
@@ -568,19 +554,6 @@ export function BubbleField({
   const workspaceMin = VIEWBOX_TOP;
   const workspaceMax = VIEWBOX_BOTTOM;
   const workspaceMaxX = VIEWBOX_RIGHT;
-  const hoverPoint = hoveredBubble ? mapToRectangle(hoveredBubble.x, hoveredBubble.y, hoveredBubble.radius + FIELD_CONTENT_INSET) : null;
-  const hoverCardX = hoveredBubble && hoverPoint
-    ? clamp(
-      hoverPoint.x + hoveredBubble.radius + hoverInfoCard.width + 18 < workspaceMaxX
-        ? hoverPoint.x + hoveredBubble.radius + 18
-        : hoverPoint.x - hoveredBubble.radius - hoverInfoCard.width - 18,
-      VIEWBOX_LEFT + 12,
-      workspaceMaxX - hoverInfoCard.width - 12
-    )
-    : VIEWBOX_LEFT;
-  const hoverCardY = hoverPoint
-    ? clamp(hoverPoint.y - hoverInfoCard.height * 0.34, workspaceMin + 12, workspaceMax - hoverInfoCard.height - 12)
-    : workspaceMin;
   const containerShadowClass = isLightTheme
     ? 'shadow-[0_18px_48px_rgba(15,23,42,0.12),0_4px_18px_rgba(14,165,233,0.10),inset_0_1px_32px_rgba(255,255,255,0.72)]'
     : 'shadow-[0_28px_90px_rgba(15,23,42,0.75),inset_0_0_80px_rgba(56,189,248,0.08)]';
@@ -626,7 +599,7 @@ export function BubbleField({
     const commentBadgeX = bubble.radius * 0.78;
     const commentBadgeY = bubble.radius * 0.78;
     const isSmartPostponing = smartPostponeTaskId === bubble.task.id;
-    const displayPoint = mapToRectangle(bubble.x, bubble.y, bubble.radius + FIELD_CONTENT_INSET);
+    const displayPoint = mapToOval(bubble.x, bubble.y);
     const titleLineClamp = bubble.radius < 30 ? 2 : bubble.radius < 44 ? 3 : 4;
     const titleFontSize = getBubbleTitleFontSize(bubble.task.title, bubble.radius);
     const titlePreview = getBubbleTitlePreview(bubble.task.title, bubble.radius);
@@ -784,13 +757,13 @@ export function BubbleField({
 
   return (
     <div
-      className={`bubble-field-container surface-canvas relative overflow-hidden rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
+      className={`bubble-field-container surface-canvas relative overflow-visible rounded-[2.2rem] border ${containerShadowClass} backdrop-blur-sm ${className ?? 'h-full'}`}
       onMouseLeave={() => {
         if (isNativeCalendarOpen) return;
         scheduleHoverExit();
       }}
     >
-      <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-hidden" onContextMenu={(event) => showContextMenu(event, null)}>
+      <svg ref={svgRef} viewBox={`${VIEWBOX_LEFT} ${VIEWBOX_TOP} ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} className="bubble-field-stage relative z-20 h-full w-full overflow-visible" onContextMenu={(event) => showContextMenu(event, null)}>
         <motion.g initial={false}>
           <defs>
             <radialGradient id="bg" cx="50%" cy="50%" r="60%">
@@ -828,12 +801,94 @@ export function BubbleField({
               <feDropShadow dx="0" dy="0" stdDeviation="16" floodColor="#818cf8" floodOpacity="0.22" />
             </filter>
           </defs>
-          <rect x={VIEWBOX_LEFT} y={VIEWBOX_TOP} width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="url(#bg)" opacity={isLightTheme ? 0.66 : 0.55} pointerEvents="none" />
+          <foreignObject x={TASK_INFO_PANEL_X} y={workspaceMin + 24} width={TASK_INFO_PANEL_WIDTH} height={VIEWBOX_HEIGHT - 48} pointerEvents="none">
+            <div className="bubble-tooltip-card bubble-task-info-panel flex h-full flex-col rounded-[2.15rem] border p-6">
+              {hoveredBubble ? (
+                <div className="min-h-0 space-y-4 overflow-hidden">
+                  <div>
+                    <p className="bubble-task-info-eyebrow text-sm font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
+                    <h3 className="mt-3 break-words text-3xl font-semibold leading-tight text-primary">
+                      <LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick />
+                    </h3>
+                  </div>
+                  <div className="bubble-task-info-section rounded-[1.35rem] border p-3">
+                    <p className="text-sm uppercase tracking-[0.18em] text-subtle">Описание</p>
+                    <div className="mt-2 max-h-44 overflow-hidden break-words text-lg leading-relaxed text-muted">
+                      <LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-base">
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3">
+                      <p className="text-subtle">Дедлайн</p>
+                      <p className="mt-1 font-semibold text-primary">{formatDueDate(hoveredBubble.task.dueDate)}</p>
+                    </div>
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3">
+                      <p className="text-subtle">Осталось</p>
+                      <p className="mt-1 font-semibold text-primary">{formatDeadlineLeft(hoveredBubble.task.dueDate)}</p>
+                    </div>
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3" style={getInfoBadgeStyle(IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b', isLightTheme)}>
+                      <p className="text-subtle">Важность</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className="list-task-importance-badge inline-flex items-center rounded-full border px-2 py-0.5 text-sm font-semibold"
+                          style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                          title="Важность задачи"
+                        >
+                          {hoveredBubble.task.importance}
+                        </span>
+                        <span
+                          className="list-task-coefficient-badge inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm font-semibold"
+                          style={{ backgroundColor: getCoefficientBadgeColor(hoveredTaskCoefficient) }}
+                          title="Коэффициент важности задачи"
+                        >
+                          <Gauge size={14} />
+                          {hoveredTaskCoefficient.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bubble-info-badge rounded-[1.2rem] border p-3" style={getInfoBadgeStyle(hoveredSphere?.color ?? '#64748b', isLightTheme)}>
+                      <p className="text-subtle">Сектор</p>
+                      <p className="mt-1 truncate font-semibold text-primary">{hoveredSphere?.name ?? 'Без сектора'}</p>
+                    </div>
+                  </div>
+                  <div className="bubble-info-badge rounded-[1.5rem] border p-4 text-base">
+                    <div className="mb-2">
+                      <p className="font-semibold text-primary">Подзадачи</p>
+                    </div>
+                    <ul className="grid grid-cols-2 gap-2 overflow-hidden text-muted">
+                      {hoveredSubtasks.length === 0 ? <li className="col-span-2 text-subtle">Пока нет активных подзадач</li> : null}
+                      {visibleHoverSubtasks.map((subtask) => {
+                        const glowClass = subtask.status !== 'DONE' && isOverdue(subtask)
+                          ? 'bubble-subtask-preview-overdue'
+                          : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
+                            ? 'bubble-subtask-preview-reminder'
+                            : '';
+                        return (
+                          <li key={subtask.id} className={`bubble-subtask-preview rounded-[1rem] border px-2 py-1.5 ${glowClass}`}>
+                            <span className="bubble-subtask-preview-title break-words" title={subtask.title}>{subtask.title}</span>
+                            <span className="bubble-subtask-preview-date mt-0.5 block truncate text-sm text-subtle">Срок: {formatDueDate(subtask.dueDate)}</span>
+                          </li>
+                        );
+                      })}
+                      {hiddenHoverSubtaskCount > 0 ? <li className="col-span-2 text-subtle">Ещё осталось: {hiddenHoverSubtaskCount}</li> : null}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center text-center text-subtle">
+                  <p className="bubble-task-info-eyebrow text-[11px] font-semibold uppercase tracking-[0.28em]">Информация о задаче</p>
+                  <p className="mt-3 text-lg leading-relaxed">Наведи на пузырь, чтобы увидеть полное название, описание, дедлайн и подзадачи.</p>
+                </div>
+              )}
+            </div>
+          </foreignObject>
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X} ry={ELLIPSE_RADIUS_Y} fill="url(#bg)" opacity={isLightTheme ? 0.94 : 0.86} />
+          <ellipse cx={BUBBLE_FIELD_CENTER_X} cy={BUBBLE_FIELD_CENTER_Y} rx={ELLIPSE_RADIUS_X + 22} ry={ELLIPSE_RADIUS_Y + 16} fill="url(#fieldHalo)" filter="url(#bubbleGlow)" opacity={isLightTheme ? 0.48 : 0.7} />
 
           {sectorGeometry.map((geometry, idx) => {
             if (sectorCount === 1) return null;
             const angle = geometry.startAngle;
-            const point = rectangleRayEnd(angle + SECTOR_ROTATION);
+            const point = mapToOval(SIZE / 2 + Math.cos(angle) * FIELD_RADIUS, SIZE / 2 + Math.sin(angle) * FIELD_RADIUS);
             return <line key={idx} className="sector-divider" x1={BUBBLE_FIELD_CENTER_X} y1={BUBBLE_FIELD_CENTER_Y} x2={point.x} y2={point.y} stroke={sectorStroke} strokeWidth="1.5" />;
           })}
 
@@ -862,38 +917,212 @@ export function BubbleField({
             );
           })}
 
-          {hoveredBubble && hoverPoint ? (
-            <foreignObject
-              x={hoverCardX}
-              y={hoverCardY}
-              width={hoverInfoCard.width}
-              height={hoverInfoCard.height}
-              pointerEvents="none"
-            >
-              <div className="bubble-tooltip-card flex h-full flex-col overflow-hidden rounded-2xl border p-4 text-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.19em] text-subtle">Задача</p>
-                <p className="mt-1 max-h-[88px] overflow-hidden break-words text-[15px] font-semibold leading-snug text-primary" title={hoveredBubble.task.title}>
-                  {hoveredBubble.task.title}
-                </p>
-                <p className="mt-2 min-h-0 flex-1 overflow-hidden break-words text-xs leading-relaxed text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                  {hoveredDescription ? `${hoveredDescription.slice(0, 175)}${hoveredDescription.length > 175 ? '…' : ''}` : 'Без описания'}
-                </p>
-                <div className="mt-3 flex shrink-0 items-center justify-between gap-3 border-t border-[color:var(--panel-border)] pt-3">
-                  <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted" title="Дедлайн">
-                    <CalendarDays size={13} className="shrink-0" />
-                    <span className="truncate">{formatDueDate(hoveredBubble.task.dueDate)}</span>
-                  </span>
-                  <span
-                    className="list-task-coefficient-badge inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
-                    style={{ backgroundColor: getCoefficientBadgeColor(hoveredTaskCoefficient) }}
-                    title="Коэффициент важности"
-                  >
-                    <Gauge size={12} />
-                    {hoveredTaskCoefficient.toFixed(2)}
-                  </span>
+          {ENABLE_BUBBLE_HOVER_DETAILS && hoveredBubble ? (
+            <>
+              <foreignObject
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverInfoCard.width / 2, BUBBLE_WORKSPACE_X + 8, workspaceMaxX - hoverInfoCard.width - 8)}
+                y={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).y - hoveredBubble.radius - hoverInfoCard.height - 10, workspaceMin + 8, workspaceMax - hoverInfoCard.height - 8)}
+                width={hoverInfoCard.width}
+                height={hoverInfoCard.height}
+                onMouseEnter={cancelHoverExit}
+                onMouseLeave={scheduleHoverExit}
+              >
+                <div className="bubble-tooltip-card rounded-xl border p-3 text-xs">
+                  <p className="mb-1 font-semibold break-words"><LinkifiedText text={hoveredBubble.task.title} stopPropagationOnLinkClick /></p>
+                  <p className="mb-2 text-muted" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}><LinkifiedText text={noteHtmlToPlainText(hoveredBubble.task.description ?? '', { trimEnd: true })} fallback="Без описания" stopPropagationOnLinkClick /></p>
+                  <p className="text-muted">Срок: {formatDueDate(hoveredBubble.task.dueDate)}</p>
+                  <p className="inline-flex items-center gap-1 text-muted">
+                    {smartPostponeTaskId === hoveredBubble.task.id ? <LoaderCircle size={12} className="animate-spin text-cyan-200" /> : null}
+                    {formatDeadlineLeft(hoveredBubble.task.dueDate)}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-[11px] text-muted">Коэффициент важности</p>
+                    <div
+                      className="inline-flex items-center gap-1 rounded-full border border-[color:var(--panel-border)] px-2 py-0.5 text-[11px] font-semibold text-primary"
+                      style={{ backgroundColor: getCoefficientBadgeColor(getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap)) }}
+                    >
+                      <Gauge size={11} />
+                      {getTaskCoefficient(getSourceTask(hoveredBubble.task), subtaskMap).toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="mt-2 border-t border-[color:var(--panel-border)] pt-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-semibold text-primary transition hover:bg-emerald-500"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onQuickCompleteTask(hoveredBubble.task);
+                        }}
+                      >
+                        Выполнить
+                      </button>
+                      <div className="ml-auto flex items-center gap-2">
+                        <div className="flex items-center">
+                          <CustomSelect
+                            className="w-[136px]"
+                            value=""
+                            onChange={(value) => {
+                              if (!value) return;
+                              runQuickPostpone(hoveredBubble.task, value as '15m' | '30m' | '1h' | '3h' | 'tomorrow' | 'smart');
+                            }}
+                            options={[{ value: '', label: 'Отложить' }, { value: '15m', label: 'На 15 мин' }, { value: '30m', label: 'На 30 мин' }, { value: '1h', label: 'На час' }, { value: '3h', label: 'На 3 часа' }, { value: 'tomorrow', label: 'На завтра' }, { value: 'smart', label: '✦ Ближайшее окно (◍ 1)' }]}
+                            buttonClassName="h-7 px-2 py-1 text-[11px]"
+                            ariaLabel="Отложить задачу"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, -1);
+                          }}>-</button>
+                          <div
+                            className="h-7 min-w-8 rounded px-2 text-center text-[11px] font-semibold leading-7 text-primary"
+                            style={{ backgroundColor: IMPORTANCE_BUBBLE_COLORS[hoveredBubble.task.importance] ?? '#64748b' }}
+                          >
+                            {hoveredBubble.task.importance}
+                          </div>
+                          <button type="button" className="surface-muted rounded px-2 py-1 text-[11px] font-semibold text-primary hover:brightness-110" onClick={(event) => {
+                            event.stopPropagation();
+                            void onQuickChangeTaskImportance(hoveredBubble.task, 1);
+                          }}>+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </foreignObject>
+              </foreignObject>
+              <foreignObject
+                x={clamp(mapToOval(hoveredBubble.x, hoveredBubble.y).x - hoverSubtasksCard.width / 2, BUBBLE_WORKSPACE_X + 8, workspaceMaxX - hoverSubtasksCard.width - 8)}
+                y={getSubtasksCardY(mapToOval(hoveredBubble.x, hoveredBubble.y).y, hoveredBubble.radius)}
+                width={hoverSubtasksCard.width}
+                height={hoverSubtasksCard.height}
+                onMouseEnter={cancelHoverExit}
+                onMouseLeave={scheduleHoverExit}
+              >
+                <div
+                  className="bubble-tooltip-card rounded-xl border p-3 text-xs"
+                  data-no-field-zoom="true"
+                >
+                  <div className="mb-2 flex justify-end">
+                    <button
+                    type="button"
+                    className={`mb-2 inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${isSubtaskFilterActive
+                      ? 'border-cyan-300 bg-cyan-600/90 text-primary'
+                      : 'border-[color:var(--panel-border)] surface-muted text-muted hover:brightness-110'}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleSubtaskFilter();
+                    }}
+                  >
+                    Фильтровать
+                    </button>
+                  </div>
+                  <ul className="mb-3 max-h-40 space-y-1.5 overflow-y-auto pr-1" data-no-field-zoom="true">
+                    {hoveredSubtasks.length === 0 ? <li className="text-subtle">Пока нет подзадач</li> : null}
+                    {hoveredSubtasks.map((subtask) => (
+                      <li
+                        key={subtask.id}
+                        className="relative surface-muted overflow-hidden rounded px-2 py-1.5"
+                        style={subtask.status !== 'DONE' && isOverdue(subtask)
+                          ? { boxShadow: SUBTASK_OVERDUE_GLOW_STYLE }
+                          : subtask.status !== 'DONE' && shouldTaskGlow(subtask)
+                            ? { boxShadow: SUBTASK_REMINDER_GLOW_STYLE }
+                            : undefined}
+                      >
+                        <div className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 shrink-0"
+                            checked={subtask.status === 'DONE'}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              onToggleSubtaskDone(subtask);
+                            }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`cursor-pointer break-words text-left leading-snug ${subtask.status === 'DONE' ? 'line-through text-subtle' : ''}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSelectSubtask(subtask);
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              <LinkifiedText text={subtask.title} stopPropagationOnLinkClick />
+                            </div>
+                            <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[10px] text-muted">
+                              <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">Срок: {formatDueDate(subtask.dueDate)}</span>
+                              <InlineDateTimePickerIcon
+                                value={subtask.dueDate}
+                                title="Изменить срок подзадачи"
+                                className="shrink-0"
+                                detachedPopup
+                                timelineTasks={timelinePickerTasks}
+                                onOpenChange={handleNativeCalendarOpenChange}
+                                onChange={(dueDate) => onUpdateSubtaskDueDate(subtask, dueDate)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {isAddingSubtask ? (() => {
+                    const activeDraft = getDraftForTask(hoveredBubble.task.id);
+                    return (
+                    <div className="space-y-2">
+                      <input
+                        ref={subtaskTitleInputRef}
+                        className="w-full surface-input rounded border px-2 py-1.5 text-[11px]"
+                        placeholder="Название доп задачи"
+                        value={activeDraft.title}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => patchDraftForTask(hoveredBubble.task.id, { title: event.target.value })}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void onAddSubtask(hoveredBubble.task);
+                          }
+                        }}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          className="primary-button flex-1 rounded px-2 py-1.5 text-[11px] font-semibold"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void onAddSubtask(hoveredBubble.task);
+                          }}
+                        >
+                          Сохранить
+                        </button>
+                        <button
+                          className="secondary-button rounded px-2 py-1.5 text-[11px] font-semibold"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setIsAddingSubtask(false);
+                          }}
+                        >
+                          Отмена
+                        </button>
+                      </div>
+                    </div>
+                  );
+                  })() : (
+                    <button
+                      className="w-full rounded bg-cyan-600 px-2 py-1.5 text-[11px]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setIsAddingSubtask(true);
+                      }}
+                    >
+                      Добавить доп задачу
+                    </button>
+                  )}
+                </div>
+              </foreignObject>
+            </>
           ) : null}
         </motion.g>
       </svg>
