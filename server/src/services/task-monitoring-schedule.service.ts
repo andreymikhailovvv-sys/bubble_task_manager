@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
@@ -37,20 +37,21 @@ export async function rescheduleMonitoringSource(db: Db, sourceId: string) {
       source.collaborationId) return;
 
   const eventKey = 'overdue:' + root.id + ':' + source.id + ':' + source.dueDate!.toISOString();
-  try {
-    await db.taskMonitoringRun.create({ data: {
+  // skipDuplicates emits ON CONFLICT DO NOTHING on PostgreSQL and does not
+  // poison a surrounding task-edit transaction if the event already exists.
+  await db.taskMonitoringRun.createMany({
+    data: [{
       taskId: root.id, userId: root.userId, sourceTaskId: source.id,
       eventKey, kind: MONITOR_KIND, dueAt: source.dueDate, state: 'scheduled'
-    } });
-  } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    // Re-enabling or restoring an earlier due date can resurrect a cancelled
-    // event, but must never replay a completed/processing AI request.
-    await db.taskMonitoringRun.updateMany({
-      where: { eventKey, state: 'cancelled' },
-      data: { state: 'scheduled', dueAt: source.dueDate }
-    });
-  }
+    }],
+    skipDuplicates: true
+  });
+  // Only cancelled deliveries can be restored. Completed/processing events
+  // are never retried at the same timestamp, avoiding duplicate AI charges.
+  await db.taskMonitoringRun.updateMany({
+    where: { eventKey, state: 'cancelled' },
+    data: { state: 'scheduled', dueAt: source.dueDate }
+  });
 }
 
 export async function rescheduleMonitoringTree(db: Db, rootId: string) {
