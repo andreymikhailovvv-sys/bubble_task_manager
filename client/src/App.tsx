@@ -8,6 +8,8 @@ import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
+import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
+import { TaskMonitoringControls } from './components/TaskMonitoringControls';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
@@ -65,7 +67,7 @@ const MAX_SPHERES = 8;
 const FOCUSED_TASK_EDIT_KEYS = [
   'title', 'description', 'sphereId', 'dueDate', 'notifyBeforeMinutes',
   'isRecurring', 'recurrenceText', 'recurrenceJson', 'recurrenceSummary',
-  'recurrenceUntil', 'importance', 'urgency', 'aiNotificationsEnabled'
+  'recurrenceUntil', 'importance', 'urgency', 'aiNotificationsEnabled', 'aiMonitoringEnabled'
 ] as const satisfies readonly (keyof Task)[];
 
 const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotificationsEnabled: boolean) => ({
@@ -81,7 +83,8 @@ const focusedTaskEditableSnapshot = (task: Partial<Task>, defaultAiNotifications
   recurrenceUntil: task.recurrenceUntil ?? null,
   importance: task.importance ?? 3,
   urgency: task.urgency ?? 3,
-  aiNotificationsEnabled: task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled
+  aiNotificationsEnabled: task.aiNotificationsEnabled ?? defaultAiNotificationsEnabled,
+  aiMonitoringEnabled: task.aiMonitoringEnabled ?? false
 });
 
 
@@ -7094,6 +7097,7 @@ ${allContext}`,
                   <p className="flex items-center gap-2 text-sm font-semibold ai-panel-title"><Bot size={16} /> Помощь ИИ</p>
                   <p className="mt-1 text-xs text-muted">{focusedTask.title}</p>
                 </div>
+                {focusedTask.aiMonitoringEnabled ? <TaskMonitoringStatuses taskId={focusedTask.id} /> : null}
               </div>
               <div className="relative mb-2 min-h-0 flex-1">
                 <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-0 z-20 -translate-x-1/2" />
@@ -7508,6 +7512,14 @@ ${allContext}`,
                     уведомления от ИИ
                   </label>
                   </div>
+                  {focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId ? (
+                    <TaskMonitoringControls
+                      enabled={focusedDraft.aiMonitoringEnabled === true}
+                      onChange={(enabled) => setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: enabled } : previous)}
+                      taskId={focusedTask.id}
+                      allowed={!focusedTask.isCollaborative}
+                    />
+                  ) : null}
                   {focusedDraft.isRecurring ? (
                     <label className="block text-xs">Описание повторения
                       <textarea
@@ -7923,6 +7935,7 @@ ${allContext}`,
                 </div>
               </div>
             </div>
+            {focusedTask?.aiMonitoringEnabled ? <div className="absolute right-5 top-16 z-30"><TaskMonitoringStatuses taskId={focusedTask.id} /></div> : null}
             <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
