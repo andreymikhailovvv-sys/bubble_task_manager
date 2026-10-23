@@ -390,12 +390,17 @@ model TaskMonitoringRun {
   userId    String
   eventKey  String   @unique
   kind      String
+  // Deadline dispatches are persisted before they become due.
+  dueAt     DateTime?
+  sourceTaskId String?
   state     String   @default("pending")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([taskId, createdAt])
   @@index([state, createdAt])
+  @@index([state, dueAt])
+  @@index([sourceTaskId, state])
 }
 
 model CollaborativeTask {
