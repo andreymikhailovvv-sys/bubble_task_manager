@@ -1567,9 +1567,9 @@ export const aiAssistantService = {
     }
     throw new TypeError('ИИ не смог подготовить расписание с двух попыток. Кредиты за неудачные попытки возвращены. Попробуйте описать дни и время точнее.');
   },
-  async generateDailyCheckup(input: { userId: string }) {
+  async generateDailyCheckup(input: { userId: string; instructions?: string }) {
     const { generateSmartDailyCheckup } = await import('./daily-ai-checkup.service.js');
-    return generateSmartDailyCheckup(input.userId);
+    return generateSmartDailyCheckup(input.userId, input.instructions);
   },
   transcribeAudio: async (input: TranscribeAudioInput) => {
     const apiKey = process.env.OPENAI_API_KEY;

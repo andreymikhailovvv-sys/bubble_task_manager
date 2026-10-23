@@ -92,6 +92,8 @@ model User {
   offerTaskCompletionReport Boolean @default(true)
   morningAiCheckupEnabled Boolean @default(false)
   morningAiCheckupTime String @default("10:00")
+  aiCheckupSchedules Json?
+  aiCheckupRuns AiCheckupRun[]
   lastMorningAiCheckupDate String?
   telegramChatId String?  @unique
   telegramLinkedAt DateTime?
@@ -167,6 +169,20 @@ model AiChatConversationMemory {
   @@unique([userId, projectId, chatId])
   @@index([userId])
   @@index([userId, updatedAt])
+}
+
+// One claim per configured checkup slot per local calendar day. Atomic unique
+// insertion prevents duplicate paid calls with multiple server replicas.
+model AiCheckupRun {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleId String
+  dateKey    String
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, scheduleId, dateKey])
+  @@index([createdAt])
 }
 
 model AiUsageEvent {

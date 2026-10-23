@@ -15,9 +15,10 @@ export async function createAiCheckup(input: {
   userId: string;
   requestId?: string;
   sendTelegram?: boolean;
+  instructions?: string;
 }) {
   const requestId = input.requestId || 'daily-checkup:manual:' + randomUUID();
-  const checkup = await aiAssistantService.generateDailyCheckup({ userId: input.userId });
+  const checkup = await aiAssistantService.generateDailyCheckup({ userId: input.userId, instructions: input.instructions });
 
   let proposalId: string | null = null;
   if (checkup.moves.length) {

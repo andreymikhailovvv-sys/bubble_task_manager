@@ -12,7 +12,7 @@ test('desktop settings is a centered modal rather than a tiny anchored popover',
   assert.doesNotMatch(source, /data-tour="settings-panel" className="surface-popover light-dropdown absolute right-0/);
   assert.match(source, /Часовой пояс пользователя/);
   assert.match(source, /browser-notification-settings/);
-  assert.match(source, /ai-checkup-settings/);
+  assert.match(source, /<AiCheckupScheduleSettings user=\{currentUser\}/);
   assert.match(source, /ai-notifications-settings/);
   assert.match(source, /offerTaskCompletionReport/);
 });
@@ -25,8 +25,7 @@ test('miniapp and mobile web settings are full dialogs without browser permissio
   assert.match(source, /settings-modal-scroll[^\n]+overflow-y-auto overscroll-contain/);
   assert.match(source, /onTouchMove=\{\(event\) => event\.stopPropagation\(\)\}/);
   assert.match(source, /'Europe\/Moscow','Europe\/Kaliningrad'/);
-  assert.match(source, /morningAiCheckupEnabled/);
-  assert.match(source, /morningAiCheckupTime/);
+  assert.match(source, /<AiCheckupScheduleSettings user=\{currentUser\}/);
   assert.match(source, /aiNotificationDefault/);
   assert.match(source, /aiNotificationsEnabled: aiNotificationDefault/);
   assert.match(source, /offerTaskCompletionReport/);
@@ -45,8 +44,8 @@ test('settings select menus remain above dialogs, themed and tappable while scro
   ]);
   const desktopDialog = desktop.slice(desktop.indexOf('{isSettingsOpen ? createPortal('), desktop.indexOf('document.body', desktop.indexOf('{isSettingsOpen ? createPortal(')));
   const miniDialog = mini.slice(mini.indexOf('{isSettingsOpen ? createPortal('), mini.indexOf('document.body', mini.indexOf('{isSettingsOpen ? createPortal(')));
-  assert.equal((desktopDialog.match(/popupVariant="settings"/g) ?? []).length, 5);
-  assert.equal((miniDialog.match(/popupVariant="settings"/g) ?? []).length, 4);
+  assert.equal((desktopDialog.match(/popupVariant="settings"/g) ?? []).length, 4);
+  assert.equal((miniDialog.match(/popupVariant="settings"/g) ?? []).length, 3);
   assert.match(select, /data-miniapp-popover=\{popupVariant === 'settings' \? 'settings'/);
   assert.match(select, /onTouchMove=\{popupVariant === 'settings'/);
   assert.match(select, /const openAbove =/);
@@ -54,4 +53,19 @@ test('settings select menus remain above dialogs, themed and tappable while scro
   assert.match(css, /\.custom-select-menu\.settings-select-menu \{[\s\S]*?z-index: 390 !important/);
   assert.match(css, /settings-select-menu\[data-theme='light'\]/);
   assert.match(css, /\.settings-modal-scroll::\-webkit-scrollbar/);
+});
+
+
+test('same checkup schedule editor is used in desktop, Telegram and mobile web', async () => {
+  const [desktop, mini, shared] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/AiCheckupScheduleSettings.tsx', import.meta.url), 'utf8')
+  ]);
+  assert.match(desktop, /<AiCheckupScheduleSettings user=\{currentUser\}/);
+  assert.match(mini, /<AiCheckupScheduleSettings user=\{currentUser\}/);
+  assert.match(shared, /aria-expanded=\{expanded\}/);
+  assert.match(shared, /setExpanded\(false\)/);
+  assert.match(shared, /morningAiCheckupEnabled/);
+  assert.match(shared, /aiCheckupSchedules/);
 });

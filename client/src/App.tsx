@@ -7,6 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
+import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { CustomSelect } from './components/CustomSelect';
@@ -163,7 +164,6 @@ const getOnboardingOfferStorageKey = (userId: string) => `btm:${userId}:onboardi
 const getLatestNewsReadStorageKey = (userId: string) => `btm:${userId}:latest-news-read`;
 const USER_TIMEZONE_STORAGE_KEY = 'btm:user-timezone';
 const AI_NOTIFICATIONS_DEFAULT_STORAGE_KEY = 'btm:ai-notifications-default-enabled';
-const DEFAULT_MORNING_AI_CHECKUP_TIME = '10:00';
 const DEFAULT_TIMEZONE = 'Europe/Moscow';
 const CONTEXT_MENU_VIEWPORT_MARGIN = 12;
 const CONTEXT_MENU_WIDTH = 184;
@@ -879,8 +879,6 @@ export default function App() {
     } catch {}
     return DEFAULT_TIMEZONE;
   });
-  const [isMorningAiCheckupEnabled, setIsMorningAiCheckupEnabled] = useState(false);
-  const [morningAiCheckupTime, setMorningAiCheckupTime] = useState(DEFAULT_MORNING_AI_CHECKUP_TIME);
   const [manualCheckupLoading, setManualCheckupLoading] = useState(false);
   const [manualCheckupError, setManualCheckupError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -1683,8 +1681,6 @@ export default function App() {
     if (profileTimeZone) {
       setUserTimeZone(profileTimeZone);
     }
-    setIsMorningAiCheckupEnabled(currentUser.morningAiCheckupEnabled === true);
-    setMorningAiCheckupTime(currentUser.morningAiCheckupTime?.trim() || DEFAULT_MORNING_AI_CHECKUP_TIME);
     setSettingsError(null);
   }, [currentUser?.id, currentUser?.timeZone, currentUser?.morningAiCheckupEnabled, currentUser?.morningAiCheckupTime]);
 
@@ -5044,50 +5040,15 @@ ${allContext}`,
                 ) : null}
               </div>
 
-              <div data-tour="ai-checkup-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
-                <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
-                  <span>ИИ-чекап</span>
-                  <span className="ai-checkup-credit-badge inline-flex items-center gap-1 rounded-full border border-pink-400/30 bg-pink-500/10 px-2 py-0.5 text-[10px] text-pink-200">
-                    <Coins size={11} /> по фактическим токенам
-                  </span>
-                </div>
-                <p className="mb-2 text-[11px] leading-snug text-subtle">
-                  Ежедневный обзор задач будет приходить в общий чат с ИИ и Telegram, если бот подключён. По умолчанию выключен у всех пользователей.
-                </p>
-                <CustomSelect detachedPopup popupVariant="settings"
-                  value={isMorningAiCheckupEnabled ? 'enabled' : 'disabled'}
-                  onChange={(value) => {
-                    const enabled = value === 'enabled';
-                    setIsMorningAiCheckupEnabled(enabled);
-                    void updateUserSettings({ morningAiCheckupEnabled: enabled }, 'checkupEnabled');
-                  }}
-                  options={[{ value: 'disabled', label: 'Выключен' }, { value: 'enabled', label: 'Включен' }]}
-                  buttonClassName={settingsSavingKey === 'checkupEnabled' ? 'cursor-not-allowed opacity-60' : ''}
-                  disabled={settingsSavingKey === 'checkupEnabled'}
-                  ariaLabel="ИИ-чекап"
-                />
-                <label className="mt-2 block text-[11px] text-slate-400">
-                  Время чекапа
-                  <input
-                    type="time"
-                    className="surface-input light-dropdown-control mt-1 w-full rounded border px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    value={morningAiCheckupTime}
-                    disabled={settingsSavingKey === 'checkupTime'}
-                    onChange={(event) => {
-                      const nextTime = event.target.value || DEFAULT_MORNING_AI_CHECKUP_TIME;
-                      setMorningAiCheckupTime(nextTime);
-                      void updateUserSettings({ morningAiCheckupTime: nextTime }, 'checkupTime');
-                    }}
-                  />
-                </label>
+              <AiCheckupScheduleSettings user={currentUser} onUserUpdated={setCurrentUser}>
                 <button type="button" onClick={() => { void generateManualCheckup(); }}
                   disabled={manualCheckupLoading}
                   className="primary-button mt-3 w-full rounded-lg px-3 py-2 text-xs font-semibold disabled:cursor-wait disabled:opacity-60">
                   {manualCheckupLoading ? 'Формируем ИИ-чекап…' : 'Сформировать чекап сейчас'}
                 </button>
-                <p className="mt-2 text-[11px] leading-snug text-subtle">Запуск в любое время, независимо от ежедневного расписания. Кредиты списываются по фактическим токенам.</p>
+                <p className="mt-2 text-[11px] leading-snug text-subtle">Ручной запуск без ограничений по количеству дней или проверок. Кредиты списываются по фактическим токенам.</p>
                 {manualCheckupError ? <p className="mt-2 text-[11px] text-rose-500" role="alert">{manualCheckupError}</p> : null}
-              </div>
+              </AiCheckupScheduleSettings>
               {settingsError ? <div className="mt-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] text-rose-200">{settingsError}</div> : null}
               <div data-tour="ai-notifications-settings" className="mt-3 border-t border-[color:var(--panel-border)] pt-3">
                 <div className="mb-1 flex items-center gap-2 text-xs text-slate-300">

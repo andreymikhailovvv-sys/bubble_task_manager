@@ -8825,6 +8825,7 @@ body[data-theme='dark'] .miniapp-shell .miniapp-search-input:focus-visible {
   padding: 0;
   cursor: pointer;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .miniapp-habit-tracker-day:disabled { cursor: default; }
 .miniapp-habit-tracker-day:focus-visible {

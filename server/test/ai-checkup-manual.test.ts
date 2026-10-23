@@ -11,7 +11,7 @@ test('on-demand checkup uses the identical AI, billing and manual proposal pipel
   const delivery = await source('../src/services/ai-checkup-delivery.service.ts');
   const scheduled = await source('../src/index.ts');
   const api = await source('../src/routes/api.ts');
-  assert.match(delivery, /generateDailyCheckup\(\{ userId: input\.userId \}\)/);
+  assert.match(delivery, /generateDailyCheckup\(\{ userId: input\.userId, instructions: input\.instructions \}\)/);
   assert.match(delivery, /source: 'daily_checkup'/);
   assert.match(delivery, /autoApply: false/);
   assert.match(delivery, /creditsSpentMilli: checkup\.creditsSpentMilli/);
@@ -31,8 +31,8 @@ test('manual checkup works when auto scheduling is off and cannot consume its da
   const delivery = await source('../src/services/ai-checkup-delivery.service.ts');
   const index = await source('../src/index.ts');
   const route = await source('../src/routes/api.ts');
-  assert.match(index, /lastMorningAiCheckupDate: slot\.dateKey/);
-  assert.match(index, /requestId: 'daily-checkup:' \+ slot\.dateKey/);
+  assert.match(index, /aiCheckupRun\.create\(\{/);
+  assert.match(index, /requestId: 'daily-checkup:' \+ local\.dateKey \+ ':' \+ schedule\.id/);
   assert.match(route, /await createAiCheckup\(\{ userId: req\.user!\.id \}\)/);
   assert.match(delivery, /if \(input\.sendTelegram\)/);
   assert.doesNotMatch(delivery.replace(/\/\*[\s\S]*?\*\//g, ''), /prisma\.user\.update|lastMorningAiCheckupDate/);
@@ -77,4 +77,35 @@ test('mini-app shows a just-generated checkup immediately, even before polling r
   const confirmed = reconcileAiChatMessagesWithChips(first, [saved]);
   assert.equal(confirmed.length, 2, 'server confirmation must not duplicate the checkup');
   assert.equal(confirmed[1].taskProposal?.id, 'proposal-1');
+});
+
+
+test('several independent checkups can run on one local day without duplicate slot claims', async () => {
+  const [{ resolveAiCheckupSchedules, validateAiCheckupSchedules }, index, schema, route, client] = await Promise.all([
+    import('../src/lib/ai-checkup-schedules.js'),
+    source('../src/index.ts'),
+    source('../prisma/schema.prisma'),
+    source('../src/routes/api.ts'),
+    source('../../client/src/components/AiCheckupScheduleSettings.tsx')
+  ]);
+  const schedules = validateAiCheckupSchedules([
+    { id: 'early', time: '09:00', instructions: 'Риски на сегодня' },
+    { id: 'late', time: '19:30', instructions: 'Итоги дня' }
+  ]);
+  assert.equal(schedules.length, 2);
+  assert.notEqual(schedules[0].instructions, schedules[1].instructions);
+  assert.deepEqual(resolveAiCheckupSchedules(null, '11:45'), [{ id:'legacy',time:'11:45',instructions:'' }]);
+  assert.deepEqual(resolveAiCheckupSchedules(schedules), schedules);
+  assert.throws(() => validateAiCheckupSchedules([{ id:'x',time:'12:00',instructions:'' },{ id:'x',time:'13:00',instructions:'' }]));
+  assert.throws(() => validateAiCheckupSchedules([{ id:'a',time:'25:00',instructions:'' }]));
+  assert.throws(() => validateAiCheckupSchedules([{ id:'a',time:'12:00',instructions:'x'.repeat(1501) }]));
+  assert.match(index, /for \(const schedule of schedules\)/);
+  assert.match(index, /aiCheckupRun\.create/);
+  assert.match(index, /instructions: schedule\.instructions/);
+  assert.match(index, /P2002/);
+  assert.match(schema, /@@unique\(\[userId, scheduleId, dateKey\]\)/);
+  assert.match(route, /validateAiCheckupSchedules/);
+  assert.match(client, /setExpanded\(false\)/);
+  assert.match(client, /Добавить чекап/);
+  assert.match(client, /Пожелания к этому чекапу/);
 });

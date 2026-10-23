@@ -1,6 +1,7 @@
 import { mergeChatProjectSnapshots, canonicalizeTelegramAssistantProjects } from '../lib/ai-chat-project-sync.js';
 import { aiAssistantService } from '../services/ai-assistant.service.js';
 import { createAiCheckup } from '../services/ai-checkup-delivery.service.js';
+import { resolveAiCheckupSchedules, validateAiCheckupSchedules } from '../lib/ai-checkup-schedules.js';
 import { getTaskProposal, applyTaskProposal, rejectTaskProposal, undoTaskProposal } from '../services/ai-task-proposal.service.js';
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import crypto from 'node:crypto';
@@ -143,6 +144,7 @@ const toAuthUser = (user: {
   browserNotificationsEnabled?: boolean;
   offerTaskCompletionReport?: boolean;
   morningAiCheckupTime?: string;
+  aiCheckupSchedules?: unknown;
   efficiencyResetAt?: string;
   efficiencyScore?: number;
   efficiencyTaskScore?: number;
@@ -176,6 +178,7 @@ const toAuthUser = (user: {
   browserNotificationsEnabled: user.browserNotificationsEnabled ?? true,
   offerTaskCompletionReport: user.offerTaskCompletionReport ?? true,
   morningAiCheckupTime: CHECKUP_TIME_PATTERN.test(user.morningAiCheckupTime ?? '') ? user.morningAiCheckupTime : '10:00',
+  aiCheckupSchedules: resolveAiCheckupSchedules(user.aiCheckupSchedules, user.morningAiCheckupTime),
   efficiencyResetAt: user.efficiencyResetAt ?? EFFICIENCY_RESET_AT_ISO,
   efficiencyScore: Math.max(0, Math.min(100, user.efficiencyScore ?? 0)),
   efficiencyTaskScore: Math.max(0, user.efficiencyTaskScore ?? 0),
@@ -913,6 +916,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     browserNotificationsEnabled?: boolean;
     offerTaskCompletionReport?: boolean;
     morningAiCheckupTime?: string;
+    aiCheckupSchedules?: ReturnType<typeof validateAiCheckupSchedules>;
   } = {};
 
   if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'timeZone')) {
@@ -952,6 +956,11 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
     data.morningAiCheckupTime = checkupTime;
   }
 
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, 'aiCheckupSchedules')) {
+    try { data.aiCheckupSchedules = validateAiCheckupSchedules(req.body.aiCheckupSchedules); }
+    catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : 'Некорректное расписание чекапа' }); return; }
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: req.user!.id },
     data,
@@ -975,6 +984,7 @@ apiRouter.patch('/user/settings', requireAuth, async (req, res) => {
       browserNotificationsEnabled: true,
       offerTaskCompletionReport: true,
       morningAiCheckupTime: true,
+      aiCheckupSchedules: true,
       efficiencyScore: true,
       efficiencyTaskScore: true,
       efficiencyHabitScore: true,

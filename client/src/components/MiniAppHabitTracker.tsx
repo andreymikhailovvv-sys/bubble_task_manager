@@ -174,6 +174,15 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
     if (history === null || pendingDayKey || !day.scheduled || day.date > tracker.today) return;
     setPendingDayKey(day.key);
     setEditError(null);
+    // Optimistic toggle: the date changes visually on this very tap instead
+    // of waiting for the network response while Android holds button focus.
+    setEditedDays(previous => ({
+      ...previous,
+      [day.key]: day.done ? null : {
+        dateKey: day.key, amount: habit.targetCount, events: Math.max(1, habit.targetCount),
+        completedAt: new Date().toISOString()
+      }
+    }));
     try {
       const updated = day.done
         ? await api.uncompleteHabit(habit.id, { dateKey: day.key, amount: day.amount })
@@ -186,6 +195,13 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
       setEditedDays((previous) => ({ ...previous, [day.key]: updatedStat }));
       onHabitChanged?.(updated);
     } catch (error) {
+      // Revert only this tapped date when the server rejects the update.
+      setEditedDays(previous => ({
+        ...previous,
+        [day.key]: day.amount > 0 ? {
+          dateKey: day.key, amount: day.amount, events: 1
+        } : null
+      }));
       setEditError(error instanceof Error ? error.message : 'Не удалось изменить отметку. Попробуйте ещё раз.');
     } finally {
       setPendingDayKey(null);
@@ -233,7 +249,7 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
                 disabled={!active || history === null || pendingDayKey !== null}
                 aria-pressed={active ? day.done : undefined}
                 aria-busy={pendingDayKey === day.key}
-                onClick={() => void toggleDay(day)}
+                onClick={(event) => { event.currentTarget.blur(); void toggleDay(day); }}
                 aria-label={belongsToMonth ? `${day.date.toLocaleDateString('ru-RU')}: ${day.done ? 'выполнено' : day.partial ? 'частично выполнено' : active ? 'не выполнено' : 'не запланировано'}` : undefined}
               >
                 <span>{day.date.getDate()}</span>

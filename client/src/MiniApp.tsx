@@ -7,6 +7,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
+import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
 import { WorkspaceGlobalSearch } from './components/WorkspaceGlobalSearch';
@@ -3670,32 +3671,15 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   options={[...new Set([userTimeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Omsk','Asia/Krasnoyarsk','Asia/Irkutsk','Asia/Yakutsk','Asia/Vladivostok','Asia/Magadan','Asia/Kamchatka','Europe/Minsk','Europe/Berlin','Europe/London','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Asia/Dubai','Asia/Almaty','Asia/Tokyo'])].map(value => ({ value, label: value }))}
                   ariaLabel="Часовой пояс пользователя" detachedPopup popupVariant="settings" />
               </div>
-              <div className="border-t border-[color:var(--panel-border)] pt-4">
-                <p className="mb-2 text-sm font-semibold text-primary">ИИ-чекап</p>
-                <p className="mb-2 text-xs leading-relaxed text-muted">Ежедневный обзор задач в общем чате с ИИ и Telegram, если бот подключён.</p>
-                <CustomSelect value={currentUser?.morningAiCheckupEnabled === true ? 'enabled' : 'disabled'}
-                  onChange={(value) => void api.updateUserSettings({ morningAiCheckupEnabled: value === 'enabled' })
-                    .then(({ user }) => setCurrentUser(user))
-                    .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить настройку'))}
-                  options={[{ value:'disabled',label:'Выключен' },{ value:'enabled',label:'Включен' }]}
-                  ariaLabel="ИИ-чекап" detachedPopup popupVariant="settings" />
-                <label className="mt-3 block text-sm text-primary">
-                  Время чекапа
-                  <input type="time" className="surface-input mt-1 w-full rounded-xl border px-3 py-2"
-                    value={currentUser?.morningAiCheckupTime ?? '10:00'}
-                    onChange={(event) => void api.updateUserSettings({ morningAiCheckupTime: event.target.value })
-                      .then(({ user }) => setCurrentUser(user))
-                      .catch(error => setError(error instanceof Error ? error.message : 'Не удалось сохранить время'))}/>
-                </label>
-                <button type="button"
-                  onClick={() => { void generateManualCheckup(); }}
+              <AiCheckupScheduleSettings user={currentUser} onUserUpdated={setCurrentUser}>
+                <button type="button" onClick={() => { void generateManualCheckup(); }}
                   disabled={manualCheckupLoading}
                   className="primary-button mt-3 w-full rounded-xl px-3 py-2.5 text-sm font-semibold disabled:cursor-wait disabled:opacity-60">
                   {manualCheckupLoading ? 'Формируем ИИ-чекап…' : 'Сформировать чекап сейчас'}
                 </button>
-                <p className="mt-2 text-xs leading-relaxed text-muted">Запуск в любое время, независимо от ежедневного расписания. Кредиты списываются по фактическим токенам.</p>
+                <p className="mt-2 text-xs leading-relaxed text-muted">Ручной запуск без ограничений по количеству проверок. Кредиты списываются по фактическим токенам.</p>
                 {manualCheckupError ? <p className="mt-2 text-xs text-rose-500" role="alert">{manualCheckupError}</p> : null}
-              </div>
+              </AiCheckupScheduleSettings>
               <div className="border-t border-[color:var(--panel-border)] pt-4">
                 <p className="mb-2 text-sm font-semibold text-primary">Уведомления от ИИ в новых задачах</p>
                 <CustomSelect value={aiNotificationDefault ? 'enabled' : 'disabled'}

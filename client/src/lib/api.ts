@@ -1,6 +1,7 @@
 import type { AiChatModel, ChatAttachmentPayload, ChatMessage, ChatMode, GeneratedDocument, Habit, Sphere, Task, TaskAttachment, TaskComment, WebCitation, WebSource, TelegramInlineSendDraft, TelegramReadDraft, TelegramReadApproval } from './types';
 
 export type ApiError = Error & { status?: number; code?: string };
+export type AiCheckupSchedule = { id: string; time: string; instructions: string };
 export type AttachmentStorage = { usedBytes: number; limitBytes: number; count: number; overLimit: boolean; plan: string };
 export type AccountAttachment = { id: string; taskId: string; name: string; mimeType: string; size: number; createdAt: string; taskTitle: string; parentTaskId: string | null; parentTaskTitle: string | null };
 export const formatStorageMiB = (bytes: number) => (bytes / 1024 / 1024).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' МБ';
@@ -254,6 +255,7 @@ export type CurrentUser = {
   offerTaskCompletionReport?: boolean;
   browserNotificationsEnabled?: boolean;
   morningAiCheckupTime?: string;
+  aiCheckupSchedules?: AiCheckupSchedule[];
   efficiencyResetAt?: string;
   efficiencyScore?: number;
   efficiencyTaskScore?: number;
@@ -469,7 +471,7 @@ export const api = {
     body: JSON.stringify({ projects: stripAiChatProjectDisplayPreviews(projects) })
   }),
   generateAiCheckupNow: () => request<{ message: ChatMessage }>('/api/ai/checkup/generate', { method: 'POST', body: '{}' }),
-  updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; offerTaskCompletionReport?: boolean }) =>
+  updateUserSettings: (payload: { timeZone?: string; morningAiCheckupEnabled?: boolean; browserNotificationsEnabled?: boolean; morningAiCheckupTime?: string; aiCheckupSchedules?: AiCheckupSchedule[]; offerTaskCompletionReport?: boolean }) =>
     request<{ user: CurrentUser }>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   register: (payload: { login: string; password: string; name?: string; consentAccepted: boolean }) => request<{ user: CurrentUser }>('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   login: (payload: { login: string; password: string }) => request<{ user: CurrentUser }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
