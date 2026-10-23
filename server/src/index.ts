@@ -18,6 +18,7 @@ import { telegramQuickShare } from './services/telegram-quick-share.service.js';
 import { telegramAiMonitorWorker } from './services/telegram-ai-monitor-worker.service.js';
 import { deliverTelegramAiBotNotifications } from './services/telegram-ai-inbox.service.js';
 import { createPublicSeoPagesMiddleware } from './lib/public-seo-pages.js';
+import { startTaskMonitoringWorker } from './services/task-monitoring-worker.service.js';
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -121,6 +122,10 @@ setInterval(() => {
     console.error('[Notifications] notifyShiningTasks failed', error);
   });
 }, telegramPollIntervalMs).unref();
+
+// Event-driven queue: each monitored task owns an absolute persisted deadline.
+// A lightweight safety tick watches the queue, never scans all overdue tasks.
+startTaskMonitoringWorker();
 
 const CHECKUP_POLL_INTERVAL_MS = Number(process.env.AI_CHECKUP_POLL_INTERVAL_MS ?? 60_000);
 const formatLocalCheckupSlot = (date: Date, timeZone: string) => {

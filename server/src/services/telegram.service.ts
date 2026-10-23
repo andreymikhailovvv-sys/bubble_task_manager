@@ -4,6 +4,8 @@ import { isTelegramWebhookSecretConfigured, isTelegramWebhookSecretValid } from 
 import { Blob } from 'node:buffer';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
+import { cancelMonitoringSource, refreshMonitoringAfterExternalWrite, rescheduleMonitoringTree } from './task-monitoring-schedule.service.js';
+import { signalTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import { recordAppliedTelegramBotTask, undoTaskProposal, getTaskProposal, applyTaskProposal, rejectTaskProposal } from './ai-task-proposal.service.js';
 import type { ChatMessage } from './ai-assistant.service.js';
@@ -1677,6 +1679,7 @@ const handleCallback = async (update: TelegramUpdate) => {
       where: { id: task.id },
       data: { dueDate, telegramNotifiedAt: null }
     });
+    await refreshMonitoringAfterExternalWrite([task.id]);
 
     await answerCallback(callback.id, `Отложено на ${minutes} мин`);
     await editMessage(chatId, messageId, `✅ <b>Готово.</b>\nЗадача отложена на <b>${minutes} мин</b>.\nНовый дедлайн: <b>${formatDate(dueDate)}</b>`, keyboardMain(task.id));
@@ -1720,6 +1723,7 @@ const handleCallback = async (update: TelegramUpdate) => {
       where: { id: subtask.id },
       data: { dueDate, telegramNotifiedAt: null }
     });
+    await refreshMonitoringAfterExternalWrite([subtask.id]);
 
     await answerCallback(callback.id, `Перенесено на ${minutes} мин`);
     await editMessage(
@@ -1839,6 +1843,18 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       }
       return { taskId: parentTask.id, childCount };
     });
+    if (completed) {
+      await prisma.taskMonitoringTrigger.updateMany({
+        where: { taskId: completed.taskId, state: { in: ['pending', 'fired'] } },
+        data: { state: 'cancelled' }
+      });
+      if (completed.childCount > 0) {
+        await rescheduleMonitoringTree(prisma, completed.taskId);
+        signalTaskMonitoringWakeup();
+      } else {
+        await refreshMonitoringAfterExternalWrite([completed.taskId]);
+      }
+    }
     if (completed) console.info('[Task] status mutation', { source: 'telegram:callback', userId, taskId: completed.taskId, afterStatus: 'DONE', childrenCompleted: completed.childCount });
     await answerCallback(callback.id, 'Задача закрыта');
     await editMessage(chatId, messageId, '✅ <b>Задача выполнена и закрыта.</b> Отличная работа!');
@@ -1849,6 +1865,10 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
     const deleted = await prisma.task.deleteMany({
       where: { id: resolvedTaskId, userId }
     });
+    if (deleted.count) {
+      await cancelMonitoringSource(prisma, resolvedTaskId);
+      signalTaskMonitoringWakeup();
+    }
     await answerCallback(callback.id, deleted.count ? 'Задача удалена' : 'Задача не найдена');
     await setSession(chatId, { mode: 'IDLE', activeTaskId: null });
     await editMessage(chatId, messageId, deleted.count ? '🗑 <b>Задача удалена.</b>' : '⚠️ <b>Задача не найдена.</b>');
@@ -1869,6 +1889,7 @@ ${escapeHtml(habit.icon || '✨')} ${escapeHtml(habit.name)}`);
       where: { id: resolvedTaskId, userId, parentTaskId: subtask.parentTaskId },
       data: { status: 'DONE', telegramNotifiedAt: null }
     });
+    if (updated.count) await refreshMonitoringAfterExternalWrite([resolvedTaskId]);
     if (updated.count) console.info('[Task] status mutation', { source: 'telegram:callback', userId, taskId: resolvedTaskId, parentTaskId: subtask.parentTaskId, afterStatus: 'DONE' });
     await answerCallback(callback.id, updated.count ? 'Подзадача закрыта' : 'Подзадача не найдена');
     await editMessage(

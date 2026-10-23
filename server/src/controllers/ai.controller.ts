@@ -2,6 +2,7 @@ import { consumeTelegramAiReadRequest } from '../services/telegram-ai-read-conse
 import { telegramChatRequestIsSameOrigin } from '../lib/telegram-chat-origin.js';
 import { Request, Response } from 'express';
 import { aiAssistantService, type AiChatContextDiagnostics } from '../services/ai-assistant.service.js';
+import { cancelPendingMonitoringTriggers } from '../services/task-monitoring.service.js';
 import { telegramService } from '../services/telegram.service.js';
 import { prisma } from '../db/prisma.js';
 import { computeNextRecurringDueDate } from '../services/task.service.js';
@@ -273,6 +274,7 @@ export const aiController = {
         res.status(403).json({ error: 'Подтверждение Telegram допустимо только из Планировыча' });
         return;
       }
+      const taskReplyReceivedAt = new Date();
       const { question, userMessage } = req.body as {
         question?: string;
         userMessage?: string;
@@ -296,6 +298,11 @@ export const aiController = {
       const persistedHistory = await aiAssistantService.listTaskDialogForContext({
         userId: req.user!.id, taskId: req.params.id
       });
+      // A human reply must cancel an old trigger before the next AI call,
+      // not minutes later when a potentially slow AI response gets saved.
+      if (typeof userMessage === 'string' && userMessage.trim()) {
+        await cancelPendingMonitoringTriggers(req.user!.id, req.params.id, taskReplyReceivedAt);
+      }
       // Server-owned task / route fingerprint scope prevents cross-task replay.
       taskRequestClaim = await claimAiChatRequest(req.user!.id, req.body?.clientRequestId, {
         ...(req.body ?? {}), __aiRequestKind: 'task-chat', __aiTaskId: req.params.id
@@ -355,7 +362,8 @@ export const aiController = {
           userId: req.user!.id,
           taskId: req.params.id,
           messages: [{ role: 'user', content: normalizedUserMessage }],
-          clientRequestId: req.body?.clientRequestId
+          clientRequestId: req.body?.clientRequestId,
+          replyReceivedAt: taskReplyReceivedAt
         });
       }
       await aiAssistantService.appendTaskDialogAssistantMessage({

@@ -7,6 +7,7 @@ import { InlineDateTimePickerIcon } from './components/InlineDateTimePickerIcon'
 import { DateTimePickerWithApply } from './components/DateTimePickerWithApply';
 import { SectorEditor, HARMONIOUS_COLORS } from './components/SectorEditor';
 import { TaskEditor } from './components/TaskEditor';
+import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
@@ -7127,6 +7128,7 @@ ${allContext}`,
                   <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} /></div>
                 </div>
                 ))}
+                {focusedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={focusedTask.id} enabled /> : null}
                 {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
                 </div>
               </div>
@@ -7953,7 +7955,8 @@ ${allContext}`,
                 <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => (setReplyToAiTask(target), focusedTask && setAiRecipientByTaskId(prev => ({ ...prev, [focusedTask.id]: 'ai' })))} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={focusedTask?.sphereId ?? null} /></div>
               </div>
               ))}
-              {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
+              {focusedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={focusedTask.id} enabled /> : null}
+                {aiLoadingTaskId === focusedTask.id ? <TaskAiProgress status={aiProgressByTask[focusedTask.id] ?? 'analyzing_request'} /> : null}
             </div>
             <div className="focused-task-ai-composer focused-task-ai-composer-expanded">
             {replyToAiTask ? <AiReplyPreview target={replyToAiTask} onDismiss={() => setReplyToAiTask(null)} /> : null}
