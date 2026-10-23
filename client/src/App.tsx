@@ -2813,7 +2813,7 @@ ${allContext}`,
     const eventKey = notification.eventKey ?? '';
     if (eventKey.startsWith('monitoring:') && notification.taskId) {
       const target = tasks.find(task => task.id === notification.taskId);
-      if (target?.aiMonitoringEnabled) {
+      if (target) {
         setIsAiChatOpen(false);
         setFocusedTaskId(target.id);
         setIsAiExpanded(true);
