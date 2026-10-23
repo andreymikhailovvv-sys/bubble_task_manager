@@ -79,7 +79,7 @@ export function MiniWorkspaceTools({
             <CalendarDays size={16} aria-hidden="true" /><span>Таймлайн</span>
           </button>
         </div>
-      <div ref={rootRef} className="relative justify-self-end">
+        <div ref={rootRef} className="miniapp-workspace-filter-anchor relative justify-self-end">
         <button type="button"
           className={`miniapp-workspace-tool miniapp-workspace-tool-filter ${hasFilters ? 'is-filtered' : ''}`}
           onClick={() => setOpen(value => !value)}
