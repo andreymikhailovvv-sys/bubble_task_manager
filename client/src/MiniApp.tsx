@@ -3911,11 +3911,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
               const taskSphereLabel = taskSphere?.name ?? (isEvent ? 'Событие' : 'Без сектора');
               const importanceRating = Math.max(0, Math.min(1, task.importance / 5));
               const importanceBadgeColor = `rgba(${Math.round(80 + importanceRating * 170)}, ${Math.round(165 - importanceRating * 95)}, ${Math.round(220 - importanceRating * 190)}, ${isLightTheme ? 0.48 : 0.32})`;
-              const subtaskProgress = subtaskProgressByParent.get(task.id);
-              const hasSubtasks = Boolean(subtaskProgress && subtaskProgress.total > 0);
-              const progressPercent = hasSubtasks
-                ? Math.round(((subtaskProgress?.completed ?? 0) / (subtaskProgress?.total ?? 1)) * 100)
-                : 0;
               const taskCardStyle = {
                 '--miniapp-sector-color': taskSphereColor
               } as CSSProperties;
@@ -3961,16 +3956,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         </>
                       )}
                     </div>
-                    {hasSubtasks ? (
-                      <span
-                        className="miniapp-subtask-progress pointer-events-none absolute bottom-0 right-0 block h-4 w-4 shrink-0 rounded-full border border-slate-500/80"
-                        style={{ background: `conic-gradient(rgb(34 197 94) ${progressPercent}%, rgba(51,65,85,0.75) ${progressPercent}% 100%)` }}
-                        title={`Подзадачи: ${subtaskProgress?.completed ?? 0}/${subtaskProgress?.total ?? 0}`}
-                        aria-label={`Прогресс подзадач: ${subtaskProgress?.completed ?? 0} из ${subtaskProgress?.total ?? 0}`}
-                      >
-                        <span className="miniapp-subtask-progress-core absolute inset-[3px] rounded-full bg-slate-800/95" />
-                      </span>
-                    ) : null}
                   </button>
                   {!isEvent ? (
                     <button type="button"
