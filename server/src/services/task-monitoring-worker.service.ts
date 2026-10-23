@@ -69,7 +69,7 @@ export async function pollTaskMonitoring(now = new Date()) {
       });
       if (claimed.count === 0) continue;
       const replied = await prisma.taskAiMessage.findFirst({
-        where: { taskId: trigger.taskId, userId: trigger.userId, role: 'user', createdAt: { gt: trigger.createdAt } },
+        where: { taskId: trigger.taskId, userId: trigger.userId, role: 'user', createdAt: { gt: trigger.updatedAt } },
         select: { id: true }
       });
       if (replied) {
