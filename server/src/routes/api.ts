@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
 import { addMonitoringStatus, listMonitoringStatuses } from '../services/task-monitoring.service.js';
+import { getMonitoringTriggers } from '../services/task-monitoring-trigger.service.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
@@ -1706,6 +1707,10 @@ apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
 apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAssistantAction);
+apiRouter.get('/tasks/:id/monitoring/triggers', requireAuth, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'private, no-store').json(await getMonitoringTriggers(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Мониторинг недоступен' }); }
+}));
 apiRouter.get('/tasks/:id/monitoring/statuses', requireAuth, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'private, no-store').json(await listMonitoringStatuses(req.user!.id, req.params.id)); }
   catch { res.status(404).json({ error: 'Мониторинг недоступен' }); }
