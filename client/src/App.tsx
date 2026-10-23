@@ -2891,7 +2891,8 @@ ${allContext}`,
       const newestUnseen = [...newNotifications].reverse()[0];
       result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
       setSystemNotifications(visibleNotifications);
-      setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
+      // Monitoring notifications are badge-only: they do not duplicate the real AI message.
+      setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
       deliverBrowserSystemNotifications(newNotifications);
       if (newestUnseen && newestUnseen.readAt == null && document.visibilityState === 'visible') setSystemNotificationToast(newestUnseen);
     } catch (error) {
@@ -2918,7 +2919,8 @@ ${allContext}`,
         const newestUnseen = [...newNotifications].reverse()[0];
         result.notifications.forEach((notification) => knownSystemNotificationIdsRef.current.add(notification.id));
         setSystemNotifications(visibleNotifications);
-        setUnreadSystemNotificationCount(visibleNotifications.filter(notification => notification.readAt == null).length);
+        // Monitoring notifications are badge-only: they do not duplicate the real AI message.
+      setUnreadSystemNotificationCount(result.notifications.filter(notification => notification.readAt == null).length);
         // The first load is a baseline: never produce a pile of historical OS alerts.
         if (baselineLoaded) deliverBrowserSystemNotifications(newNotifications);
         baselineLoaded = true;
@@ -7926,6 +7928,13 @@ ${allContext}`,
                 <p className="text-xs text-muted">{focusedTask.title}</p>
               </div>
               <div className="flex items-center gap-2">
+                <TaskMonitoringStatuses taskId={focusedTask.id}
+                  enabled={focusedTask.aiMonitoringEnabled === true}
+                  allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
+                  onTaskUpdated={(updated) => {
+                    setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                    setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
+                  }} />
                 <button
                   className="rounded bg-rose-700/80 px-2 py-1.5 text-xs text-rose-100 hover:bg-rose-700"
                   onClick={clearFocusedAiDialog}
@@ -7950,13 +7959,6 @@ ${allContext}`,
                 </div>
               </div>
             </div>
-            {focusedTask ? <div className="absolute right-5 top-16 z-30"><TaskMonitoringStatuses taskId={focusedTask.id}
-                  enabled={focusedTask.aiMonitoringEnabled === true}
-                  allowed={focusedTask.taskType === 'TASK' && !focusedTask.parentTaskId && !focusedTask.isCollaborative}
-                  onTaskUpdated={(updated) => {
-                    setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
-                    setFocusedDraft(previous => previous ? { ...previous, aiMonitoringEnabled: updated.aiMonitoringEnabled } : previous);
-                  }} /></div> : null}
             <AiModelChip value={focusedAiModel} onChange={(model) => focusedTask && setAiModelByTask((prev) => ({ ...prev, [focusedTask.id]: model }))} ariaLabel="Выбрать модель ИИ для задачи" className="absolute left-1/2 top-[4.5rem] z-20 -translate-x-1/2" />
             <div ref={expandedAiDialogContainerRef} className="chat-thread focused-task-ai-thread-through min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl p-4 pt-12">
               {isFocusedAiSearchOpen ? (
