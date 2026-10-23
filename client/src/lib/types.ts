@@ -110,6 +110,7 @@ export type ChatMessage = {
   /** Small optional display-only thumbnails, not original attachment bytes. */
   attachmentPreviews?: Array<{ name: string; thumbnail?: string }>;
   creditsSpentMilli?: number;
+  monitoringTaskId?: string;
   webSearchUsed?: boolean;
   webSources?: WebSource[];
   webCitations?: WebCitation[];
