@@ -820,7 +820,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
         const unseen = baselineLoaded ? recent.filter(item => !known.has(item.id) && !item.readAt) : [];
         recent.forEach(item => known.add(item.id));
         baselineLoaded = true;
-        const latest = unseen.at(-1);
+        const latest = unseen[unseen.length - 1];
         if (latest?.taskId) setMonitoringNotificationToast({ id: latest.id, taskId: latest.taskId, content: latest.content });
       } catch { /* Telegram delivery remains available when an in-app refresh fails. */ }
     };
