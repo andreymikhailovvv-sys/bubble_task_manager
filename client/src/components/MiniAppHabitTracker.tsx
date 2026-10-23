@@ -137,6 +137,8 @@ export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; o
     const currentKey = dayKey(new Date());
     if (!habit.stats.some((stat) => stat.dateKey === currentKey)) combined.delete(currentKey);
     for (const [key, stat] of Object.entries(editedDays)) {
+      // Today's +/- buttons may have changed this value after a calendar edit.
+      if (key === currentKey) continue;
       if (stat) combined.set(key, stat);
       else combined.delete(key);
     }
