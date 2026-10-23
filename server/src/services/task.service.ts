@@ -482,6 +482,11 @@ export const taskService = {
         }
       }
       const updatedTask = await tx.task.update({ where: { id }, data: patch });
+      if (input.aiMonitoringEnabled === false || input.status === 'DONE') {
+        await tx.taskMonitoringTrigger.updateMany({
+          where: { taskId: id, state: 'pending' }, data: { state: 'cancelled' }
+        });
+      }
       let finalTask = updatedTask;
       const statusBefore = ownMember?.statusOverride ?? currentTask.status;
       const statusAfter = input.status ?? statusBefore;
