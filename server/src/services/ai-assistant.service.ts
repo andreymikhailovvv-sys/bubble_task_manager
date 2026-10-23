@@ -1810,7 +1810,7 @@ export const aiAssistantService = {
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
-      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true }
+      select: { id: true, createdAt: true, role: true, content: true, creditsSpentMilli: true, aiTaskProposalId: true, monitoringTaskId: true }
     });
     messages.reverse();
 
@@ -1824,6 +1824,7 @@ export const aiAssistantService = {
       createdAt: message.createdAt.toISOString(),
       role: message.role,
       content: message.content,
+      ...(message.monitoringTaskId ? { monitoringTaskId: message.monitoringTaskId } : {}),
       ...(message.role === 'assistant' && message.aiTaskProposalId ? { taskProposal: byId.get(message.aiTaskProposalId) } : {}),
       ...(message.role === 'assistant' && message.creditsSpentMilli !== null ? { creditsSpentMilli: message.creditsSpentMilli } : {})
     }));

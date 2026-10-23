@@ -8,6 +8,7 @@ import { TaskCompletionReportDialog } from './components/TaskCompletionReportDia
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { TaskMonitoringControls } from './components/TaskMonitoringControls';
+import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
@@ -805,6 +806,29 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
   const [newStandaloneNote, setNewStandaloneNote] = useState<StandaloneNote | null>(null);
   const [aiCredits, setAiCredits] = useState(0);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [monitoringNotificationToast, setMonitoringNotificationToast] = useState<{ id: string; taskId: string; content: string } | null>(null);
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    let alive = true;
+    let baselineLoaded = false;
+    const known = new Set<string>();
+    const refreshMonitoringNotifications = async () => {
+      try {
+        const feed = await api.getSystemNotifications();
+        if (!alive) return;
+        const recent = feed.notifications.filter(item => item.eventKey?.startsWith('monitoring:') && item.taskId);
+        const unseen = baselineLoaded ? recent.filter(item => !known.has(item.id) && !item.readAt) : [];
+        recent.forEach(item => known.add(item.id));
+        baselineLoaded = true;
+        const latest = unseen[unseen.length - 1];
+        if (latest?.taskId) setMonitoringNotificationToast({ id: latest.id, taskId: latest.taskId, content: latest.content });
+      } catch { /* Telegram delivery remains available when an in-app refresh fails. */ }
+    };
+    void refreshMonitoringNotifications();
+    const timer = window.setInterval(() => void refreshMonitoringNotifications(), 30000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [currentUser?.id]);
+
   const userTimeZone = currentUser?.timeZone?.trim() || localStorage.getItem('btm:user-timezone')?.trim() || 'Europe/Moscow';
   const effectiveMiniTheme = useMemo(
     () => resolveThemeMode(miniThemeMode, userTimeZone, new Date()),
@@ -3619,6 +3643,17 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
       }}
       className={`miniapp-shell miniapp-scrollless h-screen overflow-y-auto p-4 ${isWebRuntime ? 'miniapp-web-runtime' : ''} ${isLightTheme ? 'miniapp-light' : 'bg-slate-950 text-slate-100'}`}
     >
+      {monitoringNotificationToast ? (
+        <div role="status" className="fixed bottom-24 left-3 right-3 z-[160] mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-violet-400/30 bg-slate-900 p-3 text-xs text-slate-100 shadow-2xl">
+          <span className="min-w-0 flex-1 truncate">🤖 {monitoringNotificationToast.content}</span>
+          <button type="button" className="shrink-0 rounded-lg bg-violet-600 px-2.5 py-2 font-semibold text-white" onClick={() => {
+            const task = tasks.find(item => item.id === monitoringNotificationToast.taskId && !item.parentTaskId);
+            if (task) { openTaskModal(task); setIsAiDialogOpen(true); }
+            setMonitoringNotificationToast(null);
+          }}>Ответить</button>
+          <button type="button" onClick={() => setMonitoringNotificationToast(null)} aria-label="Закрыть уведомление"><X size={15} /></button>
+        </div>
+      ) : null}
       {reportPromptTask ? (
         <TaskCompletionReportDialog
           onDownload={startAiGeneratedDocumentDownload}
@@ -4734,6 +4769,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
+              {openedTask.aiMonitoringEnabled ? <TaskMonitoringStatuses taskId={openedTask.id} /> : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -4748,7 +4784,12 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div key={`mini-ai-full-${index}`} className={`ai-message-forward-group w-fit max-w-[88%] ${message.role === 'user' ? 'ml-auto' : 'mr-auto'}`}><div className={`miniapp-ai-chat-message miniapp-ai-chat-message-task w-full rounded-3xl px-4 py-3 ${message.role === 'user' ? `miniapp-ai-chat-message-user rounded-br-lg ${message.authorColor ? 'miniapp-ai-chat-message-authored' : ''}` : 'miniapp-ai-chat-message-assistant rounded-bl-lg'}`} style={message.role === 'user' && message.authorColor ? ({ '--message-author-color': message.authorColor } as CSSProperties) : undefined}>
                     <div className="mb-1 flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase">{message.authorName ?? (message.role === 'assistant' ? 'ИИ' : 'Вы')}{message.messageKind === 'HUMAN' && message.recipientName ? ` → ${message.recipientName}` : ''}</p>{message.role === 'assistant' ? <button type="button" onClick={() => { void navigator.clipboard?.writeText(message.content); setCopiedAiMessageKey(`compact-${index}`); setTimeout(() => setCopiedAiMessageKey((prev) => (prev === `compact-${index}` ? null : prev)), 1300); }} className="text-slate-300" title="Копировать">{copiedAiMessageKey === `compact-${index}` ? <Check size={12} className="text-emerald-300" /> : <Copy size={12} />}</button> : null}</div>
                     <div className="text-sm leading-relaxed">{message.messageKind === 'MONITOR_ACTION' ? <TaskMonitoringActionBadge content={message.content} /> : message.role === 'assistant' ? <MiniAiMessageContentWithTaskRefs content={message.content} tasks={tasks} onOpenTask={openAiTaskReference} /> : <CollapsibleUserMessage>{renderMiniAiMessageContent(message.content, message.attachmentPreviews, message.id)}</CollapsibleUserMessage>}</div>
-                    {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
+                    {message.monitoringTaskId ? <button type="button"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-violet-400/30 px-3 py-1.5 text-xs font-semibold text-violet-500"
+                    onClick={() => { const target = tasks.find(task => task.id === message.monitoringTaskId && !task.parentTaskId); if (target) { setIsAiChatOpen(false); openTaskModal(target); setIsAiDialogOpen(true); } }}>
+                    <ArrowUpRight size={12} /> Ответить в чате задачи
+                  </button> : null}
+                  {message.role === 'assistant' && message.webSearchUsed ? <WebCitations sources={message.webSources} /> : null}
                     {message.role === 'assistant' && message.generatedDocument ? <AiGeneratedDocumentButton document={message.generatedDocument} onDownload={downloadAiGeneratedDocument} /> : null}
                   {message.role === 'assistant' && message.taskProposal ? <AiTaskProposalCard proposal={message.taskProposal} /> : null}
                   {message.role === 'assistant' && message.telegramSuggestedReply ? <TelegramAiReplySuggestionCard reply={message.telegramSuggestedReply} /> : null}

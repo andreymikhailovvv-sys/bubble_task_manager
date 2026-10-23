@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { aiAssistantService } from './ai-assistant.service.js';
 import { requireMonitoredTask } from './task-monitoring.service.js';
+import { publishTaskMonitoringReply } from './task-monitoring-delivery.service.js';
 import { recoverMonitoredDeadlinesOnBoot } from './task-monitoring-schedule.service.js';
 import { registerTaskMonitoringWakeup } from './task-monitoring-wakeup.service.js';
 
@@ -60,6 +61,14 @@ async function deliver(run: Run, question: string, checkCurrent: () => Promise<b
     await aiAssistantService.appendTaskDialogAssistantMessage({
       userId: run.userId, taskId: run.taskId,
       content: result.answer, creditsSpentMilli: result.billing.creditsSpentMilli
+    });
+    // At this point the task conversation is the source of truth.
+    // The fan-out uses an idempotent event key so a network retry never
+    // publishes a duplicate quick-chat message or notification.
+    await publishTaskMonitoringReply({
+      userId: run.userId, taskId: run.taskId, runId: run.id,
+      kind: question.startsWith('Пользователь пока не ответил') ? 'trigger' : 'overdue',
+      answer: result.answer
     });
     await markRun(run.id, 'completed');
   } catch (error) {

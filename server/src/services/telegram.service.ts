@@ -2313,6 +2313,23 @@ export const telegramService = {
       });
     }
   },
+  async notifyMonitoringTaskReply(input: { taskId: string; userId: string; taskTitle: string; answer: string; kind: 'overdue' | 'trigger' }): Promise<boolean> {
+    if (!BOT_TOKEN) return false;
+    const owner = await prisma.user.findUnique({
+      where: { id: input.userId }, select: { telegramChatId: true }
+    });
+    if (!owner?.telegramChatId) return false;
+    // Telegram HTML is escaped; never let the model inject arbitrary markup.
+    const title = escapeHtml(input.taskTitle.slice(0, 150));
+    const answer = escapeHtml(input.answer.trim().slice(0, 2400));
+    const reason = input.kind === 'trigger' ? 'Напоминание по триггеру' : 'Мониторинг просроченного срока';
+    return sendMessage(owner.telegramChatId,
+      '🤖 <b>' + reason + '</b>\n📌 <b>' + title + '</b>\n\n' + answer,
+      { inline_keyboard: [[{
+        text: '↩️ Ответить', web_app: { url: buildMiniAppTaskAiUrl(input.taskId) }
+      }]] }
+    );
+  },
   async notifyOverdueTaskAiMessage(input: { taskId: string; userId: string; aiMessage: string; creditsSpentMilli?: number }) {
     if (!BOT_TOKEN) return;
     if (!input.aiMessage.trim()) return;
