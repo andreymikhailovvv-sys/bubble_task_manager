@@ -35,6 +35,15 @@ test('same beta opt-in/status UI exists on web, Telegram and mobile web', async 
   assert.match(panel, /Автомониторинг/);
   assert.match(panel, /beta/);
   assert.match(panel, /Что такое автомониторинг\?/);
-  assert.match(panel, /История статусов/);
+  const statuses = await file('../../client/src/components/TaskMonitoringStatuses.tsx');
+  const desktop = await file('../../client/src/App.tsx');
+  assert.doesNotMatch(panel, /История статусов/);
+  assert.match(statuses, /История статусов/);
+  assert.match(statuses, /task-monitor-status-timeline/);
+  assert.match(desktop, /<TaskMonitoringControls/);
+  assert.match(desktop, /aiMonitoringEnabled: task.aiMonitoringEnabled/);
+  assert.match(desktop, /'aiNotificationsEnabled', 'aiMonitoringEnabled'/);
+  assert.equal((desktop.match(/<TaskMonitoringStatuses/g) ?? []).length, 2);
+  assert.match(mini, /<TaskMonitoringStatuses taskId=\{openedTask.id\}/);
   assert.match(types, /aiMonitoringEnabled\?: boolean/);
 });
