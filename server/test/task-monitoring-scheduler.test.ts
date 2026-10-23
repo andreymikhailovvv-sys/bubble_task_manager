@@ -16,7 +16,7 @@ test('event-driven monitoring saves per-task and subtask deadlines, not a repeat
   assert.match(schema, /@@index\(\[state, dueAt\]\)/);
   assert.match(migration, /TaskMonitoringRun_state_dueAt_idx/);
   assert.match(schedule, /aiMonitoringEnabled: true/);
-  assert.match(schedule, /'overdue:' \+ root.id \+ ':' \+ source.id \+ ':' \+ source.dueDate!\.toISOString\(\)/);
+  assert.match(schedule, /'overdue:' \+ root.id \+ ':g' \+ root.aiMonitoringGeneration \+ ':' \+ source.id \+ ':' \+ source.dueDate!\.toISOString\(\)/);
   assert.match(schedule, /state: 'cancelled'/);
   assert.match(schedule, /status === 'DONE'/);
   assert.match(schedule, /skipDuplicates: true/);
@@ -103,4 +103,26 @@ test('Telegram snoozes, AI bulk moves and undo actions update persisted monitore
   assert.match(ai, /refreshMonitoringAfterExternalWrite\(candidates\.map\(item => item\.id\)\)/);
   assert.match(undo, /await rescheduleMonitoringSource\(tx, item\.id\)/);
   assert.match(schedule, /refreshMonitoringAfterExternalWrite\(sourceIds: readonly string\[\]\)/);
+});
+
+
+test('a new opt-in session can rearm the same overdue deadline, without duplicates from ordinary saves', async () => {
+  const [task, schedule, schema, migration, worker, route] = await Promise.all([
+    file('../src/services/task.service.ts'),
+    file('../src/services/task-monitoring-schedule.service.ts'),
+    file('../prisma/schema.prisma'),
+    file('../prisma/migrations/20261024010000_monitoring_reactivation_generation/migration.sql'),
+    file('../src/services/task-monitoring-worker.service.ts'),
+    file('../src/routes/api.ts')
+  ]);
+  assert.match(schema, /aiMonitoringGeneration Int @default\(0\)/);
+  assert.match(migration, /ADD COLUMN "aiMonitoringGeneration" INTEGER NOT NULL DEFAULT 0/);
+  assert.match(task, /input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled/);
+  assert.match(task, /patch.aiMonitoringGeneration = \{ increment: 1 \}/);
+  assert.match(schedule, /':g' \+ root.aiMonitoringGeneration/);
+  assert.match(worker, /\[TaskMonitoring\] event worker started/);
+  assert.match(worker, /\[TaskMonitoring\] deadline claimed/);
+  assert.match(worker, /void pollTaskMonitoring\(\)\.catch\(error =>\s*console.error\('\[TaskMonitoring\] immediate dispatch failed'/);
+  assert.match(route, /apiRouter.get\('\/tasks\/:id\/monitoring\/diagnostics', requireAuth/);
+  assert.match(route, /requireMonitoredTask\(req.user!\.id, req.params.id\)/);
 });
