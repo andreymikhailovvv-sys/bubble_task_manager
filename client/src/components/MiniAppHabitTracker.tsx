@@ -105,16 +105,22 @@ export function computeHabitTracker(habit: Habit, month: Date, todayDate = new D
 
 const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
+export function MiniAppHabitTracker({ habit, onHabitChanged }: { habit: Habit; onHabitChanged?: (updated: Habit) => void }) {
   const today = new Date();
   const [monthOffset, setMonthOffset] = useState(0);
   const [history, setHistory] = useState<Habit['stats'] | null>(null);
   const [historyError, setHistoryError] = useState(false);
+  const [editedDays, setEditedDays] = useState<Record<string, Habit['stats'][number] | null>>({});
+  const [pendingDayKey, setPendingDayKey] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const startX = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     let active = true;
     setHistory(null);
     setHistoryError(false);
+    setEditedDays({});
+    setPendingDayKey(null);
+    setEditError(null);
     void api.getHabitHistory(habit.id).then((stats) => {
       if (active) setHistory(stats);
     }).catch(() => {
@@ -130,8 +136,14 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
     // A removed record must override the originally fetched history too.
     const currentKey = dayKey(new Date());
     if (!habit.stats.some((stat) => stat.dateKey === currentKey)) combined.delete(currentKey);
+    for (const [key, stat] of Object.entries(editedDays)) {
+      // Today's +/- buttons may have changed this value after a calendar edit.
+      if (key === currentKey) continue;
+      if (stat) combined.set(key, stat);
+      else combined.delete(key);
+    }
     return { ...habit, stats: Array.from(combined.values()) };
-  }, [habit, history]);
+  }, [habit, history, editedDays]);
   const shownMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
   const tracker = useMemo(() => computeHabitTracker(historyHabit, shownMonth, today), [historyHabit, monthOffset, today.getDate(), today.getMonth(), today.getFullYear()]);
   const oldestMonth = new Date(tracker.created.getFullYear(), tracker.created.getMonth(), 1);
@@ -155,6 +167,30 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
     moveMonth(deltaX > 0 ? -1 : 1);
   };
   const monthLabel = shownMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+
+  const toggleDay = async (day: HabitDay) => {
+    // Only a planned day which has already begun can be changed. The full
+    // history must be loaded first, otherwise old completions could be lost.
+    if (history === null || pendingDayKey || !day.scheduled || day.date > tracker.today) return;
+    setPendingDayKey(day.key);
+    setEditError(null);
+    try {
+      const updated = day.done
+        ? await api.uncompleteHabit(habit.id, { dateKey: day.key, amount: day.amount })
+        : await api.completeHabit(habit.id, {
+          dateKey: day.key,
+          amount: Math.max(1, habit.targetCount - day.amount),
+          completedAt: new Date(day.date.getFullYear(), day.date.getMonth(), day.date.getDate(), 12).toISOString()
+        });
+      const updatedStat = updated.stats.find((stat) => stat.dateKey === day.key) ?? null;
+      setEditedDays((previous) => ({ ...previous, [day.key]: updatedStat }));
+      onHabitChanged?.(updated);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Не удалось изменить отметку. Попробуйте ещё раз.');
+    } finally {
+      setPendingDayKey(null);
+    }
+  };
 
   return (
     <div className="miniapp-habit-tracker space-y-4" style={{ '--tracker-accent': habit.color || '#22c55e' } as CSSProperties}>
@@ -181,7 +217,8 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
               const after = index < tracker.days.length - 1 && tracker.days[index + 1].done && tracker.days[index + 1].date.getMonth() === shownMonth.getMonth();
               const joinedBefore = day.done && before && index % 7 !== 0;
               const joinedAfter = day.done && after && index % 7 !== 6;
-              return <div
+              return <button
+                type="button"
                 key={day.key}
                 className={['miniapp-habit-tracker-day',
                   !belongsToMonth ? 'miniapp-habit-tracker-day-outside' : '',
@@ -193,14 +230,20 @@ export function MiniAppHabitTracker({ habit }: { habit: Habit }) {
                   day.key === dayKey(tracker.today) ? 'miniapp-habit-tracker-day-today' : ''
                 ].filter(Boolean).join(' ')}
                 title={belongsToMonth ? `${day.date.toLocaleDateString('ru-RU')}: ${day.amount} из ${habit.targetCount}${day.scheduled ? '' : ' · не запланировано'}` : undefined}
+                disabled={!active || history === null || pendingDayKey !== null}
+                aria-pressed={active ? day.done : undefined}
+                aria-busy={pendingDayKey === day.key}
+                onClick={() => void toggleDay(day)}
                 aria-label={belongsToMonth ? `${day.date.toLocaleDateString('ru-RU')}: ${day.done ? 'выполнено' : day.partial ? 'частично выполнено' : active ? 'не выполнено' : 'не запланировано'}` : undefined}
               >
                 <span>{day.date.getDate()}</span>
-              </div>;
+              </button>;
             })}
           </div>
         </div>
-        {history === null ? <p role="status" className="mt-2 text-[11px] text-muted">{historyError ? 'Полную историю получить не удалось. Показаны последние отметки.' : 'Загружаем историю выполнения…'}</p> : null}
+        {history === null ? <p role="status" className="mt-2 text-[11px] text-muted">{historyError ? 'Полную историю получить не удалось. Изменение дат временно недоступно.' : 'Загружаем историю выполнения…'}</p> : null}
+        {editError ? <p role="alert" className="mt-2 text-[11px] text-rose-500">{editError}</p> : null}
+        <p className="mt-2 text-[11px] text-muted">Нажмите на прошедший плановый день, чтобы отметить выполнение или снять отметку.</p>
         <div className="miniapp-habit-tracker-legend mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
           <span><i className="miniapp-habit-tracker-legend-dot miniapp-habit-tracker-legend-done" />Выполнено</span>
           <span><i className="miniapp-habit-tracker-legend-dot miniapp-habit-tracker-legend-partial" />Частично</span>

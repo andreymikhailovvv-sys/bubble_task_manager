@@ -3674,7 +3674,7 @@ ${allContext}`,
     });
   };
 
-  const persistTask = async (payload: Partial<Task>, draftSubtasks: Array<Pick<Task, 'title' | 'description'>> = []) => {
+  const persistTask = async (payload: Partial<Task>, draftSubtasks: Array<Pick<Task, 'title' | 'description'>> = [], eventAttachments: ChatAttachmentPayload[] = []) => {
     if (!editorState?.task?.id && !(payload.title ?? '').trim()) {
       throw new Error('Необходимо ввести название');
     }
@@ -3708,6 +3708,16 @@ ${allContext}`,
           parentTaskId: createdTask.id,
           aiNotificationsEnabled: isAiNotificationsDefaultEnabled
         })));
+      }
+      if (isEventPayload && eventAttachments.length > 0) {
+        // Event and task uploads share the same authorized API/quota. Settle
+        // all uploads so a failed file cannot trigger a duplicate event create.
+        const uploads = await Promise.allSettled(eventAttachments.map((file) => api.createTaskAttachment(createdTask.id, file)));
+        const failed = uploads.find((result) => result.status === 'rejected');
+        if (failed) {
+          const reason = failed.status === 'rejected' && failed.reason instanceof Error ? failed.reason.message : 'Ошибка загрузки';
+          window.alert('Событие создано, однако не все файлы прикреплены: ' + reason);
+        }
       }
       void persistEfficiencyBonus(EFFICIENCY_BONUSES.createdTask, 'task');
     }

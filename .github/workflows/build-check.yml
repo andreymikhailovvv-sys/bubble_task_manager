@@ -102,6 +102,6 @@ jobs:
       - name: Verify AI checkup analysis, selective approvals and Telegram view-only navigation
         run: node --import tsx --test server/test/daily-ai-checkup.test.ts server/test/daily-ai-checkup-proposal.test.ts server/test/daily-ai-checkup-telegram.test.ts
       - name: Verify repeatable manual AI checkup and app navigation
-        run: node --import tsx --test server/test/ai-checkup-manual.test.ts
+        run: node --import tsx --test server/test/ai-checkup-manual.test.ts server/test/miniapp-habit-tracker-ui.test.ts
       - name: Build the deployment Docker image
         run: docker build --progress=plain -t bubble-task-manager:ci .

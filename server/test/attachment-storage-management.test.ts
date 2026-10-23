@@ -80,3 +80,20 @@ test('старые chat uploads очищаются отдельно от пос�
   assert.match(migration, /10485760/);
   assert.doesNotMatch(migration, /DELETE FROM "TaskAttachment"/);
 });
+
+test('события прикрепляют файлы через существующий task attachment API на всех экранах', async () => {
+  const [web, editor, mini, service] = await Promise.all([
+    readFile(new URL('../../client/src/App.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/components/TaskEditor.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../client/src/MiniApp.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../src/services/task-attachment.service.ts', import.meta.url), 'utf8')
+  ]);
+  assert.match(editor, /!task.parentTaskId && !isEventEditor/);
+  assert.match(editor, /isSubtask \|\| isEventEditor/);
+  assert.match(editor, /setPendingEventFiles/);
+  assert.match(editor, /onSave\(form, draftSubtasks, eventAttachments\)/);
+  assert.match(web, /api\.createTaskAttachment\(createdTask\.id, file\)/);
+  assert.match(mini, /createTaskPendingFiles/);
+  assert.match(mini, /api\.createTaskAttachment\(createdTask\.id, await fileToAttachmentPayload\(file\)\)/);
+  assert.match(service, /taskAccessWhere\(userId\)/);
+});

@@ -147,3 +147,12 @@ test('Russian keyboard layout finds Latin texts without disrupting English searc
   assert.equal(matchesWorkspaceText('Согласовать договор','ghbdtn'),false);
   assert.equal(matchesWorkspaceText('Привет и договор','ghbdtn договор'),true);
 });
+
+test('верхний поиск компактнее в Telegram и мобильном браузере', async () => {
+  const css = await readFile(new URL('../../client/src/styles.css', import.meta.url), 'utf8');
+  const styles = css.slice(css.indexOf('.miniapp-shell .miniapp-global-search-field {'));
+  assert.match(styles, /height: 36px;/);
+  // Keep >= 16px on the focused input to avoid iOS Safari zooming.
+  assert.match(styles, /\.miniapp-shell \.miniapp-global-search-field input \{[\s\S]*?font-size: 16px;/);
+  assert.match(styles, /\.miniapp-shell \.miniapp-global-search-field input::placeholder \{\s*font-size: 13px;/);
+});
