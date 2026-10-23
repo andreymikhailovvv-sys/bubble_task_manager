@@ -8,6 +8,7 @@ import { TaskCompletionReportDialog } from './components/TaskCompletionReportDia
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { TaskMonitoringControls } from './components/TaskMonitoringControls';
+import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
 import { MiniAppStandaloneNoteEditor } from './components/MiniAppStandaloneNoteEditor';
 import { StandaloneNotesWorkspace } from './components/StandaloneNotesWorkspace';
@@ -4756,6 +4757,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                   <div className="ai-message-forward-actions"><AiReplyAction message={message} onReply={(target) => { setReplyToTask(target); if (openedTask) setAiRecipientByTaskId(prev => ({ ...prev, [openedTask.id]: 'ai' })); }} /><TelegramMessageQuickShare text={message.content} compact initialNoteSphereId={openedTask?.sphereId ?? null} /></div>
                 </div>
                 ))}
+                {openedTask.aiMonitoringEnabled ? <TaskMonitoringTriggerChips taskId={openedTask.id} enabled /> : null}
                 {aiLoadingTaskId === openedTask.id ? <TaskAiProgress status={aiProgressByTask[openedTask.id] ?? 'analyzing_request'} /> : null}
                 <div className="miniapp-ai-chat-bottom-spacer h-24" aria-hidden="true" />
               </div>
