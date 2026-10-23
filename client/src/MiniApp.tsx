@@ -8,6 +8,7 @@ import { TaskCompletionReportDialog } from './components/TaskCompletionReportDia
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
 import { TaskMonitoringControls } from './components/TaskMonitoringControls';
+import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
 import { AiCheckupScheduleSettings } from './components/AiCheckupScheduleSettings';
@@ -4734,6 +4735,7 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
+              {openedTask.aiMonitoringEnabled ? <TaskMonitoringStatuses taskId={openedTask.id} /> : null}
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
