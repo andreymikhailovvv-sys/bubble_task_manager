@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { sphereController } from '../controllers/sphere.controller.js';
 import { taskController } from '../controllers/task.controller.js';
+import { addMonitoringStatus, listMonitoringStatuses } from '../services/task-monitoring.service.js';
 import { taskParticipantMessageController } from '../controllers/task-participant-message.controller.js';
 import { taskCommentController } from '../controllers/task-comment.controller.js';
 import { habitController } from '../controllers/habit.controller.js';
@@ -1705,6 +1706,19 @@ apiRouter.post('/ai-chat', requireAuth, aiController.askAiChat);
 apiRouter.get('/ai-general-chat', requireAuth, aiController.getGeneralAssistantHistory);
 apiRouter.post('/ai-general-chat', requireAuth, aiController.askGeneralAssistant);
 apiRouter.post('/ai-general-chat/undo', requireAuth, aiController.undoGeneralAssistantAction);
+apiRouter.get('/tasks/:id/monitoring/statuses', requireAuth, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'private, no-store').json(await listMonitoringStatuses(req.user!.id, req.params.id)); }
+  catch { res.status(404).json({ error: 'Мониторинг недоступен' }); }
+}));
+apiRouter.post('/tasks/:id/monitoring/statuses', requireAuth, taskProposalSameOrigin, asyncHandler(async (req, res) => {
+  try {
+    res.set('Cache-Control', 'private, no-store').status(201).json(
+      await addMonitoringStatus(req.user!.id, req.params.id, req.body?.label, req.body?.detail)
+    );
+  } catch (error) {
+    res.status(error instanceof TypeError ? 400 : 404).json({ error: error instanceof Error ? error.message : 'Мониторинг недоступен' });
+  }
+}));
 apiRouter.get('/tasks/:id/ai-chat', requireAuth, aiController.getTaskAssistantHistory);
 apiRouter.post('/tasks/:id/ai-chat', requireAuth, aiController.askTaskAssistant);
 apiRouter.post('/tasks/:id/ai-chat/messages', requireAuth, aiController.appendTaskAssistantMessages);
