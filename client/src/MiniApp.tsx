@@ -7,7 +7,7 @@ import { NotesEditor } from './components/NotesEditor';
 import { TaskCompletionReportDialog } from './components/TaskCompletionReportDialog';
 import { TaskAiEmptyState } from './components/TaskAiEmptyState';
 import { MiniAppHabitTracker } from './components/MiniAppHabitTracker';
-import { TaskMonitoringControls } from './components/TaskMonitoringControls';
+
 import { TaskMonitoringStatuses } from './components/TaskMonitoringStatuses';
 import { TaskMonitoringTriggerChips } from './components/TaskMonitoringTriggerChips';
 import { TaskMonitoringActionBadge } from './components/TaskMonitoringActionBadge';
@@ -4328,12 +4328,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                       />
                       уведомления от ИИ
                     </label> : null}
-                    {openedTask.taskType === 'TASK' ? <TaskMonitoringControls
-                      enabled={openedTaskDraft.aiMonitoringEnabled === true}
-                      onChange={(enabled) => onChangeDraft(openedTask.id, { aiMonitoringEnabled: enabled })}
-                      taskId={openedTask.id}
-                      allowed={!openedTask.parentTaskId && !openedTask.isCollaborative}
-                    /> : null}
                     {openedTaskDraft.isRecurring ? (
                       <div className="rounded-2xl border border-violet-200/70 p-2 text-xs">
                         <p className="mb-1 text-slate-500">Опишите как должно повторяться {openedTask.taskType === 'EVENT' ? 'событие' : 'задача'}</p>
@@ -4769,7 +4763,20 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
           <div className="miniapp-ai-chat-panel miniapp-ai-chat-panel-task miniapp-slide-panel mx-auto flex h-full w-full max-w-none flex-col overflow-hidden rounded-none border-t border-violet-500/30 bg-slate-900 text-slate-100">
             <div className={`miniapp-ai-chat-header miniapp-ai-chat-header-task flex items-center justify-between gap-2 p-3 ${isTaskAiChatHeaderHidden ? 'miniapp-ai-chat-header-hidden' : ''}`}>
               <h2 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-primary">Помощь ИИ</h2>
-              {openedTask.aiMonitoringEnabled ? <TaskMonitoringStatuses taskId={openedTask.id} /> : null}
+              <TaskMonitoringStatuses taskId={openedTask.id}
+                enabled={openedTask.aiMonitoringEnabled === true}
+                allowed={openedTask.taskType === 'TASK' && !openedTask.parentTaskId && !openedTask.isCollaborative}
+                onTaskUpdated={(updated) => {
+                  setTasks(previous => previous.map(task => task.id === updated.id ? updated : task));
+                  setDraftByTaskId(previous => ({
+                    ...previous,
+                    [updated.id]: { ...(previous[updated.id] ?? taskToMiniDraft(updated)), aiMonitoringEnabled: updated.aiMonitoringEnabled }
+                  }));
+                  taskDraftOriginalByIdRef.current[updated.id] = {
+                    ...(taskDraftOriginalByIdRef.current[updated.id] ?? taskToMiniDraft(updated)),
+                    aiMonitoringEnabled: updated.aiMonitoringEnabled
+                  };
+                }} />
               <button type="button" onClick={() => closeMiniWindowWithMotion('task-ai', () => setIsAiDialogOpen(false))} className="miniapp-ai-chat-icon-button rounded-full border border-slate-700 bg-slate-800 p-2" aria-label="Закрыть диалог с ИИ"><X size={18} /></button>
               <select value={selectedAiChatModel} onChange={(event) => setSelectedAiChatModel(event.target.value as AiChatModel)} className="miniapp-ai-chat-select miniapp-ai-chat-model-cap w-40 rounded-b-xl rounded-t-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-semibold" aria-label="Выбрать модель помощи ИИ">
                 {AI_CHAT_MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -5240,10 +5247,6 @@ export default function MiniApp({ runtime = 'telegram' }: MiniAppProps) {
                         />
                         уведомления от ИИ
                       </label> : null}
-                      {createEditorType === 'task' ? <div className="mt-3"><TaskMonitoringControls
-                        enabled={createTaskDraft.aiMonitoringEnabled === true}
-                        onChange={(enabled) => setCreateTaskDraft(previous => ({ ...previous, aiMonitoringEnabled: enabled }))}
-                      /></div> : null}
                       {createTaskDraft.isRecurring ? (
                         <div className="mt-3 rounded-2xl border border-violet-200/70 p-2 text-xs">
                           <p className="mb-1 text-slate-500">Опишите как должно повторяться {createEditorType === 'event' ? 'событие' : 'задача'}</p>
