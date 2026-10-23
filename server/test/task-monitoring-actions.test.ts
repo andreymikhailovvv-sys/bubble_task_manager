@@ -35,6 +35,8 @@ test('AI priority changes are bound to 1..5 and recorded in task activity and ch
   assert.match(actions, /source: 'ai_monitoring'/);
   assert.match(actions, /type: 'monitoring_importance_changed'/);
   assert.match(actions, /messageKind: 'MONITOR_ACTION'/);
+  const ai = await read('../src/services/ai-assistant.service.ts');
+  assert.match(ai, /message.messageKind === 'MONITOR_ACTION'/);
   assert.match(web, /TaskMonitoringActionBadge/);
   assert.match(mini, /TaskMonitoringActionBadge/);
   assert.match(types, /'MONITOR_ACTION'/);
