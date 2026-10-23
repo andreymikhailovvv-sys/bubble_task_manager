@@ -295,6 +295,7 @@ export const taskService = {
         recurrenceUntil: isSubtask ? null : (input.recurrenceUntil !== undefined ? toDueDate(input.recurrenceUntil) : null),
         aiNotificationsEnabled: (isEvent || isReminder) ? false : (input.aiNotificationsEnabled ?? true),
         aiMonitoringEnabled: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true,
+        aiMonitoringGeneration: !isSubtask && !isEvent && !isReminder && !parent?.collaborationId && input.aiMonitoringEnabled === true ? 1 : 0,
         
         collaboration: parent?.collaborationId ? { connect: { id: parent.collaborationId } } : undefined
       }
@@ -344,7 +345,12 @@ export const taskService = {
     }
 
     const patch: Prisma.TaskUpdateInput = {};
-    if (input.aiMonitoringEnabled !== undefined) patch.aiMonitoringEnabled = input.aiMonitoringEnabled === true;
+    if (input.aiMonitoringEnabled !== undefined) {
+      patch.aiMonitoringEnabled = input.aiMonitoringEnabled === true;
+      if (input.aiMonitoringEnabled === true && !currentTask.aiMonitoringEnabled) {
+        patch.aiMonitoringGeneration = { increment: 1 };
+      }
+    }
     const isCollaborativeRoot = Boolean(currentTask.collaborationId && !currentTask.parentTaskId);
     const personalSettingsPatch: Prisma.CollaborativeTaskMemberUpdateInput = {};
     const ownMember = isCollaborativeRoot && currentTask.collaborationId
