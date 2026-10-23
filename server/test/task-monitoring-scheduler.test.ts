@@ -86,3 +86,21 @@ test('follow-up countdown is visible in task chat on web and mobile', async () =
   assert.match(chip, /Триггер запущен/);
   assert.match(chip, /getTaskMonitoringTriggers/);
 });
+
+
+test('Telegram snoozes, AI bulk moves and undo actions update persisted monitored deadlines', async () => {
+  const [telegram, ai, undo, schedule] = await Promise.all([
+    file('../src/services/telegram.service.ts'),
+    file('../src/services/ai-assistant.service.ts'),
+    file('../src/services/ai-task-proposal-undo.service.ts'),
+    file('../src/services/task-monitoring-schedule.service.ts')
+  ]);
+  assert.match(telegram, /refreshMonitoringAfterExternalWrite\(\[task\.id\]\)/);
+  assert.match(telegram, /refreshMonitoringAfterExternalWrite\(\[subtask\.id\]\)/);
+  assert.match(telegram, /rescheduleMonitoringTree\(prisma, completed\.taskId\)/);
+  assert.match(ai, /refreshMonitoringAfterExternalWrite\(updates\.map\(u => u\.taskId\)\)/);
+  assert.match(ai, /refreshMonitoringAfterExternalWrite\(input\.plan\.map\(item => item\.taskId\)\)/);
+  assert.match(ai, /refreshMonitoringAfterExternalWrite\(candidates\.map\(item => item\.id\)\)/);
+  assert.match(undo, /await rescheduleMonitoringSource\(tx, item\.id\)/);
+  assert.match(schedule, /refreshMonitoringAfterExternalWrite\(sourceIds: readonly string\[\]\)/);
+});
