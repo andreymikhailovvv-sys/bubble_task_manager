@@ -1904,6 +1904,13 @@ export const aiAssistantService = {
 
     const monitoringEnabled = task.aiMonitoringEnabled === true && task.userId === input.userId &&
       !task.parentTaskId && !task.collaborationId && task.taskType === 'TASK';
+    const monitoringStatuses = monitoringEnabled
+      ? await prisma.taskMonitoringStatus.findMany({
+          where: { taskId: task.id, userId: input.userId },
+          orderBy: { createdAt: 'desc' }, take: 12,
+          select: { label: true, detail: true, createdAt: true }
+        })
+      : [];
     const useContextV2 = isTaskChatContextV2Enabled(input.userId);
     const history = useContextV2 ? input.history : normalizeHistory(input.history);
     const question = input.question.trim();
@@ -2009,6 +2016,10 @@ export const aiAssistantService = {
       ...(monitoringEnabled ? [{ role: 'system' as const,
         content: 'Владелец включил beta-автомониторинг этой задачи. Можно использовать set_task_monitoring_trigger для ожидания ответа, create_monitoring_subtask для конкретных необходимых действий с дедлайном, change_monitoring_importance при обоснованной переоценке и add_monitoring_status для фиксации проверенного результата. Не создавай много лишних подзадач и не меняй важность ради активности. Каждый вызов разрешён сервером только в beta-режиме. В остальных задачах инструментов нет. Не заявляй о выполненных внешних действиях без подтверждения.' }] : []),
       ...(fileCatalogText ? [{ role: 'user' as const, content: fileCatalogText }] : []),
+      ...(monitoringStatuses.length ? [{ role: 'user' as const, content:
+        'История статусов задачи (от последнего к первому):\\n' +
+        monitoringStatuses.map(status => status.createdAt.toISOString() + ' — ' + status.label +
+          (status.detail ? ' (' + status.detail + ')' : '')).join('\\n') }] : []),
       ...(memoryReady ? [{ role: 'user' as const, content: formatTaskChatMemory(memoryResult!.memory!.summary) }] : []),
       ...trimmedHistory,
       ...(attachmentsMessage ? [attachmentsMessage] : []),
