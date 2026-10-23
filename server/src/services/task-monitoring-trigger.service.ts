@@ -22,7 +22,7 @@ export async function createMonitoringTrigger(userId: string, taskId: string, in
   const data = input as Record<string, unknown> | null;
   const delayMinutes = data?.delayMinutes;
   const question = typeof data?.question === 'string' ? data.question.trim() : '';
-  if (!Number.isInteger(delayMinutes) || (delayMinutes as number) < 5 || (delayMinutes as number) > 10080 ||
+  if (typeof delayMinutes !== 'number' || !Number.isInteger(delayMinutes) || delayMinutes < 5 || delayMinutes > 10080 ||
       question.length < 4 || question.length > 500) {
     return { ok: false, code: 'INVALID_TRIGGER_ARGUMENTS' };
   }
