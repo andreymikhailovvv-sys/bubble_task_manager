@@ -4,7 +4,7 @@
  */
 export type AiCheckupSchedule = { id: string; time: string; instructions: string };
 export const MAX_AI_CHECKUP_SCHEDULES = 12;
-const TIME = /^([01]\\d|2[0-3]):[0-5]\\d$/;
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ID = /^[a-zA-Z0-9_-]{1,64}$/;
 
 export const resolveAiCheckupSchedules = (
